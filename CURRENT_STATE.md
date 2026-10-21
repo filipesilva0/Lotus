@@ -35,6 +35,9 @@
 - **Settings**: Model & Inference, Chat & Formatting, Voice (1 toggle), Island & Agents, Appearance, Licenses. Persisted.
 - **Packaging**: custom MSI template, portable zip script, CI workflow, version guard. [see §5]
 
+## 3b. Design pass 1 (applied after session 1) ⚠️ unverified
+Tokens/type/radii normalised across `components/` and `App.tsx`; `LeftRail` rewritten (labels, real engine dot, avatar and fake badge removed). **Not run:** `tsc`, `npm run build`, the 63 TS tests and screenshots were all impossible in that session (no dependencies, no network). Run them first, then look at light/dark/desktop screenshots; text moving from 9–11 px to 12 px may overflow in tight spots (badges, session meta, Inspector). Phases 3–5 (Chat layout, Settings page + T6, other workspaces) are not started. Also still present: static footer "Local VRAM inference" in chat messages (should go in Phase 3).
+
 ## 4. Known bugs, limitations and unfinished work
 
 IDs are referenced from `TASKS.md`.

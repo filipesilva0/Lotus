@@ -59,7 +59,7 @@ export const VoicesTab: React.FC<{
     <div className="p-5 space-y-4">
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-xs">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <TextInput aria-label="Search voices" placeholder="Search voices" value={q} onChange={(e) => setQ(e.target.value)} className="!pl-9" />
         </div>
         <div className="flex-1" />
@@ -87,8 +87,8 @@ export const VoicesTab: React.FC<{
                 <div className="flex items-start gap-3">
                   <Avatar name={p.name} size={40} />
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold truncate text-[#111827] dark:text-white">{p.name}</h3>
-                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <h3 className="text-sm font-semibold truncate text-[var(--color-text-main)]">{p.name}</h3>
+                    <p className="text-xs text-[var(--color-text-muted)] flex items-center gap-1.5 mt-0.5">
                       {t.icon}{t.label}<span aria-hidden>·</span>{p.language.toUpperCase()}
                       {p.default_engine && <><span aria-hidden>·</span>{engineLabel(p.default_engine)}</>}
                     </p>
@@ -96,13 +96,13 @@ export const VoicesTab: React.FC<{
                   <div className="relative">
                     <IconBtn label="More actions" onClick={() => setMenu(menu === p.id ? null : p.id)}><MoreHorizontal className="w-4 h-4" /></IconBtn>
                     {menu === p.id && (
-                      <div className="absolute right-0 top-9 z-10 w-36 rounded-[12px] border border-[#EBECEF] dark:border-[#2C2F38] bg-white dark:bg-[#22242B] shadow-lg py-1" onMouseLeave={() => setMenu(null)}>
+                      <div className="absolute right-0 top-9 z-10 w-36 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] shadow-lg py-1" onMouseLeave={() => setMenu(null)}>
                         {[
                           { l: 'Edit', i: <Pencil className="w-3.5 h-3.5" />, f: () => { setMenu(null); setEditing(p); } },
                           { l: 'Export', i: <Download className="w-3.5 h-3.5" />, f: () => doExport(p) },
                           { l: 'Delete', i: <Trash2 className="w-3.5 h-3.5" />, f: () => { setMenu(null); setToDelete(p); }, danger: true },
                         ].map((m) => (
-                          <button key={m.l} onClick={m.f} className={cx('w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5', m.danger ? 'text-rose-600 dark:text-rose-400' : 'text-[#111827] dark:text-slate-200')}>
+                          <button key={m.l} onClick={m.f} className={cx('w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5', m.danger ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--color-text-main)] dark:text-slate-200')}>
                             {m.i}{m.l}
                           </button>
                         ))}
@@ -110,9 +110,9 @@ export const VoicesTab: React.FC<{
                     )}
                   </div>
                 </div>
-                {p.description && <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-3 line-clamp-2">{p.description}</p>}
+                {p.description && <p className="text-xs text-[var(--color-text-muted)] mt-3 line-clamp-2">{p.description}</p>}
                 <div className="flex items-center justify-between mt-4">
-                  <span className="text-[11px] text-[#9CA3AF] tabular-nums">
+                  <span className="text-xs text-[var(--color-text-muted)] tabular-nums">
                     {p.voice_type === 'cloned' && <>{p.sample_count} sample{p.sample_count === 1 ? '' : 's'} · </>}{p.generation_count} generated
                   </span>
                   <Btn size="sm" variant={selectedId === p.id ? 'primary' : 'secondary'} onClick={() => onUse(p.id)}>
@@ -133,8 +133,8 @@ export const VoicesTab: React.FC<{
           <Btn variant="ghost" onClick={() => setToDelete(null)}>Keep it</Btn>
           <Btn variant="primary" className="!bg-rose-600 hover:!bg-rose-700" loading={busy} onClick={doDelete}>Delete voice</Btn>
         </>}>
-        <p className="text-xs text-[#6B7280] dark:text-slate-400 leading-relaxed">
-          <strong className="text-[#111827] dark:text-white">{toDelete?.name}</strong> and its samples will be removed. Audio you already generated with it stays in your library.
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+          <strong className="text-[var(--color-text-main)]">{toDelete?.name}</strong> and its samples will be removed. Audio you already generated with it stays in your library.
         </p>
       </Modal>
     </div>

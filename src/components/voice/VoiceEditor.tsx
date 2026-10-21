@@ -164,8 +164,8 @@ export const VoiceEditor: React.FC<{
             <Label hint="A few seconds of clear speech is enough">Voice samples</Label>
 
             {existing.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 rounded-[10px] bg-black/[.03] dark:bg-white/[.04] px-3 py-2 mb-2">
-                <span className="text-xs flex-1 truncate text-[#111827] dark:text-slate-200">“{s.reference_text}”</span>
+              <div key={s.id} className="flex items-center gap-2 rounded-lg bg-black/[.03] dark:bg-white/[.04] px-3 py-2 mb-2">
+                <span className="text-xs flex-1 truncate text-[var(--color-text-main)] dark:text-slate-200">“{s.reference_text}”</span>
                 <IconBtn label="Delete sample" onClick={async () => { await voicebox.deleteSample(s.id); setExisting((c) => c.filter((x) => x.id !== s.id)); }}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </IconBtn>
@@ -173,10 +173,10 @@ export const VoiceEditor: React.FC<{
             ))}
 
             {samples.map((s) => (
-              <div key={s.key} className="rounded-[12px] border border-[#EBECEF] dark:border-[#2C2F38] p-3 mb-2 space-y-2">
+              <div key={s.key} className="rounded-xl border border-[var(--color-border-subtle)] p-3 mb-2 space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold flex-1 truncate text-[#111827] dark:text-white">{s.fileName}</span>
-                  {s.durationSec != null && <span className="text-[11px] text-[#9CA3AF] tabular-nums">{fmtDuration(s.durationSec)}</span>}
+                  <span className="text-xs font-semibold flex-1 truncate text-[var(--color-text-main)]">{s.fileName}</span>
+                  {s.durationSec != null && <span className="text-xs text-[var(--color-text-muted)] tabular-nums">{fmtDuration(s.durationSec)}</span>}
                   <IconBtn label="Remove sample" onClick={() => setSamples((c) => c.filter((x) => x.key !== s.key))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                 </div>
                 <TextArea rows={2} value={s.text} placeholder="Type exactly what is said in this clip" maxLength={1000}
@@ -223,15 +223,15 @@ export const VoiceEditor: React.FC<{
                 {presetList.map((v) => (
                   <button key={v.voice_id} role="radio" aria-checked={presetVoice === v.voice_id}
                     onClick={() => { setPresetVoice(v.voice_id); if (!name) setName(v.name); if (v.language) setLanguage(v.language.slice(0, 2).toLowerCase()); }}
-                    className={cx('text-left px-3 py-2 rounded-[10px] border text-xs transition-colors',
+                    className={cx('text-left px-3 py-2 rounded-lg border text-xs transition-colors',
                       presetVoice === v.voice_id
                         ? 'bg-[var(--color-accent-pastel)] border-[var(--color-accent-vibrant)] text-[var(--color-accent-vibrant)]'
-                        : 'border-[#EBECEF] dark:border-[#2C2F38] hover:bg-black/[.03] dark:hover:bg-white/5 text-[#111827] dark:text-slate-200')}>
+                        : 'border-[var(--color-border-subtle)] hover:bg-black/[.03] dark:hover:bg-white/5 text-[var(--color-text-main)] dark:text-slate-200')}>
                     <span className="font-semibold block truncate">{v.name}</span>
-                    <span className="text-[11px] text-[#9CA3AF]">{[v.gender, v.language].filter(Boolean).join(' · ')}</span>
+                    <span className="text-xs text-[var(--color-text-muted)]">{[v.gender, v.language].filter(Boolean).join(' · ')}</span>
                   </button>
                 ))}
-                {presetList.length === 0 && <p className="text-xs text-[#9CA3AF] col-span-2">This engine has no built-in voices.</p>}
+                {presetList.length === 0 && <p className="text-xs text-[var(--color-text-muted)] col-span-2">This engine has no built-in voices.</p>}
               </div>
             )}
           </section>
@@ -247,7 +247,7 @@ export const VoiceEditor: React.FC<{
         )}
 
         <details className="group">
-          <summary className="text-xs font-semibold text-[#6B7280] dark:text-slate-400 cursor-pointer select-none">More options</summary>
+          <summary className="text-xs font-semibold text-[var(--color-text-muted)] cursor-pointer select-none">More options</summary>
           <div className="mt-3 space-y-3">
             <div><Label hint="optional">Description</Label><TextInput value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} /></div>
             <div><Label>Preferred engine</Label>

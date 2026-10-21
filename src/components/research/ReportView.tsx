@@ -17,7 +17,7 @@ function inline(text: string, onCite: (n: number) => void, key: string): React.R
       t.slice(1, -1).split(/[,;]/).forEach((part, j) => {
         const range = part.split('-').map((x) => parseInt(x, 10));
         const n = range[0];
-        out.push(<button key={`${k}-${j}`} onClick={() => onCite(n)} className="mx-px px-1 rounded bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[10px] font-semibold align-super hover:brightness-95" aria-label={`Citation ${part.trim()}`}>{part.trim()}</button>);
+        out.push(<button key={`${k}-${j}`} onClick={() => onCite(n)} className="mx-px px-1 rounded bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold align-super hover:brightness-95" aria-label={`Citation ${part.trim()}`}>{part.trim()}</button>);
       });
     } else if (t.startsWith('**')) out.push(<strong key={k}>{t.slice(2, -2)}</strong>);
     else if (t.startsWith('*')) out.push(<em key={k}>{t.slice(1, -1)}</em>);
@@ -39,7 +39,7 @@ export const ReportMarkdown: React.FC<{ text: string; onCite: (n: number) => voi
     if (!list) return;
     const L = list;
     nodes.push(L.ordered
-      ? <ol key={nodes.length} className="my-2.5 space-y-1.5 text-[13px]">{L.items.map((it, i) => <li id={inRefs ? `ref-${it.n}` : undefined} key={i} className="flex gap-2 scroll-mt-4 rounded-md px-1 -mx-1 target:bg-[var(--color-accent-pastel)]"><span className="text-[#9CA3AF] tabular-nums shrink-0 w-6 text-right">{it.n}.</span><span>{inline(it.t, onCite, `o${i}`)}</span></li>)}</ol>
+      ? <ol key={nodes.length} className="my-2.5 space-y-1.5 text-[13px]">{L.items.map((it, i) => <li id={inRefs ? `ref-${it.n}` : undefined} key={i} className="flex gap-2 scroll-mt-4 rounded-md px-1 -mx-1 target:bg-[var(--color-accent-pastel)]"><span className="text-[var(--color-text-muted)] tabular-nums shrink-0 w-6 text-right">{it.n}.</span><span>{inline(it.t, onCite, `o${i}`)}</span></li>)}</ol>
       : <ul key={nodes.length} className="my-2.5 list-disc pl-5 space-y-1">{L.items.map((it, i) => <li key={i}>{inline(it.t, onCite, `u${i}`)}</li>)}</ul>);
     list = null;
   };
@@ -50,7 +50,7 @@ export const ReportMarkdown: React.FC<{ text: string; onCite: (n: number) => voi
       flushP(); flushL();
       inRefs = /^references?$/i.test(h[2].trim());
       const lvl = h[1].length;
-      nodes.push(React.createElement(`h${lvl + 0}`, { key: nodes.length, className: lvl === 1 ? 'text-xl font-semibold mt-1 mb-3 text-[#111827] dark:text-white' : lvl === 2 ? 'text-base font-semibold mt-6 mb-1.5 text-[#111827] dark:text-white' : 'text-sm font-semibold mt-4 mb-1 text-[#111827] dark:text-white' }, h[2]));
+      nodes.push(React.createElement(`h${lvl + 0}`, { key: nodes.length, className: lvl === 1 ? 'text-xl font-semibold mt-1 mb-3 text-[var(--color-text-main)]' : lvl === 2 ? 'text-base font-semibold mt-6 mb-1.5 text-[var(--color-text-main)]' : 'text-sm font-semibold mt-4 mb-1 text-[var(--color-text-main)]' }, h[2]));
     } else if (ul) { flushP(); if (!list || list.ordered) { flushL(); list = { ordered: false, items: [] }; } list.items.push({ t: ul[1] }); }
     else if (ol) { flushP(); if (!list || !list.ordered) { flushL(); list = { ordered: true, items: [] }; } list.items.push({ n: Number(ol[1]), t: ol[2] }); }
     else if (!line.trim()) { flushP(); flushL(); }
@@ -78,7 +78,7 @@ export const ReportView: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) =
         {p.phase === 'done' && rejected > 0 && <Btn size="sm" variant="ghost" icon={<RefreshCw className="w-3 h-3" />} onClick={() => r.writeReportFromPartial(p.id)}>Rewrite without {rejected} rejected source{rejected > 1 ? 's' : ''}</Btn>}
       </div>
       <Banner tone="info">Written by a local model from paper <strong>abstracts only</strong>. Treat it as a map of the literature and check claims against the cited sources.</Banner>
-      <article className="rounded-2xl border border-[#EBECEF] dark:border-[#2C2F38] bg-white dark:bg-[#1D1F25] px-7 py-6">
+      <article className="rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] px-7 py-6">
         {p.report ? <ReportMarkdown text={p.report} onCite={jump} /> : <div className="space-y-2.5">{[90, 70, 85, 60].map((w) => <Skeleton key={w} className="h-3" />)}</div>}
         {writing && <span className="inline-block w-1.5 h-4 bg-[var(--color-accent-vibrant)] animate-pulse align-middle ml-0.5" aria-hidden />}
       </article>

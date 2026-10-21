@@ -270,18 +270,18 @@ export default function App() {
   // ── Layout ────────────────────────────────────────────────────────────────
   const panel = (
     <main className={isTauri
-      ? 'w-full h-full bg-white dark:bg-[#18191E] flex overflow-hidden transition-colors'
-      : 'w-full max-w-[1360px] bg-white dark:bg-[#18191E] rounded-[28px] sm:rounded-[32px] shadow-[0_24px_70px_-15px_rgba(0,0,0,0.14)] dark:shadow-[0_24px_70px_-15px_rgba(0,0,0,0.7)] border border-black/5 dark:border-[#2C2F38] flex overflow-hidden min-h-[640px] md:min-h-[720px] transition-colors'}>
+      ? 'w-full h-full bg-[var(--color-bg-panel)] flex overflow-hidden transition-colors'
+      : 'w-full max-w-[1360px] bg-[var(--color-bg-panel)] rounded-[28px] sm:rounded-[32px] shadow-[0_24px_70px_-15px_rgba(0,0,0,0.14)] dark:shadow-[0_24px_70px_-15px_rgba(0,0,0,0.7)] border border-black/5 dark:border-[var(--color-border-subtle)] flex overflow-hidden min-h-[640px] md:min-h-[720px] transition-colors'}>
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
         onOpenSettings={() => setIsSettingsOpen(true)}
         darkMode={settings.darkMode}
         onToggleTheme={() => setSettings((s) => ({ ...s, darkMode: !s.darkMode }))}
-        unreadCount={0}
+        engines={eng.engines}
       />
 
-      <div className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 flex flex-col overflow-hidden bg-white dark:bg-[#18191E]">
+      <div className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
         {currentView === 'chat' && (
           <ChatWorkspace
             sessions={sessions}

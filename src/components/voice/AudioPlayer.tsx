@@ -63,7 +63,7 @@ export const AudioPlayer: React.FC<{
             style={{ height: `${Math.max(8, p * 100)}%` }} />
         ))}
       </div>
-      <span className="text-[11px] tabular-nums text-[#6B7280] dark:text-slate-400 w-[74px] text-right">
+      <span className="text-xs tabular-nums text-[var(--color-text-muted)] w-[74px] text-right">
         {fmtDuration(pos)} / {fmtDuration(duration)}
       </span>
       {onDownload && <IconBtn label="Save as WAV" onClick={onDownload}><Download className="w-4 h-4" /></IconBtn>}

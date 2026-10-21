@@ -140,12 +140,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const availableModels = models;
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-white dark:bg-[#18191E] rounded-[24px] overflow-hidden select-none border border-black/5 dark:border-[#2C2F38]">
+    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden select-none border border-black/5 dark:border-[var(--color-border-subtle)]">
       {/* Session List Sidebar */}
-      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-[#EBECEF] dark:border-[#2C2F38] p-4 flex flex-col justify-between shrink-0 bg-[#F9FAFC] dark:bg-[#202228]">
+      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] p-4 flex flex-col justify-between shrink-0 bg-[var(--color-bg-sidebar)]">
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-xs font-bold text-[#111827] dark:text-white uppercase tracking-wider">
+            <span className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider">
               Conversations
             </span>
             <button
@@ -164,15 +164,15 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <div
                   key={s.id}
                   onClick={() => onSelectSession(s.id)}
-                  className={`group flex items-center justify-between p-2.5 rounded-[14px] cursor-pointer transition-all border ${
+                  className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
                     isActive
                       ? 'bg-[var(--color-accent-pastel)] border-[var(--color-accent-pastel-border)] text-[var(--color-accent-vibrant)] font-semibold shadow-xs'
-                      : 'border-transparent text-[#6B7280] dark:text-slate-400 hover:bg-white dark:hover:bg-[#282B34] hover:text-[#111827] dark:hover:text-white'
+                      : 'border-transparent text-[var(--color-text-muted)] hover:bg-white dark:hover:bg-[#282B34] hover:text-[var(--color-text-main)]'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-xs truncate">{s.title}</p>
-                    <p className="text-[10px] opacity-70 font-normal">
+                    <p className="text-xs opacity-70 font-normal">
                       {[s.category || 'Local AI', s.modelTag || s.model].filter(Boolean).join(' · ')}
                     </p>
                   </div>
@@ -195,19 +195,19 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
 
         {/* Engine status indicator */}
-        <div className="pt-3 border-t border-[#EBECEF] dark:border-[#2C2F38] text-[11px] text-[#6B7280] dark:text-slate-400 flex items-center justify-between">
+        <div className="pt-3 border-t border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)] flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${ollamaUp ? 'bg-emerald-500' : ollamaUp === null ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'}`} />
-            <span className="font-semibold text-[#111827] dark:text-white">{ollamaUp ? 'Ollama running' : ollamaUp === null ? 'Connecting…' : 'Ollama stopped'}</span>
+            <span className="font-semibold text-[var(--color-text-main)]">{ollamaUp ? 'Ollama running' : ollamaUp === null ? 'Connecting…' : 'Ollama stopped'}</span>
           </div>
-          <span className="tabular-nums font-mono text-[10px]">{engineUrl('ollama').replace('http://', '')}</span>
+          <span className="tabular-nums font-mono text-xs">{engineUrl('ollama').replace('http://', '')}</span>
         </div>
       </div>
 
       {/* Main Chat Thread */}
-      <div className="flex-1 flex flex-col justify-between h-full bg-white dark:bg-[#18191E]">
+      <div className="flex-1 flex flex-col justify-between h-full bg-[var(--color-bg-panel)]">
         {/* Header with Model Selector */}
-        <div className="h-14 px-6 border-b border-[#EBECEF] dark:border-[#2C2F38] flex items-center justify-between">
+        <div className="h-14 px-6 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
           {/* Model Selector Pill */}
           <div className="relative">
             <button
@@ -220,9 +220,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </button>
 
             {modelDropdownOpen && (
-              <div className="absolute top-10 left-0 z-30 w-64 bg-white dark:bg-[#22242B] rounded-[16px] shadow-xl border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] p-1.5 space-y-1">
+              <div className="absolute top-10 left-0 z-30 w-64 bg-[var(--color-bg-card)] rounded-2xl shadow-xl border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] p-1.5 space-y-1">
                 {availableModels.length === 0 && (
-                  <div className="p-3 text-xs text-[#6B7280] dark:text-slate-400 leading-relaxed">
+                  <div className="p-3 text-xs text-[var(--color-text-muted)] leading-relaxed">
                     No models installed yet.
                     <button onClick={onOpenEngines} className="block mt-1 font-semibold text-[var(--color-accent-vibrant)] hover:underline">Pull one from Engines</button>
                   </div>
@@ -234,14 +234,14 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       onSelectModel(m.id);
                       setModelDropdownOpen(false);
                     }}
-                    className={`w-full text-left p-2 rounded-[10px] text-xs flex flex-col transition-colors ${
+                    className={`w-full text-left p-2 rounded-lg text-xs flex flex-col transition-colors ${
                       selectedModel === m.id
                         ? 'bg-[var(--color-accent-vibrant)] text-white'
-                        : 'hover:bg-[var(--color-accent-pastel)] text-[#111827] dark:text-white'
+                        : 'hover:bg-[var(--color-accent-pastel)] text-[var(--color-text-main)]'
                     }`}
                   >
                     <span className="font-semibold">{m.name}</span>
-                    <span className="text-[10px] opacity-80">{m.tag}</span>
+                    <span className="text-xs opacity-80">{m.tag}</span>
                   </button>
                 ))}
               </div>
@@ -250,9 +250,9 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
           {/* Speed of the latest reply in this conversation (hidden until there is one) */}
           {lastTps > 0 && (
-            <div className="flex items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400" title="Speed of the latest reply">
+            <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" title="Speed of the latest reply">
               <Activity className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="tabular-nums font-semibold px-2 py-0.5 rounded-full bg-[var(--color-badge-bg)] text-[var(--color-badge-text)] text-[11px]">
+              <span className="tabular-nums font-semibold px-2 py-0.5 rounded-full bg-[var(--color-badge-bg)] text-[var(--color-badge-text)] text-xs">
                 {lastTps} tok/s
               </span>
             </div>
@@ -275,15 +275,15 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               )}
 
               <div
-                className={`max-w-[78%] rounded-[20px] p-4 text-xs leading-relaxed group relative shadow-xs ${
+                className={`max-w-[78%] rounded-2xl p-4 text-sm leading-relaxed group relative shadow-xs ${
                   msg.role === 'user'
                     ? 'bg-[var(--color-accent-vibrant)] text-white rounded-br-sm'
-                    : 'bg-[var(--color-accent-pastel)] dark:bg-[#22242B] text-[#111827] dark:text-[#F3F4F6] rounded-bl-sm border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]'
+                    : 'bg-[var(--color-accent-pastel)] dark:bg-[#22242B] text-[var(--color-text-main)] rounded-bl-sm border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]'
                 }`}
               >
                 {/* Image attachment preview if present */}
                 {msg.attachment && (
-                  <div className="mb-2 rounded-[12px] overflow-hidden max-w-[240px]">
+                  <div className="mb-2 rounded-xl overflow-hidden max-w-[240px]">
                     <img
                       src={msg.attachment.url}
                       alt={msg.attachment.name}
@@ -296,7 +296,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
                 {/* Tokens per sec footer */}
                 {msg.tokensPerSec ? (
-                  <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-[10px] text-[#6B7280] dark:text-slate-400">
+                  <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
                     <span>Local VRAM inference</span>
                     <span className="tabular-nums font-medium">
                       {msg.tokensPerSec} tok/s · {msg.durationMs}ms
@@ -327,12 +327,12 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ))}
 
           {isStreaming && (
-            <div className="flex gap-3 items-center text-xs text-[#6B7280] dark:text-slate-400 animate-pulse">
+            <div className="flex gap-3 items-center text-xs text-[var(--color-text-muted)] animate-pulse">
               <div className="w-7 h-7 rounded-full bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] flex items-center justify-center shrink-0">
                 <Bot className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />
               </div>
               <span>Generating on your GPU…</span>
-              <button onClick={onStop} className="ml-1 h-6 px-2.5 rounded-full bg-black/5 dark:bg-white/10 text-[11px] font-semibold text-[#111827] dark:text-white hover:bg-black/10 dark:hover:bg-white/15 not-italic">Stop</button>
+              <button onClick={onStop} className="ml-1 h-6 px-2.5 rounded-full bg-black/5 dark:bg-white/10 text-xs font-semibold text-[var(--color-text-main)] hover:bg-black/10 dark:hover:bg-white/15 not-italic">Stop</button>
             </div>
           )}
 
@@ -340,7 +340,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
 
         {/* Input Composer Box */}
-        <div className="p-4 border-t border-[#EBECEF] dark:border-[#2C2F38]">
+        <div className="p-4 border-t border-[var(--color-border-subtle)]">
           {/* File Attachment Pill */}
           {filePreview && (
             <div className="mb-2 flex items-center gap-2 p-1.5 pl-3 bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] rounded-full w-fit max-w-sm">
@@ -349,25 +349,25 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 alt="Upload preview"
                 className="w-5 h-5 rounded-full object-cover"
               />
-              <span className="text-[11px] font-medium text-[var(--color-accent-vibrant)] truncate">
+              <span className="text-xs font-medium text-[var(--color-accent-vibrant)] truncate">
                 {attachedFile?.name}
               </span>
               <button
                 onClick={removeAttachment}
                 className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10"
               >
-                <X className="w-3 h-3 text-[#6B7280]" />
+                <X className="w-3 h-3 text-[var(--color-text-muted)]" />
               </button>
             </div>
           )}
 
-          {micError && <p role="alert" className="mb-2 px-3 text-[11px] text-rose-600 dark:text-rose-400">{micError}</p>}
+          {micError && <p role="alert" className="mb-2 px-3 text-xs text-rose-600 dark:text-rose-400">{micError}</p>}
           <form
             onSubmit={handleSend}
-            className="flex items-center gap-2 bg-[#F9FAFC] dark:bg-[#202228] rounded-full p-2 pl-4 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] shadow-xs"
+            className="flex items-center gap-2 bg-[var(--color-bg-sidebar)] rounded-full p-2 pl-4 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] shadow-xs"
           >
             {/* Attachment Button */}
-            <label className="cursor-pointer text-[#6B7280] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white transition-colors p-1">
+            <label className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white transition-colors p-1">
               <input
                 type="file"
                 accept="image/*"
@@ -384,7 +384,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               className={`p-1.5 rounded-full transition-colors ${
                 isRecording
                   ? 'bg-rose-500 text-white animate-pulse'
-                  : 'text-[#6B7280] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white'
               }`}
               title={isRecording ? 'Stop dictation' : isTranscribing ? 'Transcribing…' : 'Dictate (local Whisper)'}
               aria-label={isRecording ? 'Stop dictation' : 'Dictate'}
@@ -398,7 +398,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder={`Message ${selectedModel}`}
-              className="flex-1 bg-transparent text-xs text-[#111827] dark:text-white placeholder-[#9CA3AF] focus:outline-none"
+              className="flex-1 bg-transparent text-xs text-[var(--color-text-main)] placeholder-[#9CA3AF] focus:outline-none"
             />
 
             {/* Send button */}

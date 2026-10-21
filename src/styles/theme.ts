@@ -119,8 +119,8 @@ export function applyThemeToDocument(
   const font = FONTS[fontKey] || FONTS.jakarta;
   const root = document.documentElement;
 
-  // Background and base surface variables
-  // White in light mode, Dark Grey (#18191E / #22242B) in dark mode
+  // Semantic surface/text tokens. Components must use these (var(--color-*)) and never hard-code hex.
+  // Muted text is >= 4.5:1 on its surface in both themes (WCAG AA); do not add a lighter grey.
   if (darkMode) {
     root.classList.add('dark');
     root.style.setProperty('--color-bg-base', '#18191E');

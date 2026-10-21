@@ -49,7 +49,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
             {recording && <span className="absolute inset-0 rounded-full bg-rose-500/30" style={{ transform: `scale(${1 + level * 0.6})`, transition: 'transform 80ms' }} aria-hidden />}
             <span className="relative">{busy ? <Spinner className="w-7 h-7" /> : recording ? <Square className="w-6 h-6" fill="currentColor" /> : <Mic className="w-7 h-7" />}</span>
           </button>
-          <p className="text-xs text-[#6B7280] dark:text-slate-400 tabular-nums h-4">
+          <p className="text-xs text-[var(--color-text-muted)] tabular-nums h-4">
             {recording ? `Listening… ${fmtDuration(secs)}` : busy ? 'Transcribing on your device…' : 'Tap to dictate'}
           </p>
         </div>
@@ -60,7 +60,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
             {langs.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
           </Select>
         </div>
-        <p className="text-[11px] text-[#9CA3AF] leading-relaxed">Audio is transcribed by Whisper running on this PC. Nothing leaves your machine.</p>
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Audio is transcribed by Whisper running on this PC. Nothing leaves your machine.</p>
       </Card>
 
       <div className="space-y-3 min-w-0">
@@ -81,9 +81,9 @@ const CaptureCard: React.FC<{ c: Capture; onChange: (c: Capture) => void; onDele
   const text = c.transcript_refined || c.transcript_raw;
   return (
     <Card className="p-4">
-      <p className="text-sm leading-relaxed text-[#111827] dark:text-slate-100 whitespace-pre-wrap">{text || <span className="text-[#9CA3AF]">No speech detected.</span>}</p>
+      <p className="text-sm leading-relaxed text-[var(--color-text-main)] whitespace-pre-wrap">{text || <span className="text-[var(--color-text-muted)]">No speech detected.</span>}</p>
       <div className="flex items-center gap-1 mt-3">
-        <span className="text-[11px] text-[#9CA3AF] flex-1 tabular-nums">
+        <span className="text-xs text-[var(--color-text-muted)] flex-1 tabular-nums">
           {new Date(c.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {fmtDuration((c.duration_ms ?? 0) / 1000)}{c.transcript_refined && ' · cleaned up'}
         </span>
         {!c.transcript_refined && c.transcript_raw && (

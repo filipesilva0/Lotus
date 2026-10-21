@@ -15,13 +15,13 @@ export const Modal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-modal="true" aria-label={title}
-        className={cx('w-full max-h-[88vh] flex flex-col rounded-3xl bg-white dark:bg-[#1D1F25] border border-[#EBECEF] dark:border-[#2C2F38] shadow-2xl', wide ? 'max-w-2xl' : 'max-w-md')}>
+        className={cx('w-full max-h-[88vh] flex flex-col rounded-3xl bg-[var(--color-bg-card)] border border-[var(--color-border-subtle)] shadow-2xl', wide ? 'max-w-2xl' : 'max-w-md')}>
         <div className="flex items-center justify-between px-5 pt-4 pb-3">
-          <h2 className="text-sm font-semibold text-[#111827] dark:text-white">{title}</h2>
+          <h2 className="text-sm font-semibold text-[var(--color-text-main)]">{title}</h2>
           <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
         </div>
         <div className="px-5 pb-4 overflow-y-auto flex-1">{children}</div>
-        {footer && <div className="px-5 py-3 border-t border-[#EBECEF] dark:border-[#2C2F38] flex justify-end gap-2">{footer}</div>}
+        {footer && <div className="px-5 py-3 border-t border-[var(--color-border-subtle)] flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );

@@ -16,28 +16,28 @@ const useNow = (on: boolean) => {
 const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; sub?: string }> = ({ icon, label, value, sub }) => (
   <Card className="px-4 py-3 flex items-center gap-3">
     <div className="w-9 h-9 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] flex items-center justify-center shrink-0">{icon}</div>
-    <div className="min-w-0"><p className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">{label}</p><p className="text-base font-semibold text-[#111827] dark:text-white tabular-nums leading-tight">{value}</p>{sub && <p className="text-[10px] text-[#9CA3AF] tabular-nums">{sub}</p>}</div>
+    <div className="min-w-0"><p className="text-xs font-semibold text-[var(--color-text-muted)]">{label}</p><p className="text-base font-semibold text-[var(--color-text-main)] tabular-nums leading-tight">{value}</p>{sub && <p className="text-xs text-[var(--color-text-muted)] tabular-nums">{sub}</p>}</div>
   </Card>
 );
 
 const AgentCard: React.FC<{ a: AgentState; maxDepth: number }> = ({ a, maxDepth }) => {
   const [open, setOpen] = useState(a.status === 'running');
-  const icon = a.status === 'running' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" /> : a.status === 'done' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : a.status === 'error' ? <AlertCircle className="w-3.5 h-3.5 text-rose-500" /> : <Clock className="w-3.5 h-3.5 text-[#9CA3AF]" />;
+  const icon = a.status === 'running' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" /> : a.status === 'done' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : a.status === 'error' ? <AlertCircle className="w-3.5 h-3.5 text-rose-500" /> : <Clock className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />;
   return (
     <Card className="overflow-hidden">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-black/[.02] dark:hover:bg-white/[.03] transition-colors">
         <span className="mt-0.5">{icon}</span>
         <span className="flex-1 min-w-0">
-          <span className="block text-xs font-semibold text-[#111827] dark:text-white truncate">{a.title}</span>
-          <span className="block text-[11px] text-[#6B7280] dark:text-slate-400 truncate">{a.action}</span>
-          <span className="block text-[10px] text-[#9CA3AF] tabular-nums mt-1">Round {Math.max(1, a.iteration)}/{maxDepth} · {a.sourceIds.length} sources · {fmtNum(a.tokensIn + a.tokensOut)} tokens</span>
+          <span className="block text-xs font-semibold text-[var(--color-text-main)] truncate">{a.title}</span>
+          <span className="block text-xs text-[var(--color-text-muted)] truncate">{a.action}</span>
+          <span className="block text-xs text-[var(--color-text-muted)] tabular-nums mt-1">Round {Math.max(1, a.iteration)}/{maxDepth} · {a.sourceIds.length} sources · {fmtNum(a.tokensIn + a.tokensOut)} tokens</span>
         </span>
-        <ChevronDown className={cx('w-4 h-4 text-[#9CA3AF] transition-transform mt-0.5', open && 'rotate-180')} />
+        <ChevronDown className={cx('w-4 h-4 text-[var(--color-text-muted)] transition-transform mt-0.5', open && 'rotate-180')} />
       </button>
       {open && (
-        <ul className="px-4 pb-3 pt-1 space-y-1 border-t border-[#EBECEF] dark:border-[#2C2F38] max-h-44 overflow-y-auto font-mono text-[10.5px] text-[#6B7280] dark:text-slate-400">
+        <ul className="px-4 pb-3 pt-1 space-y-1 border-t border-[var(--color-border-subtle)] max-h-44 overflow-y-auto font-mono text-[10.5px] text-[var(--color-text-muted)]">
           {a.log.length === 0 && <li>No activity yet.</li>}
-          {a.log.map((l, i) => <li key={i}><span className="text-[#9CA3AF]">{fmtClock(l.t)}</span> {l.text}</li>)}
+          {a.log.map((l, i) => <li key={i}><span className="text-[var(--color-text-muted)]">{fmtClock(l.t)}</span> {l.text}</li>)}
         </ul>
       )}
     </Card>
@@ -65,7 +65,7 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
   return (
     <div className="p-6 space-y-5 max-w-4xl mx-auto">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0"><h2 className="text-lg font-semibold text-[#111827] dark:text-white truncate">{p.title}</h2><p className="text-xs text-[#6B7280] dark:text-slate-400 truncate">{p.question}</p></div>
+        <div className="min-w-0"><h2 className="text-lg font-semibold text-[var(--color-text-main)] truncate">{p.title}</h2><p className="text-xs text-[var(--color-text-muted)] truncate">{p.question}</p></div>
         <Segmented value={view} onChange={setView} options={[{ id: 'live', label: 'Live' }, { id: 'report', label: 'Report' }]} />
       </div>
 
@@ -86,7 +86,7 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
           </div>
 
           <div>
-            <div className="flex justify-between text-[11px] font-semibold text-[#6B7280] dark:text-slate-400 mb-1.5"><span>{phaseText}</span><span className="tabular-nums">{Math.round(p.progress * 100)}%</span></div>
+            <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1.5"><span>{phaseText}</span><span className="tabular-nums">{Math.round(p.progress * 100)}%</span></div>
             <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden" role="progressbar" aria-valuenow={Math.round(p.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-full bg-[var(--color-accent-vibrant)] transition-[width] duration-500" style={{ width: `${p.progress * 100}%` }} />
             </div>
@@ -95,7 +95,7 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
           {/* Steering & pause deck */}
           <Card className="p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-semibold text-[#111827] dark:text-white flex-1">Steering</h3>
+              <h3 className="text-xs font-semibold text-[var(--color-text-main)] flex-1">Steering</h3>
               {p.paused
                 ? <Btn size="sm" variant="primary" icon={<Play className="w-3 h-3" fill="currentColor" />} onClick={() => r.resume(p.id)} disabled={!live}>Resume</Btn>
                 : <Btn size="sm" variant="secondary" icon={<Pause className="w-3 h-3" fill="currentColor" />} onClick={() => r.pause(p.id)} disabled={!live}>Pause</Btn>}
@@ -111,11 +111,11 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
             </form>
             {(p.injected.length > 0 || p.limits.excludedDomains.length > 0) && (
               <div className="flex flex-wrap gap-1.5">
-                {p.injected.map((t, i) => <span key={i} className="inline-flex items-center gap-1 h-6 pl-2.5 pr-1 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[11px] font-semibold max-w-full"><span className="truncate">{t}</span><button aria-label="Remove instruction" onClick={() => r.removeInjected(p.id, i)} className="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button></span>)}
-                {p.limits.excludedDomains.map((d) => <span key={d} className="inline-flex items-center h-6 px-2.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[11px] font-semibold">Excluding {d}</span>)}
+                {p.injected.map((t, i) => <span key={i} className="inline-flex items-center gap-1 h-6 pl-2.5 pr-1 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold max-w-full"><span className="truncate">{t}</span><button aria-label="Remove instruction" onClick={() => r.removeInjected(p.id, i)} className="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button></span>)}
+                {p.limits.excludedDomains.map((d) => <span key={d} className="inline-flex items-center h-6 px-2.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold">Excluding {d}</span>)}
               </div>
             )}
-            <p className="text-[11px] text-[#9CA3AF]">Instructions apply from each agent's next round. Excluded domains also remove sources already collected.</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Instructions apply from each agent's next round. Excluded domains also remove sources already collected.</p>
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -124,21 +124,21 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
 
           {/* Live query terminal */}
           <Card className="overflow-hidden">
-            <button onClick={() => setTermOpen(!termOpen)} aria-expanded={termOpen} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[#111827] dark:text-white">
-              <Terminal className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />Live query terminal<span className="font-normal text-[#9CA3AF] tabular-nums">· {p.queries.length}</span>
-              <ChevronDown className={cx('w-4 h-4 ml-auto text-[#9CA3AF] transition-transform', termOpen && 'rotate-180')} />
+            <button onClick={() => setTermOpen(!termOpen)} aria-expanded={termOpen} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-[var(--color-text-main)]">
+              <Terminal className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />Live query terminal<span className="font-normal text-[var(--color-text-muted)] tabular-nums">· {p.queries.length}</span>
+              <ChevronDown className={cx('w-4 h-4 ml-auto text-[var(--color-text-muted)] transition-transform', termOpen && 'rotate-180')} />
             </button>
             {termOpen && (
-              <div ref={termRef} className="bg-[#0F1117] text-[#C9D1D9] font-mono text-[11px] leading-relaxed max-h-56 overflow-y-auto px-4 py-3 space-y-0.5" role="log" aria-live="off">
-                {p.queries.length === 0 && <p className="text-[#6B7280]">Waiting for the first search…</p>}
+              <div ref={termRef} className="bg-[#0F1117] text-[#C9D1D9] font-mono text-xs leading-relaxed max-h-56 overflow-y-auto px-4 py-3 space-y-0.5" role="log" aria-live="off">
+                {p.queries.length === 0 && <p className="text-[var(--color-text-muted)]">Waiting for the first search…</p>}
                 {p.queries.map((q, i) => (
                   <div key={i} className="flex items-baseline gap-2 whitespace-nowrap overflow-hidden">
-                    <span className="text-[#6B7280]">{fmtClock(q.t)}</span>
+                    <span className="text-[var(--color-text-muted)]">{fmtClock(q.t)}</span>
                     <span className="w-[68px] shrink-0 text-[#8B949E]">{REPO_INFO[q.repo].name}</span>
                     <span className={cx('w-8 shrink-0 font-semibold', q.status >= 200 && q.status < 300 ? 'text-emerald-400' : 'text-rose-400')}>{q.status || 'ERR'}</span>
-                    <span className="w-14 shrink-0 text-[#6B7280] text-right tabular-nums">{q.ms}ms</span>
+                    <span className="w-14 shrink-0 text-[var(--color-text-muted)] text-right tabular-nums">{q.ms}ms</span>
                     <span className="w-12 shrink-0"><CredBadge c={rateDomain(REPO_INFO[q.repo].host, q.repo)} /></span>
-                    <span className="truncate">“{q.query}” <span className="text-[#6B7280]">→ {q.count}</span></span>
+                    <span className="truncate">“{q.query}” <span className="text-[var(--color-text-muted)]">→ {q.count}</span></span>
                   </div>
                 ))}
               </div>

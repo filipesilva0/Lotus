@@ -141,7 +141,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
             onChange={(e) => onText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void run(); } }}
             className="!text-sm min-h-[220px]" />
-          <div className="flex items-center justify-between mt-1.5 text-[11px] text-[#9CA3AF]">
+          <div className="flex items-center justify-between mt-1.5 text-xs text-[var(--color-text-muted)]">
             <span>Ctrl + Enter to generate</span>
             <span className="tabular-nums">{text.length.toLocaleString()} / 50,000</span>
           </div>
@@ -151,7 +151,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           {busy ? (
             <>
               <Btn variant="secondary" icon={<Square className="w-3.5 h-3.5" fill="currentColor" />} onClick={cancel}>Cancel</Btn>
-              <span className="flex items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
+              <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
                 <Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />
                 Generating… <span className="tabular-nums">{elapsed.toFixed(1)}s</span>
               </span>
@@ -172,7 +172,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
             <AudioPlayer src={result.url} autoPlay
               onDownload={async () => downloadBlob(await voicebox.exportAudio(result.gen.id), `${profile.name}-${result.gen.id.slice(0, 6)}.wav`)} />
             <div className="flex items-center justify-between">
-              <p className="text-[11px] text-[#6B7280] dark:text-slate-400 tabular-nums">
+              <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
                 {engineLabel(result.gen.engine)} · {fmtDuration(result.gen.duration)}
                 {result.gen.seed != null && <> · seed {result.gen.seed}</>}
               </p>
@@ -189,10 +189,10 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
                 <li key={g.id}>
                   <button
                     onClick={async () => setResult({ gen: g, url: await voicebox.audioUrl(g.id) })}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-[10px] hover:bg-black/[.04] dark:hover:bg-white/5 transition-colors">
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-black/[.04] dark:hover:bg-white/5 transition-colors">
                     {g.is_favorited && <Star className="w-3 h-3 text-amber-500 shrink-0" fill="currentColor" />}
-                    <span className="text-xs text-[#111827] dark:text-slate-200 truncate flex-1">{g.text}</span>
-                    <span className="text-[11px] text-[#9CA3AF] tabular-nums shrink-0">{g.profile_name ?? ''} · {fmtDuration(g.duration)}</span>
+                    <span className="text-xs text-[var(--color-text-main)] dark:text-slate-200 truncate flex-1">{g.text}</span>
+                    <span className="text-xs text-[var(--color-text-muted)] tabular-nums shrink-0">{g.profile_name ?? ''} · {fmtDuration(g.duration)}</span>
                   </button>
                 </li>
               ))}
@@ -225,8 +225,8 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input type="checkbox" checked={personality} onChange={(e) => setPersonality(e.target.checked)} className="mt-0.5 accent-[var(--color-accent-vibrant)]" />
             <span className="text-xs leading-snug">
-              <span className="font-semibold text-[#111827] dark:text-white block">Speak in character</span>
-              <span className="text-[#6B7280] dark:text-slate-400">Rewrites your text in this voice's personality using the local LLM.</span>
+              <span className="font-semibold text-[var(--color-text-main)] block">Speak in character</span>
+              <span className="text-[var(--color-text-muted)]">Rewrites your text in this voice's personality using the local LLM.</span>
             </span>
           </label>
         )}
@@ -241,9 +241,9 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           </div>
         </div>
 
-        <div className="border-t border-[#EBECEF] dark:border-[#2C2F38] pt-3">
-          <button onClick={() => setFxOpen(!fxOpen)} aria-expanded={fxOpen} className="w-full flex items-center justify-between text-xs font-semibold text-[#111827] dark:text-white">
-            <span>Effects <span className="text-[#9CA3AF] font-medium tabular-nums">{effectiveFx.filter((e) => e.enabled).length || ''}</span></span>
+        <div className="border-t border-[var(--color-border-subtle)] pt-3">
+          <button onClick={() => setFxOpen(!fxOpen)} aria-expanded={fxOpen} className="w-full flex items-center justify-between text-xs font-semibold text-[var(--color-text-main)]">
+            <span>Effects <span className="text-[var(--color-text-muted)] font-medium tabular-nums">{effectiveFx.filter((e) => e.enabled).length || ''}</span></span>
             <ChevronDown className={cx('w-3.5 h-3.5 transition-transform', fxOpen && 'rotate-180')} />
           </button>
           {fxOpen && (
@@ -254,8 +254,8 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           )}
         </div>
 
-        <div className="border-t border-[#EBECEF] dark:border-[#2C2F38] pt-3">
-          <button onClick={() => setAdvOpen(!advOpen)} aria-expanded={advOpen} className="w-full flex items-center justify-between text-xs font-semibold text-[#111827] dark:text-white">
+        <div className="border-t border-[var(--color-border-subtle)] pt-3">
+          <button onClick={() => setAdvOpen(!advOpen)} aria-expanded={advOpen} className="w-full flex items-center justify-between text-xs font-semibold text-[var(--color-text-main)]">
             Advanced
             <ChevronDown className={cx('w-3.5 h-3.5 transition-transform', advOpen && 'rotate-180')} />
           </button>

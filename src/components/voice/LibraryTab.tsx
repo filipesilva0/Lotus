@@ -50,7 +50,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
     <div className="p-5 space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <TextInput aria-label="Search generations" placeholder="Search what was said" value={q} onChange={(e) => setQ(e.target.value)} className="!pl-9" />
         </div>
         <Select aria-label="Filter by voice" value={profileId} onChange={(e) => setProfileId(e.target.value)} className="!w-44">
@@ -78,8 +78,8 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                     <Play className="w-3.5 h-3.5 ml-0.5" fill="currentColor" />
                   </button>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[#111827] dark:text-slate-100 line-clamp-2 leading-relaxed">{g.text}</p>
-                    <p className="text-[11px] text-[#9CA3AF] mt-1 tabular-nums">
+                    <p className="text-xs text-[var(--color-text-main)] line-clamp-2 leading-relaxed">{g.text}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1 tabular-nums">
                       {g.profile_name ?? 'Voice'} · {engineLabel(g.engine)} · {fmtDuration(g.duration)} · {new Date(g.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
                       {g.status === 'failed' && <span className="text-rose-600 dark:text-rose-400"> · failed{g.error ? `: ${g.error}` : ''}</span>}
                     </p>
@@ -92,7 +92,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                   </div>
                 </div>
                 {open?.id === g.id && (
-                  <div className="mt-3 pt-3 border-t border-[#EBECEF] dark:border-[#2C2F38] space-y-2">
+                  <div className="mt-3 pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
                     <AudioPlayer src={open.url} autoPlay />
                     <div className="flex gap-2">
                       <Btn size="sm" variant="ghost" onClick={() => onSpeakAgain(g.text, g.profile_id)}>Edit & regenerate</Btn>

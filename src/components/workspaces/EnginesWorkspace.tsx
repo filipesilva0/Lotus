@@ -38,11 +38,11 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
   useEffect(() => setTab(initialTab), [initialTab]);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-white dark:bg-[#18191E] rounded-[24px] overflow-hidden border border-black/5 dark:border-[#2C2F38]">
-      <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-[#EBECEF] dark:border-[#2C2F38]">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
+      <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-[var(--color-border-subtle)]">
         <div>
-          <h2 className="text-lg font-semibold text-[#111827] dark:text-white leading-tight">Engines</h2>
-          <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-0.5">The local programs Tomo talks to. Everything runs on this PC.</p>
+          <h2 className="text-lg font-semibold text-[var(--color-text-main)] leading-tight">Engines</h2>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">The local programs Tomo talks to. Everything runs on this PC.</p>
         </div>
         <Segmented value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
       </header>
@@ -68,17 +68,17 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
         <Card className="p-5 border-[var(--color-accent-pastel-border)] bg-[var(--color-accent-pastel)]/40">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-[#111827] dark:text-white">Get set up</h3>
-              <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-0.5">Tomo works with three local engines. Chat and voice are the quickest to start with.</p>
+              <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Get set up</h3>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Tomo works with three local engines. Chat and voice are the quickest to start with.</p>
             </div>
             <Btn size="sm" variant="ghost" onClick={() => { localStorage.setItem('tomo.setup.dismissed', '1'); setDismissed(true); }}>Dismiss</Btn>
           </div>
           <ul className="mt-4 space-y-2">
             {(['ollama', 'voicebox', 'comfyui'] as EngineId[]).map((id) => (
               <li key={id} className="flex items-center gap-3 text-xs">
-                {engines[id].up ? <Check className="w-4 h-4 text-emerald-500 shrink-0" /> : <Circle className="w-4 h-4 text-[#9CA3AF] shrink-0" />}
-                <span className="font-semibold text-[#111827] dark:text-white w-20">{META[id].name}</span>
-                <span className="text-[#6B7280] dark:text-slate-400 flex-1">
+                {engines[id].up ? <Check className="w-4 h-4 text-emerald-500 shrink-0" /> : <Circle className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />}
+                <span className="font-semibold text-[var(--color-text-main)] w-20">{META[id].name}</span>
+                <span className="text-[var(--color-text-muted)] flex-1">
                   {engines[id].up ? 'Running' : id === 'comfyui' ? 'Optional, for images' : 'Not running'}
                 </span>
                 {engines[id].up && id !== 'comfyui' && <Btn size="sm" variant="secondary" onClick={goModels}>Get models</Btn>}
@@ -89,9 +89,9 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
       )}
 
       {gpu && (
-        <div className="flex items-center gap-2 text-xs text-[#6B7280] dark:text-slate-400">
+        <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
           <Cpu className="w-3.5 h-3.5" />
-          <span className="font-semibold text-[#111827] dark:text-white">{gpu.name}</span>
+          <span className="font-semibold text-[var(--color-text-main)]">{gpu.name}</span>
           {gpu.vramTotalGb > 0 && <span className="tabular-nums">· {(gpu.vramTotalGb - gpu.vramFreeGb).toFixed(1)} of {gpu.vramTotalGb.toFixed(0)} GB VRAM in use</span>}
         </div>
       )}
@@ -117,10 +117,10 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className={cx('w-2 h-2 rounded-full', s.up ? 'bg-emerald-500' : s.up === null || busy ? 'bg-amber-400 animate-pulse' : 'bg-[#9CA3AF]')} />
-            <h3 className="text-sm font-semibold text-[#111827] dark:text-white">{m.name}</h3>
-            {s.version && <span className="text-[11px] font-mono text-[#9CA3AF]">{s.version}</span>}
+            <h3 className="text-sm font-semibold text-[var(--color-text-main)]">{m.name}</h3>
+            {s.version && <span className="text-xs font-mono text-[var(--color-text-muted)]">{s.version}</span>}
           </div>
-          <p className="text-[11px] text-[#6B7280] dark:text-slate-400 mt-1" role="status">{status}</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-1" role="status">{status}</p>
         </div>
         {s.up ? (
           <Btn size="sm" variant="secondary" loading={s.phase === 'stopping'} disabled={!s.supervised || busy} icon={<Square className="w-3 h-3" fill="currentColor" />}
@@ -130,7 +130,7 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
         )}
       </div>
 
-      <p className="text-xs text-[#6B7280] dark:text-slate-400 leading-relaxed">{m.blurb}</p>
+      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">{m.blurb}</p>
 
       {s.needsExe && (
         <Banner tone="warn" action={<Btn size="sm" variant="secondary" icon={<FolderSearch className="w-3 h-3" />} onClick={async () => { if (await browseForExe(id)) void eng.start(id); }}>Browse…</Btn>}>
@@ -141,25 +141,25 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
       )}
       {s.error && <Banner tone="error">{s.error}</Banner>}
 
-      <div className="mt-auto pt-3 border-t border-[#EBECEF] dark:border-[#2C2F38] space-y-3">
-        <label className="flex items-center gap-2 text-xs cursor-pointer text-[#111827] dark:text-slate-200">
+      <div className="mt-auto pt-3 border-t border-[var(--color-border-subtle)] space-y-3">
+        <label className="flex items-center gap-2 text-xs cursor-pointer text-[var(--color-text-main)] dark:text-slate-200">
           <input type="checkbox" className="accent-[var(--color-accent-vibrant)]" checked={s.policy === 'on_launch'}
             onChange={(e) => eng.setPolicy(id, (e.target.checked ? 'on_launch' : 'manual') as Policy)} />
           Start with Tomo
         </label>
-        <div className="flex items-center gap-2 text-[11px]">
+        <div className="flex items-center gap-2 text-xs">
           {editUrl ? (
             <>
-              <TextInput value={url} onChange={(e) => setUrl(e.target.value)} className="!h-7 !text-[11px] font-mono" aria-label={`${m.name} address`} />
+              <TextInput value={url} onChange={(e) => setUrl(e.target.value)} className="!h-7 !text-xs font-mono" aria-label={`${m.name} address`} />
               <Btn size="sm" variant="primary" onClick={() => { setEngineUrl(id, url); setEditUrl(false); void eng.refresh(); }}>Save</Btn>
               <Btn size="sm" variant="ghost" onClick={() => { setUrl(DEFAULT_URLS[id]); setEngineUrl(id, DEFAULT_URLS[id]); setEditUrl(false); void eng.refresh(); }}>Reset</Btn>
             </>
           ) : (
             <>
-              <span className="font-mono text-[#9CA3AF] flex-1 truncate">{engineUrl(id).replace('http://', '')}</span>
+              <span className="font-mono text-[var(--color-text-muted)] flex-1 truncate">{engineUrl(id).replace('http://', '')}</span>
               <button className="font-semibold text-[var(--color-accent-vibrant)] hover:underline" onClick={() => setEditUrl(true)}>Change</button>
               {!s.up && <button className="font-semibold text-[var(--color-accent-vibrant)] hover:underline inline-flex items-center gap-1" onClick={() => openExternal(m.install)}>{m.installLabel}<ExternalLink className="w-3 h-3" /></button>}
-              {!s.up && <button className="font-semibold text-[#6B7280] hover:underline" onClick={async () => { if (await browseForExe(id)) void eng.start(id); }}>Locate…</button>}
+              {!s.up && <button className="font-semibold text-[var(--color-text-muted)] hover:underline" onClick={async () => { if (await browseForExe(id)) void eng.start(id); }}>Locate…</button>}
             </>
           )}
         </div>
@@ -175,7 +175,7 @@ const SUGGESTIONS = ['llama3.2:3b', 'qwen2.5-coder:7b', 'llava:7b', 'deepseek-r1
 
 const Section: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
   <section className="space-y-2.5">
-    <div><h3 className="text-sm font-semibold text-[#111827] dark:text-white">{title}</h3>{hint && <p className="text-[11px] text-[#6B7280] dark:text-slate-400">{hint}</p>}</div>
+    <div><h3 className="text-sm font-semibold text-[var(--color-text-main)]">{title}</h3>{hint && <p className="text-xs text-[var(--color-text-muted)]">{hint}</p>}</div>
     {children}
   </section>
 );
@@ -257,10 +257,10 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
                 <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
                   <div className={cx('h-full bg-[var(--color-accent-vibrant)] transition-[width]', pulling.pct === null && 'animate-pulse w-1/3')} style={pulling.pct !== null ? { width: `${pulling.pct * 100}%` } : undefined} />
                 </div>
-                <p className="text-[11px] text-[#6B7280] tabular-nums">{pulling.name} · {pulling.status}{pulling.pct !== null && ` · ${Math.round(pulling.pct * 100)}%`}</p>
+                <p className="text-xs text-[var(--color-text-muted)] tabular-nums">{pulling.name} · {pulling.status}{pulling.pct !== null && ` · ${Math.round(pulling.pct * 100)}%`}</p>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <div className="flex flex-wrap gap-1.5 text-xs">
                 {SUGGESTIONS.filter((x) => !ollamaModels.some((m) => m.name === x)).map((x) => (
                   <button key={x} onClick={() => setPull(x)} className="px-2.5 h-6 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-mono font-semibold hover:brightness-95">{x}</button>
                 ))}
@@ -270,10 +270,10 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
             <ul className="space-y-2">
               {ollamaModels.map((m) => (
                 <li key={m.name}><Card className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[11px] font-semibold flex items-center justify-center shrink-0">{m.details?.parameter_size ?? '?'}</div>
+                  <div className="w-9 h-9 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold flex items-center justify-center shrink-0">{m.details?.parameter_size ?? '?'}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[#111827] dark:text-white truncate">{m.name}</p>
-                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400">{[m.details?.family, m.details?.quantization_level, gb(m.size)].filter(Boolean).join(' · ')}</p>
+                    <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">{m.name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">{[m.details?.family, m.details?.quantization_level, gb(m.size)].filter(Boolean).join(' · ')}</p>
                   </div>
                   <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={async () => { await ollamaClient.deleteModel(m.name).catch((e) => setErr(e.message)); await loadOllama(); }}>Delete</Btn>
                 </Card></li>
@@ -291,8 +291,8 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
               return (
                 <li key={m.model_name}><Card className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[#111827] dark:text-white truncate">{m.display_name}</p>
-                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400 tabular-nums">
+                    <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">{m.display_name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
                       {m.size_mb ? `${(m.size_mb / 1024).toFixed(1)} GB` : 'Size unknown'}
                       {m.downloaded && !m.downloading && ' · Downloaded'}{m.loaded && ' · In memory'}
                       {m.downloading && ` · Downloading${t?.progress != null ? ` ${Math.round(t.progress)}%` : '…'}`}
@@ -321,7 +321,7 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
           <Empty title="No checkpoints found" body="Put a Stable Diffusion or FLUX checkpoint file in ComfyUI's models/checkpoints folder, then restart ComfyUI." className="!py-6" />
         ) : (
           <ul className="space-y-2">{checkpoints.map((c) => (
-            <li key={c}><Card className="px-4 py-3 text-xs font-semibold text-[#111827] dark:text-white truncate">{c}</Card></li>
+            <li key={c}><Card className="px-4 py-3 text-xs font-semibold text-[var(--color-text-main)] truncate">{c}</Card></li>
           ))}</ul>
         )}
       </Section>
@@ -350,15 +350,15 @@ const StorageTab: React.FC = () => {
       <Card className="p-5 space-y-3">
         <div className="flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-[var(--color-accent-vibrant)]" />
-          <h3 className="text-sm font-semibold text-[#111827] dark:text-white">{paths.portable ? 'Portable mode' : 'Installed mode'}</h3>
+          <h3 className="text-sm font-semibold text-[var(--color-text-main)]">{paths.portable ? 'Portable mode' : 'Installed mode'}</h3>
         </div>
-        <p className="text-xs text-[#6B7280] dark:text-slate-400 leading-relaxed">
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
           {paths.portable
             ? 'Tomo keeps its data next to the program, so you can move the whole folder or run it from a USB drive.'
             : 'Tomo keeps its data in your user profile. To make it portable, use the portable download, or reinstall and tick "Portable data".'}
         </p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 text-[11px] bg-black/[.04] dark:bg-white/5 rounded-[10px] px-3 py-2 truncate">{paths.dataDir}</code>
+          <code className="flex-1 text-xs bg-black/[.04] dark:bg-white/5 rounded-lg px-3 py-2 truncate">{paths.dataDir}</code>
           <Btn variant="secondary" icon={<FolderOpen className="w-3.5 h-3.5" />}
             onClick={async () => { setErr(null); try { await revealPath(paths.dataDir); } catch { setErr('That folder does not exist yet. It is created the first time Voicebox starts.'); } }}>Show</Btn>
         </div>
@@ -367,8 +367,8 @@ const StorageTab: React.FC = () => {
       <Card className="divide-y divide-[#EBECEF] dark:divide-[#2C2F38]">
         {rows.map(([k, v]) => (
           <div key={k} className="px-5 py-3 grid grid-cols-[1fr_1.4fr] gap-4 text-xs">
-            <span className="font-semibold text-[#111827] dark:text-white">{k}</span>
-            <span className="text-[#6B7280] dark:text-slate-400 break-all">{v}</span>
+            <span className="font-semibold text-[var(--color-text-main)]">{k}</span>
+            <span className="text-[var(--color-text-muted)] break-all">{v}</span>
           </div>
         ))}
       </Card>

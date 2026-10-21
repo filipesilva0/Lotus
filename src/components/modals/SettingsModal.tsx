@@ -85,15 +85,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-sm select-none animate-fadeIn">
-      <div className="w-full max-w-4xl bg-white dark:bg-[#18191E] rounded-[28px] shadow-2xl border border-black/5 dark:border-[#2C2F38] flex flex-col md:flex-row h-[90vh] max-h-[640px] overflow-hidden">
+      <div className="w-full max-w-4xl bg-[var(--color-bg-panel)] rounded-[28px] shadow-2xl border border-black/5 dark:border-[var(--color-border-subtle)] flex flex-col md:flex-row h-[90vh] max-h-[640px] overflow-hidden">
         {/* Left Settings Sidebar */}
-        <div className="w-full md:w-60 bg-[#F9FAFC] dark:bg-[#202228] p-4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[#EBECEF] dark:border-[#2C2F38] shrink-0">
+        <div className="w-full md:w-60 bg-[var(--color-bg-sidebar)] p-4 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] shrink-0">
           <div>
             <div className="px-2 py-1 mb-3">
-              <span className="text-[10px] font-bold text-[#6B7280] dark:text-slate-400 uppercase tracking-wider">
+              <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                 Tomo Studio Settings
               </span>
-              <h2 className="text-sm font-bold text-[#111827] dark:text-white leading-tight">
+              <h2 className="text-sm font-bold text-[var(--color-text-main)] leading-tight">
                 Preferences
               </h2>
             </div>
@@ -106,10 +106,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[14px] text-xs transition-all text-left ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
                       isActive
                         ? 'bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] text-[var(--color-accent-vibrant)] font-bold shadow-xs'
-                        : 'text-[#6B7280] dark:text-slate-400 hover:text-[#111827] dark:hover:text-white hover:bg-[var(--color-accent-pastel)]/40 dark:hover:bg-[#282B34]'
+                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent-pastel)]/40 dark:hover:bg-[#282B34]'
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" strokeWidth={1.75} />
@@ -120,21 +120,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </nav>
           </div>
 
-          <div className="pt-3 border-t border-[#EBECEF] dark:border-[#2C2F38] px-2 text-[10px] text-[#6B7280]">
+          <div className="pt-3 border-t border-[var(--color-border-subtle)] px-2 text-xs text-[var(--color-text-muted)]">
             <span>Tomo v1.0.0 · Local AI Studio</span>
           </div>
         </div>
 
         {/* Right Settings Content Area */}
-        <div className="flex-1 flex flex-col justify-between overflow-hidden bg-white dark:bg-[#18191E]">
+        <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[var(--color-bg-panel)]">
           {/* Header */}
-          <div className="h-14 px-6 border-b border-[#EBECEF] dark:border-[#2C2F38] flex items-center justify-between shrink-0">
-            <h3 className="text-xs font-bold text-[#111827] dark:text-white uppercase tracking-wider">
+          <div className="h-14 px-6 border-b border-[var(--color-border-subtle)] flex items-center justify-between shrink-0">
+            <h3 className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider">
               {tabs.find((t) => t.id === activeTab)?.label}
             </h3>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B7280] hover:text-[#111827] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -146,13 +146,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'inference' && (
               <div className="space-y-5">
                 {/* Default Model */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-2 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-black/5 dark:border-white/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Active Model Checkpoint
                       </span>
-                      <p className="text-[11px] text-[#8B8F99]">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         Default neural weights used for conversation and vision analysis.
                       </p>
                     </div>
@@ -160,7 +160,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <select
                     value={settings.selectedModel}
                     onChange={(e) => onUpdateSettings({ selectedModel: e.target.value })}
-                    className="w-full h-9 bg-white dark:bg-[#0E1A33] rounded-xl px-3 text-xs font-semibold text-[#0E1A33] dark:text-white border border-black/5 dark:border-white/10 focus:outline-none cursor-pointer"
+                    className="w-full h-9 bg-white dark:bg-[#0E1A33] rounded-xl px-3 text-xs font-semibold text-[var(--color-text-main)] border border-black/5 dark:border-white/10 focus:outline-none cursor-pointer"
                   >
                     <option value="llama3.2:3b">Llama 3.2 3B Instruct (Ultra Fast · Meta)</option>
                     <option value="qwen2.5-coder:7b">Qwen 2.5 Coder 7B (Code Specialist · Alibaba)</option>
@@ -170,13 +170,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Temperature Pill Slider */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-3 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-3 border border-black/5 dark:border-white/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Temperature (Sampling Randomness)
                       </span>
-                      <p className="text-[11px] text-[#8B8F99]">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         0.2 for precise coding, 0.7 for balanced chat, 1.1+ for creative generation.
                       </p>
                     </div>
@@ -194,25 +194,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
 
                   {/* Preset Quick Chips */}
-                  <div className="flex gap-2 pt-1 text-[11px]">
+                  <div className="flex gap-2 pt-1 text-xs">
                     <button
                       type="button"
                       onClick={() => onUpdateSettings({ temperature: 0.2 })}
-                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[#0E1A33] dark:text-white border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
+                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[var(--color-text-main)] border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
                     >
                       Precise (0.2)
                     </button>
                     <button
                       type="button"
                       onClick={() => onUpdateSettings({ temperature: 0.7 })}
-                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[#0E1A33] dark:text-white border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
+                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[var(--color-text-main)] border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
                     >
                       Balanced (0.7)
                     </button>
                     <button
                       type="button"
                       onClick={() => onUpdateSettings({ temperature: 1.1 })}
-                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[#0E1A33] dark:text-white border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
+                      className="px-2.5 py-0.5 rounded-full bg-white dark:bg-[#0E1A33] text-[var(--color-text-main)] border border-black/5 dark:border-white/10 hover:border-[#0E1A33] transition-colors"
                     >
                       Creative (1.1)
                     </button>
@@ -220,13 +220,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Top-P Nucleus Sampling */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-2 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-black/5 dark:border-white/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Top-P (Nucleus Sampling)
                       </span>
-                      <p className="text-[11px] text-[#8B8F99]">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         Limits token selection to top cumulative probability mass.
                       </p>
                     </div>
@@ -244,13 +244,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Context Window Length */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-2 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-black/5 dark:border-white/5">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Context Window (Max Tokens)
                       </span>
-                      <p className="text-[11px] text-[#8B8F99]">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         KV Cache size allocated in VRAM for conversation memory.
                       </p>
                     </div>
@@ -263,8 +263,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClick={() => onUpdateSettings({ contextWindow: ctx })}
                         className={`py-2 rounded-xl text-xs font-semibold transition-all border ${
                           settings.contextWindow === ctx
-                            ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[#0E1A33] border-transparent shadow-xs'
-                            : 'bg-white dark:bg-[#0E1A33] text-[#0E1A33] dark:text-white border-black/5 dark:border-white/10 hover:border-[#0E1A33]'
+                            ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[var(--color-text-main)] border-transparent shadow-xs'
+                            : 'bg-white dark:bg-[#0E1A33] text-[var(--color-text-main)] border-black/5 dark:border-white/10 hover:border-[#0E1A33]'
                         }`}
                       >
                         {ctx >= 1000 ? `${ctx / 1024}K tokens` : `${ctx} tokens`}
@@ -274,12 +274,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Reasoning <think> Block Mode */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-2 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-black/5 dark:border-white/5">
                   <div>
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Deep Reasoning &lt;think&gt; Display
                     </span>
-                    <p className="text-[11px] text-[#8B8F99]">
+                    <p className="text-xs text-[var(--color-text-muted)]">
                       How DeepSeek R1 and reasoning models render internal chain-of-thought blocks.
                     </p>
                   </div>
@@ -295,8 +295,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         onClick={() => onUpdateSettings({ reasoningBlockMode: mode.id })}
                         className={`py-1.5 rounded-xl text-xs font-semibold transition-all border ${
                           settings.reasoningBlockMode === mode.id
-                            ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[#0E1A33] border-transparent shadow-xs'
-                            : 'bg-white dark:bg-[#0E1A33] text-[#0E1A33] dark:text-white border-black/5 dark:border-white/10'
+                            ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[var(--color-text-main)] border-transparent shadow-xs'
+                            : 'bg-white dark:bg-[#0E1A33] text-[var(--color-text-main)] border-black/5 dark:border-white/10'
                         }`}
                       >
                         {mode.label}
@@ -306,9 +306,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* System Prompt / Custom Instructions */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] space-y-2 border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-black/5 dark:border-white/5">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Custom System Instructions (Odysseus / ChatGPT Persona)
                     </span>
                     <button
@@ -319,7 +319,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             'You are Tomo, an intelligent local AI engineer and creative assistant. Answer concisely and accurately.',
                         })
                       }
-                      className="text-[10px] text-[#8B8F99] hover:text-[#0E1A33] dark:hover:text-white flex items-center gap-1"
+                      className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] dark:hover:text-white flex items-center gap-1"
                     >
                       <RotateCcw className="w-3 h-3" />
                       <span>Reset</span>
@@ -330,7 +330,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(e) => onUpdateSettings({ systemPrompt: e.target.value })}
                     rows={3}
                     placeholder="Provide overarching guidelines for how the model should behave, respond, and format answers..."
-                    className="w-full p-3 bg-white dark:bg-[#0E1A33] rounded-xl text-xs text-[#0E1A33] dark:text-white border border-black/5 dark:border-white/10 focus:outline-none resize-none leading-relaxed"
+                    className="w-full p-3 bg-white dark:bg-[#0E1A33] rounded-xl text-xs text-[var(--color-text-main)] border border-black/5 dark:border-white/10 focus:outline-none resize-none leading-relaxed"
                   />
                 </div>
               </div>
@@ -340,12 +340,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'chat' && (
               <div className="space-y-4">
                 {/* Send on Enter */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] flex items-center justify-between border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl flex items-center justify-between border border-black/5 dark:border-white/5">
                   <div>
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Send Message with Enter
                     </span>
-                    <p className="text-[11px] text-[#8B8F99] mt-0.5">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                       Pressing Enter submits message; Shift + Enter creates a new line.
                     </p>
                   </div>
@@ -356,12 +356,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Auto Scroll */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] flex items-center justify-between border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl flex items-center justify-between border border-black/5 dark:border-white/5">
                   <div>
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Auto-Scroll During Generation
                     </span>
-                    <p className="text-[11px] text-[#8B8F99] mt-0.5">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                       Smoothly scrolls viewport down as incoming tokens stream in real time.
                     </p>
                   </div>
@@ -372,12 +372,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Code Copy Language */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] flex items-center justify-between border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl flex items-center justify-between border border-black/5 dark:border-white/5">
                   <div>
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Include Language Header on Code Copy
                     </span>
-                    <p className="text-[11px] text-[#8B8F99] mt-0.5">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                       Copies markdown ```typescript tags alongside code snippets.
                     </p>
                   </div>
@@ -388,12 +388,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Message Density */}
-                <div className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] flex items-center justify-between border border-black/5 dark:border-white/5">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl flex items-center justify-between border border-black/5 dark:border-white/5">
                   <div>
-                    <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Message Layout Density
                     </span>
-                    <p className="text-[11px] text-[#8B8F99] mt-0.5">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
                       Choose between spacious comfortable bubbles or tight developer density.
                     </p>
                   </div>
@@ -403,8 +403,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => onUpdateSettings({ density: 'comfortable' })}
                       className={`px-3 py-1 rounded-full transition-all ${
                         settings.density === 'comfortable'
-                          ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[#0E1A33]'
-                          : 'text-[#8B8F99]'
+                          ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[var(--color-text-main)]'
+                          : 'text-[var(--color-text-muted)]'
                       }`}
                     >
                       Comfortable
@@ -414,8 +414,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => onUpdateSettings({ density: 'compact' })}
                       className={`px-3 py-1 rounded-full transition-all ${
                         settings.density === 'compact'
-                          ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[#0E1A33]'
-                          : 'text-[#8B8F99]'
+                          ? 'bg-[#0E1A33] dark:bg-white text-white dark:text-[var(--color-text-main)]'
+                          : 'text-[var(--color-text-muted)]'
                       }`}
                     >
                       Compact
@@ -429,13 +429,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'appearance' && (
               <div className="space-y-5">
                 {/* Mode: Light vs Dark */}
-                <div className="p-4 bg-[#F9FAFC] dark:bg-[#202228] rounded-[20px] space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-[#111827] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Background Mode
                       </span>
-                      <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         White in Light Mode, Dark Grey in Dark Mode.
                       </p>
                     </div>
@@ -457,11 +457,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-300" />
-                        <span className="font-bold text-[#111827]">
+                        <span className="font-bold text-[var(--color-text-main)]">
                           Light Mode (White)
                         </span>
                       </div>
-                      <p className="text-[10px] text-[#6B7280]">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         Pure white surface panels, soft pastels for secondary elements, high contrast typography.
                       </p>
                     </button>
@@ -481,7 +481,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           Dark Mode (Dark Grey)
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-400">
+                      <p className="text-xs text-slate-400">
                         Deep dark-grey surfaces (#18191E / #202228), darkened pastels, lowered eye fatigue.
                       </p>
                     </button>
@@ -489,12 +489,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Color Palettes (Amber, Purple, Green, Blue, Pink) */}
-                <div className="p-4 bg-[#F9FAFC] dark:bg-[#202228] rounded-[20px] space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
                   <div>
-                    <span className="text-xs font-bold text-[#111827] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Color Palette (Vibrant Accents & Pastels)
                     </span>
-                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                    <p className="text-xs text-[var(--color-text-muted)]">
                       Vibrant tone for buttons and key actions; gentle pastels for badges, cards, and borders.
                     </p>
                   </div>
@@ -550,7 +550,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           onClick={() => onUpdateSettings({ palette: p.id })}
                           className={`p-3 rounded-2xl flex flex-col items-center gap-2 border-2 transition-all ${
                             isSelected
-                              ? 'border-[var(--color-accent-vibrant)] bg-white dark:bg-[#18191E] shadow-xs scale-102 ring-2 ring-[var(--color-accent-pastel-border)]'
+                              ? 'border-[var(--color-accent-vibrant)] bg-[var(--color-bg-panel)] shadow-xs scale-102 ring-2 ring-[var(--color-accent-pastel-border)]'
                               : 'border-transparent bg-white/70 dark:bg-[#18191E]/60 hover:bg-white dark:hover:bg-[#18191E]'
                           }`}
                         >
@@ -569,11 +569,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           </div>
 
                           <div className="text-center">
-                            <span className="text-xs font-bold text-[#111827] dark:text-white capitalize block">
+                            <span className="text-xs font-bold text-[var(--color-text-main)] capitalize block">
                               {p.name}
                             </span>
                             <span
-                              className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 inline-block"
+                              className="text-xs font-semibold px-1.5 py-0.5 rounded-full mt-0.5 inline-block"
                               style={{
                                 backgroundColor: settings.darkMode ? p.pastelDark : p.pastel,
                                 color: p.vibrant,
@@ -589,12 +589,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Live Theme Preview Card */}
-                <div className="p-4 bg-white dark:bg-[#18191E] rounded-[20px] border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] shadow-xs">
+                <div className="p-4 bg-[var(--color-bg-panel)] rounded-2xl border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] shadow-xs">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-[#111827] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Live Component Preview
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-badge-bg)] text-[var(--color-badge-text)] font-semibold capitalize">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-badge-bg)] text-[var(--color-badge-text)] font-semibold capitalize">
                       {settings.palette} Theme Active
                     </span>
                   </div>
@@ -616,12 +616,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Font Family Selector */}
-                <div className="p-4 bg-[#F9FAFC] dark:bg-[#202228] rounded-[20px] space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]">
+                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-3 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
                   <div>
-                    <span className="text-xs font-bold text-[#111827] dark:text-white">
+                    <span className="text-xs font-bold text-[var(--color-text-main)]">
                       Typography / Interface Font
                     </span>
-                    <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                    <p className="text-xs text-[var(--color-text-muted)]">
                       Set the typographical personality across all workspaces.
                     </p>
                   </div>
@@ -640,11 +640,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className={`p-2.5 rounded-xl text-left border transition-all ${
                           settings.fontFamily === f.id
                             ? 'bg-[var(--color-accent-vibrant)] text-white border-transparent shadow-xs'
-                            : 'bg-white dark:bg-[#18191E] text-[#111827] dark:text-white border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] hover:border-[var(--color-accent-vibrant)]'
+                            : 'bg-[var(--color-bg-panel)] text-[var(--color-text-main)] border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] hover:border-[var(--color-accent-vibrant)]'
                         }`}
                       >
                         <span className="text-xs font-bold block">{f.name}</span>
-                        <span className="text-[9px] opacity-80 block">{f.desc}</span>
+                        <span className="text-xs opacity-80 block">{f.desc}</span>
                       </button>
                     ))}
                   </div>
@@ -652,16 +652,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {/* Font Scaling & Density */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="p-4 bg-[#F9FAFC] dark:bg-[#202228] rounded-[20px] space-y-2 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]">
+                  <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
                     <div>
-                      <span className="text-xs font-bold text-[#111827] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Text Size Scale
                       </span>
-                      <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         Adjust overall interface scale.
                       </p>
                     </div>
-                    <div className="flex bg-white dark:bg-[#18191E] p-1 rounded-full border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] text-xs font-semibold">
+                    <div className="flex bg-[var(--color-bg-panel)] p-1 rounded-full border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] text-xs font-semibold">
                       {[
                         { id: 'sm' as const, label: 'Small (90%)' },
                         { id: 'md' as const, label: 'Medium (100%)' },
@@ -674,7 +674,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           className={`flex-1 py-1 rounded-full transition-all ${
                             settings.fontSize === sz.id
                               ? 'bg-[var(--color-accent-vibrant)] text-white shadow-xs'
-                              : 'text-[#6B7280] dark:text-slate-400'
+                              : 'text-[var(--color-text-muted)]'
                           }`}
                         >
                           {sz.label}
@@ -683,16 +683,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-4 bg-[#F9FAFC] dark:bg-[#202228] rounded-[20px] space-y-2 border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38]">
+                  <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl space-y-2 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
                     <div>
-                      <span className="text-xs font-bold text-[#111827] dark:text-white">
+                      <span className="text-xs font-bold text-[var(--color-text-main)]">
                         Interface Density
                       </span>
-                      <p className="text-[11px] text-[#6B7280] dark:text-slate-400">
+                      <p className="text-xs text-[var(--color-text-muted)]">
                         Padding and spacing of cards.
                       </p>
                     </div>
-                    <div className="flex bg-white dark:bg-[#18191E] p-1 rounded-full border border-[var(--color-accent-pastel-border)] dark:border-[#2C2F38] text-xs font-semibold">
+                    <div className="flex bg-[var(--color-bg-panel)] p-1 rounded-full border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] text-xs font-semibold">
                       {[
                         { id: 'comfortable' as const, label: 'Comfortable' },
                         { id: 'compact' as const, label: 'Compact' },
@@ -704,7 +704,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           className={`flex-1 py-1 rounded-full transition-all ${
                             settings.density === d.id
                               ? 'bg-[var(--color-accent-vibrant)] text-white shadow-xs'
-                              : 'text-[#6B7280] dark:text-slate-400'
+                              : 'text-[var(--color-text-muted)]'
                           }`}
                         >
                           {d.label}
@@ -723,10 +723,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === 'licenses' && (
               <div className="space-y-3">
-                <span className="text-xs font-bold text-[#0E1A33] dark:text-white">
+                <span className="text-xs font-bold text-[var(--color-text-main)]">
                   Open Source Notices & THIRD_PARTY_LICENSES.md
                 </span>
-                <pre className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[18px] text-[10px] text-[#0E1A33] dark:text-slate-300 font-mono whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed border border-black/5 dark:border-white/5">
+                <pre className="p-4 bg-[var(--color-bg-sidebar)] rounded-[18px] text-xs text-[var(--color-text-main)] dark:text-slate-300 font-mono whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed border border-black/5 dark:border-white/5">
                   {THIRD_PARTY_LICENSES_TEXT}
                 </pre>
               </div>
@@ -735,12 +735,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Footer */}
           <div className="h-14 px-6 border-t border-[#EBECEF] dark:border-[#1E293B] flex items-center justify-between shrink-0">
-            <span className="text-[11px] text-[#8B8F99]">
+            <span className="text-xs text-[var(--color-text-muted)]">
               Configuration changes are saved automatically.
             </span>
             <button
               onClick={onClose}
-              className="px-5 py-2 rounded-full bg-[#0E1A33] dark:bg-white text-white dark:text-[#0E1A33] text-xs font-bold hover:scale-105 active:scale-95 transition-transform"
+              className="px-5 py-2 rounded-full bg-[#0E1A33] dark:bg-white text-white dark:text-[var(--color-text-main)] text-xs font-bold hover:scale-105 active:scale-95 transition-transform"
             >
               Done
             </button>

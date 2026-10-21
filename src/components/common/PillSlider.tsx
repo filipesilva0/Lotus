@@ -83,7 +83,7 @@ export const PillSlider: React.FC<PillSliderProps> = ({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      className="relative w-full h-8 bg-white dark:bg-[#18191E] border border-[var(--color-accent-pastel-border,#EBECEF)] rounded-full cursor-ew-resize select-none overflow-hidden flex items-center justify-between px-3.5 shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)]/30"
+      className="relative w-full h-8 bg-[var(--color-bg-panel)] border border-[var(--color-accent-pastel-border,#EBECEF)] rounded-full cursor-ew-resize select-none overflow-hidden flex items-center justify-between px-3.5 shadow-xs transition-all focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)]/30"
     >
       {/* Background fill representing current slider level */}
       <div
@@ -103,7 +103,7 @@ export const PillSlider: React.FC<PillSliderProps> = ({
       </div>
 
       {/* Right Percentage Text */}
-      <span className="relative z-10 text-[11px] font-bold text-[var(--color-accent-vibrant,#2563EB)] tabular-nums">
+      <span className="relative z-10 text-xs font-bold text-[var(--color-accent-vibrant,#2563EB)] tabular-nums">
         {value}
         {unit}
       </span>

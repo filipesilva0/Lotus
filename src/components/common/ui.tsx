@@ -20,13 +20,13 @@ export const Btn: React.FC<BtnProps> = ({ variant = 'secondary', loading, size =
     {...rest}
     disabled={disabled || loading}
     className={cx(
-      'inline-flex items-center justify-center gap-1.5 rounded-[10px] font-semibold transition-colors select-none',
+      'inline-flex items-center justify-center gap-1.5 rounded-lg font-semibold transition-colors select-none',
       'disabled:opacity-45 disabled:cursor-not-allowed',
-      size === 'sm' ? 'h-7 px-2.5 text-[11px]' : 'h-9 px-4 text-xs',
+      size === 'sm' ? 'h-7 px-2.5 text-xs' : 'h-9 px-4 text-xs',
       variant === 'primary' && 'bg-[var(--color-accent-vibrant)] text-white hover:bg-[var(--color-accent-hover)]',
       variant === 'secondary' &&
         'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] border border-[var(--color-accent-pastel-border)] hover:brightness-95',
-      variant === 'ghost' && 'text-[#6B7280] dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#111827] dark:hover:text-white',
+      variant === 'ghost' && 'text-[var(--color-text-muted)] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[var(--color-text-main)]',
       variant === 'danger' && 'text-rose-600 dark:text-rose-400 hover:bg-rose-500/10',
       focus,
       className,
@@ -45,10 +45,10 @@ export const IconBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & {
     title={label}
     aria-label={label}
     className={cx(
-      'w-8 h-8 inline-flex items-center justify-center rounded-[10px] transition-colors disabled:opacity-40',
+      'w-8 h-8 inline-flex items-center justify-center rounded-lg transition-colors disabled:opacity-40',
       active
         ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]'
-        : 'text-[#6B7280] dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#111827] dark:hover:text-white',
+        : 'text-[var(--color-text-muted)] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[var(--color-text-main)]',
       focus,
       className,
     )}
@@ -77,7 +77,7 @@ export function Segmented<T extends string>({
             'px-3 h-7 inline-flex items-center justify-center gap-1.5 text-xs font-semibold rounded-full transition-all',
             value === o.id
               ? 'bg-[var(--color-accent-vibrant)] text-white shadow-xs'
-              : 'text-[#6B7280] dark:text-slate-400 hover:text-[#111827] dark:hover:text-white',
+              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]',
             focus,
           )}
         >
@@ -91,13 +91,13 @@ export function Segmented<T extends string>({
 
 export const Label: React.FC<{ children: React.ReactNode; hint?: React.ReactNode; className?: string }> = ({ children, hint, className }) => (
   <div className={cx('flex items-baseline justify-between mb-1.5', className)}>
-    <span className="text-[11px] font-semibold text-[#6B7280] dark:text-slate-400">{children}</span>
-    {hint && <span className="text-[11px] text-[#9CA3AF] tabular-nums">{hint}</span>}
+    <span className="text-xs font-semibold text-[var(--color-text-muted)]">{children}</span>
+    {hint && <span className="text-xs text-[var(--color-text-muted)] tabular-nums">{hint}</span>}
   </div>
 );
 
 const field =
-  'w-full rounded-[10px] bg-white dark:bg-[#1D1F25] border border-[#E4E6EB] dark:border-[#2C2F38] text-xs text-[#111827] dark:text-slate-100 placeholder:text-[#9CA3AF] hover:border-[#CDD0D8] dark:hover:border-[#3A3E4A] focus:border-[var(--color-accent-vibrant)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)]/20 transition-colors disabled:opacity-50';
+  'w-full rounded-lg bg-[var(--color-bg-card)] border border-[var(--color-border-subtle)] text-xs text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] hover:border-[#CDD0D8] dark:hover:border-[#3A3E4A] focus:border-[var(--color-accent-vibrant)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)]/20 transition-colors disabled:opacity-50';
 
 export const TextInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...p }, ref) => <input ref={ref} {...p} className={cx(field, 'h-9 px-3', className)} />,
@@ -133,13 +133,13 @@ export const Slider: React.FC<{
 };
 
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...p }) => (
-  <div {...p} className={cx('rounded-2xl border border-[#EBECEF] dark:border-[#2C2F38] bg-white dark:bg-[#22242B]', className)} />
+  <div {...p} className={cx('rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)]', className)} />
 );
 
 export const Spinner: React.FC<{ className?: string }> = ({ className }) => <Loader2 className={cx('animate-spin', className ?? 'w-4 h-4')} />;
 
 export const Skeleton: React.FC<{ className?: string }> = ({ className }) => (
-  <div className={cx('animate-pulse rounded-[10px] bg-black/[.06] dark:bg-white/[.07]', className)} />
+  <div className={cx('animate-pulse rounded-lg bg-black/[.06] dark:bg-white/[.07]', className)} />
 );
 
 export const Empty: React.FC<{ icon?: React.ReactNode; title: string; body?: string; action?: React.ReactNode; className?: string }> = ({
@@ -147,8 +147,8 @@ export const Empty: React.FC<{ icon?: React.ReactNode; title: string; body?: str
 }) => (
   <div className={cx('flex flex-col items-center justify-center text-center py-12 px-6', className)}>
     {icon && <div className="w-11 h-11 rounded-2xl bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] flex items-center justify-center mb-3">{icon}</div>}
-    <h3 className="text-sm font-semibold text-[#111827] dark:text-white">{title}</h3>
-    {body && <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-1 max-w-sm leading-relaxed">{body}</p>}
+    <h3 className="text-sm font-semibold text-[var(--color-text-main)]">{title}</h3>
+    {body && <p className="text-xs text-[var(--color-text-muted)] mt-1 max-w-sm leading-relaxed">{body}</p>}
     {action && <div className="mt-4 flex gap-2">{action}</div>}
   </div>
 );
@@ -159,7 +159,7 @@ export const Banner: React.FC<{ tone?: 'error' | 'info' | 'warn'; children: Reac
   <div
     role={tone === 'error' ? 'alert' : 'status'}
     className={cx(
-      'flex items-start gap-2.5 rounded-[12px] px-3 py-2.5 text-xs leading-relaxed',
+      'flex items-start gap-2.5 rounded-xl px-3 py-2.5 text-xs leading-relaxed',
       tone === 'error' && 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300',
       tone === 'warn' && 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300',
       tone === 'info' && 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]',

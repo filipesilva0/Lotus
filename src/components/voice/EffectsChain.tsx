@@ -45,11 +45,11 @@ export const EffectsChain: React.FC<{
       {chain.map((fx, i) => {
         const def = byType[fx.type];
         return (
-          <div key={i} className={cx('rounded-[12px] border border-[#EBECEF] dark:border-[#2C2F38] p-2.5', !fx.enabled && 'opacity-55')}>
+          <div key={i} className={cx('rounded-xl border border-[var(--color-border-subtle)] p-2.5', !fx.enabled && 'opacity-55')}>
             <div className="flex items-center gap-1.5">
               <input type="checkbox" checked={fx.enabled} onChange={(e) => patch(i, { enabled: e.target.checked })}
                 aria-label={`Enable ${def?.label ?? fx.type}`} className="accent-[var(--color-accent-vibrant)]" />
-              <span className="text-xs font-semibold flex-1 truncate text-[#111827] dark:text-white">{def?.label ?? fx.type}</span>
+              <span className="text-xs font-semibold flex-1 truncate text-[var(--color-text-main)]">{def?.label ?? fx.type}</span>
               <IconBtn label="Move up" className="!w-6 !h-6" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp className="w-3 h-3" /></IconBtn>
               <IconBtn label="Move down" className="!w-6 !h-6" onClick={() => move(i, 1)} disabled={i === chain.length - 1}><ArrowDown className="w-3 h-3" /></IconBtn>
               <IconBtn label="Remove effect" className="!w-6 !h-6" onClick={() => onChange(chain.filter((_, j) => j !== i))}><X className="w-3 h-3" /></IconBtn>
@@ -58,7 +58,7 @@ export const EffectsChain: React.FC<{
               <div className="mt-2 space-y-2">
                 {Object.entries(def.params).map(([k, pd]) => (
                   <div key={k}>
-                    <div className="flex justify-between text-[11px] text-[#6B7280] dark:text-slate-400 mb-1">
+                    <div className="flex justify-between text-xs text-[var(--color-text-muted)] mb-1">
                       <span>{pd.description ?? k}</span>
                       <span className="tabular-nums">{(fx.params[k] ?? pd.default).toFixed(pd.step && pd.step >= 1 ? 0 : 2)}</span>
                     </div>
@@ -91,7 +91,7 @@ export const EffectsChain: React.FC<{
             onClick={async () => { await onSavePreset!(name.trim(), chain); setName(''); setNaming(false); }}>Add</Btn>
         </div>
       )}
-      {chain.length === 0 && <p className="text-[11px] text-[#9CA3AF]">No effects. The voice is delivered as generated.</p>}
+      {chain.length === 0 && <p className="text-xs text-[var(--color-text-muted)]">No effects. The voice is delivered as generated.</p>}
     </div>
   );
 };

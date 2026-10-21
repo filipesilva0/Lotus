@@ -31,17 +31,17 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
   const list = tag ? r.projects.filter((x) => x.tags.includes(tag)) : r.projects;
 
   return (
-    <div className="flex-1 flex h-full min-h-0 bg-white dark:bg-[#18191E] rounded-[24px] overflow-hidden border border-black/5 dark:border-[#2C2F38]">
+    <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
       {/* Panel 1 · modes & project vault */}
-      <nav className="w-[236px] shrink-0 border-r border-[#EBECEF] dark:border-[#2C2F38] flex flex-col min-h-0" aria-label="Research projects">
-        <div className="p-3 space-y-3 border-b border-[#EBECEF] dark:border-[#2C2F38]">
+      <nav className="w-[236px] shrink-0 border-r border-[var(--color-border-subtle)] flex flex-col min-h-0" aria-label="Research projects">
+        <div className="p-3 space-y-3 border-b border-[var(--color-border-subtle)]">
           <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => { r.create(); setMode('A'); }}>New deep research task</Btn>
           <Segmented<'A' | 'B'> value={mode} onChange={setMode} className="w-full [&>button]:flex-1 [&>button]:px-1" options={[{ id: 'A', label: 'Scoping' }, { id: 'B', label: 'Live' }]} />
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by tag">
               {[null, ...tags].map((t) => (
                 <button key={t ?? 'all'} onClick={() => setTag(t)} aria-pressed={tag === t}
-                  className={cx('h-6 px-2 rounded-full text-[11px] font-semibold transition-colors', tag === t ? 'bg-[var(--color-accent-vibrant)] text-white' : 'bg-black/[.05] dark:bg-white/[.07] text-[#6B7280] dark:text-slate-300 hover:bg-black/10 dark:hover:bg-white/10')}>
+                  className={cx('h-6 px-2 rounded-full text-xs font-semibold transition-colors', tag === t ? 'bg-[var(--color-accent-vibrant)] text-white' : 'bg-black/[.05] dark:bg-white/[.07] text-[var(--color-text-muted)] hover:bg-black/10 dark:hover:bg-white/10')}>
                   {t ? (t.startsWith('#') ? t : `#${t}`) : 'All'}
                 </button>
               ))}
@@ -49,14 +49,14 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
           )}
         </div>
         <ul className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
-          {list.length === 0 && <li className="px-3 py-6 text-center text-[11px] text-[#9CA3AF]">{r.projects.length ? 'No tasks with this tag.' : 'Your research tasks will be listed here.'}</li>}
+          {list.length === 0 && <li className="px-3 py-6 text-center text-xs text-[var(--color-text-muted)]">{r.projects.length ? 'No tasks with this tag.' : 'Your research tasks will be listed here.'}</li>}
           {list.map((x) => (
             <li key={x.id} className="group relative">
               <button onClick={() => r.setActiveId(x.id)} aria-current={x.id === r.activeId}
-                className={cx('w-full text-left rounded-[12px] px-3 py-2.5 transition-colors', x.id === r.activeId ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-black/[.04] dark:hover:bg-white/5')}>
-                <span className="block text-xs font-semibold text-[#111827] dark:text-white line-clamp-2 pr-5 leading-snug">{x.title}</span>
-                <span className="flex items-center gap-2 mt-1.5"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-[10px] text-[#9CA3AF]">{ago(x.updatedAt)}</span></span>
-                {x.tags.length > 0 && <span className="block text-[10px] text-[var(--color-accent-vibrant)] mt-1 truncate">{x.tags.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')}</span>}
+                className={cx('w-full text-left rounded-xl px-3 py-2.5 transition-colors', x.id === r.activeId ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-black/[.04] dark:hover:bg-white/5')}>
+                <span className="block text-xs font-semibold text-[var(--color-text-main)] line-clamp-2 pr-5 leading-snug">{x.title}</span>
+                <span className="flex items-center gap-2 mt-1.5"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-xs text-[var(--color-text-muted)]">{ago(x.updatedAt)}</span></span>
+                {x.tags.length > 0 && <span className="block text-xs text-[var(--color-accent-vibrant)] mt-1 truncate">{x.tags.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')}</span>}
               </button>
               <span className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                 {confirm === x.id
@@ -70,9 +70,9 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
 
       {/* Panel 2 · adaptive workspace */}
       <section className="flex-1 min-w-0 flex flex-col min-h-0">
-        <header className="flex items-center gap-3 px-5 h-12 border-b border-[#EBECEF] dark:border-[#2C2F38] shrink-0">
+        <header className="flex items-center gap-3 px-5 h-12 border-b border-[var(--color-border-subtle)] shrink-0">
           <FlaskConical className="w-4 h-4 text-[var(--color-accent-vibrant)]" />
-          <h2 className="text-sm font-semibold text-[#111827] dark:text-white flex-1 truncate">{p ? (mode === 'A' ? 'Scoping & brief' : 'Live research') : 'Deep research'}</h2>
+          <h2 className="text-sm font-semibold text-[var(--color-text-main)] flex-1 truncate">{p ? (mode === 'A' ? 'Scoping & brief' : 'Live research') : 'Deep research'}</h2>
           {p && <PhaseBadge phase={p.phase} paused={p.paused} />}
           {p && <IconBtn label={inspector ? 'Hide inspector' : 'Show inspector'} active={inspector} onClick={() => setInspector(!inspector)}><PanelRight className="w-4 h-4" /></IconBtn>}
         </header>

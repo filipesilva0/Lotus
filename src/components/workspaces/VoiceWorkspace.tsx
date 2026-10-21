@@ -58,11 +58,11 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
   ];
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-white dark:bg-[#18191E] rounded-[24px] overflow-hidden border border-black/5 dark:border-[#2C2F38]">
-      <header className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[#EBECEF] dark:border-[#2C2F38]">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
+      <header className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--color-border-subtle)]">
         <Segmented value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />
-        <span className="flex items-center gap-2 text-[11px] font-semibold text-[#6B7280] dark:text-slate-400" role="status">
+        <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
           <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-emerald-500' : data.status === 'checking' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500')} />
           {data.status === 'online'
             ? `Voicebox${data.health?.gpu_type ? ` · ${data.health.gpu_type}` : data.health?.gpu_available ? ' · GPU' : ' · CPU'}`

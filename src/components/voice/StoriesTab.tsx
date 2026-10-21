@@ -190,10 +190,10 @@ export const StoriesTab: React.FC<{
         <ul className="space-y-1">
           {stories.map((s) => (
             <li key={s.id}>
-              <button onClick={() => open(s.id)} className={cx('w-full text-left px-3 py-2 rounded-[10px] text-xs transition-colors',
-                story?.id === s.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#111827] dark:text-slate-200')}>
+              <button onClick={() => open(s.id)} className={cx('w-full text-left px-3 py-2 rounded-lg text-xs transition-colors',
+                story?.id === s.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[var(--color-text-main)] dark:text-slate-200')}>
                 <span className="font-semibold block truncate">{s.name}</span>
-                <span className="text-[11px] opacity-70">{s.item_count} clip{s.item_count === 1 ? '' : 's'}</span>
+                <span className="text-xs opacity-70">{s.item_count} clip{s.item_count === 1 ? '' : 's'}</span>
               </button>
             </li>
           ))}
@@ -206,11 +206,11 @@ export const StoriesTab: React.FC<{
       ) : (
         <div className="space-y-3 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-[#111827] dark:text-white mr-2 truncate">{story.name}</h2>
+            <h2 className="text-sm font-semibold text-[var(--color-text-main)] mr-2 truncate">{story.name}</h2>
             {playing
               ? <Btn variant="primary" icon={<Square className="w-3.5 h-3.5" fill="currentColor" />} onClick={stop}>Stop</Btn>
               : <Btn variant="primary" disabled={!items.length} icon={<Play className="w-3.5 h-3.5" fill="currentColor" />} onClick={play}>Play</Btn>}
-            <span className="text-xs tabular-nums text-[#6B7280] dark:text-slate-400 w-20">{fmtDuration(playheadMs / 1000)} / {fmtDuration(totalMs / 1000 - 2)}</span>
+            <span className="text-xs tabular-nums text-[var(--color-text-muted)] w-20">{fmtDuration(playheadMs / 1000)} / {fmtDuration(totalMs / 1000 - 2)}</span>
             <div className="flex-1" />
             <div className="w-24"><Slider min={30} max={200} step={5} value={pxPerSec} onChange={setPxPerSec} label="Zoom" /></div>
             <Btn variant="ghost" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLineOpen(!lineOpen)}>Add line</Btn>
@@ -242,18 +242,18 @@ export const StoriesTab: React.FC<{
                 const r = e.currentTarget.getBoundingClientRect();
                 setPlayheadMs(Math.max(0, ((e.clientX - r.left) / pxPerSec) * 1000)); setSelected(null);
               }} data-bg>
-              <div className="h-6 border-b border-[#EBECEF] dark:border-[#2C2F38] relative text-[10px] text-[#9CA3AF] tabular-nums pointer-events-none">
+              <div className="h-6 border-b border-[var(--color-border-subtle)] relative text-xs text-[var(--color-text-muted)] tabular-nums pointer-events-none">
                 {ticks.filter((t) => pxPerSec >= 60 || t % 2 === 0).map((t) => <span key={t} className="absolute top-1" style={{ left: t * pxPerSec + 3 }}>{fmtDuration(t)}</span>)}
               </div>
               {Array.from({ length: tracks }).map((_, r) => (
-                <div key={r} data-bg className="absolute left-0 right-0 border-b border-dashed border-[#EBECEF] dark:border-[#2C2F38]" style={{ top: 24 + r * ROW_H, height: ROW_H }} />
+                <div key={r} data-bg className="absolute left-0 right-0 border-b border-dashed border-[var(--color-border-subtle)]" style={{ top: 24 + r * ROW_H, height: ROW_H }} />
               ))}
               {items.map((it) => {
                 const d = drag?.id === it.id ? drag : null;
                 const left = msToPx(d ? d.ms : it.start_time_ms), top = 24 + (d ? d.track : it.track) * ROW_H + 4;
                 return (
                   <div key={it.id} onPointerDown={(e) => startDrag(e, it)} role="button" tabIndex={0} aria-label={`${it.profile_name}: ${it.text}`}
-                    className={cx('absolute rounded-[10px] px-2.5 py-1.5 text-white text-[11px] leading-tight overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none',
+                    className={cx('absolute rounded-lg px-2.5 py-1.5 text-white text-xs leading-tight overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none',
                       selected === it.id && 'ring-2 ring-offset-1 ring-[var(--color-accent-vibrant)] dark:ring-offset-[#22242B]')}
                     style={{ left, top, height: ROW_H - 8, width: Math.max(28, msToPx(effMs(it))), background: avatarGradient(it.profile_name), opacity: it.volume === 0 ? 0.4 : 1 }}>
                     <span className="font-semibold block truncate">{it.profile_name}</span>
@@ -267,14 +267,14 @@ export const StoriesTab: React.FC<{
             </div>
           </Card>
 
-          {items.length === 0 && <p className="text-xs text-[#9CA3AF]">Empty timeline. Use “Add line”, or send clips here from Speak and Library.</p>}
+          {items.length === 0 && <p className="text-xs text-[var(--color-text-muted)]">Empty timeline. Use “Add line”, or send clips here from Speak and Library.</p>}
 
           {sel && (
             <Card className="p-4 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-[#111827] dark:text-white">{sel.profile_name}</p>
-                  <p className="text-xs text-[#6B7280] dark:text-slate-400 mt-0.5 line-clamp-2">{sel.text}</p>
+                  <p className="text-xs font-semibold text-[var(--color-text-main)]">{sel.profile_name}</p>
+                  <p className="text-xs text-[var(--color-text-muted)] mt-0.5 line-clamp-2">{sel.text}</p>
                 </div>
                 <IconBtn label="Split at playhead" disabled={playheadMs <= sel.start_time_ms + 100 || playheadMs >= sel.start_time_ms + effMs(sel) - 100}
                   onClick={() => act(() => voicebox.splitStoryItem(story.id, sel.id, Math.round(playheadMs)))}><Scissors className="w-4 h-4" /></IconBtn>

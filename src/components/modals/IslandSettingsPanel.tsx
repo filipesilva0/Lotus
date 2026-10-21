@@ -11,16 +11,16 @@ import { TomoSettings } from '../../types/tomo';
 const Row: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="flex items-center justify-between gap-6 py-3.5">
     <div className="min-w-0">
-      <p className="text-xs font-semibold text-[#0E1A33] dark:text-white">{title}</p>
-      {hint && <p className="text-[11px] text-[#8B8F99] mt-0.5 leading-relaxed">{hint}</p>}
+      <p className="text-xs font-semibold text-[var(--color-text-main)]">{title}</p>
+      {hint && <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-relaxed">{hint}</p>}
     </div>
     <div className="shrink-0">{children}</div>
   </div>
 );
 
 const Group: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="p-4 bg-[#F8F9FB] dark:bg-[#16223B] rounded-[20px] border border-black/5 dark:border-white/5">
-    <h4 className="text-[11px] font-bold uppercase tracking-wider text-[#8B8F99] mb-1">{title}</h4>
+  <section className="p-4 bg-[var(--color-bg-sidebar)] rounded-2xl border border-black/5 dark:border-white/5">
+    <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-1">{title}</h4>
     <div className="divide-y divide-black/5 dark:divide-white/5">{children}</div>
   </section>
 );
@@ -75,9 +75,9 @@ export const IslandSettingsPanel: React.FC = () => {
 
       <Group title="Shortcuts">
         {[['Ctrl + Alt + Space', 'Open the island chat'], ['Ctrl + Alt + D', 'Start or stop dictation'], ['Ctrl + Alt + T', 'Show or hide the island']].map(([k, d]) => (
-          <Row key={k} title={d}><kbd className="px-2 py-1 rounded-md bg-black/5 dark:bg-white/10 text-[11px] font-semibold">{k}</kbd></Row>
+          <Row key={k} title={d}><kbd className="px-2 py-1 rounded-md bg-black/5 dark:bg-white/10 text-xs font-semibold">{k}</kbd></Row>
         ))}
-        <p className="text-[11px] text-[#8B8F99] pt-3">If a shortcut does nothing, another app may already be using it.</p>
+        <p className="text-xs text-[var(--color-text-muted)] pt-3">If a shortcut does nothing, another app may already be using it.</p>
       </Group>
 
       <Group title="Claude Code">
@@ -88,7 +88,7 @@ export const IslandSettingsPanel: React.FC = () => {
           hint="Adds Tomo's hooks to your Claude Code settings file (a backup is saved next to it). Claude Code keeps working normally while Tomo is closed.">
           {isTauri
             ? <Btn variant={hooksOn ? 'ghost' : 'primary'} loading={busy} disabled={hooksOn === null} onClick={toggleHooks}>{hooksOn ? 'Disconnect' : 'Connect'}</Btn>
-            : <span className="text-[11px] text-[#8B8F99]">Desktop app only</span>}
+            : <span className="text-xs text-[var(--color-text-muted)]">Desktop app only</span>}
         </Row>
         {hookErr && <div className="pt-3"><Banner tone="error">{hookErr}</Banner></div>}
       </Group>
@@ -101,6 +101,6 @@ export const VoiceSettingsPanel: React.FC<{ settings: TomoSettings; onUpdateSett
     <Row title="Read replies aloud" hint="Speak each chat reply with your selected voice (needs Voicebox running).">
       <Toggle checked={settings.autoReadResponses} onChange={(v) => onUpdateSettings({ autoReadResponses: v })} ariaLabel="Read replies aloud" />
     </Row>
-    <p className="text-[11px] text-[#8B8F99] pt-3 leading-relaxed">Voices, languages, effects and dictation are managed in the Voice tab.</p>
+    <p className="text-xs text-[var(--color-text-muted)] pt-3 leading-relaxed">Voices, languages, effects and dictation are managed in the Voice tab.</p>
   </Group>
 );
