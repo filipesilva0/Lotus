@@ -1,0 +1,43 @@
+[package]
+name = "tomo"
+version = "0.1.0"
+description = "Local AI studio with a floating island"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "tomo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "~2.6.3", features = [] }
+
+[dependencies]
+# Pinned to the same minor releases as the npm packages in ../package.json. `tauri build` refuses to
+# run when a crate and its npm twin differ in major.minor, so bump both sides together
+# (see "Upgrading Tauri" in the README and `npm run check:tauri`).
+tauri = { version = "~2.11.6", features = ["tray-icon"] }
+tauri-plugin-http = "~2.7.0"
+tauri-plugin-dialog = "~2.7.3"
+tauri-plugin-opener = "~2.5.5"
+tauri-plugin-global-shortcut = "~2.3.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "~2.4.5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+
+# Small and fast: no Chromium is bundled (the app uses the system's WebView2),
+# and the release profile is tuned for size.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dev-dependencies]
+tauri = { version = "~2.11.6", features = ["test"] }

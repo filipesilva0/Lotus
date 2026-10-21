@@ -1,0 +1,93 @@
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # Rust crates and npm packages must be on the same Tauri minor release
+      - run: npm run check:tauri
+
+      # Produces the .msi (WiX) in src-tauri/target/release/bundle/msi
+      - run: npm run tauri build -- --verbose
+
+      # Only runs when the build fails: tauri hides light.exe's own error text, so run the linker
+      # again by hand and print everything it says, and keep the rendered WiX files for inspection.
+      - name: WiX diagnostics (on failure)
+        if: failure()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $obj = Get-ChildItem src-tauri/target/release/wix -Recurse -Filter main.wixobj -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $obj) {
+            Write-Host 'main.wixobj not found. Listing src-tauri/target/release:'
+            Get-ChildItem src-tauri/target/release -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 80 | ForEach-Object { $_.FullName }
+            exit 0
+          }
+          $dir = $obj.DirectoryName
+          Write-Host "WiX work dir: $dir"
+          Get-ChildItem $dir | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length)" }
+          $wxl = Get-ChildItem $dir -Filter *.wxl | Select-Object -First 1
+          Push-Location $dir
+          Write-Host '=== light.exe output ==='
+          $out = & "$env:LOCALAPPDATA\tauri\WixTools314\light.exe" -v -ext WixUIExtension -ext WixUtilExtension "-cultures:en-us" -loc $wxl.FullName -out "$dir\diag.msi" $obj.FullName 2>&1 | ForEach-Object { "$_" }
+          $code = $LASTEXITCODE
+          $out | ForEach-Object { Write-Host $_ }
+          Write-Host "=== light.exe exit code: $code ==="
+          # Second run with ICE validation skipped: tells us whether validation is what fails,
+          # and leaves an UNVALIDATED msi in the artifact so the app itself can still be tried.
+          Write-Host '=== light.exe -sval (ICE validation skipped) ==='
+          $out2 = & "$env:LOCALAPPDATA\tauri\WixTools314\light.exe" -sval -ext WixUIExtension -ext WixUtilExtension "-cultures:en-us" -loc $wxl.FullName -out "$dir\unvalidated.msi" $obj.FullName 2>&1 | ForEach-Object { "$_" }
+          $code2 = $LASTEXITCODE
+          $out2 | ForEach-Object { Write-Host $_ }
+          Write-Host "=== light.exe -sval exit code: $code2 ==="
+          Pop-Location
+          "light.exe normal exit $code ; with -sval exit $code2" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          Write-Host "::warning title=light.exe::normal run exit $code, -sval run exit $code2"
+          # Keep the text next to the uploaded files, and surface it on the run page itself.
+          $out | Set-Content -Path "$dir\light-output.txt"
+          $hits = @($out | Where-Object { $_ -match 'error|ICE\d+|LGHT\d+|warning' } | Select-Object -First 25)
+          foreach ($h in $hits) { Write-Host "::error title=light.exe::$h" }
+          "### light.exe (exit $code)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          ($hits -join "`n") | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Upload WiX files (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wix-debug
+          path: src-tauri/target/release/wix
+          if-no-files-found: ignore
+
+      - name: Package portable zip
+        shell: pwsh
+        run: ./scripts/package-portable.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tomo-windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            dist-portable/Tomo-portable-x64.zip

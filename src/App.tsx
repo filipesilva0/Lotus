@@ -1,0 +1,338 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ViewMode, ChatSession, ChatMessage, TomoSettings, GeneratedImage } from './types/tomo';
+import { LeftRail } from './components/rail/LeftRail';
+import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
+import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
+import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
+import { EnginesWorkspace } from './components/workspaces/EnginesWorkspace';
+import { ResearchWorkspace } from './components/research/ResearchWorkspace';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { ollamaClient, ChatTurn, fileToBase64 } from './services/ollamaService';
+import { comfy, dimensionsFor } from './services/comfyService';
+import { voicebox } from './services/voicebox';
+import { useEngines } from './hooks/useEngines';
+import { applyThemeToDocument } from './styles/theme';
+import { isTauri } from './lib/http';
+import { invokeNative, onEvent, reportActivity } from './lib/bus';
+
+const SETTINGS_KEY = 'tomo.settings.v1';
+const SESSIONS_KEY = 'tomo.sessions.v1';
+const ACTIVE_KEY = 'tomo.activeSession.v1';
+
+const DEFAULT_SETTINGS: TomoSettings = {
+  darkMode: false,
+  tomoFolderPath: '',
+  keepEnginesRunningOnQuit: false,
+  selectedModel: '',
+  temperature: 0.7,
+  topP: 0.9,
+  contextWindow: 4096,
+  frequencyPenalty: 0.0,
+  presencePenalty: 0.0,
+  systemPrompt: 'You are Tomo, a helpful AI assistant running locally on the user\'s PC. Answer concisely and accurately.',
+  streamingEnabled: true,
+  reasoningBlockMode: 'collapsed',
+  sendOnEnter: true,
+  autoScroll: true,
+  codeCopyLanguage: true,
+  vramCapPercent: 80,
+  comfyUiIdleStopMinutes: 10,
+  defaultTtsVoice: '',
+  ttsRate: 10,
+  autoReadResponses: false,
+  whisperLanguage: 'English',
+  density: 'comfortable',
+  palette: 'blue',
+  fontFamily: 'jakarta',
+  fontSize: 'md',
+};
+
+const now = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+function load<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const welcomeSession = (model: string): ChatSession => ({
+  id: `chat-${Date.now()}`,
+  title: 'New conversation',
+  model,
+  updatedAt: 'Just now',
+  category: 'General',
+  messages: [],
+});
+
+/** Blob URLs do not survive a restart, so attachments are kept by name only. */
+const stripBlobs = (list: ChatSession[]): ChatSession[] =>
+  list.map((s) => ({ ...s, messages: s.messages.map((m) => (m.attachment?.url.startsWith('blob:') ? { ...m, attachment: undefined, isStreaming: false } : { ...m, isStreaming: false })) }));
+
+export default function App() {
+  const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('tomo.setup.dismissed'));
+  const [currentView, setCurrentView] = useState<ViewMode>(firstRun.current ? 'engines' : 'chat');
+  const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
+  const [settings, setSettings] = useState<TomoSettings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<TomoSettings>>(SETTINGS_KEY, {}) }));
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    const saved = stripBlobs(load<ChatSession[]>(SESSIONS_KEY, []));
+    return saved.length ? saved : [welcomeSession('')];
+  });
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => load<string>(ACTIVE_KEY, ''));
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Image generation state
+  const [images, setImages] = useState<GeneratedImage[]>([]);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageElapsed, setImageElapsed] = useState(0);
+  const [checkpoints, setCheckpoints] = useState<string[]>([]);
+  const imageAbort = useRef<AbortController | null>(null);
+  const chatAbort = useRef<AbortController | null>(null);
+
+  const eng = useEngines();
+  const ollamaUp = eng.engines.ollama.up;
+  const comfyUp = eng.engines.comfyui.up;
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+
+  // ── Persistence ───────────────────────────────────────────────────────────
+  useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
+  useEffect(() => { if (!isStreaming) localStorage.setItem(SESSIONS_KEY, JSON.stringify(stripBlobs(sessions).slice(0, 60))); }, [sessions, isStreaming]);
+  useEffect(() => { if (activeSession) localStorage.setItem(ACTIVE_KEY, JSON.stringify(activeSession.id)); }, [activeSession]);
+
+  useEffect(() => {
+    applyThemeToDocument(settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode);
+  }, [settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode]);
+
+  // The window starts hidden to avoid a white flash; show it once we have painted.
+  useEffect(() => { requestAnimationFrame(() => void invokeNative('main_ready')); }, []);
+
+  // ── Models & checkpoints follow engine availability ────────────────────────
+  useEffect(() => {
+    if (!ollamaUp) return;
+    ollamaClient.listModels().then((list) => {
+      setModels(list.map((m) => ({ id: m.name, name: m.name, tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
+      setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
+    }).catch(() => undefined);
+  }, [ollamaUp]);
+  useEffect(() => { if (comfyUp) comfy.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp]);
+
+  // ── Messages from other windows ───────────────────────────────────────────
+  const openEngines = useCallback((tab: 'engines' | 'models' = 'engines') => { setEnginesTab(tab); setCurrentView('engines'); }, []);
+
+  useEffect(() => {
+    const offs: (() => void)[] = [];
+    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
+    void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
+    void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => {
+      const s = welcomeSession(settings.selectedModel);
+      s.title = (msgs.find((m) => m.role === 'user')?.content ?? 'From the island').slice(0, 40);
+      s.messages = msgs.map((m, i) => ({ id: `imp-${Date.now()}-${i}`, role: m.role, content: m.content, timestamp: now() }));
+      setSessions((prev) => [s, ...prev]);
+      setActiveSessionId(s.id);
+      setCurrentView('chat');
+    }).then((u) => offs.push(u));
+    return () => offs.forEach((o) => o());
+  }, [settings.selectedModel]);
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+  const patchSession = (id: string, fn: (s: ChatSession) => ChatSession) => setSessions((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
+  const patchMessage = (sid: string, mid: string, patch: Partial<ChatMessage>) =>
+    patchSession(sid, (s) => ({ ...s, messages: s.messages.map((m) => (m.id === mid ? { ...m, ...patch } : m)) }));
+
+  const handleSendMessage = async (text: string, file?: File) => {
+    const session = activeSession;
+    const stamp = Date.now();
+    const userMsg: ChatMessage = {
+      id: `user-${stamp}`, role: 'user', content: text, timestamp: now(),
+      attachment: file ? { type: 'image', url: URL.createObjectURL(file), name: file.name } : undefined,
+    };
+    const aiId = `assistant-${stamp}`;
+    const aiMsg: ChatMessage = { id: aiId, role: 'assistant', content: '', timestamp: now(), tokensPerSec: 0, durationMs: 0, isStreaming: true };
+    const isFirst = session.messages.length === 0;
+
+    patchSession(session.id, (s) => ({
+      ...s, updatedAt: 'Just now', model: settings.selectedModel,
+      title: isFirst || s.title === 'New conversation' ? text.slice(0, 40) || 'Image chat' : s.title,
+      messages: [...s.messages, userMsg, aiMsg],
+    }));
+
+    const turns: ChatTurn[] = [
+      { role: 'system', content: settings.systemPrompt },
+      ...session.messages.filter((m) => m.content).map((m) => ({ role: m.role === 'system' ? 'system' : m.role, content: m.content }) as ChatTurn),
+      { role: 'user', content: text, images: file ? [await fileToBase64(file)] : undefined },
+    ];
+
+    const ctrl = new AbortController();
+    chatAbort.current = ctrl;
+    setIsStreaming(true);
+    let acc = '';
+    let lastReport = 0;
+    try {
+      if (!settings.selectedModel) throw new Error('No model selected. Open Engines → Models to download one.');
+      const stream = ollamaClient.streamChat(turns, {
+        model: settings.selectedModel, temperature: settings.temperature, topP: settings.topP, numCtx: settings.contextWindow,
+        frequencyPenalty: settings.frequencyPenalty, presencePenalty: settings.presencePenalty, signal: ctrl.signal,
+      }, (st) => {
+        patchMessage(session.id, aiId, { tokensPerSec: st.tokensPerSec, durationMs: st.durationMs });
+        if (Date.now() - lastReport > 1000) { lastReport = Date.now(); reportActivity({ id: 'main-chat', kind: 'chat', label: `${st.tokensPerSec} tok/s` }); }
+      });
+      for await (const token of stream) {
+        acc += token;
+        patchMessage(session.id, aiId, { content: acc });
+      }
+    } catch (e) {
+      if (!ctrl.signal.aborted) {
+        const msg = (e as Error).message;
+        patchMessage(session.id, aiId, { content: acc ? `${acc}\n\n_(${msg})_` : `Couldn't get a reply. ${msg}` });
+      }
+    } finally {
+      setIsStreaming(false);
+      chatAbort.current = null;
+      patchMessage(session.id, aiId, { isStreaming: false });
+      reportActivity({ id: 'main-chat', kind: 'chat', label: 'Done', done: true });
+    }
+
+    if (settings.autoReadResponses && acc && !ctrl.signal.aborted) {
+      try {
+        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: localStorage.getItem('tomo.voice.profile') ?? undefined });
+        const done = await voicebox.waitFor(q.id);
+        await new Audio(await voicebox.audioUrl(done.id)).play();
+      } catch { /* read-aloud is best effort */ }
+    }
+  };
+
+  const handleNewSession = () => {
+    const s = welcomeSession(settings.selectedModel);
+    setSessions((prev) => [s, ...prev]);
+    setActiveSessionId(s.id);
+  };
+
+  const handleDeleteSession = (id: string) => {
+    const remaining = sessions.filter((s) => s.id !== id);
+    if (!remaining.length) {
+      const s = welcomeSession(settings.selectedModel);
+      setSessions([s]);
+      setActiveSessionId(s.id);
+      return;
+    }
+    setSessions(remaining);
+    if (activeSessionId === id) setActiveSessionId(remaining[0].id);
+  };
+
+  // ── Images (ComfyUI) ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isGeneratingImage) return;
+    const t0 = Date.now();
+    const t = setInterval(() => setImageElapsed((Date.now() - t0) / 1000), 250);
+    return () => { clearInterval(t); setImageElapsed(0); };
+  }, [isGeneratingImage]);
+
+  const handleGenerateImage = async (p: { prompt: string; negativePrompt?: string; steps: number; cfg: number; checkpoint: string; aspectRatio: string }) => {
+    setIsGeneratingImage(true);
+    setImageError(null);
+    const ctrl = new AbortController();
+    imageAbort.current = ctrl;
+    const id = `img-${Date.now()}`;
+    reportActivity({ id, kind: 'image', label: 'Image' });
+    try {
+      const { width, height } = dimensionsFor(p.aspectRatio, p.checkpoint);
+      const r = await comfy.txt2img({
+        prompt: p.prompt, negativePrompt: p.negativePrompt, checkpoint: p.checkpoint, steps: p.steps, cfg: p.cfg, width, height, signal: ctrl.signal,
+        onTick: (ms) => reportActivity({ id, kind: 'image', label: `${Math.floor(ms / 1000)}s` }),
+      });
+      const img: GeneratedImage = {
+        id, url: r.url, prompt: p.prompt, negativePrompt: p.negativePrompt, seed: r.seed, steps: p.steps, cfg: p.cfg,
+        dimensions: `${width}×${height}`, generationTimeSec: r.generationTimeSec, timestamp: now(), checkpoint: p.checkpoint,
+      };
+      setImages((prev) => [img, ...prev]);
+      reportActivity({ id, kind: 'image', label: 'Image ready', done: true });
+    } catch (e) {
+      if (!ctrl.signal.aborted) setImageError((e as Error).message);
+      reportActivity({ id, kind: 'image', label: 'Image', done: true });
+    } finally {
+      setIsGeneratingImage(false);
+      imageAbort.current = null;
+    }
+  };
+
+  // ── Layout ────────────────────────────────────────────────────────────────
+  const panel = (
+    <main className={isTauri
+      ? 'w-full h-full bg-white dark:bg-[#18191E] flex overflow-hidden transition-colors'
+      : 'w-full max-w-[1360px] bg-white dark:bg-[#18191E] rounded-[28px] sm:rounded-[32px] shadow-[0_24px_70px_-15px_rgba(0,0,0,0.14)] dark:shadow-[0_24px_70px_-15px_rgba(0,0,0,0.7)] border border-black/5 dark:border-[#2C2F38] flex overflow-hidden min-h-[640px] md:min-h-[720px] transition-colors'}>
+      <LeftRail
+        currentView={currentView}
+        onSelectView={setCurrentView}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        darkMode={settings.darkMode}
+        onToggleTheme={() => setSettings((s) => ({ ...s, darkMode: !s.darkMode }))}
+        unreadCount={0}
+      />
+
+      <div className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 flex flex-col overflow-hidden bg-white dark:bg-[#18191E]">
+        {currentView === 'chat' && (
+          <ChatWorkspace
+            sessions={sessions}
+            activeSessionId={activeSession.id}
+            onSelectSession={setActiveSessionId}
+            onNewSession={handleNewSession}
+            onSendMessage={handleSendMessage}
+            onDeleteSession={handleDeleteSession}
+            isStreaming={isStreaming}
+            selectedModel={settings.selectedModel || 'No model'}
+            onSelectModel={(m) => setSettings((s) => ({ ...s, selectedModel: m }))}
+            models={models}
+            ollamaUp={ollamaUp}
+            onStop={() => chatAbort.current?.abort()}
+            onOpenEngines={() => openEngines('models')}
+            prefill={prefill}
+          />
+        )}
+
+        {currentView === 'images' && (
+          <ImageWorkspace
+            images={images}
+            onGenerate={handleGenerateImage}
+            isGenerating={isGeneratingImage}
+            checkpoints={checkpoints}
+            comfyUp={comfyUp}
+            error={imageError}
+            elapsedSec={imageElapsed}
+            onCancel={() => imageAbort.current?.abort()}
+            onOpenEngines={() => openEngines('engines')}
+          />
+        )}
+
+        {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} />}
+
+        {currentView === 'research' && (
+          <ResearchWorkspace model={settings.selectedModel} models={models.map((m) => m.id)} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('models')} />
+        )}
+
+        {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
+      </div>
+    </main>
+  );
+
+  return (
+    <div
+      className={isTauri ? 'h-screen w-screen font-sans' : 'min-h-screen w-full flex items-center justify-center p-2 sm:p-5 md:p-8 lg:p-12 transition-colors duration-500 font-sans'}
+      style={isTauri ? undefined : { background: settings.darkMode ? 'linear-gradient(180deg, #1E2026 0%, #121316 100%)' : 'linear-gradient(180deg, #EDEDED 0%, #BEBEBE 100%)' }}
+    >
+      {panel}
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} />
+    </div>
+  );
+}

@@ -1,0 +1,156 @@
+mod engines;
+mod hooks;
+mod island;
+mod paths;
+
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, ShortcutState};
+
+fn started_minimized() -> bool {
+    std::env::args().any(|a| a == "--minimized")
+}
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+#[tauri::command]
+fn app_paths(app: AppHandle) -> paths::AppPaths {
+    let installed = app.path().app_data_dir().unwrap_or_default();
+    paths::describe(installed)
+}
+
+/// The main window starts hidden to avoid a white flash; the web layer calls this once it has painted.
+#[tauri::command]
+fn main_ready(app: AppHandle) {
+    if !started_minimized() {
+        show_main(&app);
+    }
+}
+
+/// Bring the studio forward, optionally on a specific view (chat, image, voice, engines).
+#[tauri::command]
+fn open_main(app: AppHandle, view: Option<String>) {
+    show_main(&app);
+    let _ = app.emit_to("main", "main:navigate", view);
+}
+
+#[tauri::command]
+fn quit_app(app: AppHandle) {
+    app.exit(0);
+}
+
+pub fn run() {
+    paths::apply_portable_env();
+
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        // A second launch just brings the first one forward.
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main(app)));
+    }
+
+    let app = builder
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .manage(engines::Engines::default())
+        .manage(hooks::Pending::default())
+        .invoke_handler(tauri::generate_handler![
+            app_paths,
+            main_ready,
+            open_main,
+            quit_app,
+            island::island_resize,
+            island::island_show,
+            island::island_hide,
+            island::island_focus,
+            island::island_visible,
+            hooks::hook_answer,
+            hooks::hooks_installed,
+            hooks::hooks_install,
+            hooks::hooks_uninstall,
+            engines::engine_start,
+            engines::engine_stop,
+            engines::engine_supervised,
+            engines::engine_find,
+        ])
+        .on_window_event(|window, event| {
+            // Closing the studio keeps Tomo (and the island) running in the tray.
+            if window.label() == "main" {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
+        .setup(|app| {
+            // Tray
+            let open = MenuItem::with_id(app, "open", "Open Tomo", true, None::<&str>)?;
+            let island = MenuItem::with_id(app, "island", "Show / hide island", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Tomo", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &island, &quit])?;
+            let mut tray = TrayIconBuilder::new()
+                .tooltip("Tomo")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open" => show_main(app),
+                    "island" => {
+                        let _ = app.emit_to("island", "island:toggle", ());
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
+
+            // Global shortcuts (failures are ignored: another app may already own a combo)
+            let ca = Modifiers::CONTROL | Modifiers::ALT;
+            app.handle().plugin(
+                tauri_plugin_global_shortcut::Builder::new()
+                    .with_handler(move |app, sc, ev| {
+                        if ev.state() != ShortcutState::Pressed {
+                            return;
+                        }
+                        if sc.matches(ca, Code::Space) {
+                            let _ = app.emit_to("island", "island:open-chat", ());
+                        } else if sc.matches(ca, Code::KeyD) {
+                            let _ = app.emit_to("island", "island:dictate", ());
+                        } else if sc.matches(ca, Code::KeyT) {
+                            let _ = app.emit_to("island", "island:toggle", ());
+                        }
+                    })
+                    .build(),
+            )?;
+            let gs = app.global_shortcut();
+            for code in [Code::Space, Code::KeyD, Code::KeyT] {
+                let _ = gs.register(tauri_plugin_global_shortcut::Shortcut::new(Some(ca), code));
+            }
+
+            hooks::start(app.handle().clone());
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building Tomo");
+
+    app.run(|handle, event| {
+        if let RunEvent::Exit = event {
+            engines::kill_all(&handle.state::<engines::Engines>());
+        }
+    });
+}

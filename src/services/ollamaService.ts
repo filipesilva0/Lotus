@@ -1,0 +1,257 @@
+// Ollama client: streaming chat (text + vision), model list, running models, pull, delete.
+
+import { http, EngineError, errorText, timeoutSignal } from '../lib/http';
+import { engineUrl } from './engineConfig';
+
+const ENGINE = 'Ollama';
+
+export interface ChatTurn {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  /** Base64 image data (no data: prefix) for vision models. */
+  images?: string[];
+}
+
+export interface ChatOptions {
+  model: string;
+  temperature?: number;
+  topP?: number;
+  numCtx?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  signal?: AbortSignal;
+  /** Called with reasoning tokens from "thinking" models; hidden by default. */
+  onThinking?: (token: string) => void;
+}
+
+export interface ChatStats {
+  tokensPerSec: number;
+  totalTokens: number;
+  durationMs: number;
+}
+
+export interface OllamaModel {
+  name: string;
+  size: number;
+  modified_at: string;
+  details?: { parameter_size?: string; quantization_level?: string; family?: string };
+}
+
+export interface RunningModel {
+  name: string;
+  size: number;
+  size_vram: number;
+  expires_at: string;
+}
+
+export interface PullProgress {
+  status: string;
+  completed?: number;
+  total?: number;
+}
+
+const unreachable = () =>
+  new EngineError(
+    `Can't reach Ollama at ${engineUrl('ollama')}. Start Ollama (or the engine from the Engines tab), then try again.`,
+    ENGINE,
+    undefined,
+    true,
+  );
+
+/** Splits a streamed NDJSON body into parsed objects, handling lines that span chunks. */
+async function* ndjson<T>(res: Response): AsyncGenerator<T> {
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) {
+        try {
+          yield JSON.parse(line) as T;
+        } catch {
+          /* skip a malformed line */
+        }
+      }
+    }
+  }
+  const rest = buf.trim();
+  if (rest) {
+    try {
+      yield JSON.parse(rest) as T;
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export class OllamaService {
+  get baseUrl() {
+    return engineUrl('ollama');
+  }
+
+  private async raw(path: string, init: RequestInit = {}, timeoutMs = 15_000): Promise<Response> {
+    let res: Response;
+    try {
+      res = await http(`${this.baseUrl}${path}`, { ...init, signal: init.signal ?? timeoutSignal(timeoutMs) });
+    } catch {
+      throw unreachable();
+    }
+    if (!res.ok) throw new EngineError(await errorText(res), ENGINE, res.status);
+    return res;
+  }
+
+  async checkHealth(timeoutMs = 1500): Promise<boolean> {
+    try {
+      const res = await http(`${this.baseUrl}/api/tags`, { signal: timeoutSignal(timeoutMs) });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async version(): Promise<string | null> {
+    try {
+      const r = await this.raw('/api/version', {}, 1500);
+      return (await r.json()).version ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async listModels(): Promise<OllamaModel[]> {
+    return (await (await this.raw('/api/tags')).json()).models ?? [];
+  }
+
+  async runningModels(): Promise<RunningModel[]> {
+    return (await (await this.raw('/api/ps')).json()).models ?? [];
+  }
+
+  async deleteModel(name: string) {
+    await this.raw('/api/delete', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: name }),
+    });
+  }
+
+  /** Streams download progress for `ollama pull`. */
+  async *pull(name: string, signal?: AbortSignal): AsyncGenerator<PullProgress> {
+    const res = await this.raw(
+      '/api/pull',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: name, stream: true }),
+        signal,
+      },
+      24 * 3600_000,
+    );
+    for await (const chunk of ndjson<PullProgress & { error?: string }>(res)) {
+      if (chunk.error) throw new EngineError(chunk.error, ENGINE);
+      yield chunk;
+    }
+  }
+
+  /** Streams assistant tokens. Reasoning ("thinking") tokens never reach the yielded text. */
+  async *streamChat(
+    messages: ChatTurn[],
+    opts: ChatOptions,
+    onStats?: (s: ChatStats) => void,
+  ): AsyncGenerator<string, void, unknown> {
+    const res = await this.raw(
+      '/api/chat',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: opts.signal,
+        body: JSON.stringify({
+          model: opts.model,
+          messages,
+          stream: true,
+          options: {
+            temperature: opts.temperature,
+            top_p: opts.topP,
+            num_ctx: opts.numCtx,
+            frequency_penalty: opts.frequencyPenalty,
+            presence_penalty: opts.presencePenalty,
+          },
+        }),
+      },
+      30 * 60_000,
+    );
+
+    const start = performance.now();
+    let tokens = 0;
+    for await (const chunk of ndjson<any>(res)) {
+      if (chunk.error) throw new EngineError(String(chunk.error), ENGINE);
+      const thinking = chunk.message?.thinking;
+      if (thinking) opts.onThinking?.(thinking);
+      const token: string | undefined = chunk.message?.content;
+      if (token) {
+        tokens++;
+        const secs = (performance.now() - start) / 1000;
+        onStats?.({
+          tokensPerSec: secs > 0 ? Math.round((tokens / secs) * 10) / 10 : 0,
+          totalTokens: tokens,
+          durationMs: Math.round(secs * 1000),
+        });
+        yield token;
+      }
+      if (chunk.done && chunk.eval_count && chunk.eval_duration) {
+        // Ollama reports exact generation speed on the final chunk.
+        onStats?.({
+          tokensPerSec: Math.round((chunk.eval_count / (chunk.eval_duration / 1e9)) * 10) / 10,
+          totalTokens: chunk.eval_count,
+          durationMs: Math.round((chunk.total_duration ?? 0) / 1e6),
+        });
+      }
+    }
+  }
+
+  /** Non-streaming call that reports real token counts (used by Deep Research). */
+  async chatOnce(
+    messages: ChatTurn[],
+    opts: ChatOptions & { json?: boolean },
+  ): Promise<{ content: string; promptTokens: number; evalTokens: number }> {
+    const res = await this.raw(
+      '/api/chat',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: opts.signal,
+        body: JSON.stringify({
+          model: opts.model, messages, stream: false, ...(opts.json ? { format: 'json' } : {}),
+          options: { temperature: opts.temperature, top_p: opts.topP, num_ctx: opts.numCtx },
+        }),
+      },
+      30 * 60_000,
+    );
+    const j = await res.json();
+    if (j.error) throw new EngineError(String(j.error), ENGINE);
+    return { content: j.message?.content ?? '', promptTokens: j.prompt_eval_count ?? 0, evalTokens: j.eval_count ?? 0 };
+  }
+
+  /** One-shot, non-streaming helper (used by the island for short answers). */
+  async complete(messages: ChatTurn[], opts: ChatOptions): Promise<string> {
+    let out = '';
+    for await (const t of this.streamChat(messages, opts)) out += t;
+    return out;
+  }
+}
+
+export const ollamaClient = new OllamaService();
+
+/** Browser File → base64 payload for Ollama's `images` field. */
+export async function fileToBase64(file: Blob): Promise<string> {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}

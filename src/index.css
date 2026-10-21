@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  code, pre, kbd {
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom scrollbar matching Image 1 subtlety */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(14, 26, 51, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(14, 26, 51, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Island mascot animations ── */
+@keyframes tomo-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.045, 0.97); } }
+@keyframes tomo-bounce { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-3px); } 55% { transform: translateY(0); } 75% { transform: translateY(-1.2px); } }
+@keyframes tomo-talk { 0%,100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+@keyframes tomo-dots { 0%,20% { opacity: .15; } 50% { opacity: 1; } 80%,100% { opacity: .15; } }
+@keyframes tomo-pulse { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
+@keyframes tomo-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-tomo-anim] { animation: none !important; }
+}
