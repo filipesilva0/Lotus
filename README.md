@@ -54,7 +54,8 @@ middle, and an inspector on the right whose tabs change with the mode.
   Citations that don't match a real fetched source are stripped, so the model can't cite papers it
   never saw. Copy or save as `.md`.
 
-**Privacy:** Deep Research contacts arXiv, PubMed (NCBI), OpenAlex and Crossref directly from your PC.
+**Privacy:** Update checks (only when you ask, or at launch if you enable it) contact GitHub; see *Updating Tomo*.
+Deep Research contacts arXiv, PubMed (NCBI), OpenAlex and Crossref directly from your PC.
 Only the keyword queries the agents write are sent; each repository can be switched off (Crossref
 starts off). Requests are rate-limited per host (arXiv: one per 3 s) and agents share that budget,
 so a run takes a few minutes. The desktop app's network permission is limited to those four hosts
@@ -96,6 +97,29 @@ An MSI cannot be "portable" in the strict sense, which is why portable is a sepa
 
 Requires Windows 10 (1803+) or 11 with the WebView2 Runtime (already present on Windows 11 and
 current Windows 10; the installer fetches it if missing).
+
+## Updating Tomo
+
+**Settings → About & Updates** has a *Check for updates* button. When a newer version exists it shows
+the release notes and a *Download and restart* button; Tomo downloads the installer, verifies its
+signature, installs it and reopens. A dot appears on the Settings icon once an update has been found.
+Checking contacts GitHub (it sees your IP address and the request, nothing else) and happens only when
+you press the button, or at launch if you switch on *Check when Tomo starts* (off by default).
+Portable copies can check, but you replace the folder yourself: the installer would add a second copy.
+
+### Publishing an update (maintainer)
+
+One-time setup:
+1. `npx tauri signer generate -w tomo-updater.key` and choose a password. Keep the `.key` file private and
+   backed up: installed copies only accept updates signed by it, so losing it means a reinstall for everyone.
+2. In the GitHub repo: *Settings → Secrets and variables → Actions*, add `TAURI_SIGNING_PRIVATE_KEY` (the
+   `.key` file's contents), `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and `TAURI_UPDATER_PUBKEY` (the `.pub` file's contents).
+3. The repository must be **public**: installed copies fetch `latest.json` anonymously.
+
+Each release: `git tag v0.2.0 && git push origin v0.2.0`. The workflow takes the version from the tag,
+builds and signs the MSI, and publishes a GitHub Release with the MSI, its signature, the portable zip and
+`latest.json`. Without the three secrets, a tag build still works but makes no updater files. The first
+version that contains the updater has to be installed by hand once.
 
 ## Connecting the engines
 

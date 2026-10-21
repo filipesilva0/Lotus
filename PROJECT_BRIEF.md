@@ -60,7 +60,7 @@ Status here is a pointer only; see `CURRENT_STATE.md` for evidence.
 - Coucou: phone companion, Spotify/GitHub/Stripe pills, weekly recap, its mascot/art/sounds (not licensed for reuse).
 - Deep Research: PDF / full-text reading (abstracts only), cloud LLMs, evidence-matrix files.
 - Hardware monitoring (RAM/CPU/temperature/power): removed because it cannot be measured without extra native code.
-- Auto-update, code signing, telemetry.
+- Code signing (Authenticode) and telemetry. *(Auto-update was originally out of scope; the user asked for it in session 2, see DECISIONS D24.)*
 
 ## 5. Missing information ❓
 - Target audience and distribution plan (private use vs public release).

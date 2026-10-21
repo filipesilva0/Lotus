@@ -16,6 +16,7 @@ import { ollamaClient, ChatTurn, fileToBase64 } from './services/ollamaService';
 import { comfy, dimensionsFor } from './services/comfyService';
 import { voicebox } from './services/voicebox';
 import { useEngines } from './hooks/useEngines';
+import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument } from './styles/theme';
 import { isTauri } from './lib/http';
 import { invokeNative, onEvent, reportActivity } from './lib/bus';
@@ -101,6 +102,7 @@ export default function App() {
   const chatAbort = useRef<AbortController | null>(null);
 
   const eng = useEngines();
+  const updates = useUpdates();
   const ollamaUp = eng.engines.ollama.up;
   const comfyUp = eng.engines.comfyui.up;
 
@@ -279,6 +281,7 @@ export default function App() {
         darkMode={settings.darkMode}
         onToggleTheme={() => setSettings((s) => ({ ...s, darkMode: !s.darkMode }))}
         engines={eng.engines}
+        updateAvailable={updates.state.kind === 'available'}
       />
 
       <div className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
@@ -332,7 +335,7 @@ export default function App() {
       style={isTauri ? undefined : { background: settings.darkMode ? 'linear-gradient(180deg, #1E2026 0%, #121316 100%)' : 'linear-gradient(180deg, #EDEDED 0%, #BEBEBE 100%)' }}
     >
       {panel}
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );
 }

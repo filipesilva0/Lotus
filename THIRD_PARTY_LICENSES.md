@@ -24,6 +24,8 @@ Tomo's island is an independent implementation with its own mascot and visuals.
 
 ## Public data sources used by Deep Research (not bundled)
 
+Update checks and downloads use the project's own GitHub Releases (github.com and its release-asset host), only when the user asks.
+
 arXiv API, NCBI PubMed E-utilities, OpenAlex and Crossref are queried over HTTPS with short keyword
 queries. Please follow each service's terms of use; Tomo rate-limits its requests accordingly.
 

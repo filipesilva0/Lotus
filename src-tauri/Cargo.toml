@@ -21,6 +21,10 @@ tauri-plugin-http = "~2.7.0"
 tauri-plugin-dialog = "~2.7.3"
 tauri-plugin-opener = "~2.5.5"
 tauri-plugin-global-shortcut = "~2.3.2"
+# Updater has no npm twin (the web layer calls our own commands in src/updates.rs), so the version
+# guard does not pair it. Left at "2" because it could not be locked offline: let the first build
+# resolve it, then commit the updated Cargo.lock.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 

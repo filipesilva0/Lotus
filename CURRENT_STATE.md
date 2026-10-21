@@ -38,6 +38,9 @@
 ## 3b. Design pass 1 (applied after session 1) ⚠️ unverified
 Tokens/type/radii normalised across `components/` and `App.tsx`; `LeftRail` rewritten (labels, real engine dot, avatar and fake badge removed). **Not run:** `tsc`, `npm run build`, the 63 TS tests and screenshots were all impossible in that session (no dependencies, no network). Run them first, then look at light/dark/desktop screenshots; text moving from 9–11 px to 12 px may overflow in tight spots (badges, session meta, Inspector). Phases 3–5 (Chat layout, Settings page + T6, other workspaces) are not started. Also still present: static footer "Local VRAM inference" in chat messages (should go in Phase 3).
 
+## 3c. In-app updates (session 2) ⚠️ unverified
+Code written: `src-tauri/src/updates.rs`, updater plugin registration, `plugins.updater` placeholders in `tauri.conf.json`, release steps in `.github/workflows/build-windows.yml`, `useUpdates` + `UpdatesPanel` (Settings → About & Updates), dot on the rail's Settings icon. Also fixed: the Settings footer showed a hard-coded "v1.0.0"; it now shows the real version. **Not run:** `cargo check` (the crate is not in `Cargo.lock`; the next build must resolve it, then commit the lock), `tsc`, the build, tests. Needs from the user: signing key + 3 Actions secrets, a public repo, and one real tagged release plus one update from an older install to prove the loop. See TASKS T14.
+
 ## 4. Known bugs, limitations and unfinished work
 
 IDs are referenced from `TASKS.md`.

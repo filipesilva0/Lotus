@@ -67,5 +67,16 @@
       }
     },
     "licenseFile": "wix/license.rtf"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "SET-BY-CI-RELEASE-BUILD",
+      "endpoints": [
+        "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

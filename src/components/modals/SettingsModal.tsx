@@ -27,12 +27,15 @@ import { Toggle } from '../common/Toggle';
 import { PillSlider } from '../common/PillSlider';
 import { THIRD_PARTY_LICENSES_TEXT } from '../../data/licenses';
 import { ollamaClient } from '../../services/ollamaService';
+import { UpdatesPanel } from './UpdatesPanel';
+import type { Updates } from '../../hooks/useUpdates';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: TomoSettings;
   onUpdateSettings: (newSettings: Partial<TomoSettings>) => void;
+  updates: Updates;
 }
 
 type SettingsTab =
@@ -41,6 +44,7 @@ type SettingsTab =
   | 'voice'
   | 'island'
   | 'appearance'
+  | 'updates'
   | 'licenses';
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -48,6 +52,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   settings,
   onUpdateSettings,
+  updates,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('inference');
   const [ollamaCheckStatus, setOllamaCheckStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle');
@@ -80,6 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'voice', label: 'Voice', icon: Volume2 },
     { id: 'island', label: 'Island & Agents', icon: Cpu },
     { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: 'updates', label: 'About & Updates', icon: Download },
     { id: 'licenses', label: 'Licenses & Legal', icon: Shield },
   ];
 
@@ -121,7 +127,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="pt-3 border-t border-[var(--color-border-subtle)] px-2 text-xs text-[var(--color-text-muted)]">
-            <span>Tomo v1.0.0 · Local AI Studio</span>
+            <span>{updates.version ? `Tomo ${updates.version}` : 'Tomo'} · Local AI Studio</span>
           </div>
         </div>
 
@@ -720,6 +726,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'island' && <IslandSettingsPanel />}
 
             {activeTab === 'voice' && <VoiceSettingsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+
+            {activeTab === 'updates' && <UpdatesPanel u={updates} />}
 
             {activeTab === 'licenses' && (
               <div className="space-y-3">

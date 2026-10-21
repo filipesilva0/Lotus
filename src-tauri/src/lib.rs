@@ -2,6 +2,7 @@ mod engines;
 mod hooks;
 mod island;
 mod paths;
+mod updates;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -61,6 +62,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(engines::Engines::default())
         .manage(hooks::Pending::default())
         .invoke_handler(tauri::generate_handler![
@@ -81,6 +83,8 @@ pub fn run() {
             engines::engine_stop,
             engines::engine_supervised,
             engines::engine_find,
+            updates::update_check,
+            updates::update_install,
         ])
         .on_window_event(|window, event| {
             // Closing the studio keeps Tomo (and the island) running in the tray.

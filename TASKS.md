@@ -51,6 +51,11 @@ Give the user a short manual checklist and collect results:
 | T12 | Spec parity items (B5): MCP/connector toggles (decide scope), richer Agent Graph, live per-loop context usage. | T5 | Ask the user which matter. |
 | T13 | **Licence decision** (B15): ask the user; then set `LICENSE`, `Cargo.toml`, `src/App.tsx` header, `wix/license.rtf`, README, `THIRD_PARTY_LICENSES.md`. | none (needs user) | |
 
+### Updates (session 2)
+| ID | Task | Depends on | Notes |
+|---|---|---|---|
+| T14 | **Prove the update loop**: after T2, run `cargo check` (resolves `tauri-plugin-updater`, commit `Cargo.lock`); create the signing key and the 3 secrets (README "Publishing an update"); push tag `v0.1.1`, install the MSI from `v0.1.0`, press Check → Download and restart. Verify per-user vs per-machine install behaviour, the signature-failure message, and that portable copies are not offered the installer. | T2, user's repo/keys | Never run. If `updater()` fails at startup with the placeholder config, change the registration to build the plugin only when `plugins.updater.pubkey` is real. |
+
 ### P3: later / ideas 💡
 - Island: multi-monitor placement, click-through outside the pill, user-chosen position.
 - Code signing, auto-update, installer-size/perf measurement (B17), accessibility audit, real WebView2 visual pass.

@@ -48,6 +48,8 @@ interface LeftRailProps {
   darkMode?: boolean;
   onToggleTheme?: () => void;
   engines: Record<EngineId, EngineState>;
+  /** A newer version was found (only ever true after a real check). */
+  updateAvailable?: boolean;
 }
 
 const itemBase =
@@ -63,6 +65,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
   darkMode = false,
   onToggleTheme,
   engines,
+  updateAvailable = false,
 }) => {
   const navItems = [
     { id: 'chat' as ViewMode, icon: MessageSquare, label: 'Chat', title: 'Chat & Vision' },
@@ -129,11 +132,16 @@ export const LeftRail: React.FC<LeftRailProps> = ({
         <button
           type="button"
           onClick={onOpenSettings}
-          title="Settings"
-          aria-label="Settings"
+          title={updateAvailable ? 'Settings: an update is available' : 'Settings'}
+          aria-label={updateAvailable ? 'Settings. An update is available' : 'Settings'}
           className={`${itemBase} ${itemOff}`}
         >
-          <SettingsIcon className="w-5 h-5" strokeWidth={1.8} />
+          <span className="relative">
+            <SettingsIcon className="w-5 h-5" strokeWidth={1.8} />
+            {updateAvailable && (
+              <span aria-hidden="true" className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-[var(--color-accent-vibrant)] ring-2 ring-[var(--color-bg-panel)]" />
+            )}
+          </span>
           <span className="text-xs font-semibold leading-none">Settings</span>
         </button>
 
