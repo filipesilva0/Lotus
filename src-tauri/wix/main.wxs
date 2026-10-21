@@ -179,7 +179,7 @@
 
         <DirectoryRef Id="APPLICATIONFOLDER">
             <Component Id="AutostartEntry" Guid="*">
-                <RegistryValue Root="HKMU" Key="Software\\Microsoft\\Windows\\CurrentVersion\\Run" Name="{{product_name}}" Type="string" Value="&quot;[!Path]&quot; --minimized" KeyPath="yes" />
+                <RegistryValue Root="HKMU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="{{product_name}}" Type="string" Value="&quot;[!Path]&quot; --minimized" KeyPath="yes" />
             </Component>
             <Component Id="PortableDataEntry" Guid="*">
                 <RegistryValue Root="HKMU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="PortableData" Type="integer" Value="1" KeyPath="yes" />

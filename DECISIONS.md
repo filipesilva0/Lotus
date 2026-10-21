@@ -34,6 +34,7 @@
 | D8 | **Persistence in `localStorage`**, no database; images and attachments session-only. | Me | Simple, shared by both windows, relocatable in portable mode. Quota risk B10. |
 | D9 | **Fonts bundled** (`@fontsource-variable`); no Google Fonts. | Me | Offline + privacy. |
 | D10 | **MSI**: custom WiX template from Tauri's stock one; `WixUI_Advanced`; dual-purpose package (default **per-user**); `HKMU` roots; features Desktop shortcut / Start with Windows / Portable data. Bundle target is **MSI only**. | Me + User (P4) | Per-user default needs no admin. ⚠️ never built. |
+| D10c | In `main.wxs`, `\\` is a literal-backslash escape only directly before `{{…}}`; registry keys without a placeholder must use single backslashes. (Run-key bug, found via LGHT0204.) | Me | Lesson from CI failure 4. |
 | D10b | **Shortcut components use `HKCU` key paths** (Desktop, Start Menu, Uninstall); install-folder components keep `HKMU`. Added after `light.exe` failed; ⚠️ hypothesis (ICE38/ICE64), unconfirmed. | Me | Per-user folders require an HKCU key path. |
 | D11 | **Portable mode** = `tomo.portable` marker beside the exe **or** registry `PortableData=1`; sets `WEBVIEW2_USER_DATA_FOLDER` before windows exist. | Me | Gives both the portable zip and the MSI "Portable data" option the same mechanism. |
 | D12 | **WebView2 `downloadBootstrapper`** install mode. | Me | Keeps the MSI small; runtime is already on Windows 11. |
