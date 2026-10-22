@@ -16,7 +16,7 @@ type Tab = 'speak' | 'voices' | 'stories' | 'dictate' | 'library';
 export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngines }) => {
   const data = useVoiceData();
   const [profile, selectProfile] = useSelectedProfile(data.profiles);
-  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('tomo.voice.tab') as Tab) || 'speak');
+  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('lotus.voice.tab') as Tab) || 'speak');
   const [text, setText] = useState('');
   const [createRequested, setCreateRequested] = useState(false);
   const [storyClip, setStoryClip] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
   const [startErr, setStartErr] = useState<string | null>(null);
   const [needsExe, setNeedsExe] = useState(false);
 
-  const go = (t: Tab) => { setTab(t); localStorage.setItem('tomo.voice.tab', t); };
+  const go = (t: Tab) => { setTab(t); localStorage.setItem('lotus.voice.tab', t); };
 
   // Text sent over from the island or chat ("speak this").
   useEffect(() => {
@@ -84,7 +84,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
             {needsExe && (
               <Banner tone="warn" action={<Btn size="sm" variant="secondary" icon={<FolderSearch className="w-3 h-3" />}
                 onClick={async () => { if (await browseForExe('voicebox')) void start(); }}>Browse…</Btn>}>
-                Tomo couldn't find Voicebox. Locate <code>voicebox-server.exe</code> once and it will remember.
+                Lotus couldn't find Voicebox. Locate <code>voicebox-server.exe</code> once and it will remember.
               </Banner>
             )}
             {startErr && <Banner tone="error">{startErr}</Banner>}

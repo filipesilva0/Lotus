@@ -105,7 +105,7 @@ P = {
 }
 URL = 'http://127.0.0.1:8123'
 def scenario(name, projects, dark=False, view_rail='Deep Research', extra=None):
-    js(f"localStorage.clear(); localStorage.setItem('tomo.research.v1', {json.dumps(json.dumps(projects))}); localStorage.setItem('tomo.sessions.v1','[]'); localStorage.setItem('tomo.settings.v1', {json.dumps(json.dumps(dict(darkMode=dark, palette='blue', selectedModel='llama3.1:8b')))});")
+    js(f"localStorage.clear(); localStorage.setItem('lotus.research.v1', {json.dumps(json.dumps(projects))}); localStorage.setItem('lotus.sessions.v1','[]'); localStorage.setItem('lotus.settings.v1', {json.dumps(json.dumps(dict(darkMode=dark, palette='blue', selectedModel='llama3.1:8b')))});")
     load(URL + '/index.html')
     js(f"document.querySelector('[title=\"{view_rail}\"], [aria-label=\"{view_rail}\"]')?.click();", 900)
     if extra: js(extra, 500)

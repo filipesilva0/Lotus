@@ -3,19 +3,21 @@ import { EngineId } from '../services/engineConfig';
 import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { comfy } from '../services/comfyService';
-import { startEngine, stopEngine, isSupervised, NeedsExecutable, savedExe } from '../services/engineControl';
+import { startEngine, stopEngine, isSupervised, diagnose, NeedsExecutable, savedExe } from '../services/engineControl';
 
 export type Policy = 'on_launch' | 'manual';
 
 export interface EngineState {
   up: boolean | null;
   version: string | null;
-  /** Tomo started this process itself, so Tomo can stop it. */
+  /** Lotus started this process itself, so Lotus can stop it. */
   supervised: boolean;
   policy: Policy;
   phase: 'starting' | 'stopping' | null;
   error: string | null;
   needsExe: boolean;
+  /** Why the engine looks offline (nothing listening, blocked, Lotus bug). Null when up or unknown. */
+  detail: string | null;
 }
 
 export interface GpuInfo {
@@ -25,9 +27,9 @@ export interface GpuInfo {
 }
 
 const IDS: EngineId[] = ['ollama', 'comfyui', 'voicebox'];
-const polKey = (id: EngineId) => `tomo.engine.${id}.policy`;
+const polKey = (id: EngineId) => `lotus.engine.${id}.policy`;
 const initial = (id: EngineId): EngineState => ({
-  up: null, version: null, supervised: false, phase: null, error: null, needsExe: false,
+  up: null, version: null, supervised: false, phase: null, error: null, needsExe: false, detail: null,
   policy: (localStorage.getItem(polKey(id)) as Policy) || 'manual',
 });
 
@@ -44,10 +46,12 @@ export function useEngines() {
       ollamaClient.version(), comfy.stats().catch(() => null), voicebox.health().catch(() => null),
       Promise.all(IDS.map(isSupervised)),
     ]);
+    const ups = [o !== null, c !== null, v !== null];
+    const detail = await Promise.all(IDS.map((id, i) => (ups[i] ? Promise.resolve(null) : diagnose(id).catch(() => null))));
     setState((s) => ({
-      ollama: { ...s.ollama, up: o !== null, version: o, supervised: sup[0] },
-      comfyui: { ...s.comfyui, up: c !== null, version: c?.version ?? null, supervised: sup[1] },
-      voicebox: { ...s.voicebox, up: v !== null, version: null, supervised: sup[2] },
+      ollama: { ...s.ollama, up: ups[0], version: o, supervised: sup[0], detail: detail[0] },
+      comfyui: { ...s.comfyui, up: ups[1], version: c?.version ?? null, supervised: sup[1], detail: detail[1] },
+      voicebox: { ...s.voicebox, up: ups[2], version: null, supervised: sup[2], detail: detail[2] },
     }));
     if (c?.device) setGpu({ name: c.device, vramTotalGb: c.vramTotalGb, vramFreeGb: c.vramFreeGb });
     else if (v?.gpu_available) setGpu((g) => g ?? { name: v.gpu_type ?? 'GPU', vramTotalGb: 0, vramFreeGb: 0 });
@@ -84,7 +88,7 @@ export function useEngines() {
 
   const setPolicy = useCallback((id: EngineId, p: Policy) => { localStorage.setItem(polKey(id), p); patch(id, { policy: p }); }, [patch]);
 
-  // "Start with Tomo": once, after the first probe, bring up engines that are set to launch with the app.
+  // "Start with Lotus": once, after the first probe, bring up engines that are set to launch with the app.
   useEffect(() => {
     if (autoStarted.current || IDS.some((id) => state[id].up === null)) return;
     autoStarted.current = true;

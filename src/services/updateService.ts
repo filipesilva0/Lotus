@@ -15,7 +15,7 @@ export interface UpdateProgress { downloaded: number; total: number | null }
 
 export const updatesSupported = isTauri;
 
-/** Resolves null when Tomo is up to date. Throws an Error with a user-readable message. */
+/** Resolves null when Lotus is up to date. Throws an Error with a user-readable message. */
 export async function checkForUpdate(): Promise<UpdateInfo | null> {
   try {
     return (await invokeNative<UpdateInfo | null>('update_check')) ?? null;

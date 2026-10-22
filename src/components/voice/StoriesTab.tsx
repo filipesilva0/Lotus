@@ -37,14 +37,14 @@ export const StoriesTab: React.FC<{
     try { setStories(await voicebox.listStories()); } catch (e) { setErr((e as Error).message); } finally { setLoading(false); }
   }, []);
   const open = useCallback(async (id: string) => {
-    try { setStory(await voicebox.getStory(id)); setSelected(null); setPlayheadMs(0); localStorage.setItem('tomo.voice.story', id); }
+    try { setStory(await voicebox.getStory(id)); setSelected(null); setPlayheadMs(0); localStorage.setItem('lotus.voice.story', id); }
     catch (e) { setErr((e as Error).message); }
   }, []);
   const reload = useCallback(async () => { if (story) setStory(await voicebox.getStory(story.id)); void loadList(); }, [story, loadList]);
 
   useEffect(() => { void loadList(); }, [loadList]);
   useEffect(() => {
-    if (!story && stories.length) void open(stories.find((s) => s.id === localStorage.getItem('tomo.voice.story'))?.id ?? stories[0].id);
+    if (!story && stories.length) void open(stories.find((s) => s.id === localStorage.getItem('lotus.voice.story'))?.id ?? stories[0].id);
   }, [stories, story, open]);
   useEffect(() => { if (!lineProfile && data.profiles[0]) setLineProfile(data.profiles[0].id); }, [data.profiles, lineProfile]);
 

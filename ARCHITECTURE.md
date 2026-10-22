@@ -1,4 +1,4 @@
-# Tomo: Architecture
+# Lotus: Architecture
 
 > Evidence legend: ✅ confirmed in source/tests · ⚠️ unverified · 💡 proposed · ❓ unknown. See `CURRENT_STATE.md` for what has actually been run.
 
@@ -23,7 +23,7 @@ src/
   main.tsx, App.tsx               studio entry; owns settings, chat sessions, image state, engine state wiring
   fonts.ts, index.css             bundled fonts; CSS variables, mascot keyframes
   styles/theme.ts                 palettes/fonts → CSS variables (applyThemeToDocument)
-  types/tomo.ts                   ViewMode, TomoSettings, ChatSession, GeneratedImage…
+  types/lotus.ts                   ViewMode, LotusSettings, ChatSession, GeneratedImage…
   lib/
     http.ts                       http() = Rust-backed fetch in Tauri, normal fetch in browser; EngineError; isTauri
     bus.ts                        cross-window events (Tauri events / BroadcastChannel); invokeNative(); reportActivity()
@@ -35,7 +35,7 @@ src/
     comfyService.ts               txt2img graph, polling, checkpoints, stats
     voicebox.ts                   typed client for the Voicebox REST API
     engineControl.ts              start/stop/locate engines via Tauri commands
-  hooks/useEngines.ts             polls the 3 engines; start/stop/policy; "start with Tomo"
+  hooks/useEngines.ts             polls the 3 engines; start/stop/policy; "start with Lotus"
   components/
     rail/LeftRail.tsx             icon rail (Chat, Images, Voice, Research | theme, Engines, Settings)
     common/ (ui.tsx, Modal, Toggle, PillSlider, Logo)   shared primitives
@@ -62,7 +62,7 @@ Two WebView windows, one Rust process.
 
 - **`main`**: the studio (1280×820, min 980×640, native decorations, starts hidden; the web layer calls `main_ready` after first paint so there is no white flash). Closing it **hides to tray**; Quit is in the tray menu.
 - **`island`**: transparent, undecorated, always-on-top, skip-taskbar, starts hidden (config 420×64). The web layer owns animation and requests exact native sizes through `island_resize`; Rust clamps and centres it at the top of the **primary monitor only**. Current target sizes (`Island.tsx`): strip `(56+44+100·pills+12) × 36`, peek `max(340, 120+100·pills) × 96`, chat `460 × (500 | 214 when empty)`, approval `480 × 236`. The window grows first, then shrinks 340 ms after the CSS animation.
-- Both windows share **one origin**, so `localStorage` is shared and `storage` events propagate settings (e.g. the island reacts to `tomo.island.v1`).
+- Both windows share **one origin**, so `localStorage` is shared and `storage` events propagate settings (e.g. the island reacts to `lotus.island.v1`).
 - `single-instance` plugin: a second launch just shows `main`.
 
 ### Rust Tauri commands ✅ (`lib.rs` handler list)
@@ -82,7 +82,7 @@ Ctrl+Alt+Space → `island:open-chat`; Ctrl+Alt+D → `island:dictate`; Ctrl+Alt
 | `agent:event`, `agent:permission`, `agent:permission-done` | Rust hook server → Island | Claude Code hook JSON (+`request_id`) |
 | `voice:speak-text` | **nobody emits it**; `VoiceWorkspace` listens | text (dead hook, see CURRENT_STATE B6) |
 
-Outside Tauri (plain browser dev), `bus.ts` falls back to `BroadcastChannel('tomo-bus')`.
+Outside Tauri (plain browser dev), `bus.ts` falls back to `BroadcastChannel('lotus-bus')`.
 
 ## 4. Network and integrations
 
@@ -92,11 +92,11 @@ All engine/API calls go through `http()` in `lib/http.ts`: inside Tauri it uses 
 ### 4.2 Engines ✅ (clients written from the engines' source/docs; tested against mocks only)
 - **Ollama** `127.0.0.1:11434`: `/api/chat` (NDJSON stream; `thinking` tokens are dropped, not shown), `/api/chat` non-stream with real `prompt_eval_count/eval_count` (`chatOnce`, used by research), `/api/tags`, `/api/version`, `/api/ps`, `/api/delete`, `/api/pull` (progress stream).
 - **ComfyUI** `127.0.0.1:8188`: builds a fixed 7-node txt2img graph (CheckpointLoaderSimple→CLIPTextEncode×2→EmptyLatentImage→KSampler→VAEDecode→SaveImage), `POST /prompt`, polls `/history/{id}`, fetches `/view`; `/object_info/CheckpointLoaderSimple` for checkpoints; `/system_stats`; `/interrupt`. No WebSocket (progress is elapsed time only).
-- **Voicebox** `127.0.0.1:17493`: a typed client over its FastAPI server (read from the repository source, not a live server). Generation is **async**: `POST /generate` → poll `GET /history/{id}` → `GET /audio/{id}`. Also profiles/samples, presets, effects, stories, models (+`/tasks/active` for download progress), `/transcribe`, `/captures`, `/speak`. Tomo starts it with `--port <port> --data-dir <dataDir>\voicebox`, and Rust appends `--parent-pid <tomo pid>` so the server exits if Tomo dies. ⚠️ Default port 8000 in Voicebox's own CLI; 17493 is what its desktop app uses. Exact server executable name/location on Windows is unconfirmed.
-- Ports are user-editable (`tomo.engineUrls.v1`).
+- **Voicebox** `127.0.0.1:17493`: a typed client over its FastAPI server (read from the repository source, not a live server). Generation is **async**: `POST /generate` → poll `GET /history/{id}` → `GET /audio/{id}`. Also profiles/samples, presets, effects, stories, models (+`/tasks/active` for download progress), `/transcribe`, `/captures`, `/speak`. Lotus starts it with `--port <port> --data-dir <dataDir>\voicebox`, and Rust appends `--parent-pid <lotus pid>` so the server exits if Lotus dies. ⚠️ Default port 8000 in Voicebox's own CLI; 17493 is what its desktop app uses. Exact server executable name/location on Windows is unconfirmed.
+- Ports are user-editable (`lotus.engineUrls.v1`).
 
 ### 4.3 Claude Code hook bridge ✅ (Rust, tested on Linux)
-`hooks.rs` runs a plain-`std` HTTP server on `127.0.0.1:17495`. **Connect** (Settings → Island & Agents) edits `~/.claude/settings.json`, adding six hook events (`PermissionRequest`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionStart`, `SessionEnd`), each running `curl.exe … -H "X-Tomo-Hook: 1" --data-binary @- http://127.0.0.1:17495/hook/claude`. For a `PermissionRequest` the connection is **held open** until the island's Allow/Deny arrives (`hook_answer`), then answered with `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"|"deny",…}}}`; after 5 minutes it returns `{}` so Claude Code falls back to its terminal prompt. Posts without the `X-Tomo-Hook` header are rejected (stops web-page spam). Existing user settings are preserved; a one-time `settings.json.tomo-backup` is written. ⚠️ The decision-JSON shape was copied from knowledge of Claude Code's hook contract, not verified against a live Claude Code.
+`hooks.rs` runs a plain-`std` HTTP server on `127.0.0.1:17495`. **Connect** (Settings → Island & Agents) edits `~/.claude/settings.json`, adding six hook events (`PermissionRequest`, `UserPromptSubmit`, `Stop`, `Notification`, `SessionStart`, `SessionEnd`), each running `curl.exe … -H "X-Lotus-Hook: 1" --data-binary @- http://127.0.0.1:17495/hook/claude`. For a `PermissionRequest` the connection is **held open** until the island's Allow/Deny arrives (`hook_answer`), then answered with `{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"|"deny",…}}}`; after 5 minutes it returns `{}` so Claude Code falls back to its terminal prompt. Posts without the `X-Lotus-Hook` header are rejected (stops web-page spam). Existing user settings are preserved; a one-time `settings.json.lotus-backup` is written. ⚠️ The decision-JSON shape was copied from knowledge of Claude Code's hook contract, not verified against a live Claude Code.
 
 ### 4.4 Deep Research sources ✅ (parsers tested on fixtures, not live)
 `research/repos.ts`: arXiv (Atom XML via regex), PubMed (esearch + efetch XML), OpenAlex (JSON, rebuilds abstract from inverted index), Crossref (JSON). Only titles/abstracts/metadata are read. Domain/credibility come from the **publisher landing page** when known (not `doi.org`). A shared per-host rate limiter (arXiv 3.1 s, NCBI 0.4 s, OpenAlex/Crossref 0.12 s) is used by all agents.
@@ -117,13 +117,13 @@ All state is one `Project` object (`research/types.ts`), mutated only via `api.p
 
 ## 6. Persistence map ✅ (all `localStorage`, shared by both windows)
 
-`tomo.settings.v1`, `tomo.sessions.v1` (≤ 60 chats; blob attachments stripped), `tomo.activeSession.v1`, `tomo.engineUrls.v1`, `tomo.engine.<id>.exe`, `tomo.engine.<id>.policy`, `tomo.setup.dismissed`, `tomo.voice.profile|tab|story`, `tomo.dictate.lang`, `tomo.image.checkpoint`, `tomo.island.v1`, `tomo.island.chat.v1`, `tomo.research.v1` (≤ 40 projects, debounced, quota failures swallowed), `tomo.research.limits.v1`.
+`lotus.settings.v1`, `lotus.sessions.v1` (≤ 60 chats; blob attachments stripped), `lotus.activeSession.v1`, `lotus.engineUrls.v1`, `lotus.engine.<id>.exe`, `lotus.engine.<id>.policy`, `lotus.setup.dismissed`, `lotus.voice.profile|tab|story`, `lotus.dictate.lang`, `lotus.image.checkpoint`, `lotus.island.v1`, `lotus.island.chat.v1`, `lotus.research.v1` (≤ 40 projects, debounced, quota failures swallowed), `lotus.research.limits.v1`.
 Generated images are **session-only** (blob URLs). Portable mode relocates the WebView2 profile (hence localStorage) to `<exe dir>\data\webview`.
 
 ## 7. Install/packaging architecture
 
-- **Scope choice**: custom WiX template based on Tauri's stock (dev-branch) `main.wxs`; swapped `WixUI_InstallDir` for `WixUI_Advanced`; dual-purpose package (`ALLUSERS=2`, `MSIINSTALLPERUSER=1`, default per-user); registry roots changed to `HKMU`; features: Desktop shortcut, Start with Windows (HKMU Run), Portable data (writes `HKMU\Software\Tomo\Tomo\PortableData=1`). ✅ Renders to valid XML with all refs resolving; ⚠️ never built by WiX.
-- **Portable mode** (`paths.rs`): on if `tomo.portable` sits beside the exe **or** the registry flag is set. Sets `WEBVIEW2_USER_DATA_FOLDER` before any window exists; data dir = `<exe dir>\data`. ✅ Logic reviewed; registry branch ⚠️ unbuilt (Windows-only code).
+- **Scope choice**: custom WiX template based on Tauri's stock (dev-branch) `main.wxs`; swapped `WixUI_InstallDir` for `WixUI_Advanced`; dual-purpose package (`ALLUSERS=2`, `MSIINSTALLPERUSER=1`, default per-user); registry roots changed to `HKMU`; features: Desktop shortcut, Start with Windows (HKMU Run), Portable data (writes `HKMU\Software\Lotus\Lotus\PortableData=1`). ✅ Renders to valid XML with all refs resolving; ⚠️ never built by WiX.
+- **Portable mode** (`paths.rs`): on if `lotus.portable` sits beside the exe **or** the registry flag is set. Sets `WEBVIEW2_USER_DATA_FOLDER` before any window exists; data dir = `<exe dir>\data`. ✅ Logic reviewed; registry branch ⚠️ unbuilt (Windows-only code).
 - **WebView2**: `downloadBootstrapper` install mode (small installer; fetches runtime only if missing).
 - **License page**: `bundle.licenseFile` → `wix/license.rtf` (placeholder).
 

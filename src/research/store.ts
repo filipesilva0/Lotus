@@ -5,8 +5,8 @@ import { proposeQuestions, proposePlan, proposePersonas, uid, LlmCtx } from './l
 import { reportActivity } from '../lib/bus';
 import { EngineError } from '../lib/http';
 
-const KEY = 'tomo.research.v1';
-const LIMITS_KEY = 'tomo.research.limits.v1';
+const KEY = 'lotus.research.v1';
+const LIMITS_KEY = 'lotus.research.limits.v1';
 
 const loadLimits = (): ResearchLimits => {
   try { return { ...DEFAULT_LIMITS, ...JSON.parse(localStorage.getItem(LIMITS_KEY) || '{}') }; } catch { return DEFAULT_LIMITS; }
@@ -17,7 +17,7 @@ function loadProjects(): Project[] {
     const list: Project[] = JSON.parse(localStorage.getItem(KEY) || '[]');
     // A run cannot survive closing the app; keep what it collected and say so.
     return list.map((p) => (p.phase === 'running' || p.phase === 'synthesizing'
-      ? { ...p, phase: 'stopped' as Phase, paused: false, error: 'Tomo was closed during this run. Partial results are kept; you can write the report from them.' }
+      ? { ...p, phase: 'stopped' as Phase, paused: false, error: 'Lotus was closed during this run. Partial results are kept; you can write the report from them.' }
       : p));
   } catch { return []; }
 }

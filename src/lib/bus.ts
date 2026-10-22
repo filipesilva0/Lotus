@@ -5,7 +5,7 @@ import { isTauri } from './http';
 
 type Handler<T> = (payload: T) => void;
 
-const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('tomo-bus') : null;
+const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('lotus-bus') : null;
 
 export async function emitEvent<T = unknown>(name: string, payload?: T): Promise<void> {
   if (isTauri) {

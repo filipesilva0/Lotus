@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Tomo",
+  "productName": "Lotus",
   "version": "0.1.0",
-  "identifier": "app.tomo.studio",
+  "identifier": "app.lotus.studio",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:3000",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Tomo",
+        "title": "Lotus",
         "url": "index.html",
         "width": 1280,
         "height": 820,
@@ -25,7 +25,7 @@
       },
       {
         "label": "island",
-        "title": "Tomo Island",
+        "title": "Lotus Island",
         "url": "island.html",
         "width": 420,
         "height": 64,
@@ -48,7 +48,7 @@
     "targets": [
       "msi"
     ],
-    "publisher": "Tomo",
+    "publisher": "Lotus",
     "shortDescription": "A local AI studio: chat, images and voice on your own machine.",
     "icon": [
       "icons/32x32.png",

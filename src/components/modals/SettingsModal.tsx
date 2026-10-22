@@ -21,7 +21,7 @@ import {
   FileText,
   RotateCcw,
 } from 'lucide-react';
-import { TomoSettings } from '../../types/tomo';
+import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
 import { PillSlider } from '../common/PillSlider';
@@ -33,8 +33,8 @@ import type { Updates } from '../../hooks/useUpdates';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  settings: TomoSettings;
-  onUpdateSettings: (newSettings: Partial<TomoSettings>) => void;
+  settings: LotusSettings;
+  onUpdateSettings: (newSettings: Partial<LotusSettings>) => void;
   updates: Updates;
 }
 
@@ -69,11 +69,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleExportChats = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(
-      JSON.stringify({ exportedAt: new Date().toISOString(), platform: "Tomo Local AI" }, null, 2)
+      JSON.stringify({ exportedAt: new Date().toISOString(), platform: "Lotus Local AI" }, null, 2)
     );
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `tomo-conversations-export-${Date.now()}.json`);
+    downloadAnchor.setAttribute("download", `lotus-conversations-export-${Date.now()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -97,7 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div>
             <div className="px-2 py-1 mb-3">
               <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                Tomo Studio Settings
+                Lotus Studio Settings
               </span>
               <h2 className="text-sm font-bold text-[var(--color-text-main)] leading-tight">
                 Preferences
@@ -127,7 +127,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="pt-3 border-t border-[var(--color-border-subtle)] px-2 text-xs text-[var(--color-text-muted)]">
-            <span>{updates.version ? `Tomo ${updates.version}` : 'Tomo'} · Local AI Studio</span>
+            <span>{updates.version ? `Lotus ${updates.version}` : 'Lotus'} · Local AI Studio</span>
           </div>
         </div>
 
@@ -322,7 +322,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() =>
                         onUpdateSettings({
                           systemPrompt:
-                            'You are Tomo, an intelligent local AI engineer and creative assistant. Answer concisely and accurately.',
+                            'You are Lotus, an intelligent local AI engineer and creative assistant. Answer concisely and accurately.',
                         })
                       }
                       className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] dark:hover:text-white flex items-center gap-1"

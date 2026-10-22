@@ -10,7 +10,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { Logo } from '../common/Logo';
-import { ViewMode } from '../../types/tomo';
+import { ViewMode } from '../../types/lotus';
 import type { EngineState } from '../../hooks/useEngines';
 import type { EngineId } from '../../services/engineConfig';
 
@@ -19,7 +19,7 @@ export type EngineHealth = 'checking' | 'ok' | 'attention' | 'idle';
 /**
  * Real engine health for the rail, derived only from measured state.
  * - checking: first probe has not finished, or something is starting/stopping
- * - attention: an engine Tomo is meant to run (started by Tomo, or "Start with Tomo") is down or errored
+ * - attention: an engine Lotus is meant to run (started by Lotus, or "Start with Lotus") is down or errored
  * - ok: at least one engine is running and nothing needs attention
  * - idle: no engine is running (a normal state: engines are optional)
  */
@@ -83,8 +83,8 @@ export const LeftRail: React.FC<LeftRailProps> = ({
       <button
         onClick={() => onSelectView('chat')}
         className="flex items-center justify-center p-1.5 mb-4 rounded-xl hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-vibrant)]"
-        title="Tomo"
-        aria-label="Tomo, go to Chat"
+        title="Lotus"
+        aria-label="Lotus, go to Chat"
       >
         <Logo size={28} />
       </button>

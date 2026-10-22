@@ -12,7 +12,7 @@ export type UpdateState =
   | { kind: 'installing'; downloaded: number; total: number | null }
   | { kind: 'error'; message: string };
 
-const PREF_KEY = 'tomo.updates.v1';
+const PREF_KEY = 'lotus.updates.v1';
 const loadAuto = (): boolean => {
   try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}').autoCheck === true; } catch { return false; }
 };
@@ -50,7 +50,7 @@ export function useUpdates() {
     setState({ kind: 'installing', downloaded: 0, total: null });
     const off = await onUpdateProgress((p) => setState({ kind: 'installing', ...p }));
     try {
-      await installUpdate(); // normally never returns: the installer closes Tomo and reopens it
+      await installUpdate(); // normally never returns: the installer closes Lotus and reopens it
     } catch (e) {
       setState({ kind: 'error', message: (e as Error).message });
     } finally {
@@ -64,7 +64,7 @@ export function useUpdates() {
     setAutoCheckState(v);
   }, []);
 
-  // Optional check shortly after launch (off by default: it is the one request Tomo makes to GitHub).
+  // Optional check shortly after launch (off by default: it is the one request Lotus makes to GitHub).
   useEffect(() => {
     if (!updatesSupported || !autoCheck) return;
     const t = setTimeout(() => void check(), 4000);

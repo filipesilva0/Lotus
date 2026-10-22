@@ -6,7 +6,7 @@ export const DEFAULT_URLS: Record<EngineId, string> = {
   voicebox: 'http://127.0.0.1:17493',
 };
 
-const KEY = 'tomo.engineUrls.v1';
+const KEY = 'lotus.engineUrls.v1';
 
 function read(): Partial<Record<EngineId, string>> {
   try {

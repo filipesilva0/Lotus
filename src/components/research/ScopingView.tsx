@@ -30,7 +30,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
         <section className="space-y-4">
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-main)]">What do you want to research?</h2>
-            <p className="text-xs text-[var(--color-text-muted)] mt-1 leading-relaxed">State the question in your own words. Tomo will ask a few questions to narrow it, then draft a plan for you to approve before anything is searched.</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1 leading-relaxed">State the question in your own words. Lotus will ask a few questions to narrow it, then draft a plan for you to approve before anything is searched.</p>
           </div>
           <TextArea aria-label="Research question" rows={4} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Does intermittent fasting improve cardiovascular outcomes in adults?" className="!text-sm" />
           <div className="flex flex-wrap gap-1.5">

@@ -83,11 +83,12 @@ pub fn run() {
             engines::engine_stop,
             engines::engine_supervised,
             engines::engine_find,
+            engines::engine_ping,
             updates::update_check,
             updates::update_install,
         ])
         .on_window_event(|window, event| {
-            // Closing the studio keeps Tomo (and the island) running in the tray.
+            // Closing the studio keeps Lotus (and the island) running in the tray.
             if window.label() == "main" {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
@@ -97,12 +98,12 @@ pub fn run() {
         })
         .setup(|app| {
             // Tray
-            let open = MenuItem::with_id(app, "open", "Open Tomo", true, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Open Lotus", true, None::<&str>)?;
             let island = MenuItem::with_id(app, "island", "Show / hide island", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Tomo", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Lotus", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &island, &quit])?;
             let mut tray = TrayIconBuilder::new()
-                .tooltip("Tomo")
+                .tooltip("Lotus")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -150,7 +151,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building Tomo");
+        .expect("error while building Lotus");
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {

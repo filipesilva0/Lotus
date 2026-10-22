@@ -5,6 +5,7 @@ interface LogoProps {
   size?: number;
 }
 
+/** Lotus line art: five petals and a ripple, drawn with strokes only so it follows the text colour. */
 export const Logo: React.FC<LogoProps> = ({ className = 'text-[var(--color-text-main)]', size = 26 }) => {
   return (
     <svg
@@ -14,37 +15,14 @@ export const Logo: React.FC<LogoProps> = ({ className = 'text-[var(--color-text-
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label="Tomo logo"
+      aria-label="Lotus logo"
     >
-      {/* Precision 4-petal interlocking geometric monogram matching Image 1 */}
-      <path
-        d="M11.5 7C9.01472 7 7 9.01472 7 11.5C7 13.9853 9.01472 16 11.5 16H16V11.5C16 9.01472 13.9853 7 11.5 7Z"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M20.5 7C22.9853 7 25 9.01472 25 11.5C25 13.9853 22.9853 16 20.5 16H16V11.5C16 9.01472 18.0147 7 20.5 7Z"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M11.5 25C9.01472 25 7 22.9853 7 20.5C7 18.0147 9.01472 16 11.5 16H16V20.5C16 22.9853 13.9853 25 11.5 25Z"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M20.5 25C22.9853 25 25 22.9853 25 20.5C25 18.0147 22.9853 16 20.5 16H16V20.5C16 22.9853 18.0147 25 20.5 25Z"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M16 4.5C20.5 9.5 20.5 17.5 16 23.5C11.5 17.5 11.5 9.5 16 4.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 23.5C10.5 22.5 6.8 18 6.8 12C11.6 12.8 14.8 17 16 23.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 23.5C21.5 22.5 25.2 18 25.2 12C20.4 12.8 17.2 17 16 23.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 23.5C9 25 3.8 21.5 2.6 16C8 15.8 13.2 18.4 16 23.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 23.5C23 25 28.2 21.5 29.4 16C24 15.8 18.8 18.4 16 23.5Z" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 28C12 29.6 20 29.6 25 28" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 };

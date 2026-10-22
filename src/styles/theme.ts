@@ -1,4 +1,4 @@
-import { ColorPalette, FontFamily, FontSize } from '../types/tomo';
+import { ColorPalette, FontFamily, FontSize } from '../types/lotus';
 
 export interface ThemeColors {
   name: string;

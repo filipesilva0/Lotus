@@ -50,9 +50,9 @@ export interface PullProgress {
   total?: number;
 }
 
-const unreachable = () =>
+const unreachable = (cause?: unknown) =>
   new EngineError(
-    `Can't reach Ollama at ${engineUrl('ollama')}. Start Ollama (or the engine from the Engines tab), then try again.`,
+    `Can't reach Ollama at ${engineUrl('ollama')}. Start Ollama (or the engine from the Engines tab), then try again.${cause ? ` (${cause instanceof Error ? cause.message : String(cause)})` : ''}`,
     ENGINE,
     undefined,
     true,
@@ -100,8 +100,8 @@ export class OllamaService {
     let res: Response;
     try {
       res = await http(`${this.baseUrl}${path}`, { ...init, signal: init.signal ?? timeoutSignal(timeoutMs) });
-    } catch {
-      throw unreachable();
+    } catch (e) {
+      throw unreachable(e);
     }
     if (!res.ok) throw new EngineError(await errorText(res), ENGINE, res.status);
     return res;

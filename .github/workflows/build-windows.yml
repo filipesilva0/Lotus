@@ -139,7 +139,7 @@ jobs:
           $msi = Get-ChildItem src-tauri/target/release/bundle/msi -Filter *.msi | Select-Object -First 1
           $sig = "$($msi.FullName).sig"
           if (-not (Test-Path $sig)) { throw "Missing $sig: the updater files were not produced." }
-          gh release create $tag $msi.FullName $sig dist-portable/Tomo-portable-x64.zip --draft --title "Tomo $ver" --generate-notes
+          gh release create $tag $msi.FullName $sig dist-portable/Lotus-portable-x64.zip --draft --title "Lotus $ver" --generate-notes
           $notes = (gh release view $tag --json body | ConvertFrom-Json).body
           $manifest = @{
             version  = $ver
@@ -156,7 +156,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Tomo-windows
+          name: Lotus-windows
           path: |
             src-tauri/target/release/bundle/msi/*.msi
-            dist-portable/Tomo-portable-x64.zip
+            dist-portable/Lotus-portable-x64.zip

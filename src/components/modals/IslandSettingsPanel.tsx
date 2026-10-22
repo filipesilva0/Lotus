@@ -6,7 +6,7 @@ import { ollamaClient } from '../../services/ollamaService';
 import { voicebox, VoiceProfile } from '../../services/voicebox';
 import { invokeNative } from '../../lib/bus';
 import { isTauri } from '../../lib/http';
-import { TomoSettings } from '../../types/tomo';
+import { LotusSettings } from '../../types/lotus';
 
 const Row: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="flex items-center justify-between gap-6 py-3.5">
@@ -85,7 +85,7 @@ export const IslandSettingsPanel: React.FC = () => {
           <Toggle checked={s.agents} onChange={(v) => set({ agents: v })} ariaLabel="Show Claude Code on the island" />
         </Row>
         <Row title={hooksOn ? 'Connected' : 'Not connected'}
-          hint="Adds Tomo's hooks to your Claude Code settings file (a backup is saved next to it). Claude Code keeps working normally while Tomo is closed.">
+          hint="Adds Lotus's hooks to your Claude Code settings file (a backup is saved next to it). Claude Code keeps working normally while Lotus is closed.">
           {isTauri
             ? <Btn variant={hooksOn ? 'ghost' : 'primary'} loading={busy} disabled={hooksOn === null} onClick={toggleHooks}>{hooksOn ? 'Disconnect' : 'Connect'}</Btn>
             : <span className="text-xs text-[var(--color-text-muted)]">Desktop app only</span>}
@@ -96,7 +96,7 @@ export const IslandSettingsPanel: React.FC = () => {
   );
 };
 
-export const VoiceSettingsPanel: React.FC<{ settings: TomoSettings; onUpdateSettings: (p: Partial<TomoSettings>) => void }> = ({ settings, onUpdateSettings }) => (
+export const VoiceSettingsPanel: React.FC<{ settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }> = ({ settings, onUpdateSettings }) => (
   <Group title="Voice">
     <Row title="Read replies aloud" hint="Speak each chat reply with your selected voice (needs Voicebox running).">
       <Toggle checked={settings.autoReadResponses} onChange={(v) => onUpdateSettings({ autoReadResponses: v })} ariaLabel="Read replies aloud" />

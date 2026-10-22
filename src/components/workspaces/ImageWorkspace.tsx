@@ -10,7 +10,7 @@ import {
   ImageIcon,
   Square,
 } from 'lucide-react';
-import { GeneratedImage } from '../../types/tomo';
+import { GeneratedImage } from '../../types/lotus';
 import { PillSlider } from '../common/PillSlider';
 import { Banner, Btn, Empty } from '../common/ui';
 import { engineUrl } from '../../services/engineConfig';
@@ -49,7 +49,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const [negativePrompt, setNegativePrompt] = useState('lowres, blurry, distorted, text, watermark');
   const [steps, setSteps] = useState(28);
   const [cfg, setCfg] = useState(7.0);
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState(() => localStorage.getItem('tomo.image.checkpoint') || '');
+  const [selectedCheckpoint, setSelectedCheckpoint] = useState(() => localStorage.getItem('lotus.image.checkpoint') || '');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -65,7 +65,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || isGenerating || !selectedCheckpoint) return;
-    localStorage.setItem('tomo.image.checkpoint', selectedCheckpoint);
+    localStorage.setItem('lotus.image.checkpoint', selectedCheckpoint);
     onGenerate({
       prompt,
       negativePrompt,
@@ -284,7 +284,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                 </button>
                 <a
                   href={activeImage.url}
-                  download={`tomo-${activeImage.id}.png`}
+                  download={`lotus-${activeImage.id}.png`}
                   className="p-2 rounded-xl bg-[var(--color-accent-vibrant)] text-white hover:brightness-110 transition-all shadow-xs"
                   title="Download Image"
                 >

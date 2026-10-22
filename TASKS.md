@@ -1,4 +1,4 @@
-# Tomo: Tasks
+# Lotus: Tasks
 
 > Bug/limitation IDs (B1…B17) refer to `CURRENT_STATE.md`. Evidence legend: ✅ confirmed · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > Priorities: **P0** unblocks everything · **P1** correctness against real services · **P2** quality/polish · **P3** ideas.
@@ -18,7 +18,7 @@ Why first: the Windows build has never passed, and every other risk (Rust on Win
 **Session 2 result: root cause found (Run key with doubled backslashes, LGHT0204) and fixed; awaiting the next CI run.** Earlier attempt: shortcut components' key paths changed `HKMU`→`HKCU` (ICE38/ICE64 hypothesis, untested). Ask the user for the lines containing `error LGHT` / `ICE` in the CI log (search the log for `LGHT`). **Workflow now prints them** (verbose build + "WiX diagnostics" step) and uploads a `wix-debug` artifact: ask for the text of the "=== light.exe output ===" section, or the artifact's `main.wxs`.
 Expect and fix, one at a time, whatever fails next. Most likely suspects (all ⚠️ never built): the two `#[cfg(windows)]` blocks (`paths.rs` registry flag using `winreg 0.55`; `engines.rs` `creation_flags`), WiX compile/link of `src-tauri/wix/main.wxs` (custom `WixUI_Advanced` layout, `HKMU` components, `ConfigurableDirectory`), `scripts/package-portable.ps1`.
 Method: user pastes the failing log → reproduce what is reproducible locally (Rust unit tests, template render check) → fix → ask for the next log. Keep each fix minimal and re-run the full verification set (`CLAUDE.md`).
-**Done when:** the workflow uploads `Tomo-windows` containing an `.msi` and `Tomo-portable-x64.zip`.
+**Done when:** the workflow uploads `Lotus-windows` containing an `.msi` and `Lotus-portable-x64.zip`.
 
 ### ▶ 3. T3: Smoke-test the real app on Windows  *P0/P1, depends on T2, needs the user's machine ❓*
 Give the user a short manual checklist and collect results:
@@ -46,7 +46,7 @@ Give the user a short manual checklist and collect results:
 | T7 | Persona agents per spec (B4, STORM-style): personas ask questions/critique during research, not only in the final prompt. 💡 needs a design decision from the user (cost: more LLM calls). | T5 (to judge quality first) | |
 | T8 | Tell the user when JSON fallback kicks in (B8); ComfyUI step progress via WebSocket (B7); optional display of reasoning (`thinking`) tokens. | none | WebSocket needs `@tauri-apps/plugin-websocket` + capability + matching crate/npm minor (see guard). |
 | T9 | Wire `voice:speak-text` (B6): "Speak this" on chat messages / island answers → Voice → Speak. | none | |
-| T10 | First-time "Tomo is still running in the tray" notice (B14); visible error if hook port 17495 cannot bind (B13). | T3 | |
+| T10 | First-time "Lotus is still running in the tray" notice (B14); visible error if hook port 17495 cannot bind (B13). | T3 | |
 | T11 | Storage robustness (B10): measure `localStorage` limits; if needed move chats/research to IndexedDB or files under the data dir. | T3 | Portable mode already relocates the WebView2 profile. |
 | T12 | Spec parity items (B5): MCP/connector toggles (decide scope), richer Agent Graph, live per-loop context usage. | T5 | Ask the user which matter. |
 | T13 | **Licence decision** (B15): ask the user; then set `LICENSE`, `Cargo.toml`, `src/App.tsx` header, `wix/license.rtf`, README, `THIRD_PARTY_LICENSES.md`. | none (needs user) | |

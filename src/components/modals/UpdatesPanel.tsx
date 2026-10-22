@@ -11,14 +11,14 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
   const busy = state.kind === 'checking' || state.kind === 'installing';
 
   if (!u.supported) {
-    return <Banner tone="info">Updates are available in the Tomo desktop app. This is the browser preview.</Banner>;
+    return <Banner tone="info">Updates are available in the Lotus desktop app. This is the browser preview.</Banner>;
   }
 
   return (
     <div className="space-y-4">
       <Card className="p-4 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-[var(--color-text-main)]">Tomo {u.version ?? ''}</p>
+          <p className="text-sm font-semibold text-[var(--color-text-main)]">Lotus {u.version ?? ''}</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
             {state.kind === 'current' && `You're on the latest version. Checked ${new Date(state.checkedAt).toLocaleTimeString()}.`}
             {state.kind === 'checking' && 'Checking for updates…'}
@@ -73,7 +73,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
             </Banner>
           ) : (
             <p className="text-xs text-[var(--color-text-muted)]">
-              Tomo closes, installs the update and reopens. Anything running (a research run, a download) stops, so finish
+              Lotus closes, installs the update and reopens. Anything running (a research run, a download) stops, so finish
               it first. The installer checks the update's signature before installing.
             </p>
           )}
@@ -89,7 +89,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
             />
           </div>
           <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
-            {mb(state.downloaded)}{state.total ? ` of ${mb(state.total)}` : ''} MB. Tomo will restart when this finishes.
+            {mb(state.downloaded)}{state.total ? ` of ${mb(state.total)}` : ''} MB. Lotus will restart when this finishes.
           </p>
         </Card>
       )}
@@ -102,13 +102,13 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
 
       <Card className="p-4 flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-[var(--color-text-main)]">Check when Tomo starts</p>
+          <p className="text-sm font-semibold text-[var(--color-text-main)]">Check when Lotus starts</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5 max-w-sm leading-relaxed">
             Off by default. Checking contacts GitHub, which sees your IP address and the request, nothing else.
-            Tomo never installs anything without you pressing the button.
+            Lotus never installs anything without you pressing the button.
           </p>
         </div>
-        <Toggle checked={u.autoCheck} onChange={u.setAutoCheck} ariaLabel="Check for updates when Tomo starts" />
+        <Toggle checked={u.autoCheck} onChange={u.setAutoCheck} ariaLabel="Check for updates when Lotus starts" />
       </Card>
     </div>
   );

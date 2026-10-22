@@ -33,7 +33,7 @@ export const Island: React.FC = () => {
   // Settings are edited in the main window; the two windows share localStorage.
   useEffect(() => {
     const sync = (e: StorageEvent) => {
-      if (e.key !== 'tomo.island.v1') return;
+      if (e.key !== 'lotus.island.v1') return;
       const next = loadIsland();
       setSettings(next);
       setVisible(next.enabled);
@@ -143,7 +143,7 @@ export const Island: React.FC = () => {
     try {
       const text = (await navigator.clipboard.readText()).trim();
       if (!text) return say('The clipboard is empty.');
-      const profile = loadIsland().voiceProfileId || localStorage.getItem('tomo.voice.profile') || undefined;
+      const profile = loadIsland().voiceProfileId || localStorage.getItem('lotus.voice.profile') || undefined;
       say('Reading aloud…');
       const q = await voicebox.speak(text.slice(0, 4000), { profile });
       const done = await voicebox.waitFor(q.id);
@@ -178,7 +178,7 @@ export const Island: React.FC = () => {
           onPointerEnter={() => { if (view === 'strip') { clearTimeout(hover.current); hover.current = window.setTimeout(() => setView('peek'), 140); } }}
           onPointerLeave={() => { clearTimeout(hover.current); if (view === 'peek') hover.current = window.setTimeout(() => setView('strip'), 450); }}
           onPointerMove={onMove}
-          role="region" aria-label="Tomo island"
+          role="region" aria-label="Lotus island"
           className="relative bg-black text-white overflow-hidden ring-1 ring-white/10 shadow-[0_10px_34px_rgba(0,0,0,.5)]"
           style={{ width: dims.w, height: dims.h, borderRadius: dims.r, transition: `width .34s ${ease}, height .34s ${ease}, border-radius .34s ${ease}` }}>
 
@@ -204,7 +204,7 @@ export const Island: React.FC = () => {
                 { l: 'Chat', i: <MessageSquare className="w-4 h-4" />, f: openChat },
                 { l: 'Dictate', i: <Mic className="w-4 h-4" />, f: () => { openChat(); setTimeout(() => chat.current?.toggleDictation(), 150); } },
                 { l: 'Read clipboard', i: <Volume2 className="w-4 h-4" />, f: speakClipboard },
-                { l: 'Open Tomo', i: <LayoutGrid className="w-4 h-4" />, f: () => void invokeNative('open_main', {}) },
+                { l: 'Open Lotus', i: <LayoutGrid className="w-4 h-4" />, f: () => void invokeNative('open_main', {}) },
               ].map((b) => (
                 <button key={b.l} onClick={b.f} title={b.l} aria-label={b.l}
                   className="h-11 rounded-[14px] bg-white/[.07] hover:bg-white/15 flex flex-col items-center justify-center gap-0.5 text-white/80 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">

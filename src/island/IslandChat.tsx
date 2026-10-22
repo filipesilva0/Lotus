@@ -10,7 +10,7 @@ import { loadIsland, mainSettings, Mood } from './state';
 interface Msg { role: 'user' | 'assistant'; content: string; error?: boolean; files?: string[] }
 interface Attach { name: string; kind: 'text' | 'image'; data: string }
 
-const HISTORY_KEY = 'tomo.island.chat.v1';
+const HISTORY_KEY = 'lotus.island.chat.v1';
 const MAX_TEXT_FILE = 100_000;
 
 export interface IslandChatHandle { toggleDictation: () => void; focusInput: () => void }
@@ -126,7 +126,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
     audio.current?.pause();
     setSpeakingIdx(i);
     try {
-      const profile = loadIsland().voiceProfileId || localStorage.getItem('tomo.voice.profile') || undefined;
+      const profile = loadIsland().voiceProfileId || localStorage.getItem('lotus.voice.profile') || undefined;
       const q = await voicebox.speak(toSpeakable(msgs[i].content), { profile });
       const done = await voicebox.waitFor(q.id);
       const a = new Audio(await voicebox.audioUrl(done.id));
@@ -152,7 +152,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
         <div className="flex-1" />
         {msgs.length > 0 && (
           <>
-            <HeaderBtn label="Continue in Tomo" onClick={() => { void emitEvent('chat:import', msgs.map(({ role, content }) => ({ role, content }))); void invokeNative('open_main', { view: 'chat' }); }}><ExternalLink className="w-3.5 h-3.5" /></HeaderBtn>
+            <HeaderBtn label="Continue in Lotus" onClick={() => { void emitEvent('chat:import', msgs.map(({ role, content }) => ({ role, content }))); void invokeNative('open_main', { view: 'chat' }); }}><ExternalLink className="w-3.5 h-3.5" /></HeaderBtn>
             <HeaderBtn label="New chat" onClick={clear}><RotateCcw className="w-3.5 h-3.5" /></HeaderBtn>
           </>
         )}
@@ -171,7 +171,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : ''}>
             <div className={m.role === 'user' ? 'max-w-[85%] rounded-2xl rounded-br-md bg-[var(--color-accent-vibrant)] text-white px-3 py-2' : `group max-w-full ${m.error ? 'text-amber-300' : ''}`}>
               {m.files?.length ? <p className="text-[11px] opacity-80 mb-1 flex items-center gap-1"><FileText className="w-3 h-3" />{m.files.join(', ')}</p> : null}
-              {m.content ? <MarkdownLite text={m.content} /> : <span className="inline-flex gap-1 py-1" aria-label="Thinking">{[0, 1, 2].map((d) => <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/50" style={{ animation: `tomo-dots 1.2s ${d * 0.2}s infinite` }} />)}</span>}
+              {m.content ? <MarkdownLite text={m.content} /> : <span className="inline-flex gap-1 py-1" aria-label="Thinking">{[0, 1, 2].map((d) => <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/50" style={{ animation: `lotus-dots 1.2s ${d * 0.2}s infinite` }} />)}</span>}
               {m.role === 'assistant' && m.content && !m.error && !(busy && i === lastIdx) && (
                 <div className="flex gap-0.5 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <HeaderBtn label={copied === i ? 'Copied' : 'Copy'} onClick={() => { void navigator.clipboard.writeText(m.content); setCopied(i); setTimeout(() => setCopied(null), 1200); }}>{copied === i ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}</HeaderBtn>

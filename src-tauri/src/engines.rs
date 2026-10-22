@@ -1,5 +1,5 @@
-//! Starts and stops the local engines Tomo talks to (Voicebox, Ollama, ComfyUI).
-//! Tomo only supervises processes it started itself; anything already running is left alone.
+//! Starts and stops the local engines Lotus talks to (Voicebox, Ollama, ComfyUI).
+//! Lotus only supervises processes it started itself; anything already running is left alone.
 
 use serde::Serialize;
 use std::collections::HashMap;
@@ -37,7 +37,7 @@ pub fn engine_start(
         cmd.current_dir(dir);
     }
     if name == "voicebox" {
-        // The Voicebox server exits on its own if Tomo disappears.
+        // The Voicebox server exits on its own if Lotus disappears.
         cmd.arg("--parent-pid").arg(std::process::id().to_string());
     }
     #[cfg(windows)]
@@ -60,7 +60,45 @@ pub fn engine_stop(state: State<Engines>, name: String) -> Result<(), String> {
     Ok(())
 }
 
-/// True when Tomo started this engine and it is still alive.
+#[derive(Serialize)]
+pub struct Ping {
+    pub reachable: bool,
+    pub status: Option<u16>,
+    pub detail: String,
+}
+
+/// Raw TCP + HTTP/1.1 GET to an engine, bypassing the web layer and the HTTP plugin entirely.
+/// Used only to explain *why* an engine looks offline (nothing listening vs. blocked vs. a Lotus bug).
+#[tauri::command]
+pub fn engine_ping(host: String, port: u16, path: String) -> Ping {
+    use std::io::{Read, Write};
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let addr = match (host.as_str(), port).to_socket_addrs().ok().and_then(|mut a| a.next()) {
+        Some(a) => a,
+        None => return Ping { reachable: false, status: None, detail: format!("Could not resolve {host}") },
+    };
+    let mut stream = match TcpStream::connect_timeout(&addr, Duration::from_millis(1500)) {
+        Ok(s) => s,
+        Err(e) => {
+            return Ping { reachable: false, status: None, detail: format!("Nothing is listening on {host}:{port} ({e})") }
+        }
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1500)));
+    let req = format!("GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\nConnection: close\r\n\r\n");
+    if stream.write_all(req.as_bytes()).is_err() {
+        return Ping { reachable: true, status: None, detail: "Connected, but the request could not be sent".into() };
+    }
+    let mut buf = [0u8; 64];
+    let n = stream.read(&mut buf).unwrap_or(0);
+    let head = String::from_utf8_lossy(&buf[..n]).to_string();
+    let status = head.split_whitespace().nth(1).and_then(|s| s.parse::<u16>().ok());
+    Ping { reachable: true, status, detail: head.lines().next().unwrap_or("").to_string() }
+}
+
+/// True when Lotus started this engine and it is still alive.
 #[tauri::command]
 pub fn engine_supervised(state: State<Engines>, name: String) -> bool {
     state

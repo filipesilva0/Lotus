@@ -1,9 +1,9 @@
 //! Portable vs. installed data locations.
 //!
 //! Portable mode is on when any of these is true:
-//!   1. a file named `tomo.portable` sits next to the executable (the portable .zip ships one), or
+//!   1. a file named `lotus.portable` sits next to the executable (the portable .zip ships one), or
 //!   2. the MSI "Portable data" option was ticked (it writes `PortableData=1` under
-//!      `Software\Tomo\Tomo` in HKCU or HKLM).
+//!      `Software\Lotus\Lotus` in HKCU or HKLM).
 //! In portable mode everything (WebView2 profile, settings, engine data) lives in `<exe dir>\data`.
 
 use serde::Serialize;
@@ -29,7 +29,7 @@ fn registry_flag() -> bool {
     use winreg::{enums::*, RegKey};
     [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE].iter().any(|hive| {
         RegKey::predef(*hive)
-            .open_subkey(r"Software\Tomo\Tomo")
+            .open_subkey(r"Software\Lotus\Lotus")
             .and_then(|k| k.get_value::<u32, _>("PortableData"))
             .map(|v| v == 1)
             .unwrap_or(false)
@@ -42,7 +42,7 @@ fn registry_flag() -> bool {
 }
 
 pub fn is_portable() -> bool {
-    exe_dir().join("tomo.portable").exists() || registry_flag()
+    exe_dir().join("lotus.portable").exists() || registry_flag()
 }
 
 /// Data directory for portable mode (`<exe dir>\data`).

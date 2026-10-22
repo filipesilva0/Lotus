@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ViewMode, ChatSession, ChatMessage, TomoSettings, GeneratedImage } from './types/tomo';
+import { ViewMode, ChatSession, ChatMessage, LotusSettings, GeneratedImage } from './types/lotus';
 import { LeftRail } from './components/rail/LeftRail';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
@@ -21,13 +21,13 @@ import { applyThemeToDocument } from './styles/theme';
 import { isTauri } from './lib/http';
 import { invokeNative, onEvent, reportActivity } from './lib/bus';
 
-const SETTINGS_KEY = 'tomo.settings.v1';
-const SESSIONS_KEY = 'tomo.sessions.v1';
-const ACTIVE_KEY = 'tomo.activeSession.v1';
+const SETTINGS_KEY = 'lotus.settings.v1';
+const SESSIONS_KEY = 'lotus.sessions.v1';
+const ACTIVE_KEY = 'lotus.activeSession.v1';
 
-const DEFAULT_SETTINGS: TomoSettings = {
+const DEFAULT_SETTINGS: LotusSettings = {
   darkMode: false,
-  tomoFolderPath: '',
+  lotusFolderPath: '',
   keepEnginesRunningOnQuit: false,
   selectedModel: '',
   temperature: 0.7,
@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS: TomoSettings = {
   contextWindow: 4096,
   frequencyPenalty: 0.0,
   presencePenalty: 0.0,
-  systemPrompt: 'You are Tomo, a helpful AI assistant running locally on the user\'s PC. Answer concisely and accurately.',
+  systemPrompt: 'You are Lotus, a helpful AI assistant running locally on the user\'s PC. Answer concisely and accurately.',
   streamingEnabled: true,
   reasoningBlockMode: 'collapsed',
   sendOnEnter: true,
@@ -78,10 +78,10 @@ const stripBlobs = (list: ChatSession[]): ChatSession[] =>
   list.map((s) => ({ ...s, messages: s.messages.map((m) => (m.attachment?.url.startsWith('blob:') ? { ...m, attachment: undefined, isStreaming: false } : { ...m, isStreaming: false })) }));
 
 export default function App() {
-  const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('tomo.setup.dismissed'));
+  const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('lotus.setup.dismissed'));
   const [currentView, setCurrentView] = useState<ViewMode>(firstRun.current ? 'engines' : 'chat');
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
-  const [settings, setSettings] = useState<TomoSettings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<TomoSettings>>(SETTINGS_KEY, {}) }));
+  const [settings, setSettings] = useState<LotusSettings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<LotusSettings>>(SETTINGS_KEY, {}) }));
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     const saved = stripBlobs(load<ChatSession[]>(SESSIONS_KEY, []));
     return saved.length ? saved : [welcomeSession('')];
@@ -208,7 +208,7 @@ export default function App() {
 
     if (settings.autoReadResponses && acc && !ctrl.signal.aborted) {
       try {
-        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: localStorage.getItem('tomo.voice.profile') ?? undefined });
+        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: localStorage.getItem('lotus.voice.profile') ?? undefined });
         const done = await voicebox.waitFor(q.id);
         await new Audio(await voicebox.audioUrl(done.id)).play();
       } catch { /* read-aloud is best effort */ }

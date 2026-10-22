@@ -109,7 +109,7 @@ class ComfyService {
       '6': { class_type: 'CLIPTextEncode', inputs: { text: i.prompt, clip: ['4', 1] } },
       '7': { class_type: 'CLIPTextEncode', inputs: { text: i.negativePrompt ?? '', clip: ['4', 1] } },
       '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
-      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'tomo', images: ['8', 0] } },
+      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'lotus', images: ['8', 0] } },
     };
   }
 
@@ -121,7 +121,7 @@ class ComfyService {
       await this.raw('/prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: this.graph(input, seed), client_id: 'tomo-studio' }),
+        body: JSON.stringify({ prompt: this.graph(input, seed), client_id: 'lotus-studio' }),
       })
     ).json();
     const promptId: string = queued.prompt_id;

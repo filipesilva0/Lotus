@@ -10,7 +10,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
   const [busy, setBusy] = useState(false);
   const [level, setLevel] = useState(0);
   const [secs, setSecs] = useState(0);
-  const [language, setLanguage] = useState(() => localStorage.getItem('tomo.dictate.lang') || '');
+  const [language, setLanguage] = useState(() => localStorage.getItem('lotus.dictate.lang') || '');
   const [items, setItems] = useState<Capture[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const rec = useRef<MicRecorder | null>(null);
@@ -30,7 +30,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
     setRecording(false); setLevel(0); setBusy(true);
     try {
       const r = await rec.current!.stop();
-      const cap = await voicebox.createCapture(r.wav, { language: language || undefined, source: 'tomo' });
+      const cap = await voicebox.createCapture(r.wav, { language: language || undefined, source: 'lotus' });
       setItems((c) => [cap, ...c]);
     } catch (e) { setErr((e as Error).message); }
     finally { setBusy(false); }
@@ -55,7 +55,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
         </div>
         <div>
           <Label>Spoken language</Label>
-          <Select value={language} onChange={(e) => { setLanguage(e.target.value); localStorage.setItem('tomo.dictate.lang', e.target.value); }}>
+          <Select value={language} onChange={(e) => { setLanguage(e.target.value); localStorage.setItem('lotus.dictate.lang', e.target.value); }}>
             <option value="">Detect automatically</option>
             {langs.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
           </Select>

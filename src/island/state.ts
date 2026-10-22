@@ -15,7 +15,7 @@ export interface IslandSettings {
   agents: boolean;
 }
 
-const KEY = 'tomo.island.v1';
+const KEY = 'lotus.island.v1';
 const DEFAULTS: IslandSettings = { enabled: true, model: '', voiceProfileId: '', autoCollapse: true, agents: true };
 
 export function loadIsland(): IslandSettings {
@@ -35,19 +35,19 @@ export function saveIsland(patch: Partial<IslandSettings>): IslandSettings {
 /** Fields of the main window's saved settings the island needs. */
 export function mainSettings(): { model: string; systemPrompt: string; palette: string; temperature: number } {
   try {
-    const s = JSON.parse(localStorage.getItem('tomo.settings.v1') || '{}');
+    const s = JSON.parse(localStorage.getItem('lotus.settings.v1') || '{}');
     return {
       model: s.selectedModel || 'llama3.2:3b',
-      systemPrompt: s.systemPrompt || 'You are Tomo, a helpful local AI assistant.',
+      systemPrompt: s.systemPrompt || 'You are Lotus, a helpful local AI assistant.',
       palette: s.palette || 'blue',
       temperature: typeof s.temperature === 'number' ? s.temperature : 0.7,
     };
   } catch {
-    return { model: 'llama3.2:3b', systemPrompt: 'You are Tomo, a helpful local AI assistant.', palette: 'blue', temperature: 0.7 };
+    return { model: 'llama3.2:3b', systemPrompt: 'You are Lotus, a helpful local AI assistant.', palette: 'blue', temperature: 0.7 };
   }
 }
 
-/** A task running somewhere in Tomo that deserves a pill on the island. */
+/** A task running somewhere in Lotus that deserves a pill on the island. */
 export interface Activity {
   id: string;
   kind: 'image' | 'voice' | 'chat' | 'download' | 'research';

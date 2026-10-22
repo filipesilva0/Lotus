@@ -16,7 +16,7 @@ import {
   Activity,
   Square,
 } from 'lucide-react';
-import { ChatSession } from '../../types/tomo';
+import { ChatSession } from '../../types/lotus';
 import { voicebox } from '../../services/voicebox';
 import { engineUrl } from '../../services/engineConfig';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';

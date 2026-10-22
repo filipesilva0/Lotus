@@ -1,12 +1,12 @@
 export const THIRD_PARTY_LICENSES_TEXT = `# Third-party licenses and attributions
 
-Tomo is a front end for local AI engines and borrows ideas from two open-source projects.
-No code, artwork, sounds or trademarks from either project are bundled in Tomo.
+Lotus is a front end for local AI engines and borrows ideas from two open-source projects.
+No code, artwork, sounds or trademarks from either project are bundled in Lotus.
 
 ## Voicebox (integration)
 
-Tomo's Voice workspace talks to the Voicebox server over its local REST API
-(\`http://127.0.0.1:17493\`). Voicebox is not bundled with Tomo and is installed separately.
+Lotus's Voice workspace talks to the Voicebox server over its local REST API
+(\`http://127.0.0.1:17493\`). Voicebox is not bundled with Lotus and is installed separately.
 
 - Project: https://github.com/jamiepine/voicebox
 - License: MIT, Copyright (c) 2026 Voicebox Contributors
@@ -15,7 +15,7 @@ Tomo's Voice workspace talks to the Voicebox server over its local REST API
 
 The island's behaviour (a collapsible pill with peek, chat and approval states, agent
 permission prompts, dictation, file drop) was inspired by Coucou for macOS and Windows.
-Tomo's island is an independent implementation with its own mascot and visuals.
+Lotus's island is an independent implementation with its own mascot and visuals.
 
 - Project: https://github.com/Louis-CFM/coucou
 - Code license: MIT, Copyright (c) 2026 Louis Raillé
@@ -25,12 +25,12 @@ Tomo's island is an independent implementation with its own mascot and visuals.
 ## Public data sources used by Deep Research (not bundled)
 
 arXiv API, NCBI PubMed E-utilities, OpenAlex and Crossref are queried over HTTPS with short keyword
-queries. Please follow each service's terms of use; Tomo rate-limits its requests accordingly.
+queries. Please follow each service's terms of use; Lotus rate-limits its requests accordingly.
 
-## Engines Tomo connects to (not bundled)
+## Engines Lotus connects to (not bundled)
 
 - Ollama: MIT
-- ComfyUI: GPL-3.0 (Tomo only calls its HTTP API)
+- ComfyUI: GPL-3.0 (Lotus only calls its HTTP API)
 
 ## Bundled fonts (via Fontsource)
 

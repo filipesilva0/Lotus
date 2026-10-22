@@ -35,7 +35,7 @@ pub fn start<R: tauri::Runtime>(app: AppHandle<R>) {
         let listener = match TcpListener::bind(("127.0.0.1", PORT)) {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("tomo: hook server could not bind port {PORT}: {e}");
+                eprintln!("lotus: hook server could not bind port {PORT}: {e}");
                 return;
             }
         };
@@ -77,7 +77,7 @@ fn handle<R: tauri::Runtime>(app: AppHandle<R>, stream: TcpStream) -> std::io::R
         }
         // Browsers cannot attach this header cross-origin without a preflight we never answer,
         // so a random web page cannot spam the island with fake prompts.
-        if lower.starts_with("x-tomo-hook:") {
+        if lower.starts_with("x-lotus-hook:") {
             has_token = true;
         }
     }
@@ -125,7 +125,7 @@ fn handle<R: tauri::Runtime>(app: AppHandle<R>, stream: TcpStream) -> std::io::R
     let out = match answer {
         Ok((true, _)) => json!({"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}),
         Ok((false, msg)) => json!({"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{
-            "behavior":"deny","message": msg.unwrap_or_else(|| "Denied from the Tomo island".into())}}}),
+            "behavior":"deny","message": msg.unwrap_or_else(|| "Denied from the Lotus island".into())}}}),
         Err(_) => json!({}),
     };
     reply(stream, "200 OK", &out.to_string());
@@ -146,7 +146,7 @@ fn settings_path() -> Result<PathBuf, String> {
 
 fn command_line() -> String {
     format!(
-        "curl.exe -s -m 310 -X POST -H \"Content-Type: application/json\" -H \"X-Tomo-Hook: 1\" --data-binary @- http://127.0.0.1:{PORT}/hook/claude"
+        "curl.exe -s -m 310 -X POST -H \"Content-Type: application/json\" -H \"X-Lotus-Hook: 1\" --data-binary @- http://127.0.0.1:{PORT}/hook/claude"
     )
 }
 
@@ -171,7 +171,7 @@ fn write_settings(path: &PathBuf, v: &Value) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let backup = path.with_file_name("settings.json.tomo-backup");
+    let backup = path.with_file_name("settings.json.lotus-backup");
     if path.exists() && !backup.exists() {
         let _ = std::fs::copy(path, &backup);
     }
@@ -230,7 +230,7 @@ mod tests {
     // One test so the HOME/USERPROFILE override cannot race with another test.
     #[test]
     fn install_is_idempotent_preserves_user_config_and_uninstalls_cleanly() {
-        let dir = std::env::temp_dir().join(format!("tomo-hooks-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lotus-hooks-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".claude")).unwrap();
         std::env::set_var("USERPROFILE", &dir);
@@ -260,14 +260,14 @@ mod tests {
             assert!(v["hooks"][ev].is_array(), "{ev} registered");
         }
         assert!(
-            v["hooks"]["PermissionRequest"][0]["hooks"][0]["command"].as_str().unwrap().contains("X-Tomo-Hook"),
+            v["hooks"]["PermissionRequest"][0]["hooks"][0]["command"].as_str().unwrap().contains("X-Lotus-Hook"),
             "request carries the anti-CSRF header"
         );
         // key order of the user's file is kept (preserve_order)
         let keys: Vec<_> = v.as_object().unwrap().keys().cloned().collect();
         assert_eq!(keys, ["model", "permissions", "hooks"]);
         // backup of the original was written once
-        assert_eq!(std::fs::read_to_string(dir.join(".claude").join("settings.json.tomo-backup")).unwrap(), original);
+        assert_eq!(std::fs::read_to_string(dir.join(".claude").join("settings.json.lotus-backup")).unwrap(), original);
 
         hooks_uninstall().unwrap();
         assert!(!hooks_installed());
@@ -286,7 +286,7 @@ mod tests {
         use std::io::{Read, Write};
         let mut s = TcpStream::connect(("127.0.0.1", PORT)).unwrap();
         s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
-        let tok = if token { "X-Tomo-Hook: 1\r\n" } else { "" };
+        let tok = if token { "X-Lotus-Hook: 1\r\n" } else { "" };
         write!(s, "POST {path} HTTP/1.1\r\nHost: x\r\n{tok}Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();
         let mut out = String::new();
         s.read_to_string(&mut out).unwrap();

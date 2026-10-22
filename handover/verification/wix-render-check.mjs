@@ -4,9 +4,9 @@ import { XMLParser } from 'fast-xml-parser';
 
 const tpl = fs.readFileSync('src-tauri/wix/main.wxs', 'utf8');
 const data = {
-  product_name: 'Tomo', manufacturer: 'Tomo', version: '0.1.0', upgrade_code: '6f4a7c52-3b1e-4f0a-9d8c-2a5e7b91c4d3',
-  path_component_guid: 'aaaaaaaa-0000-4000-8000-000000000001', main_binary_path: 'C:\\t\\tomo.exe', icon_path: 'C:\\t\\icon.ico',
-  license: 'C:\\t\\license.rtf', homepage: 'https://example.com', bundle_id: 'app.tomo.studio',
+  product_name: 'Lotus', manufacturer: 'Lotus', version: '0.1.0', upgrade_code: '6f4a7c52-3b1e-4f0a-9d8c-2a5e7b91c4d3',
+  path_component_guid: 'aaaaaaaa-0000-4000-8000-000000000001', main_binary_path: 'C:\\t\\lotus.exe', icon_path: 'C:\\t\\icon.ico',
+  license: 'C:\\t\\license.rtf', homepage: 'https://example.com', bundle_id: 'app.lotus.studio',
   binaries: [], resources: {}, resource_file_ids: [], resource_dir_ids: [], merge_modules: [], deep_link_protocols: [],
   install_webview: true, webview_installer_args: '/silent', minimum_webview2_version: '110.0.0.0', enable_elevated_update_task: false,
   banner_path: undefined, dialog_image_path: undefined, webview: true, dialog_image_path_: undefined,

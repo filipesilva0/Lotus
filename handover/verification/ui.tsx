@@ -49,10 +49,10 @@ h = html(<Context r={r} p={running} />); ok('inspector B/context: hot supervisor
 h = html(<AgentGraph p={base} />); ok('empty graph state', /appears when research starts/.test(h));
 h = html(<Inspector r={r} p={base} mode="A" />); ok('inspector shell: Mode A tabs', /Repos/.test(h) && /Depth/.test(h) && /Filters/.test(h));
 // Whole workspace from persisted data
-store.set('tomo.research.v1', JSON.stringify([running, done]));
+store.set('lotus.research.v1', JSON.stringify([running, done]));
 h = html(<ResearchWorkspace model="m" models={['m']} ollamaUp={true} onOpenEngines={noop} />);
-ok('workspace: interrupted run is restored as Stopped with partial data note', /Stopped/.test(h) && /Tomo was closed during this run/.test(h) || /Stopped/.test(h));
+ok('workspace: interrupted run is restored as Stopped with partial data note', /Stopped/.test(h) && /Lotus was closed during this run/.test(h) || /Stopped/.test(h));
 ok('workspace: sidebar has New task, mode switch, project list + tag filter', /New deep research task/.test(h) && /Scoping/.test(h) && /Live/.test(h) && /#ML/.test(h));
-store.set('tomo.research.v1', '[]');
+store.set('lotus.research.v1', '[]');
 h = html(<ResearchWorkspace model="m" models={['m']} ollamaUp={true} onOpenEngines={noop} />); ok('workspace: empty state invites a first task', /Investigate a topic in depth/.test(h));
 console.log(fails ? `\n${fails} FAILED` : '\nall passed'); process.exit(fails ? 1 : 0);

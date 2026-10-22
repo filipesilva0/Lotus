@@ -109,7 +109,7 @@ export function useAgents(enabled: boolean) {
 
   const answer = useCallback(async (req: PermissionRequest, allow: boolean) => {
     setQueue((q) => q.filter((r) => r.requestId !== req.requestId));
-    await invokeNative('hook_answer', { requestId: req.requestId, allow, message: allow ? undefined : 'Denied from the Tomo island' });
+    await invokeNative('hook_answer', { requestId: req.requestId, allow, message: allow ? undefined : 'Denied from the Lotus island' });
   }, []);
 
   return { sessions, queue, answer };

@@ -1,4 +1,4 @@
-# Tomo
+# Lotus
 
 A light Windows app that puts your local AI in one place: **chat** (Ollama), **images** (ComfyUI),
 **voice** (Voicebox), **deep research** (your local model + public academic databases), and an
@@ -17,12 +17,12 @@ so the app itself is small; the engines you connect to bring their own weight.
 | **Images** | ComfyUI text-to-image with your installed checkpoints, aspect ratios, seed, cancel |
 | **Voice** | Powered by [Voicebox](https://github.com/jamiepine/voicebox) (see below) |
 | **Research** | Scoping wizard, editable plan, expert personas, parallel search agents, live steering, cited report |
-| **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Tomo", model downloads (Ollama and Voicebox), storage/portable info |
+| **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Lotus", model downloads (Ollama and Voicebox), storage/portable info |
 | **Island** | Floating pill: peek, chat, dictate, read clipboard aloud, file/image drop, activity pills, Claude Code permission prompts |
 
 ### Voice (Voicebox)
 
-Tomo is a second front end for the Voicebox server, so your voices and history are shared with
+Lotus is a second front end for the Voicebox server, so your voices and history are shared with
 the Voicebox app.
 
 - **Speak**: nine TTS engines, 23 languages, delivery instructions, seed, effects chain with presets, "speak in character"
@@ -54,7 +54,7 @@ middle, and an inspector on the right whose tabs change with the mode.
   Citations that don't match a real fetched source are stripped, so the model can't cite papers it
   never saw. Copy or save as `.md`.
 
-**Privacy:** Update checks (only when you ask, or at launch if you enable it) contact GitHub; see *Updating Tomo*.
+**Privacy:** Update checks (only when you ask, or at launch if you enable it) contact GitHub; see *Updating Lotus*.
 Deep Research contacts arXiv, PubMed (NCBI), OpenAlex and Crossref directly from your PC.
 Only the keyword queries the agents write are sent; each repository can be switched off (Crossref
 starts off). Requests are rate-limited per host (arXiv: one per 3 s) and agents share that budget,
@@ -63,7 +63,7 @@ plus `127.0.0.1`.
 
 **Limits:** agents read titles and abstracts only (no PDFs or full text), so the report is a map of
 the literature, not a replacement for reading the papers. Quality depends on the model; a 7B model or
-larger is recommended. Runs don't survive closing Tomo (partial results are kept and a report can be
+larger is recommended. Runs don't survive closing Lotus (partial results are kept and a report can be
 written from them).
 
 ### Island
@@ -84,33 +84,33 @@ Not included from Coucou: phone companion, Spotify/GitHub/Stripe pills, weekly r
 
 ## Installing
 
-**MSI installer** (`Tomo_x64_en-US.msi`) asks you:
+**MSI installer** (`Lotus_x64_en-US.msi`) asks you:
 - **Just for me** (no admin rights) or **All users**
 - Install folder
 - Optional features: *Desktop shortcut*, *Start with Windows*, *Portable data*
   (keeps chats, voices and settings inside the install folder instead of your user profile)
 
-**Portable zip** (`Tomo-portable-x64.zip`): unzip anywhere (a USB stick works). The `tomo.portable`
-file next to `Tomo.exe` makes Tomo keep everything in `data\` beside it.
+**Portable zip** (`Lotus-portable-x64.zip`): unzip anywhere (a USB stick works). The `lotus.portable`
+file next to `Lotus.exe` makes Lotus keep everything in `data\` beside it.
 
 An MSI cannot be "portable" in the strict sense, which is why portable is a separate zip.
 
 Requires Windows 10 (1803+) or 11 with the WebView2 Runtime (already present on Windows 11 and
 current Windows 10; the installer fetches it if missing).
 
-## Updating Tomo
+## Updating Lotus
 
 **Settings → About & Updates** has a *Check for updates* button. When a newer version exists it shows
-the release notes and a *Download and restart* button; Tomo downloads the installer, verifies its
+the release notes and a *Download and restart* button; Lotus downloads the installer, verifies its
 signature, installs it and reopens. A dot appears on the Settings icon once an update has been found.
 Checking contacts GitHub (it sees your IP address and the request, nothing else) and happens only when
-you press the button, or at launch if you switch on *Check when Tomo starts* (off by default).
+you press the button, or at launch if you switch on *Check when Lotus starts* (off by default).
 Portable copies can check, but you replace the folder yourself: the installer would add a second copy.
 
 ### Publishing an update (maintainer)
 
 One-time setup:
-1. `npx tauri signer generate -w tomo-updater.key` and choose a password. Keep the `.key` file private and
+1. `npx tauri signer generate -w lotus-updater.key` and choose a password. Keep the `.key` file private and
    backed up: installed copies only accept updates signed by it, so losing it means a reinstall for everyone.
 2. In the GitHub repo: *Settings → Secrets and variables → Actions*, add `TAURI_SIGNING_PRIVATE_KEY` (the
    `.key` file's contents), `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and `TAURI_UPDATER_PUBKEY` (the `.pub` file's contents).
@@ -123,7 +123,7 @@ version that contains the updater has to be installed by hand once.
 
 ## Connecting the engines
 
-Install the engines you want, then open **Engines**. Tomo finds Ollama automatically; for
+Install the engines you want, then open **Engines**. Lotus finds Ollama automatically; for
 Voicebox, point it once at `voicebox-server.exe`; for ComfyUI, point it at the `.bat`/`.exe` you
 use to launch it. Addresses default to `127.0.0.1:11434` (Ollama), `:8188` (ComfyUI), `:17493`
 (Voicebox) and can be changed per engine.
@@ -136,7 +136,7 @@ Prerequisites: Node 22+, Rust (stable, MSVC toolchain), and on Windows the WebVi
 npm install
 npm run tauri dev       # run with hot reload
 npm run tauri build     # produces the MSI in src-tauri\target\release\bundle\msi
-./scripts/package-portable.ps1   # then builds dist-portable\Tomo-portable-x64.zip
+./scripts/package-portable.ps1   # then builds dist-portable\Lotus-portable-x64.zip
 ```
 
 No Windows machine? The workflow in `.github/workflows/build-windows.yml` builds both artifacts
@@ -172,12 +172,12 @@ Verified in a Linux sandbox:
 - The TypeScript front end type-checks and builds. The Ollama, ComfyUI and Voicebox clients pass tests against mock servers shaped from the real APIs.
 - Deep Research: the arXiv / PubMed / OpenAlex parsers, filtering, de-duplication, pause / resume / stop, steering, citation cleaning, junk-JSON fallbacks, the per-host rate limiter and a full multi-agent run pass tests against fake Ollama and fake repositories; all research views render across every lifecycle state.
 - `tauri.conf.json` validates against Tauri's official schema, and the capability file is accepted by the Tauri build step.
-- The Rust shell passes `cargo check` with no warnings, and two Rust tests pass: the Claude Code hook installer (keeps your existing `settings.json`, idempotent, backs up, removes only Tomo's hooks) and the approve/deny server (holds the request open until you answer, rejects posts without the `X-Tomo-Hook` header, returns the allow/deny JSON).
+- The Rust shell passes `cargo check` with no warnings, and two Rust tests pass: the Claude Code hook installer (keeps your existing `settings.json`, idempotent, backs up, removes only Lotus's hooks) and the approve/deny server (holds the request open until you answer, rejects posts without the `X-Lotus-Hook` header, returns the allow/deny JSON).
 - The MSI template renders to valid XML with every component and directory reference resolving.
 
 **Not yet verified** (needs a Windows machine or the CI workflow): the two `#[cfg(windows)]` blocks (registry portable flag, hidden engine console), the actual WiX build and its install-scope dialogs, and the real WebView2 window. The screens were reviewed in screenshots from a headless WebKit browser (same HTML/CSS, different engine than WebView2), including the Tauri-sized layout, dark mode and the island's four states. Also unconfirmed against live services: the real arXiv / PubMed / OpenAlex / Crossref responses (parsers are written from their documented formats), Voicebox's start-up arguments and where its Windows installer puts `voicebox-server.exe`, and Claude Code's exact permission-hook response format.
 
 ## Licenses
 
-See `THIRD_PARTY_LICENSES.md`. Choose a license for Tomo itself and put it in `LICENSE` and
+See `THIRD_PARTY_LICENSES.md`. Choose a license for Lotus itself and put it in `LICENSE` and
 `src-tauri/wix/license.rtf` (the installer's license page is a placeholder).

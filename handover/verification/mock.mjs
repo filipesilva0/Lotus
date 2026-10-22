@@ -25,7 +25,7 @@ const srv = http.createServer(async (req, res) => {
   if (url.pathname === '/generate/bad') return json({ detail: 'Model qwen-tts-1.7B is not downloaded' }, 400);
   // ---- ComfyUI
   if (url.pathname === '/prompt') { const b = JSON.parse(body); globalThis.lastPrompt = b; return json({ prompt_id: 'p1' }); }
-  if (url.pathname === '/history/p1') { cpolls++; return json(cpolls < 3 ? {} : { p1: { status: { status_str: 'success' }, outputs: { 9: { images: [{ filename: 'tomo_0001.png', subfolder: '', type: 'output' }] } } } }); }
+  if (url.pathname === '/history/p1') { cpolls++; return json(cpolls < 3 ? {} : { p1: { status: { status_str: 'success' }, outputs: { 9: { images: [{ filename: 'lotus_0001.png', subfolder: '', type: 'output' }] } } } }); }
   if (url.pathname === '/view') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from('PNGfake')); }
   if (url.pathname === '/object_info/CheckpointLoaderSimple') return json({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [['a.safetensors', 'b.safetensors']] } } } });
   if (url.pathname === '/__lastPrompt') return json(globalThis.lastPrompt);

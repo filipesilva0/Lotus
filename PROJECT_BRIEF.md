@@ -1,12 +1,12 @@
-# Tomo: Project Brief
+# Lotus: Project Brief
 
 > Handover document. Read `CLAUDE.md` first, then this file, then `CURRENT_STATE.md`.
 > **Evidence legend** used across all handover docs:
 > ✅ **Confirmed** (seen in source or in a test/command run) · ⚠️ **Unverified** (written but never run, or inferred) · 💡 **Proposed** (idea, not built) · ❓ **Unknown** (information missing)
 
-## 1. What Tomo is
+## 1. What Lotus is
 
-Tomo is a **lightweight Windows desktop app that puts a person's local AI in one place**: chat (Ollama), image generation (ComfyUI), voice (Voicebox), a Deep Research workspace (local LLM + public academic databases), and an always-on-top **floating island** for quick chat, dictation and notifications. Everything runs on the user's PC; the only outbound traffic is Deep Research's keyword queries to four academic APIs (user-controlled).
+Lotus is a **lightweight Windows desktop app that puts a person's local AI in one place**: chat (Ollama), image generation (ComfyUI), voice (Voicebox), a Deep Research workspace (local LLM + public academic databases), and an always-on-top **floating island** for quick chat, dictation and notifications. Everything runs on the user's PC; the only outbound traffic is Deep Research's keyword queries to four academic APIs (user-controlled).
 
 It is **not** a model runner itself. It is a front end and supervisor for three separately installed engines.
 
@@ -30,14 +30,14 @@ Status here is a pointer only; see `CURRENT_STATE.md` for evidence.
 | **Images** | Pick a ComfyUI checkpoint → prompt/negative/steps/CFG/aspect → generate (cancel supported) → gallery for the session. |
 | **Voice (Voicebox front end)** | **Speak** (text→speech, engine/language/delivery/seed/effects), **Voices** (clone from record/upload with auto-transcribed reference text, built-in voices, or "described" voices; import/export), **Stories** (multi-voice timeline: retime/trim/split/volume/mix/export WAV), **Dictate** (local Whisper via Voicebox, optional clean-up), **Library** (history search/favourite/retry/export). |
 | **Deep Research** | State a question → local model asks 3-5 scoping questions → drafts an **editable plan** of sub-topics + expert personas → **user approves** → parallel agents search arXiv/PubMed/OpenAlex/(Crossref), filter, read abstracts → live steering (pause, inject instruction, exclude domain, untick sources) → cited Markdown report (copy / save `.md`). |
-| **Island** | Idle pill with engine-status dots + activity pills → hover "peek" (Chat, Dictate, Read aloud clipboard, Open Tomo) → chat (Ollama stream, file/image drop, dictation, read-aloud) → **Claude Code permission prompts** (Allow/Deny) and session activity. Shortcuts: Ctrl+Alt+Space / D / T. |
-| **Engines** | Per-engine Start/Stop (only for processes Tomo started), "Start with Tomo", editable address, locate executable; Models tab (Ollama pull/delete with progress, Voicebox model download/load/unload/delete, ComfyUI checkpoint list); Storage tab (data folder, portable vs installed). |
-| **Install / distribution** | **MSI** asks: Just-for-me (default, no admin) vs All users; install folder; optional features (Desktop shortcut, Start with Windows, "Portable data"). Separate **portable zip** (marker file `tomo.portable`). Built by GitHub Actions on `windows-latest`. |
+| **Island** | Idle pill with engine-status dots + activity pills → hover "peek" (Chat, Dictate, Read aloud clipboard, Open Lotus) → chat (Ollama stream, file/image drop, dictation, read-aloud) → **Claude Code permission prompts** (Allow/Deny) and session activity. Shortcuts: Ctrl+Alt+Space / D / T. |
+| **Engines** | Per-engine Start/Stop (only for processes Lotus started), "Start with Lotus", editable address, locate executable; Models tab (Ollama pull/delete with progress, Voicebox model download/load/unload/delete, ComfyUI checkpoint list); Storage tab (data folder, portable vs installed). |
+| **Install / distribution** | **MSI** asks: Just-for-me (default, no admin) vs All users; install folder; optional features (Desktop shortcut, Start with Windows, "Portable data"). Separate **portable zip** (marker file `lotus.portable`). Built by GitHub Actions on `windows-latest`. |
 
 ## 3. Requirements
 
 ### Functional ✅ (derived from user requests and spec)
-- FR1. Connect to Ollama, ComfyUI and Voicebox over local HTTP; show live status; start/stop engines Tomo launched.
+- FR1. Connect to Ollama, ComfyUI and Voicebox over local HTTP; show live status; start/stop engines Lotus launched.
 - FR2. Real streaming chat (not simulated), vision attachments, persisted conversations.
 - FR3. Real text-to-image through ComfyUI with checkpoint selection and cancel.
 - FR4. Voicebox feature coverage: generate, clone, preset/designed voices, effects, stories, dictation, history, model management.
@@ -64,7 +64,7 @@ Status here is a pointer only; see `CURRENT_STATE.md` for evidence.
 
 ## 5. Missing information ❓
 - Target audience and distribution plan (private use vs public release).
-- **Licence for Tomo itself** (installer licence page is a neutral placeholder; `Cargo.toml` says `MIT`, which I wrote without the user choosing; `src/App.tsx` header says Apache-2.0 from the original template). Needs a user decision.
-- Whether the user wants a different product name/branding ("Tomo" came from the supplied template's logo).
+- **Licence for Lotus itself** (installer licence page is a neutral placeholder; `Cargo.toml` says `MIT`, which I wrote without the user choosing; `src/App.tsx` header says Apache-2.0 from the original template). Needs a user decision.
+- Whether the user wants a different product name/branding ("Lotus" came from the supplied template's logo).
 - Minimum hardware/GPU assumptions; expected model sizes.
 - Whether the user has a Windows machine to test on, or relies solely on GitHub Actions.

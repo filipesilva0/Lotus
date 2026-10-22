@@ -1,6 +1,6 @@
-# CLAUDE.md: Tomo
+# CLAUDE.md: Lotus
 
-Tomo is a **lightweight Windows desktop app (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: feature-complete prototype that has never been built on Windows; the CI build is currently failing (B1).**
+Lotus is a **lightweight Windows desktop app (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: feature-complete prototype that has never been built on Windows; the CI build is currently failing (B1).**
 
 ## Read first (in this order)
 1. `CURRENT_STATE.md` — what is verified, known bugs (B1…B17), CI history. **Start here.**
@@ -37,7 +37,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **TypeScript:** strict; function components + hooks; no `any` unless parsing external JSON; no `dangerouslySetInnerHTML` (use `lib/markdownLite.tsx` / `ReportMarkdown`).
 - **All HTTP** goes through `http()` in `src/lib/http.ts` (Rust-backed, no CORS). Engine addresses come from `services/engineConfig.ts`. Wrap failures in `EngineError` with a message that says **what happened and how to recover**.
 - **Cross-window messaging** only via `src/lib/bus.ts` (`emitEvent/onEvent/invokeNative/reportActivity`). Add new events to the table in `ARCHITECTURE.md`.
-- **Persistence:** `localStorage` keys prefixed `tomo.`, versioned (`.v1`); list new keys in `ARCHITECTURE.md §6`. No blob URLs in persisted data.
+- **Persistence:** `localStorage` keys prefixed `lotus.`, versioned (`.v1`); list new keys in `ARCHITECTURE.md §6`. No blob URLs in persisted data.
 - **UI:** Tailwind 4 with CSS variables (`--color-accent-vibrant|pastel|hover`); reuse `components/common/ui.tsx` primitives; type scale **12 (captions/labels, the minimum) / 14 (body, chat) / 18 (titles)**, weights 500/600, radii **8/12/16** (`rounded-lg/xl/2xl`); colours only via `var(--color-*)` tokens (never hard-coded hex, never a grey lighter than `--color-text-muted`); every control labelled; handle empty/loading/error states; verify dark mode. Use **named breakpoints (`lg:`, `xl:`)**, not arbitrary `min-[…]:` (ordering bug seen). Prefer `self-stretch` over `h-full` in flex rows.
 - **Rust:** plain `std` where possible; no new crates without a reason; register commands in `lib.rs`; keep `#[cfg(windows)]` blocks tiny; any new outbound host must be added to `capabilities/default.json`, the README privacy section and `THIRD_PARTY_LICENSES.md`.
 - Copy tone: plain, specific, no jargon; no emoji in the product UI.

@@ -1,12 +1,12 @@
 [package]
-name = "tomo"
+name = "lotus"
 version = "0.1.0"
 description = "Local AI studio with a floating island"
 edition = "2021"
 license = "MIT"
 
 [lib]
-name = "tomo_lib"
+name = "lotus_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -17,7 +17,7 @@ tauri-build = { version = "~2.6.3", features = [] }
 # run when a crate and its npm twin differ in major.minor, so bump both sides together
 # (see "Upgrading Tauri" in the README and `npm run check:tauri`).
 tauri = { version = "~2.11.6", features = ["tray-icon"] }
-tauri-plugin-http = "~2.7.0"
+tauri-plugin-http = { version = "~2.7.0", features = ["unsafe-headers"] }
 tauri-plugin-dialog = "~2.7.3"
 tauri-plugin-opener = "~2.5.5"
 tauri-plugin-global-shortcut = "~2.3.2"

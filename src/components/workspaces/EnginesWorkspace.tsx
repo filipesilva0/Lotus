@@ -42,7 +42,7 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
       <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-[var(--color-border-subtle)]">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text-main)] leading-tight">Engines</h2>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">The local programs Tomo talks to. Everything runs on this PC.</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">The local programs Lotus talks to. Everything runs on this PC.</p>
         </div>
         <Segmented value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
       </header>
@@ -58,7 +58,7 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
 // ── Engines ────────────────────────────────────────────────────────────────
 
 const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModels }) => {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('tomo.setup.dismissed') === '1');
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem('lotus.setup.dismissed') === '1');
   const { engines, gpu } = eng;
   const showSetup = !dismissed && (engines.ollama.up === false || engines.voicebox.up === false);
 
@@ -69,9 +69,9 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Get set up</h3>
-              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Tomo works with three local engines. Chat and voice are the quickest to start with.</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Lotus works with three local engines. Chat and voice are the quickest to start with.</p>
             </div>
-            <Btn size="sm" variant="ghost" onClick={() => { localStorage.setItem('tomo.setup.dismissed', '1'); setDismissed(true); }}>Dismiss</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => { localStorage.setItem('lotus.setup.dismissed', '1'); setDismissed(true); }}>Dismiss</Btn>
           </div>
           <ul className="mt-4 space-y-2">
             {(['ollama', 'voicebox', 'comfyui'] as EngineId[]).map((id) => (
@@ -124,7 +124,7 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
         </div>
         {s.up ? (
           <Btn size="sm" variant="secondary" loading={s.phase === 'stopping'} disabled={!s.supervised || busy} icon={<Square className="w-3 h-3" fill="currentColor" />}
-            title={s.supervised ? undefined : 'Started outside Tomo. Close it where you launched it.'} onClick={() => eng.stop(id)}>Stop</Btn>
+            title={s.supervised ? undefined : 'Started outside Lotus. Close it where you launched it.'} onClick={() => eng.stop(id)}>Stop</Btn>
         ) : (
           <Btn size="sm" variant="primary" loading={s.phase === 'starting'} disabled={busy} icon={<Play className="w-3 h-3" fill="currentColor" />} onClick={() => eng.start(id)}>Start</Btn>
         )}
@@ -140,12 +140,13 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
         </Banner>
       )}
       {s.error && <Banner tone="error">{s.error}</Banner>}
+      {!s.up && !busy && !s.error && !s.needsExe && s.detail && <Banner tone="warn">{s.detail}</Banner>}
 
       <div className="mt-auto pt-3 border-t border-[var(--color-border-subtle)] space-y-3">
         <label className="flex items-center gap-2 text-xs cursor-pointer text-[var(--color-text-main)] dark:text-slate-200">
           <input type="checkbox" className="accent-[var(--color-accent-vibrant)]" checked={s.policy === 'on_launch'}
             onChange={(e) => eng.setPolicy(id, (e.target.checked ? 'on_launch' : 'manual') as Policy)} />
-          Start with Tomo
+          Start with Lotus
         </label>
         <div className="flex items-center gap-2 text-xs">
           {editUrl ? (
@@ -337,10 +338,10 @@ const StorageTab: React.FC = () => {
   useEffect(() => { appPaths().then((p) => setPaths(p ?? null)); }, []);
 
   if (paths === undefined) return <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" />;
-  if (paths === null) return <Banner tone="info">Storage details are available in the Tomo desktop app.</Banner>;
+  if (paths === null) return <Banner tone="info">Storage details are available in the Lotus desktop app.</Banner>;
 
   const rows: [string, string][] = [
-    ['Chats, settings and the island', paths.portable ? `${paths.dataDir}\\webview` : "Tomo's app profile in your user folder"],
+    ['Chats, settings and the island', paths.portable ? `${paths.dataDir}\\webview` : "Lotus's app profile in your user folder"],
     ['Voices, history and stories (Voicebox)', `${paths.dataDir}\\voicebox`],
     ['Chat models (Ollama)', "Ollama's own model folder"],
     ['Image checkpoints (ComfyUI)', "ComfyUI's models folder"],
@@ -354,8 +355,8 @@ const StorageTab: React.FC = () => {
         </div>
         <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
           {paths.portable
-            ? 'Tomo keeps its data next to the program, so you can move the whole folder or run it from a USB drive.'
-            : 'Tomo keeps its data in your user profile. To make it portable, use the portable download, or reinstall and tick "Portable data".'}
+            ? 'Lotus keeps its data next to the program, so you can move the whole folder or run it from a USB drive.'
+            : 'Lotus keeps its data in your user profile. To make it portable, use the portable download, or reinstall and tick "Portable data".'}
         </p>
         <div className="flex items-center gap-2">
           <code className="flex-1 text-xs bg-black/[.04] dark:bg-white/5 rounded-lg px-3 py-2 truncate">{paths.dataDir}</code>
@@ -372,7 +373,7 @@ const StorageTab: React.FC = () => {
           </div>
         ))}
       </Card>
-      <Label>Models are large, so Ollama and ComfyUI keep them in their own folders and Tomo does not copy them.</Label>
+      <Label>Models are large, so Ollama and ComfyUI keep them in their own folders and Lotus does not copy them.</Label>
     </div>
   );
 };

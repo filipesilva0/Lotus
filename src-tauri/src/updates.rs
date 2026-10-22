@@ -27,7 +27,7 @@ fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
     app.updater().map_err(|e| e.to_string())
 }
 
-/// `Ok(None)` means Tomo is up to date.
+/// `Ok(None)` means Lotus is up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
     let found = updater(&app)?.check().await.map_err(|e| e.to_string())?;
@@ -40,12 +40,12 @@ pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
 }
 
 /// Downloads the new installer (progress goes out as `update:progress`), verifies its signature,
-/// runs it, and restarts Tomo. On Windows the installer takes over and this process exits, so a
+/// runs it, and restarts Lotus. On Windows the installer takes over and this process exits, so a
 /// successful call normally never returns to the web layer.
 #[tauri::command]
 pub async fn update_install(app: AppHandle) -> Result<(), String> {
     let Some(update) = updater(&app)?.check().await.map_err(|e| e.to_string())? else {
-        return Err("Tomo is already up to date.".into());
+        return Err("Lotus is already up to date.".into());
     };
     let mut downloaded: u64 = 0;
     let emitter = app.clone();

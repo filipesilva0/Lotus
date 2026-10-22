@@ -213,8 +213,8 @@
 
         <Feature
                 Id="MainProgram"
-                Title="Tomo"
-                Description="The Tomo studio and its floating island."
+                Title="Lotus"
+                Description="The Lotus studio and its floating island."
                 Level="1"
                 ConfigurableDirectory="APPLICATIONFOLDER"
                 AllowAdvertise="no"
@@ -238,12 +238,12 @@
             {{/if}}
 
             <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut"
-                     Description="Add a Tomo shortcut to the desktop." Level="1" AllowAdvertise="no">
+                     Description="Add a Lotus shortcut to the desktop." Level="1" AllowAdvertise="no">
                 <ComponentRef Id="ApplicationShortcutDesktop"/>
             </Feature>
 
             <Feature Id="AutostartFeature" Title="Start with Windows"
-                     Description="Launch Tomo when you sign in, so the island is always there. Off by default." Level="2" AllowAdvertise="no">
+                     Description="Launch Lotus when you sign in, so the island is always there. Off by default." Level="2" AllowAdvertise="no">
                 <ComponentRef Id="AutostartEntry"/>
             </Feature>
 

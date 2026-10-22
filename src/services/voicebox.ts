@@ -1,5 +1,5 @@
 // Typed client for the Voicebox server (https://github.com/jamiepine/voicebox, MIT).
-// Voicebox runs its own FastAPI server on :17493; Tomo is a second front end for it.
+// Voicebox runs its own FastAPI server on :17493; Lotus is a second front end for it.
 // Shapes below mirror backend/models.py in that repository.
 
 import { http, EngineError, errorText, timeoutSignal } from '../lib/http';
@@ -504,7 +504,7 @@ class VoiceboxClient {
   createCapture(audio: Blob, opts: { language?: string; stt_model?: string; source?: string } = {}) {
     const form = new FormData();
     form.append('file', audio, 'capture.webm');
-    form.append('source', opts.source ?? 'tomo');
+    form.append('source', opts.source ?? 'lotus');
     if (opts.language && STT_LANGUAGES.includes(opts.language)) form.append('language', opts.language);
     if (opts.stt_model) form.append('stt_model', opts.stt_model);
     return this.json<Capture>('/captures', { method: 'POST', body: form }, 180_000);
