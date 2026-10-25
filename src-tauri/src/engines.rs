@@ -70,7 +70,14 @@ pub struct Ping {
 /// Raw TCP + HTTP/1.1 GET to an engine, bypassing the web layer and the HTTP plugin entirely.
 /// Used only to explain *why* an engine looks offline (nothing listening vs. blocked vs. a Lotus bug).
 #[tauri::command]
-pub fn engine_ping(host: String, port: u16, path: String) -> Ping {
+pub async fn engine_ping(host: String, port: u16, path: String) -> Ping {
+    // Sync commands run on the UI thread; this one blocks on the network, so run it off-thread.
+    tauri::async_runtime::spawn_blocking(move || ping_blocking(host, port, path))
+        .await
+        .unwrap_or(Ping { reachable: false, status: None, detail: "Internal error while checking the engine".into() })
+}
+
+fn ping_blocking(host: String, port: u16, path: String) -> Ping {
     use std::io::{Read, Write};
     use std::net::{TcpStream, ToSocketAddrs};
     use std::time::Duration;
@@ -128,7 +135,11 @@ fn on_path(exe: &str) -> Option<PathBuf> {
 /// Best-effort lookup of a known engine executable. Returns None if nothing is found,
 /// in which case the UI asks the user to browse for it.
 #[tauri::command]
-pub fn engine_find(name: String, data_dir: Option<String>) -> Option<String> {
+pub async fn engine_find(name: String, data_dir: Option<String>) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || find_blocking(name, data_dir)).await.ok().flatten()
+}
+
+fn find_blocking(name: String, data_dir: Option<String>) -> Option<String> {
     let mut candidates: Vec<Option<PathBuf>> = Vec::new();
     match name.as_str() {
         "ollama" => {

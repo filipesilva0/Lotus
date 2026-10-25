@@ -41,23 +41,47 @@ export function useEngines() {
   const patch = useCallback((id: EngineId, p: Partial<EngineState>) => setState((s) => ({ ...s, [id]: { ...s[id], ...p } })), []);
   const autoStarted = useRef(false);
 
+  const probing = useRef(false);
+  const lastDiag = useRef<Record<string, { at: number; text: string | null }>>({});
   const probe = useCallback(async () => {
+    if (probing.current) return; // never stack probes if one is slow
+    probing.current = true;
+    try {
     const [o, c, v, sup] = await Promise.all([
       ollamaClient.version(), comfy.stats().catch(() => null), voicebox.health().catch(() => null),
       Promise.all(IDS.map(isSupervised)),
     ]);
     const ups = [o !== null, c !== null, v !== null];
-    const detail = await Promise.all(IDS.map((id, i) => (ups[i] ? Promise.resolve(null) : diagnose(id).catch(() => null))));
-    setState((s) => ({
-      ollama: { ...s.ollama, up: ups[0], version: o, supervised: sup[0], detail: detail[0] },
-      comfyui: { ...s.comfyui, up: ups[1], version: c?.version ?? null, supervised: sup[1], detail: detail[1] },
-      voicebox: { ...s.voicebox, up: ups[2], version: null, supervised: sup[2], detail: detail[2] },
+    // Diagnosing is a raw TCP check; repeat it at most every 30 s per offline engine.
+    const detail = await Promise.all(IDS.map(async (id, i) => {
+      if (ups[i]) { delete lastDiag.current[id]; return null; }
+      const prev = lastDiag.current[id];
+      if (prev && Date.now() - prev.at < 30_000) return prev.text;
+      const text = await diagnose(id).catch(() => null);
+      lastDiag.current[id] = { at: Date.now(), text };
+      return text;
     }));
-    if (c?.device) setGpu({ name: c.device, vramTotalGb: c.vramTotalGb, vramFreeGb: c.vramFreeGb });
+    const next = [
+      { up: ups[0], version: o, supervised: sup[0], detail: detail[0] },
+      { up: ups[1], version: c?.version ?? null, supervised: sup[1], detail: detail[1] },
+      { up: ups[2], version: null, supervised: sup[2], detail: detail[2] },
+    ];
+    // Only re-render the app when something actually changed.
+    setState((s) => {
+      const cur = [s.ollama, s.comfyui, s.voicebox];
+      if (cur.every((e, i) => e.up === next[i].up && e.version === next[i].version && e.supervised === next[i].supervised && e.detail === next[i].detail)) return s;
+      return { ollama: { ...s.ollama, ...next[0] }, comfyui: { ...s.comfyui, ...next[1] }, voicebox: { ...s.voicebox, ...next[2] } };
+    });
+    if (c?.device) setGpu((g) => (g && g.name === c.device && g.vramFreeGb === c.vramFreeGb && g.vramTotalGb === c.vramTotalGb ? g : { name: c.device, vramTotalGb: c.vramTotalGb, vramFreeGb: c.vramFreeGb }));
     else if (v?.gpu_available) setGpu((g) => g ?? { name: v.gpu_type ?? 'GPU', vramTotalGb: 0, vramFreeGb: 0 });
+    } finally { probing.current = false; }
   }, []);
 
-  useEffect(() => { void probe(); const t = setInterval(probe, 4000); return () => clearInterval(t); }, [probe]);
+  useEffect(() => {
+    void probe();
+    const t = setInterval(() => { if (!document.hidden) void probe(); }, 5000);
+    return () => clearInterval(t);
+  }, [probe]);
 
   const start = useCallback(async (id: EngineId) => {
     patch(id, { phase: 'starting', error: null, needsExe: false });

@@ -13,8 +13,9 @@ export function useEngineStatus(intervalMs = 5000): EngineUp {
   useEffect(() => {
     let alive = true;
     const run = async () => {
+      if (document.hidden) return;
       const [o, v, c] = await Promise.all([ollamaClient.checkHealth(), voicebox.isUp(), comfy.isUp()]);
-      if (alive) setS({ ollama: o, voicebox: v, comfyui: c });
+      if (alive) setS((p) => (p.ollama === o && p.voicebox === v && p.comfyui === c ? p : { ollama: o, voicebox: v, comfyui: c }));
     };
     void run();
     const t = setInterval(run, intervalMs);
