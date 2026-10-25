@@ -40,22 +40,20 @@ jobs:
           PUB: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           $isTag = '${{ github.ref }}' -like 'refs/tags/v*'
+          $upd = @{ endpoints = @('https://github.com/${{ github.repository }}/releases/latest/download/latest.json') }
+          $conf = @{ plugins = @{ updater = $upd } }
           if ($env:KEY -and $env:PUB -and $isTag) {
-            $conf = @{
-              version = '${{ github.ref_name }}'.TrimStart('v')
-              bundle  = @{ createUpdaterArtifacts = $true }
-              plugins = @{ updater = @{
-                pubkey    = $env:PUB
-                endpoints = @('https://github.com/${{ github.repository }}/releases/latest/download/latest.json')
-              } }
-            }
-            $conf | ConvertTo-Json -Depth 8 | Set-Content ci-release.conf.json
+            $conf.version = '${{ github.ref_name }}'.TrimStart('v')
+            $conf.bundle  = @{ createUpdaterArtifacts = $true }
+            $upd.pubkey   = $env:PUB
             'release=true' >> $env:GITHUB_OUTPUT
             Write-Host "Release build for $($conf.version)"
           } else {
             'release=false' >> $env:GITHUB_OUTPUT
             Write-Host 'Plain build: updater files are made only for a v* tag with TAURI_SIGNING_PRIVATE_KEY and TAURI_UPDATER_PUBKEY set.'
           }
+          # Always point the build at this repository's releases (never the OWNER/REPO placeholder).
+          $conf | ConvertTo-Json -Depth 8 | Set-Content ci-release.conf.json
 
       # Produces the .msi (WiX) in src-tauri/target/release/bundle/msi
       - name: Build
@@ -64,11 +62,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          if ('${{ steps.rel.outputs.release }}' -eq 'true') {
-            npm run tauri build -- --verbose --config ci-release.conf.json
-          } else {
-            npm run tauri build -- --verbose
-          }
+          npm run tauri build -- --verbose --config ci-release.conf.json
 
       # Only runs when the build fails: tauri hides light.exe's own error text, so run the linker
       # again by hand and print everything it says, and keep the rendered WiX files for inspection.

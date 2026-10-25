@@ -83,7 +83,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden select-none border border-black/5 dark:border-[var(--color-border-subtle)]">
+    <div className="flex-1 flex flex-col lg:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] overflow-hidden select-none">
       {/* Parameters Panel */}
       <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r border-[var(--color-border-subtle)] p-5 flex flex-col justify-between bg-[var(--color-bg-sidebar)] overflow-y-auto">
         <form onSubmit={handleSubmit} className="space-y-4">

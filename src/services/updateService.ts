@@ -47,6 +47,10 @@ export async function currentVersion(): Promise<string | null> {
 
 function friendly(e: unknown): string {
   const raw = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+  if (/not built from a tagged release/i.test(raw)) return raw;
+  if (/valid release JSON|404|not found|status code/i.test(raw) && !/error sending request|dns|timed? ?out|connect/i.test(raw)) {
+    return `No update has been published yet: the update server answered, but there is no release file (latest.json) to read. This is normal until a signed release has been made. (${raw})`;
+  }
   if (/signature/i.test(raw)) return `The downloaded update failed its signature check and was not installed. (${raw})`;
   if (/404|not found|status code/i.test(raw)) {
     return `No update information was found. If you maintain this app, check that a release with latest.json exists. (${raw})`;

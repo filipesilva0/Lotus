@@ -24,6 +24,10 @@ struct Progress {
 }
 
 fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
+    let cfg = app.config().plugins.0.get("updater").map(|v| v.to_string()).unwrap_or_default();
+    if cfg.contains("OWNER/REPO") || cfg.contains("SET-BY-CI") {
+        return Err("This copy of Lotus was not built from a tagged release, so it has no update address and cannot check for updates.".into());
+    }
     app.updater().map_err(|e| e.to_string())
 }
 

@@ -31,7 +31,7 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
   const list = tag ? r.projects.filter((x) => x.tags.includes(tag)) : r.projects;
 
   return (
-    <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
+    <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
       {/* Panel 1 · modes & project vault */}
       <nav className="w-[236px] shrink-0 border-r border-[var(--color-border-subtle)] flex flex-col min-h-0" aria-label="Research projects">
         <div className="p-3 space-y-3 border-b border-[var(--color-border-subtle)]">

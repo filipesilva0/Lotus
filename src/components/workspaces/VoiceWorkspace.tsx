@@ -58,7 +58,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
   ];
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
       <header className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--color-border-subtle)]">
         <Segmented value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />

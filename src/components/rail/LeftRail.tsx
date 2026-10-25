@@ -6,8 +6,6 @@ import {
   Server,
   Settings as SettingsIcon,
   FlaskConical,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { ViewMode } from '../../types/lotus';
@@ -45,8 +43,6 @@ interface LeftRailProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   onOpenSettings: () => void;
-  darkMode?: boolean;
-  onToggleTheme?: () => void;
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
@@ -62,8 +58,6 @@ export const LeftRail: React.FC<LeftRailProps> = ({
   currentView,
   onSelectView,
   onOpenSettings,
-  darkMode = false,
-  onToggleTheme,
   engines,
   updateAvailable = false,
 }) => {
@@ -77,7 +71,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
 
   return (
     <aside
-      className="w-[76px] shrink-0 flex flex-col items-center py-4 border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-panel)] transition-colors z-20 select-none rounded-l-[28px] self-stretch"
+      className="w-[76px] shrink-0 flex flex-col items-center py-4 border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-panel)] transition-colors z-20 select-none rounded-l-[28px] self-stretch relative"
       aria-label="Navigation Rail"
     >
       <button
@@ -89,7 +83,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
         <Logo size={28} />
       </button>
 
-      <nav className="flex flex-col items-center gap-1" aria-label="Workspaces">
+      <nav className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1" aria-label="Workspaces">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = currentView === item.id;
@@ -144,18 +138,6 @@ export const LeftRail: React.FC<LeftRailProps> = ({
           </span>
           <span className="text-xs font-semibold leading-none">Settings</span>
         </button>
-
-        {onToggleTheme && (
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="w-10 h-10 mt-1 flex items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-vibrant)]"
-          >
-            {darkMode ? <Sun className="w-[18px] h-[18px]" strokeWidth={1.8} /> : <Moon className="w-[18px] h-[18px]" strokeWidth={1.8} />}
-          </button>
-        )}
       </div>
     </aside>
   );

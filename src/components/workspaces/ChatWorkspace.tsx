@@ -140,7 +140,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const availableModels = models;
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden select-none border border-black/5 dark:border-[var(--color-border-subtle)]">
+    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] overflow-hidden select-none">
       {/* Session List Sidebar */}
       <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] p-4 flex flex-col justify-between shrink-0 bg-[var(--color-bg-sidebar)]">
         <div>

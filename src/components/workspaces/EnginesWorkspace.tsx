@@ -38,7 +38,7 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
   useEffect(() => setTab(initialTab), [initialTab]);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] rounded-[24px] overflow-hidden border border-black/5 dark:border-[var(--color-border-subtle)]">
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
       <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-[var(--color-border-subtle)]">
         <div>
           <h2 className="text-lg font-semibold text-[var(--color-text-main)] leading-tight">Engines</h2>

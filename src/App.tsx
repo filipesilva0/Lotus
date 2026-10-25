@@ -278,13 +278,11 @@ export default function App() {
         currentView={currentView}
         onSelectView={setCurrentView}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        darkMode={settings.darkMode}
-        onToggleTheme={() => setSettings((s) => ({ ...s, darkMode: !s.darkMode }))}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
       />
 
-      <div className="flex-1 min-w-0 p-3.5 sm:p-5 md:p-6 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
         {currentView === 'chat' && (
           <ChatWorkspace
             sessions={sessions}
