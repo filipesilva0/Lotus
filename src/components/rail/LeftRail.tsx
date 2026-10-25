@@ -1,13 +1,7 @@
 import React from 'react';
-import {
-  MessageSquare,
-  Music,
-  Layers,
-  Server,
-  Settings as SettingsIcon,
-  FlaskConical,
-} from 'lucide-react';
+import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, FlaskConical } from 'lucide-react';
 import { Logo } from '../common/Logo';
+import { Symbol } from '../common/Symbol';
 import { ViewMode } from '../../types/lotus';
 import type { EngineState } from '../../hooks/useEngines';
 import type { EngineId } from '../../services/engineConfig';
@@ -15,7 +9,7 @@ import type { EngineId } from '../../services/engineConfig';
 export type EngineHealth = 'checking' | 'ok' | 'attention' | 'idle';
 
 /**
- * Real engine health for the rail, derived only from measured state.
+ * Real engine health for the sidebar, derived only from measured state.
  * - checking: first probe has not finished, or something is starting/stopping
  * - attention: an engine Lotus is meant to run (started by Lotus, or "Start with Lotus") is down or errored
  * - ok: at least one engine is running and nothing needs attention
@@ -33,10 +27,10 @@ export function engineHealth(engines: Record<EngineId, EngineState>): { health: 
 }
 
 const DOT: Record<EngineHealth, string> = {
-  checking: 'bg-amber-400 animate-pulse',
-  ok: 'bg-emerald-500',
-  attention: 'bg-rose-500',
-  idle: 'bg-[var(--color-text-muted)]',
+  checking: 'bg-[var(--c-orange)] animate-pulse',
+  ok: 'bg-[var(--c-green)]',
+  attention: 'bg-[var(--c-red)]',
+  idle: 'bg-[var(--color-text-muted)] opacity-60',
 };
 
 interface LeftRailProps {
@@ -46,97 +40,73 @@ interface LeftRailProps {
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
+  /** Sidebar collapsed to an icon-only column (⌘/Ctrl+Alt+S toggles it in the toolbar). */
+  collapsed?: boolean;
 }
 
-const itemBase =
-  'group relative w-[60px] flex flex-col items-center gap-1 py-2 rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-vibrant)]';
-const itemOn = 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]';
-const itemOff =
-  'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-black/5 dark:hover:bg-white/5';
+export const VIEW_TITLES: Record<ViewMode, string> = {
+  chat: 'Chat', images: 'Images', voice: 'Voice', research: 'Research', engines: 'Engines',
+};
 
-export const LeftRail: React.FC<LeftRailProps> = ({
-  currentView,
-  onSelectView,
-  onOpenSettings,
-  engines,
-  updateAvailable = false,
-}) => {
-  const navItems = [
-    { id: 'chat' as ViewMode, icon: MessageSquare, label: 'Chat', title: 'Chat & Vision' },
-    { id: 'images' as ViewMode, icon: Layers, label: 'Images', title: 'Image Studio' },
-    { id: 'voice' as ViewMode, icon: Music, label: 'Voice', title: 'Voice Studio' },
-    { id: 'research' as ViewMode, icon: FlaskConical, label: 'Research', title: 'Deep Research' },
+const row =
+  'group relative w-full flex items-center gap-2 h-7 rounded-[6px] text-[13px] select-none transition-colors duration-100 ' +
+  'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-0';
+
+/** Source-list sidebar on translucent material. Selection uses the accent colour at rest, like Finder/Mail. */
+export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, engines, updateAvailable = false, collapsed = false }) => {
+  const nav = [
+    { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
+    { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
+    { id: 'voice' as ViewMode, glyph: AudioLines, label: 'Voice' },
+    { id: 'research' as ViewMode, glyph: FlaskConical, label: 'Research' },
   ];
   const { health, label: healthLabel } = engineHealth(engines);
 
+  const item = (id: ViewMode, glyph: typeof Server, label: string, aria?: string, badge?: React.ReactNode) => {
+    const on = currentView === id;
+    return (
+      <button key={id} type="button" onClick={() => onSelectView(id)} aria-label={aria ?? label} title={collapsed ? label : undefined}
+        aria-current={on ? 'page' : undefined}
+        className={`${row} ${collapsed ? 'justify-center px-0' : 'px-2'} ${on ? 'bg-[var(--color-accent-fill)] text-white' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]'}`}>
+        <span className="relative inline-flex">
+          <Symbol glyph={glyph} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? undefined : 'var(--color-accent-vibrant)'} effect={on ? 'bounce' : undefined} />
+          {collapsed && badge}
+        </span>
+        {!collapsed && <span className="flex-1 text-left truncate font-medium">{label}</span>}
+        {!collapsed && badge}
+      </button>
+    );
+  };
+
+  const dot = (cls: string) => <span aria-hidden="true" className={`w-2 h-2 rounded-full ${cls} ${collapsed ? 'absolute -top-0.5 -right-1' : ''}`} />;
+
   return (
     <aside
-      className="w-[76px] shrink-0 flex flex-col items-center py-4 border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-panel)] transition-colors z-20 select-none rounded-l-[28px] self-stretch relative"
-      aria-label="Navigation Rail"
+      className={`material-sidebar shrink-0 flex flex-col border-r border-[var(--sep)] select-none transition-[width] duration-200 ${collapsed ? 'w-[52px]' : 'w-[216px]'}`}
+      aria-label="Sidebar"
     >
-      <button
-        onClick={() => onSelectView('chat')}
-        className="flex items-center justify-center p-1.5 mb-4 rounded-xl hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-vibrant)]"
-        title="Lotus"
-        aria-label="Lotus, go to Chat"
-      >
-        <Logo size={28} />
-      </button>
+      {/* Leaves room for the window's traffic-light / title-bar area on platforms that draw it inside the content. */}
+      <div className={`h-12 shrink-0 flex items-center gap-2 ${collapsed ? 'justify-center' : 'px-3.5'}`}>
+        <Logo size={22} />
+        {!collapsed && <span className="text-[15px] font-semibold tracking-[-0.01em]">Lotus</span>}
+      </div>
 
-      <nav className="absolute left-0 right-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1" aria-label="Workspaces">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = currentView === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelectView(item.id)}
-              title={item.title}
-              aria-label={item.title}
-              aria-current={active ? 'page' : undefined}
-              className={`${itemBase} ${active ? itemOn : itemOff}`}
-            >
-              <Icon className="w-5 h-5" strokeWidth={active ? 2.1 : 1.8} />
-              <span className="text-xs font-semibold leading-none">{item.label}</span>
-            </button>
-          );
-        })}
+      <nav className="flex flex-col gap-0.5 px-2" aria-label="Workspaces">
+        {!collapsed && <div className="px-2 pt-1 pb-1 text-[11px] font-semibold text-[var(--color-text-muted)]">Workspaces</div>}
+        {nav.map((n) => item(n.id, n.glyph, n.label))}
       </nav>
 
-      <div className="mt-auto flex flex-col items-center gap-1 pt-3 border-t border-[var(--color-border-subtle)] w-full">
-        <button
-          type="button"
-          onClick={() => onSelectView('engines')}
-          title={`Engines: ${healthLabel}`}
-          aria-label={`Engines. ${healthLabel}`}
-          aria-current={currentView === 'engines' ? 'page' : undefined}
-          className={`${itemBase} ${currentView === 'engines' ? itemOn : itemOff}`}
-        >
-          <span className="relative">
-            <Server className="w-5 h-5" strokeWidth={currentView === 'engines' ? 2.1 : 1.8} />
-            <span
-              aria-hidden="true"
-              className={`absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-[var(--color-bg-panel)] ${DOT[health]}`}
-            />
-          </span>
-          <span className="text-xs font-semibold leading-none">Engines</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          title={updateAvailable ? 'Settings: an update is available' : 'Settings'}
+      <div className="mt-auto flex flex-col gap-0.5 p-2 border-t border-[var(--sep)]">
+        {item('engines', Server, 'Engines', `Engines. ${healthLabel}`, dot(DOT[health]))}
+        <button type="button" onClick={onOpenSettings} title={collapsed ? 'Settings' : undefined}
           aria-label={updateAvailable ? 'Settings. An update is available' : 'Settings'}
-          className={`${itemBase} ${itemOff}`}
-        >
-          <span className="relative">
-            <SettingsIcon className="w-5 h-5" strokeWidth={1.8} />
-            {updateAvailable && (
-              <span aria-hidden="true" className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-[var(--color-accent-vibrant)] ring-2 ring-[var(--color-bg-panel)]" />
-            )}
+          className={`${row} ${collapsed ? 'justify-center px-0' : 'px-2'} text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]`}>
+          <span className="relative inline-flex">
+            <Symbol glyph={SettingsIcon} mode="hierarchical" tone="var(--color-accent-vibrant)" />
+            {collapsed && updateAvailable && dot('bg-[var(--color-accent-vibrant)]')}
           </span>
-          <span className="text-xs font-semibold leading-none">Settings</span>
+          {!collapsed && <span className="flex-1 text-left font-medium">Settings</span>}
+          {!collapsed && updateAvailable && (<><span className="text-[11px] text-[var(--color-text-muted)]">Update</span>{dot('bg-[var(--color-accent-vibrant)]')}</>)}
         </button>
       </div>
     </aside>

@@ -45,7 +45,7 @@ export const EffectsChain: React.FC<{
       {chain.map((fx, i) => {
         const def = byType[fx.type];
         return (
-          <div key={i} className={cx('rounded-xl border border-[var(--color-border-subtle)] p-2.5', !fx.enabled && 'opacity-55')}>
+          <div key={i} className={cx('rounded-[10px] border border-[var(--color-border-subtle)] p-2.5', !fx.enabled && 'opacity-55')}>
             <div className="flex items-center gap-1.5">
               <input type="checkbox" checked={fx.enabled} onChange={(e) => patch(i, { enabled: e.target.checked })}
                 aria-label={`Enable ${def?.label ?? fx.type}`} className="accent-[var(--color-accent-vibrant)]" />

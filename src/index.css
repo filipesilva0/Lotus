@@ -2,45 +2,148 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Lotus design tokens: macOS Human Interface Guidelines.
+ * Components use semantic tokens only (var(--c-*)); no hard-coded hex in components.
+ * Values are set per appearance in styles/theme.ts and mirrored here as light defaults.
+ *
+ * Radius scale (the only radii in the app):
+ *   --r-xs 4  checkboxes, small chips      --r-sm 6  buttons, fields, segmented
+ *   --r-md 10 cards, grouped lists         --r-lg 12 windows, sheets, popovers
+ * Status dots and spinners are true circles; nothing else is fully round.
+ */
+@theme inline {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
+  --color-accent: var(--color-accent-vibrant);
+}
+
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono Variable', Consolas, monospace;
+
+  /* Materials: translucent fills; backdrop-filter supplies the blur/saturation. */
+  --mat-sidebar: color-mix(in srgb, var(--color-bg-sidebar) 78%, transparent);
+  --mat-toolbar: color-mix(in srgb, var(--color-bg-panel) 82%, transparent);
+  --mat-overlay: color-mix(in srgb, var(--color-bg-card) 86%, transparent);
+  --blur-thin: blur(14px) saturate(1.5);
+  --blur-regular: blur(24px) saturate(1.7);
+  --blur-thick: blur(40px) saturate(1.8);
+
+  --sep: var(--color-border-subtle);
+  --hover: rgba(0, 0, 0, 0.05);
+  --pressed: rgba(0, 0, 0, 0.09);
+  --ring: color-mix(in srgb, var(--color-accent-vibrant) 55%, transparent);
+  --shadow-1: 0 0.5px 0 rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-float: 0 0 0 0.5px rgba(0,0,0,.14), 0 10px 30px rgba(0,0,0,.18);
+}
+.dark {
+  --hover: rgba(255, 255, 255, 0.07);
+  --pressed: rgba(255, 255, 255, 0.12);
+  --shadow-1: 0 0.5px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.4);
+  --shadow-float: 0 0 0 0.5px rgba(255,255,255,.14), 0 14px 38px rgba(0,0,0,.6);
+}
+
 @layer base {
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
   body {
-    font-family: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-primary, var(--font-ui));
+    font-size: 13px;               /* macOS body (Body = 13 pt) */
+    line-height: 1.4;
+    letter-spacing: -0.003em;
+    color: var(--color-text-main);
+    cursor: default;               /* native apps do not use the I-beam over labels */
+    -webkit-user-select: none; user-select: none;
   }
-  code, pre, kbd {
-    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', monospace;
-  }
+  input, textarea, [contenteditable], .selectable, pre, code, p { -webkit-user-select: text; user-select: text; }
+  code, pre, kbd { font-family: var(--font-mono); }
+  button { cursor: default; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; border-radius: inherit; }
+  ::selection { background: color-mix(in srgb, var(--color-accent-vibrant) 35%, transparent); }
 }
 
-/* Custom scrollbar matching Image 1 subtlety */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* macOS-style overlay scrollbars: thin, no track, fade in on hover. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(14, 26, 51, 0.15);
-  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.25); border-radius: 5px;
+  border: 3px solid transparent; background-clip: content-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(14, 26, 51, 0.3);
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.45); background-clip: content-box; }
+.dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); background-clip: content-box; }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.48); background-clip: content-box; }
+
+/* Material utilities */
+.material-sidebar { background: var(--mat-sidebar); backdrop-filter: var(--blur-regular); -webkit-backdrop-filter: var(--blur-regular); }
+.material-toolbar { background: var(--mat-toolbar); backdrop-filter: var(--blur-thin); -webkit-backdrop-filter: var(--blur-thin); }
+.material-overlay { background: var(--mat-overlay); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick); box-shadow: var(--shadow-float); }
+@supports not (backdrop-filter: blur(1px)) {
+  .material-sidebar { background: var(--color-bg-sidebar); }
+  .material-toolbar { background: var(--color-bg-panel); }
+  .material-overlay { background: var(--color-bg-card); }
 }
 
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
+/* ── Symbol effects (SF Symbols-style, see components/common/Symbol.tsx) ── */
+@keyframes sym-pulse   { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes sym-bounce  { 0%,100% { transform: translateY(0); } 35% { transform: translateY(-3px); } 65% { transform: translateY(0); } 82% { transform: translateY(-1px); } }
+@keyframes sym-variable{ 0% { opacity: .25; } 33% { opacity: 1; } 100% { opacity: .25; } }
+@keyframes sym-rotate  { to { transform: rotate(360deg); } }
+@keyframes sym-appear  { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes sym-wiggle  { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 75% { transform: rotate(9deg); } }
+.sym-pulse    { animation: sym-pulse 1.6s ease-in-out infinite; }
+.sym-bounce   { animation: sym-bounce .7s cubic-bezier(.3,.7,.4,1) 1; }
+.sym-variable > * { animation: sym-variable 1.2s ease-in-out infinite; }
+.sym-variable > *:nth-child(2) { animation-delay: .2s; }
+.sym-variable > *:nth-child(3) { animation-delay: .4s; }
+.sym-rotate   { animation: sym-rotate 1s linear infinite; }
+.sym-appear   { animation: sym-appear .25s cubic-bezier(.3,.7,.4,1) 1; }
+.sym-wiggle   { animation: sym-wiggle .5s ease-in-out 1; }
 
-/* ── Island mascot animations ── */
+/* ── Island mascot animations (unchanged) ── */
 @keyframes lotus-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.045, 0.97); } }
 @keyframes lotus-bounce { 0%,100% { transform: translateY(0); } 30% { transform: translateY(-3px); } 55% { transform: translateY(0); } 75% { transform: translateY(-1.2px); } }
 @keyframes lotus-talk { 0%,100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
 @keyframes lotus-dots { 0%,20% { opacity: .15; } 50% { opacity: 1; } 80%,100% { opacity: .15; } }
 @keyframes lotus-pulse { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes lotus-spin { to { transform: rotate(360deg); } }
+
+/* Reduced motion: movement is replaced by a plain fade; looping effects stop. */
 @media (prefers-reduced-motion: reduce) {
   [data-lotus-anim] { animation: none !important; }
+  .sym-pulse, .sym-bounce, .sym-rotate, .sym-wiggle, .sym-variable > * { animation: none !important; }
+  .sym-appear { animation: sym-fade .15s linear 1 !important; }
+  .animate-spin, .animate-pulse { animation: none !important; }
+  * { transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+@keyframes sym-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Increase Contrast / forced colors */
+@media (prefers-contrast: more) {
+  :root { --sep: rgba(0,0,0,.45); }
+  .dark { --sep: rgba(255,255,255,.55); }
+}
+@media (forced-colors: active) {
+  :focus-visible { outline: 3px solid Highlight; }
+}
+
+/* ── Slider (native range, macOS look) ── */
+.mac-slider { -webkit-appearance: none; appearance: none; background: transparent; }
+.mac-slider::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--color-accent-fill) var(--pct), var(--hover) var(--pct));
+  box-shadow: inset 0 0 0 0.5px var(--sep);
+}
+.mac-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 0.5px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.3);
+}
+.mac-slider:focus-visible { outline: none; }
+.mac-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--ring), 0 1px 3px rgba(0,0,0,.3); }
+@keyframes mac-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+.mac-indeterminate { animation: mac-indeterminate 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .mac-indeterminate { animation: none; width: 100%; opacity: .5; } }

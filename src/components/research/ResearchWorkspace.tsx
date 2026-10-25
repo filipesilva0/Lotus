@@ -41,7 +41,7 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
             <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by tag">
               {[null, ...tags].map((t) => (
                 <button key={t ?? 'all'} onClick={() => setTag(t)} aria-pressed={tag === t}
-                  className={cx('h-6 px-2 rounded-full text-xs font-semibold transition-colors', tag === t ? 'bg-[var(--color-accent-vibrant)] text-white' : 'bg-black/[.05] dark:bg-white/[.07] text-[var(--color-text-muted)] hover:bg-black/10 dark:hover:bg-white/10')}>
+                  className={cx('h-6 px-2 rounded-[6px] text-xs font-semibold transition-colors', tag === t ? 'bg-[var(--color-accent-vibrant)] text-white' : 'bg-black/[.05] dark:bg-white/[.07] text-[var(--color-text-muted)] hover:bg-black/10 dark:hover:bg-white/10')}>
                   {t ? (t.startsWith('#') ? t : `#${t}`) : 'All'}
                 </button>
               ))}
@@ -53,7 +53,7 @@ export const ResearchWorkspace: React.FC<Props> = ({ model, models, ollamaUp, on
           {list.map((x) => (
             <li key={x.id} className="group relative">
               <button onClick={() => r.setActiveId(x.id)} aria-current={x.id === r.activeId}
-                className={cx('w-full text-left rounded-xl px-3 py-2.5 transition-colors', x.id === r.activeId ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-black/[.04] dark:hover:bg-white/5')}>
+                className={cx('w-full text-left rounded-[10px] px-3 py-2.5 transition-colors', x.id === r.activeId ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-black/[.04] dark:hover:bg-white/5')}>
                 <span className="block text-xs font-semibold text-[var(--color-text-main)] line-clamp-2 pr-5 leading-snug">{x.title}</span>
                 <span className="flex items-center gap-2 mt-1.5"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-xs text-[var(--color-text-muted)]">{ago(x.updatedAt)}</span></span>
                 {x.tags.length > 0 && <span className="block text-xs text-[var(--color-accent-vibrant)] mt-1 truncate">{x.tags.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')}</span>}

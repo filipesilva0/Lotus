@@ -146,7 +146,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
       {/* Header */}
       <div className="flex items-center gap-1.5 pl-14 pr-3 pt-2.5 pb-1.5">
         <select aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)}
-          className="max-w-[170px] bg-white/10 hover:bg-white/15 text-white/90 text-[11px] font-semibold rounded-full px-2.5 h-6 outline-none appearance-none cursor-pointer truncate">
+          className="max-w-[170px] bg-white/10 hover:bg-white/15 text-white/90 text-[11px] font-semibold rounded-[6px] px-2.5 h-6 outline-none appearance-none cursor-pointer truncate">
           {[...new Set([model, ...models])].map((m) => <option key={m} value={m} className="text-black">{m}</option>)}
         </select>
         <div className="flex-1" />
@@ -190,14 +190,14 @@ export const IslandChat = forwardRef<IslandChatHandle, {
         {attach.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-1 pb-1.5">
             {attach.map((a) => (
-              <span key={a.name} className="inline-flex items-center gap-1 bg-white/10 rounded-full pl-2.5 pr-1 h-6 text-[11px] text-white/80">
+              <span key={a.name} className="inline-flex items-center gap-1 bg-white/10 rounded-[6px] pl-2.5 pr-1 h-6 text-[11px] text-white/80">
                 <span className="max-w-[120px] truncate">{a.name}</span>
                 <button aria-label={`Remove ${a.name}`} onClick={() => setAttach((cur) => cur.filter((x) => x !== a))} className="w-4 h-4 rounded-full hover:bg-white/15 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
               </span>
             ))}
           </div>
         )}
-        <div className={`flex items-end gap-1 rounded-[20px] bg-white/10 pl-2 pr-1.5 py-1.5 ring-1 transition-shadow ${dragOver ? 'ring-[var(--color-accent-vibrant)] ring-2' : 'ring-white/10 focus-within:ring-white/30'}`}>
+        <div className={`flex items-end gap-1 rounded-[10px] bg-white/10 pl-2 pr-1.5 py-1.5 ring-1 transition-shadow ${dragOver ? 'ring-[var(--color-accent-vibrant)] ring-2' : 'ring-white/10 focus-within:ring-white/30'}`}>
           <label className="w-8 h-8 shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 cursor-pointer" title="Attach a file" aria-label="Attach a file">
             <Paperclip className="w-4 h-4" />
             <input type="file" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
@@ -207,11 +207,11 @@ export const IslandChat = forwardRef<IslandChatHandle, {
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } if (e.key === 'Escape') onClose(); }}
             className="flex-1 bg-transparent resize-none outline-none text-[13px] text-white placeholder:text-white/40 py-1.5 max-h-24" />
           <button onClick={toggleDictation} aria-label={recording ? 'Stop dictation' : 'Dictate'} aria-pressed={recording} disabled={transcribing}
-            className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-colors ${recording ? 'bg-rose-500 text-white' : 'text-white/60 hover:bg-white/10'} disabled:opacity-40`}>
+            className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center transition-colors ${recording ? 'bg-[var(--c-red)] text-white' : 'text-white/60 hover:bg-white/10'} disabled:opacity-40`}>
             <Mic className="w-4 h-4" />
           </button>
           {busy ? (
-            <button onClick={() => abort.current?.abort()} aria-label="Stop generating" className="w-8 h-8 shrink-0 rounded-full bg-white text-black flex items-center justify-center"><Square className="w-3 h-3" fill="currentColor" /></button>
+            <button onClick={() => abort.current?.abort()} aria-label="Stop generating" className="w-8 h-8 shrink-0 rounded-full bg-[var(--color-bg-card)] text-black flex items-center justify-center"><Square className="w-3 h-3" fill="currentColor" /></button>
           ) : (
             <button onClick={() => send()} disabled={!input.trim() && !attach.length} aria-label="Send"
               className="w-8 h-8 shrink-0 rounded-full bg-[var(--color-accent-vibrant)] text-white flex items-center justify-center disabled:opacity-30 transition-opacity"><ArrowUp className="w-4 h-4" /></button>

@@ -96,13 +96,13 @@ export const VoicesTab: React.FC<{
                   <div className="relative">
                     <IconBtn label="More actions" onClick={() => setMenu(menu === p.id ? null : p.id)}><MoreHorizontal className="w-4 h-4" /></IconBtn>
                     {menu === p.id && (
-                      <div className="absolute right-0 top-9 z-10 w-36 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] shadow-lg py-1" onMouseLeave={() => setMenu(null)}>
+                      <div className="absolute right-0 top-9 z-10 w-36 rounded-[10px] border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] shadow-lg py-1" onMouseLeave={() => setMenu(null)}>
                         {[
                           { l: 'Edit', i: <Pencil className="w-3.5 h-3.5" />, f: () => { setMenu(null); setEditing(p); } },
                           { l: 'Export', i: <Download className="w-3.5 h-3.5" />, f: () => doExport(p) },
                           { l: 'Delete', i: <Trash2 className="w-3.5 h-3.5" />, f: () => { setMenu(null); setToDelete(p); }, danger: true },
                         ].map((m) => (
-                          <button key={m.l} onClick={m.f} className={cx('w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5', m.danger ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--color-text-main)] dark:text-slate-200')}>
+                          <button key={m.l} onClick={m.f} className={cx('w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5', m.danger ? 'text-[var(--c-red)]' : 'text-[var(--color-text-main)] dark:text-slate-200')}>
                             {m.i}{m.l}
                           </button>
                         ))}

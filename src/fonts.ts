@@ -1,5 +1,4 @@
-// Fonts ship inside the app (no requests to Google Fonts), so Lotus works fully offline.
-import '@fontsource-variable/plus-jakarta-sans';
+// The default UI font is the system font (San Francisco on macOS, Segoe UI Variable on Windows):
+// it is not bundled. Only the optional Inter choice and the code font ship inside the app.
 import '@fontsource-variable/inter';
-import '@fontsource-variable/outfit';
 import '@fontsource-variable/jetbrains-mono';

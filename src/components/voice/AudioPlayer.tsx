@@ -59,7 +59,7 @@ export const AudioPlayer: React.FC<{
       </button>
       <div onClick={seek} className="flex-1 h-9 flex items-center gap-[2px] cursor-pointer" role="slider" aria-label="Seek" aria-valuenow={Math.round(progress * 100)}>
         {(peaks.length ? peaks : Array.from({ length: 96 }, () => 0.12)).map((p, i, arr) => (
-          <div key={i} className={cx('flex-1 rounded-full transition-colors', i / arr.length <= progress ? 'bg-[var(--color-accent-vibrant)]' : 'bg-black/15 dark:bg-white/20')}
+          <div key={i} className={cx('flex-1 rounded-[6px] transition-colors', i / arr.length <= progress ? 'bg-[var(--color-accent-vibrant)]' : 'bg-black/15 dark:bg-white/20')}
             style={{ height: `${Math.max(8, p * 100)}%` }} />
         ))}
       </div>

@@ -108,7 +108,7 @@ export const LiveSources: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) 
       <p className="text-xs text-[var(--color-text-muted)] tabular-nums">{kept} of {p.sources.length} included in the report</p>
       <ul className="space-y-2">
         {[...p.sources].reverse().map((s) => (
-          <li key={s.id} className={cx('rounded-xl border border-[var(--color-border-subtle)] p-2.5 flex gap-2.5 transition-opacity', s.rejected && 'opacity-50')}>
+          <li key={s.id} className={cx('rounded-[10px] border border-[var(--color-border-subtle)] p-2.5 flex gap-2.5 transition-opacity', s.rejected && 'opacity-50')}>
             <input type="checkbox" checked={!s.rejected} onChange={() => r.toggleSource(p.id, s.id)} aria-label={`Include ${s.title}`} className="mt-0.5 accent-[var(--color-accent-vibrant)] shrink-0" />
             <div className="min-w-0 flex-1 space-y-1">
               <button onClick={() => void openExternal(s.url)} title="Open in browser" className="text-left text-xs font-semibold text-[var(--color-text-main)] line-clamp-2 hover:text-[var(--color-accent-vibrant)] leading-snug">{s.title}<ExternalLink className="inline w-2.5 h-2.5 ml-1 opacity-50" /></button>
@@ -157,8 +157,8 @@ const Meter: React.FC<{ label: string; value: number; max: number; note?: string
   return (
     <div>
       <div className="flex justify-between text-xs mb-1"><span className="font-semibold text-[var(--color-text-main)] truncate pr-2">{label}</span><span className="tabular-nums text-[var(--color-text-muted)] shrink-0">{fmtNum(value)} / {fmtNum(max)}</span></div>
-      <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden" role="meter" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label}>
-        <div className={cx('h-full transition-[width]', hot ? 'bg-rose-500' : warm ? 'bg-amber-500' : 'bg-[var(--color-accent-vibrant)]')} style={{ width: `${pct}%` }} />
+      <div className="h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden" role="meter" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label}>
+        <div className={cx('h-full transition-[width]', hot ? 'bg-[var(--c-red)]' : warm ? 'bg-amber-500' : 'bg-[var(--color-accent-vibrant)]')} style={{ width: `${pct}%` }} />
       </div>
       {note && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{note}</p>}
     </div>
@@ -178,7 +178,7 @@ export const Context: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) => {
         <p className="text-xs text-[var(--color-text-muted)] mt-1.5 leading-relaxed">Larger windows let the report cite more sources but use more GPU memory. Applies to the next run.</p>
       </div>
       <div className="space-y-3.5">
-        <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Largest prompt so far</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Largest prompt so far</h4>
         <Meter label="Supervisor (report)" value={p.supervisorCtx} max={p.numCtx} note={supHot ? 'Close to the limit. Lower sources per agent or raise the window.' : undefined} />
         {p.agents.map((a) => <Meter key={a.id} label={a.title} value={a.ctxPeak} max={p.numCtx} />)}
         {!p.agents.length && <p className="text-xs text-[var(--color-text-muted)]">Meters appear once agents start.</p>}
@@ -186,7 +186,7 @@ export const Context: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) => {
       <Card className="p-3 space-y-1">
         <div className="flex justify-between text-xs"><span className="text-[var(--color-text-muted)]">Tokens in</span><span className="tabular-nums font-semibold text-[var(--color-text-main)]">{p.tokensIn.toLocaleString()}</span></div>
         <div className="flex justify-between text-xs"><span className="text-[var(--color-text-muted)]">Tokens out</span><span className="tabular-nums font-semibold text-[var(--color-text-main)]">{p.tokensOut.toLocaleString()}</span></div>
-        <div className="flex justify-between text-xs"><span className="text-[var(--color-text-muted)]">Cost</span><span className="font-semibold text-emerald-600 dark:text-emerald-400">$0.00 · runs locally</span></div>
+        <div className="flex justify-between text-xs"><span className="text-[var(--color-text-muted)]">Cost</span><span className="font-semibold text-[var(--c-green)]">$0.00 · runs locally</span></div>
       </Card>
       {p.model && <p className="text-xs text-[var(--color-text-muted)] flex items-center gap-1"><Lock className="w-3 h-3" />Model: <span className="font-mono">{p.model}</span></p>}
     </div>

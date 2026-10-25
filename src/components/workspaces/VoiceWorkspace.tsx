@@ -63,7 +63,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
         <Segmented value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />
         <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
-          <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-emerald-500' : data.status === 'checking' ? 'bg-amber-400 animate-pulse' : 'bg-rose-500')} />
+          <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-[var(--c-green)]' : data.status === 'checking' ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]')} />
           {data.status === 'online'
             ? `Voicebox${data.health?.gpu_type ? ` · ${data.health.gpu_type}` : data.health?.gpu_available ? ' · GPU' : ' · CPU'}`
             : data.status === 'checking' ? 'Connecting…' : 'Voicebox offline'}

@@ -81,7 +81,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                     <p className="text-xs text-[var(--color-text-main)] line-clamp-2 leading-relaxed">{g.text}</p>
                     <p className="text-xs text-[var(--color-text-muted)] mt-1 tabular-nums">
                       {g.profile_name ?? 'Voice'} · {engineLabel(g.engine)} · {fmtDuration(g.duration)} · {new Date(g.created_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
-                      {g.status === 'failed' && <span className="text-rose-600 dark:text-rose-400"> · failed{g.error ? `: ${g.error}` : ''}</span>}
+                      {g.status === 'failed' && <span className="text-[var(--c-red)]"> · failed{g.error ? `: ${g.error}` : ''}</span>}
                     </p>
                   </div>
                   <div className="flex items-center shrink-0">

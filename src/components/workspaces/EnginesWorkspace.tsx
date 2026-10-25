@@ -76,7 +76,7 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
           <ul className="mt-4 space-y-2">
             {(['ollama', 'voicebox', 'comfyui'] as EngineId[]).map((id) => (
               <li key={id} className="flex items-center gap-3 text-xs">
-                {engines[id].up ? <Check className="w-4 h-4 text-emerald-500 shrink-0" /> : <Circle className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />}
+                {engines[id].up ? <Check className="w-4 h-4 text-[var(--c-green)] shrink-0" /> : <Circle className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />}
                 <span className="font-semibold text-[var(--color-text-main)] w-20">{META[id].name}</span>
                 <span className="text-[var(--color-text-muted)] flex-1">
                   {engines[id].up ? 'Running' : id === 'comfyui' ? 'Optional, for images' : 'Not running'}
@@ -116,7 +116,7 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={cx('w-2 h-2 rounded-full', s.up ? 'bg-emerald-500' : s.up === null || busy ? 'bg-amber-400 animate-pulse' : 'bg-[#9CA3AF]')} />
+            <span className={cx('w-2 h-2 rounded-full', s.up ? 'bg-[var(--c-green)]' : s.up === null || busy ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[#9CA3AF]')} />
             <h3 className="text-sm font-semibold text-[var(--color-text-main)]">{m.name}</h3>
             {s.version && <span className="text-xs font-mono text-[var(--color-text-muted)]">{s.version}</span>}
           </div>
@@ -255,7 +255,7 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
             </form>
             {pulling ? (
               <div className="space-y-1.5" role="status">
-                <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+                <div className="h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden">
                   <div className={cx('h-full bg-[var(--color-accent-vibrant)] transition-[width]', pulling.pct === null && 'animate-pulse w-1/3')} style={pulling.pct !== null ? { width: `${pulling.pct * 100}%` } : undefined} />
                 </div>
                 <p className="text-xs text-[var(--color-text-muted)] tabular-nums">{pulling.name} · {pulling.status}{pulling.pct !== null && ` · ${Math.round(pulling.pct * 100)}%`}</p>
@@ -263,7 +263,7 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
             ) : (
               <div className="flex flex-wrap gap-1.5 text-xs">
                 {SUGGESTIONS.filter((x) => !ollamaModels.some((m) => m.name === x)).map((x) => (
-                  <button key={x} onClick={() => setPull(x)} className="px-2.5 h-6 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-mono font-semibold hover:brightness-95">{x}</button>
+                  <button key={x} onClick={() => setPull(x)} className="px-2.5 h-6 rounded-[6px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-mono font-semibold hover:brightness-95">{x}</button>
                 ))}
               </div>
             )}
@@ -298,7 +298,7 @@ const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngin
                       {m.downloaded && !m.downloading && ' · Downloaded'}{m.loaded && ' · In memory'}
                       {m.downloading && ` · Downloading${t?.progress != null ? ` ${Math.round(t.progress)}%` : '…'}`}
                     </p>
-                    {m.downloading && <div className="mt-1.5 h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden"><div className="h-full bg-[var(--color-accent-vibrant)] transition-[width]" style={{ width: `${t?.progress ?? 8}%` }} /></div>}
+                    {m.downloading && <div className="mt-1.5 h-1 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden"><div className="h-full bg-[var(--color-accent-vibrant)] transition-[width]" style={{ width: `${t?.progress ?? 8}%` }} /></div>}
                   </div>
                   {m.downloading ? <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" /> : !m.downloaded ? (
                     <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => vbAction(() => voicebox.downloadModel(m.model_name))}>Download</Btn>
@@ -359,7 +359,7 @@ const StorageTab: React.FC = () => {
             : 'Lotus keeps its data in your user profile. To make it portable, use the portable download, or reinstall and tick "Portable data".'}
         </p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs bg-black/[.04] dark:bg-white/5 rounded-lg px-3 py-2 truncate">{paths.dataDir}</code>
+          <code className="flex-1 text-xs bg-black/[.04] dark:bg-white/5 rounded-[6px] px-3 py-2 truncate">{paths.dataDir}</code>
           <Btn variant="secondary" icon={<FolderOpen className="w-3.5 h-3.5" />}
             onClick={async () => { setErr(null); try { await revealPath(paths.dataDir); } catch { setErr('That folder does not exist yet. It is created the first time Voicebox starts.'); } }}>Show</Btn>
         </div>

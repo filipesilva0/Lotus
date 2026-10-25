@@ -164,7 +164,7 @@ export const VoiceEditor: React.FC<{
             <Label hint="A few seconds of clear speech is enough">Voice samples</Label>
 
             {existing.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 rounded-lg bg-black/[.03] dark:bg-white/[.04] px-3 py-2 mb-2">
+              <div key={s.id} className="flex items-center gap-2 rounded-[6px] bg-black/[.03] dark:bg-white/[.04] px-3 py-2 mb-2">
                 <span className="text-xs flex-1 truncate text-[var(--color-text-main)] dark:text-slate-200">“{s.reference_text}”</span>
                 <IconBtn label="Delete sample" onClick={async () => { await voicebox.deleteSample(s.id); setExisting((c) => c.filter((x) => x.id !== s.id)); }}>
                   <Trash2 className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export const VoiceEditor: React.FC<{
             ))}
 
             {samples.map((s) => (
-              <div key={s.key} className="rounded-xl border border-[var(--color-border-subtle)] p-3 mb-2 space-y-2">
+              <div key={s.key} className="rounded-[10px] border border-[var(--color-border-subtle)] p-3 mb-2 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold flex-1 truncate text-[var(--color-text-main)]">{s.fileName}</span>
                   {s.durationSec != null && <span className="text-xs text-[var(--color-text-muted)] tabular-nums">{fmtDuration(s.durationSec)}</span>}
@@ -191,7 +191,7 @@ export const VoiceEditor: React.FC<{
               {recording ? (
                 <>
                   <Btn variant="primary" icon={<Square className="w-3.5 h-3.5" fill="currentColor" />} onClick={stopRec}>Stop · <span className="tabular-nums">{fmtDuration(secs)}</span></Btn>
-                  <div className="flex-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden" aria-hidden>
+                  <div className="flex-1 h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden" aria-hidden>
                     <div className="h-full bg-[var(--color-accent-vibrant)] transition-[width] duration-75" style={{ width: `${level * 100}%` }} />
                   </div>
                 </>
@@ -223,7 +223,7 @@ export const VoiceEditor: React.FC<{
                 {presetList.map((v) => (
                   <button key={v.voice_id} role="radio" aria-checked={presetVoice === v.voice_id}
                     onClick={() => { setPresetVoice(v.voice_id); if (!name) setName(v.name); if (v.language) setLanguage(v.language.slice(0, 2).toLowerCase()); }}
-                    className={cx('text-left px-3 py-2 rounded-lg border text-xs transition-colors',
+                    className={cx('text-left px-3 py-2 rounded-[6px] border text-xs transition-colors',
                       presetVoice === v.voice_id
                         ? 'bg-[var(--color-accent-pastel)] border-[var(--color-accent-vibrant)] text-[var(--color-accent-vibrant)]'
                         : 'border-[var(--color-border-subtle)] hover:bg-black/[.03] dark:hover:bg-white/5 text-[var(--color-text-main)] dark:text-slate-200')}>

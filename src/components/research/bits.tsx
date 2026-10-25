@@ -12,11 +12,11 @@ const CRED: Record<Credibility, { label: string; cls: string; tip: string }> = {
 };
 
 export const CredBadge: React.FC<{ c: Credibility }> = ({ c }) => (
-  <span title={CRED[c].tip} className={cx('inline-flex items-center h-[18px] px-1.5 rounded-full text-xs font-semibold', CRED[c].cls)}>{CRED[c].label}</span>
+  <span title={CRED[c].tip} className={cx('inline-flex items-center h-[18px] px-1.5 rounded-[6px] text-xs font-semibold', CRED[c].cls)}>{CRED[c].label}</span>
 );
 
 export const RepoTag: React.FC<{ repo: RepoId }> = ({ repo }) => (
-  <span className="inline-flex items-center h-[18px] px-1.5 rounded-full text-xs font-semibold bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]">{REPO_INFO[repo].name}</span>
+  <span className="inline-flex items-center h-[18px] px-1.5 rounded-[6px] text-xs font-semibold bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]">{REPO_INFO[repo].name}</span>
 );
 
 const PHASE: Record<Phase, { label: string; cls: string }> = {
@@ -29,7 +29,7 @@ const PHASE: Record<Phase, { label: string; cls: string }> = {
 };
 export const PhaseBadge: React.FC<{ phase: Phase; paused?: boolean }> = ({ phase, paused }) => {
   const p = paused && (phase === 'running' || phase === 'synthesizing') ? { label: 'Paused', cls: PHASE.stopped.cls } : PHASE[phase];
-  return <span className={cx('inline-flex items-center h-5 px-2 rounded-full text-xs font-semibold', p.cls)}>{p.label}</span>;
+  return <span className={cx('inline-flex items-center h-5 px-2 rounded-[6px] text-xs font-semibold', p.cls)}>{p.label}</span>;
 };
 
 /** Type and press Enter (or comma) to add a chip. */
@@ -41,9 +41,9 @@ export const ChipInput: React.FC<{ values: string[]; onChange: (v: string[]) => 
     setDraft('');
   };
   return (
-    <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] p-1.5 flex flex-wrap gap-1.5 focus-within:border-[var(--color-accent-vibrant)] focus-within:ring-2 focus-within:ring-[var(--color-accent-vibrant)]/20">
+    <div className="rounded-[6px] border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] p-1.5 flex flex-wrap gap-1.5 focus-within:border-[var(--color-accent-vibrant)] focus-within:ring-2 focus-within:ring-[var(--color-accent-vibrant)]/20">
       {values.map((v) => (
-        <span key={v} className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold">
+        <span key={v} className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-[6px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold">
           {v}
           <button aria-label={`Remove ${v}`} onClick={() => onChange(values.filter((x) => x !== v))} className="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
         </span>

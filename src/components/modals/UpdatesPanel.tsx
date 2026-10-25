@@ -62,7 +62,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
             )}
           </div>
           {state.info.notes && (
-            <pre className="text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto rounded-xl p-3 bg-[var(--color-bg-sidebar)] text-[var(--color-text-main)] font-sans">
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto rounded-[10px] p-3 bg-[var(--color-bg-sidebar)] text-[var(--color-text-main)] font-sans">
               {state.info.notes}
             </pre>
           )}
@@ -82,7 +82,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
 
       {state.kind === 'installing' && (
         <Card className="p-4 space-y-2" aria-live="polite">
-          <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+          <div className="h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden">
             <div
               className="h-full bg-[var(--color-accent-vibrant)] transition-all"
               style={{ width: state.total ? `${Math.min(100, (state.downloaded / state.total) * 100)}%` : '35%' }}
@@ -96,7 +96,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
 
       {state.kind === 'current' && (
         <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Nothing to install.
+          <CheckCircle2 className="w-3.5 h-3.5 text-[var(--c-green)]" /> Nothing to install.
         </p>
       )}
 

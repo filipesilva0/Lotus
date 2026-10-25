@@ -8,14 +8,9 @@ interface ToggleProps {
   disabled?: boolean;
 }
 
-export const Toggle: React.FC<ToggleProps> = ({
-  checked,
-  onChange,
-  ariaLabel = 'Toggle switch',
-  size = 'md',
-  disabled = false,
-}) => {
-  const isSm = size === 'sm';
+/** Switch: macOS 38×22 (small 30×18) track. The switch track is the one place a capsule is correct (HIG). */
+export const Toggle: React.FC<ToggleProps> = ({ checked, onChange, ariaLabel = 'Switch', size = 'md', disabled = false }) => {
+  const sm = size === 'sm';
   return (
     <button
       type="button"
@@ -24,24 +19,15 @@ export const Toggle: React.FC<ToggleProps> = ({
       aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex items-center cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed transition-colors duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent-vibrant)] rounded-full ${
-        isSm ? 'w-9 h-5' : 'w-11 h-6'
-      } ${
-        checked
-          ? 'bg-[var(--color-accent-vibrant)]'
-          : 'bg-[#C9CCD3] dark:bg-[#343842]'
-      }`}
+      className={`relative inline-flex items-center shrink-0 rounded-full transition-colors duration-150 disabled:opacity-40 focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-1 ${
+        sm ? 'w-[30px] h-[18px]' : 'w-[38px] h-[22px]'
+      } ${checked ? 'bg-[var(--c-green)]' : 'bg-[var(--pressed)] shadow-[inset_0_0_0_0.5px_var(--sep)]'}`}
     >
       <span
-        className={`inline-block rounded-full bg-white shadow-sm transform transition-transform duration-200 ease-out ${
-          isSm ? 'w-3.5 h-3.5' : 'w-4.5 h-4.5'
-        } ${
-          checked
-            ? isSm
-              ? 'translate-x-[18px]'
-              : 'translate-x-[22px]'
-            : 'translate-x-[3px]'
-        }`}
+        aria-hidden="true"
+        className={`inline-block rounded-full bg-white shadow-[0_0_0_0.5px_rgba(0,0,0,.12),0_1px_3px_rgba(0,0,0,.3)] transition-transform duration-150 ${
+          sm ? 'w-3.5 h-3.5' : 'w-[18px] h-[18px]'
+        } ${checked ? (sm ? 'translate-x-[14px]' : 'translate-x-[18px]') : 'translate-x-[2px]'}`}
       />
     </button>
   );

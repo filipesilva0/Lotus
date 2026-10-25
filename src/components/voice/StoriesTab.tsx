@@ -190,7 +190,7 @@ export const StoriesTab: React.FC<{
         <ul className="space-y-1">
           {stories.map((s) => (
             <li key={s.id}>
-              <button onClick={() => open(s.id)} className={cx('w-full text-left px-3 py-2 rounded-lg text-xs transition-colors',
+              <button onClick={() => open(s.id)} className={cx('w-full text-left px-3 py-2 rounded-[6px] text-xs transition-colors',
                 story?.id === s.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[var(--color-text-main)] dark:text-slate-200')}>
                 <span className="font-semibold block truncate">{s.name}</span>
                 <span className="text-xs opacity-70">{s.item_count} clip{s.item_count === 1 ? '' : 's'}</span>
@@ -253,7 +253,7 @@ export const StoriesTab: React.FC<{
                 const left = msToPx(d ? d.ms : it.start_time_ms), top = 24 + (d ? d.track : it.track) * ROW_H + 4;
                 return (
                   <div key={it.id} onPointerDown={(e) => startDrag(e, it)} role="button" tabIndex={0} aria-label={`${it.profile_name}: ${it.text}`}
-                    className={cx('absolute rounded-lg px-2.5 py-1.5 text-white text-xs leading-tight overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none',
+                    className={cx('absolute rounded-[6px] px-2.5 py-1.5 text-white text-xs leading-tight overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none',
                       selected === it.id && 'ring-2 ring-offset-1 ring-[var(--color-accent-vibrant)] dark:ring-offset-[#22242B]')}
                     style={{ left, top, height: ROW_H - 8, width: Math.max(28, msToPx(effMs(it))), background: avatarGradient(it.profile_name), opacity: it.volume === 0 ? 0.4 : 1 }}>
                     <span className="font-semibold block truncate">{it.profile_name}</span>
@@ -261,8 +261,8 @@ export const StoriesTab: React.FC<{
                   </div>
                 );
               })}
-              <div className="absolute top-0 bottom-0 w-px bg-rose-500 pointer-events-none" style={{ left: msToPx(playheadMs) }}>
-                <div className="w-2.5 h-2.5 -ml-[5px] bg-rose-500 rounded-full" />
+              <div className="absolute top-0 bottom-0 w-px bg-[var(--c-red)] pointer-events-none" style={{ left: msToPx(playheadMs) }}>
+                <div className="w-2.5 h-2.5 -ml-[5px] bg-[var(--c-red)] rounded-full" />
               </div>
             </div>
           </Card>

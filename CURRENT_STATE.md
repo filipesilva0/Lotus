@@ -71,6 +71,12 @@ IDs are referenced from `TASKS.md`.
 | **B18** | Risk (found in session 2) | `@tauri-apps/plugin-http 2.7.0` declares `@tauri-apps/api ^2.12.0`, but `package.json` pins api to exactly `2.11.1` (to match the `tauri 2.11.6` crate). npm therefore nests a **second copy, `api 2.12.4`, under plugin-http** (see `package-lock.json`). The CLI's version check only inspects the top-level copy, so it passes, but every `http()` call runs through a different API minor than the Rust core. Probably harmless, ⚠️ unverified at runtime. Options: move crates *and* api to 2.12.x together, or pin an older plugin-http. The guard now prints a `warn` line for this. | `package-lock.json` read ✅; runtime ⚠️ |
 | **B17** | Not done | No accessibility audit; no real-WebView2 visual pass; no performance measurement; installer size unmeasured. | ⚠️ |
 
+## 4b. macOS HIG redesign (session 3, ⚠️ unbuilt)
+Design layer rewritten; **not compiled, type-checked against React types, or viewed**: the sandbox had no `node_modules` and no network. Only a syntax-only `tsc` pass was run (clean). Run `npm install && npx tsc --noEmit && npm run build && bash handover/verification/run-tests.sh`, then look at the screenshots, before trusting any of it.
+- Done: tokens/materials/focus/scrollbars/symbol effects (`index.css`, `theme.ts`); controls (`ui.tsx`, `Toggle`, `Modal`, `PillSlider`); new `Symbol.tsx`, `DataViews.tsx` (Table, OutlineView; **not yet used by any screen**); sidebar + toolbar shell (`LeftRail.tsx`, `App.tsx`); Settings shell + Appearance rewritten; mechanical sweep of radii/colours across all workspaces.
+- Removed dead controls (honest UI): Message Layout Density, the fake "Live Component Preview" slider. Bundled Plus Jakarta/Outfit fonts dropped from `fonts.ts` (`package.json` and the lockfile still list them on purpose, so `npm ci` keeps working; remove later with `npm rm` plus a regenerated lock).
+- Not done: workspace-by-workspace layout pass (chat composer, Engines, Voice tabs, Research inspector still use old structure with new tokens); Island keeps its own look; Table/OutlineView adoption (e.g. Library, Stories, Engines models); VoiceOver and contrast audit; animated-symbol bundles from the user (none were in the upload).
+
 ## 5. CI / build history (important context)
 
 1. **Failure 1:** `tauri.conf.json` → `bundle.windows.wix.license` is not valid in Tauri 2. **Fixed:** moved to top-level `bundle.licenseFile` (config now schema-valid).

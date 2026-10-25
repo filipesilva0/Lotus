@@ -51,6 +51,10 @@
 | D21 | Layout in the desktop app uses a definite-height container; rail uses `self-stretch` (not `h-full`), so browser preview and Tauri look the same. | Me | Found via screenshots. |
 | D22 | Verification strategy without Windows: Linux Rust 1.85 from apt + MSRV-fallback resolver for `cargo check/test`; TS tests via esbuild against mocks; headless WebKitGTK screenshots with an **ephemeral** web context. | Me | Only option available in the dev sandbox. |
 
+| D23 | **macOS HIG visual language** (user request): translucent source-list sidebar + unified toolbar split view; semantic tokens in `styles/theme.ts` + `index.css`; radius scale 4/6/10/12 only; accent = macOS system colours (same palette keys); system font stack (`-apple-system`, `Segoe UI Variable` fallback); 3 px focus ring; reduced-motion + contrast media queries. Controls live in `components/common/ui.tsx`, `DataViews.tsx`, `Symbol.tsx`. | User + Me | Native-looking on a Windows/Tauri shell with no new dependency. |
+| D24 | **Icons go through `Symbol.tsx`** (Lucide, ISC) with SF-Symbols vocabulary (weight, scale, rendering mode, effects). **SF Symbols and SF fonts are NOT bundled**: Apple's licence limits them to Apple-platform apps; Lotus ships on Windows. | Me | Swap only the renderer in `Symbol.tsx` if a macOS build is ever made. |
+| D25 | Window translucency is **in-app only** (`backdrop-filter`). Real Mica/Acrylic via Tauri `windowEffects` is 💡 not enabled: needs a transparent main window, untestable here. | Me | See A12. |
+
 ## 3. Rejected approaches (do not revive without cause)
 
 | Rejected | Why |
@@ -85,3 +89,4 @@
 | A9 | Voicebox / Ollama / ComfyUI default ports (17493 / 11434 / 8188) are what users have. | Connection errors (mitigated by editable addresses). | T4. |
 | A10 | `localStorage` capacity in WebView2 is adequate. | Silent data loss for long chats. | Measure (T11). |
 | A11 | Deep Research UI is usable in the real WebView2 window at 980 px wide (inspector auto-hidden < 1240 px). | Cramped layout. | T3 visual pass. |
+| A12 | `backdrop-filter` blur and `color-mix()` render correctly in the user's WebView2 (Chromium 105+ target; `color-mix` needs 111+). | Flat/untinted surfaces if unsupported (fallbacks exist for blur only). | Run the app on Windows (T3). |

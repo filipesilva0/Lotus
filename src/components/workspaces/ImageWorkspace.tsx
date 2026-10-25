@@ -89,12 +89,12 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${comfyUp ? 'bg-emerald-500' : comfyUp === null ? 'bg-amber-400 animate-pulse' : 'bg-rose-500'}`} />
-              <h3 className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider">
+              <span className={`w-2.5 h-2.5 rounded-full ${comfyUp ? 'bg-[var(--c-green)]' : comfyUp === null ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]'}`} />
+              <h3 className="text-xs font-semibold text-[var(--color-text-main)] uppercase tracking-wider">
                 {comfyUp ? 'ComfyUI running' : comfyUp === null ? 'Connecting…' : 'ComfyUI stopped'}
               </h3>
             </div>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[var(--color-badge-bg)] text-[var(--color-badge-text)]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-[6px] bg-[var(--color-badge-bg)] text-[var(--color-badge-text)]">
               {engineUrl('comfyui').replace('http://', '')}
             </span>
           </div>
@@ -108,7 +108,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               <select
                 value={selectedCheckpoint}
                 onChange={(e) => setSelectedCheckpoint(e.target.value)}
-                className="w-full h-9 bg-[var(--color-bg-panel)] rounded-xl px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] appearance-none cursor-pointer"
+                className="w-full h-9 bg-[var(--color-bg-panel)] rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] appearance-none cursor-pointer"
               >
                 {checkpoints.length === 0 && <option value="">{comfyUp ? 'No checkpoints found' : 'Start ComfyUI to list checkpoints'}</option>}
                 {checkpoints.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -127,7 +127,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               onChange={(e) => setPrompt(e.target.value)}
               rows={3}
               placeholder="Describe the image you want"
-              className="w-full p-3 bg-[var(--color-bg-panel)] rounded-xl text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] resize-none leading-relaxed"
+              className="w-full p-3 bg-[var(--color-bg-panel)] rounded-[10px] text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] resize-none leading-relaxed"
             />
           </div>
 
@@ -142,9 +142,9 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                   key={ratio}
                   type="button"
                   onClick={() => setAspectRatio(ratio)}
-                  className={`py-1.5 text-xs font-semibold rounded-xl transition-all ${
+                  className={`py-1.5 text-xs font-semibold rounded-[10px] transition-all ${
                     aspectRatio === ratio
-                      ? 'bg-[var(--color-accent-vibrant)] text-white shadow-xs'
+                      ? 'bg-[var(--color-accent-vibrant)] text-white '
                       : 'bg-[var(--color-bg-panel)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]'
                   }`}
                 >
@@ -176,7 +176,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                   value={negativePrompt}
                   onChange={(e) => setNegativePrompt(e.target.value)}
                   rows={2}
-                  className="w-full p-2.5 bg-[var(--color-bg-panel)] rounded-xl text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none resize-none"
+                  className="w-full p-2.5 bg-[var(--color-bg-panel)] rounded-[10px] text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none resize-none"
                 />
               </div>
 
@@ -184,7 +184,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               <div>
                 <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1">
                   <span>Inference Steps</span>
-                  <span className="text-[var(--color-accent-vibrant)] font-bold tabular-nums">{steps}</span>
+                  <span className="text-[var(--color-accent-vibrant)] font-semibold tabular-nums">{steps}</span>
                 </div>
                 <PillSlider
                   value={steps}
@@ -199,7 +199,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               <div>
                 <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1">
                   <span>CFG Guidance</span>
-                  <span className="text-[var(--color-accent-vibrant)] font-bold tabular-nums">{cfg.toFixed(1)}</span>
+                  <span className="text-[var(--color-accent-vibrant)] font-semibold tabular-nums">{cfg.toFixed(1)}</span>
                 </div>
                 <PillSlider
                   value={Math.round(cfg * 10)}
@@ -216,7 +216,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
           <button
             type="submit"
             disabled={isGenerating || !prompt.trim() || !selectedCheckpoint || !comfyUp}
-            className="w-full h-11 rounded-full bg-[var(--color-accent-vibrant)] text-white font-bold text-xs tracking-wider flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 transition-all shadow-xs"
+            className="w-full h-11 rounded-[6px] bg-[var(--color-accent-vibrant)] text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 transition-all "
           >
             {isGenerating ? (
               <>
@@ -259,7 +259,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
             />
 
             {/* Floating Info Overlay */}
-            <div className="absolute bottom-3 left-3 right-3 bg-white/95 dark:bg-[#18191E]/95 backdrop-blur-md p-3 rounded-2xl flex items-center justify-between shadow-xs border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
+            <div className="absolute bottom-3 left-3 right-3 bg-white/95 dark:bg-[#18191E]/95 backdrop-blur-md p-3 rounded-[10px] flex items-center justify-between  border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
               <div className="min-w-0 pr-3">
                 <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">
                   {activeImage.prompt}
@@ -273,11 +273,11 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                 <button
                   type="button"
                   onClick={() => handleCopyPrompt(activeImage.prompt, activeImage.id)}
-                  className="p-2 rounded-xl hover:bg-[var(--color-accent-pastel)] text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] transition-colors"
+                  className="p-2 rounded-[10px] hover:bg-[var(--color-accent-pastel)] text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] transition-colors"
                   title="Copy Prompt"
                 >
                   {copiedId === activeImage.id ? (
-                    <Check className="w-4 h-4 text-emerald-500" />
+                    <Check className="w-4 h-4 text-[var(--c-green)]" />
                   ) : (
                     <Copy className="w-4 h-4" />
                   )}
@@ -285,7 +285,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
                 <a
                   href={activeImage.url}
                   download={`lotus-${activeImage.id}.png`}
-                  className="p-2 rounded-xl bg-[var(--color-accent-vibrant)] text-white hover:brightness-110 transition-all shadow-xs"
+                  className="p-2 rounded-[10px] bg-[var(--color-accent-vibrant)] text-white hover:brightness-110 transition-all "
                   title="Download Image"
                 >
                   <Download className="w-4 h-4" />
@@ -297,7 +297,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
 
         {/* Generated Images Grid */}
         <div>
-          <h4 className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider mb-3">
+          <h4 className="text-xs font-semibold text-[var(--color-text-main)] uppercase tracking-wider mb-3">
             Output History & Cache
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -305,7 +305,7 @@ export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
               <div
                 key={img.id}
                 onClick={() => setActiveImage(img)}
-                className={`relative group rounded-[18px] overflow-hidden cursor-pointer border-2 transition-all aspect-square bg-[var(--color-bg-sidebar)] ${
+                className={`relative group rounded-[10px] overflow-hidden cursor-pointer border-2 transition-all aspect-square bg-[var(--color-bg-sidebar)] ${
                   activeImage?.id === img.id
                     ? 'border-[var(--color-accent-vibrant)] shadow-sm scale-102'
                     : 'border-transparent hover:border-[var(--color-accent-pastel-border)]'

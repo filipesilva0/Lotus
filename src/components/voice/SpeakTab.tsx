@@ -22,7 +22,7 @@ interface Props {
 }
 
 export const Avatar: React.FC<{ name: string; size?: number; className?: string }> = ({ name, size = 32, className }) => (
-  <div className={cx('rounded-full flex items-center justify-center text-white font-semibold shrink-0 select-none', className)}
+  <div className={cx('rounded-[6px] flex items-center justify-center text-white font-semibold shrink-0 select-none', className)}
     style={{ width: size, height: size, background: avatarGradient(name), fontSize: size * 0.4 }}>
     {name.trim().charAt(0).toUpperCase() || '?'}
   </div>
@@ -189,8 +189,8 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
                 <li key={g.id}>
                   <button
                     onClick={async () => setResult({ gen: g, url: await voicebox.audioUrl(g.id) })}
-                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-black/[.04] dark:hover:bg-white/5 transition-colors">
-                    {g.is_favorited && <Star className="w-3 h-3 text-amber-500 shrink-0" fill="currentColor" />}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-[6px] hover:bg-black/[.04] dark:hover:bg-white/5 transition-colors">
+                    {g.is_favorited && <Star className="w-3 h-3 text-[var(--c-orange)] shrink-0" fill="currentColor" />}
                     <span className="text-xs text-[var(--color-text-main)] dark:text-slate-200 truncate flex-1">{g.text}</span>
                     <span className="text-xs text-[var(--color-text-muted)] tabular-nums shrink-0">{g.profile_name ?? ''} · {fmtDuration(g.duration)}</span>
                   </button>

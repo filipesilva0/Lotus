@@ -5,7 +5,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewMode, ChatSession, ChatMessage, LotusSettings, GeneratedImage } from './types/lotus';
-import { LeftRail } from './components/rail/LeftRail';
+import { LeftRail, VIEW_TITLES } from './components/rail/LeftRail';
+import { IconBtn } from './components/common/ui';
+import { Symbol } from './components/common/Symbol';
+import { PanelLeft } from 'lucide-react';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
@@ -18,7 +21,6 @@ import { voicebox } from './services/voicebox';
 import { useEngines } from './hooks/useEngines';
 import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument } from './styles/theme';
-import { isTauri } from './lib/http';
 import { invokeNative, onEvent, reportActivity } from './lib/bus';
 
 const SETTINGS_KEY = 'lotus.settings.v1';
@@ -91,6 +93,13 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => load<boolean>('lotus.sidebar.v1', false));
+  useEffect(() => { localStorage.setItem('lotus.sidebar.v1', JSON.stringify(sidebarCollapsed)); }, [sidebarCollapsed]);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); setSidebarCollapsed((c) => !c); } };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
   // Image generation state
   const [images, setImages] = useState<GeneratedImage[]>([]);
@@ -270,19 +279,26 @@ export default function App() {
   };
 
   // ── Layout ────────────────────────────────────────────────────────────────
+  // Split view: translucent sidebar | content pane with a unified toolbar on top.
   const panel = (
-    <main className={isTauri
-      ? 'w-full h-full bg-[var(--color-bg-panel)] flex overflow-hidden transition-colors'
-      : 'w-full max-w-[1360px] bg-[var(--color-bg-panel)] rounded-[28px] sm:rounded-[32px] shadow-[0_24px_70px_-15px_rgba(0,0,0,0.14)] dark:shadow-[0_24px_70px_-15px_rgba(0,0,0,0.7)] border border-black/5 dark:border-[var(--color-border-subtle)] flex overflow-hidden min-h-[640px] md:min-h-[720px] transition-colors'}>
+    <main className="w-full h-full flex overflow-hidden bg-[var(--color-bg-panel)] text-[var(--color-text-main)]">
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
         onOpenSettings={() => setIsSettingsOpen(true)}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
+        collapsed={sidebarCollapsed}
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
+        <header className="material-toolbar h-12 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--sep)]" role="banner">
+          <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
+            <Symbol glyph={PanelLeft} weight="medium" />
+          </IconBtn>
+          <h1 className="text-[15px] font-semibold tracking-[-0.01em]">{VIEW_TITLES[currentView]}</h1>
+        </header>
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
           <ChatWorkspace
             sessions={sessions}
@@ -323,15 +339,13 @@ export default function App() {
         )}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
+        </div>
       </div>
     </main>
   );
 
   return (
-    <div
-      className={isTauri ? 'h-screen w-screen font-sans' : 'min-h-screen w-full flex items-center justify-center p-2 sm:p-5 md:p-8 lg:p-12 transition-colors duration-500 font-sans'}
-      style={isTauri ? undefined : { background: settings.darkMode ? 'linear-gradient(180deg, #1E2026 0%, #121316 100%)' : 'linear-gradient(180deg, #EDEDED 0%, #BEBEBE 100%)' }}
-    >
+    <div className="h-screen w-screen" style={{ background: 'var(--color-bg-base)' }}>
       {panel}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>

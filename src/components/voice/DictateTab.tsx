@@ -45,8 +45,8 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
         <div className="flex flex-col items-center gap-3 py-2">
           <button onClick={recording ? stop : start} disabled={busy} aria-label={recording ? 'Stop dictation' : 'Start dictation'}
             className={cx('relative w-20 h-20 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-accent-vibrant)]/30',
-              recording ? 'bg-rose-500' : 'bg-[var(--color-accent-vibrant)] hover:bg-[var(--color-accent-hover)]')}>
-            {recording && <span className="absolute inset-0 rounded-full bg-rose-500/30" style={{ transform: `scale(${1 + level * 0.6})`, transition: 'transform 80ms' }} aria-hidden />}
+              recording ? 'bg-[var(--c-red)]' : 'bg-[var(--color-accent-vibrant)] hover:bg-[var(--color-accent-hover)]')}>
+            {recording && <span className="absolute inset-0 rounded-[6px] bg-[var(--c-red)]/30" style={{ transform: `scale(${1 + level * 0.6})`, transition: 'transform 80ms' }} aria-hidden />}
             <span className="relative">{busy ? <Spinner className="w-7 h-7" /> : recording ? <Square className="w-6 h-6" fill="currentColor" /> : <Mic className="w-7 h-7" />}</span>
           </button>
           <p className="text-xs text-[var(--color-text-muted)] tabular-nums h-4">

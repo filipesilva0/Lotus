@@ -34,7 +34,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
           </div>
           <TextArea aria-label="Research question" rows={4} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="e.g. Does intermittent fasting improve cardiovascular outcomes in adults?" className="!text-sm" />
           <div className="flex flex-wrap gap-1.5">
-            {EXAMPLES.map((x) => <button key={x} onClick={() => setQuestion(x)} className="text-xs px-2.5 h-6 rounded-full bg-black/[.04] dark:bg-white/[.06] text-[var(--color-text-muted)] hover:bg-black/[.08] dark:hover:bg-white/10 transition-colors">{x}</button>)}
+            {EXAMPLES.map((x) => <button key={x} onClick={() => setQuestion(x)} className="text-xs px-2.5 h-6 rounded-[6px] bg-black/[.04] dark:bg-white/[.06] text-[var(--color-text-muted)] hover:bg-black/[.08] dark:hover:bg-white/10 transition-colors">{x}</button>)}
           </div>
           <div><Label hint="optional">Tags</Label><ChipInput label="Tags" values={p.tags} onChange={(t) => r.patch(p.id, (q) => ({ ...q, tags: t }))} placeholder="#Biomedical, #MachineLearning" /></div>
           {models.length > 0 && (
@@ -58,7 +58,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
         <section className="space-y-4">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-full bg-[var(--color-accent-vibrant)] text-white flex items-center justify-center shrink-0"><FlaskConical className="w-4 h-4" /></div>
-            <div className="rounded-2xl rounded-tl-md bg-[var(--color-accent-pastel)] px-4 py-3 text-sm text-[var(--color-text-main)]">
+            <div className="rounded-[10px] rounded-tl-md bg-[var(--color-accent-pastel)] px-4 py-3 text-sm text-[var(--color-text-main)]">
               <span className="text-xs font-semibold text-[var(--color-accent-vibrant)] block mb-0.5">Your question</span>{p.question}
             </div>
           </div>
@@ -134,7 +134,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
                 ))}
                 {p.personas.length < 5 && (
                   <button onClick={() => patchPersonas((l) => [...l, { id: uid(), name: 'New expert', role: 'Describe their background', focus: 'What they challenge' }])}
-                    className="rounded-2xl border border-dashed border-[#D5D8DF] dark:border-[#3A3E4A] text-xs font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] hover:border-[var(--color-accent-vibrant)] min-h-[88px] transition-colors">+ Add expert</button>
+                    className="rounded-[10px] border border-dashed border-[#D5D8DF] dark:border-[#3A3E4A] text-xs font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] hover:border-[var(--color-accent-vibrant)] min-h-[88px] transition-colors">+ Add expert</button>
                 )}
               </div>
             )}

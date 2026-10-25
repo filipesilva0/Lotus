@@ -22,7 +22,7 @@ const Stat: React.FC<{ icon: React.ReactNode; label: string; value: string; sub?
 
 const AgentCard: React.FC<{ a: AgentState; maxDepth: number }> = ({ a, maxDepth }) => {
   const [open, setOpen] = useState(a.status === 'running');
-  const icon = a.status === 'running' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" /> : a.status === 'done' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : a.status === 'error' ? <AlertCircle className="w-3.5 h-3.5 text-rose-500" /> : <Clock className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />;
+  const icon = a.status === 'running' ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--c-green)]" /> : a.status === 'done' ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : a.status === 'error' ? <AlertCircle className="w-3.5 h-3.5 text-[var(--c-red)]" /> : <Clock className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />;
   return (
     <Card className="overflow-hidden">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-black/[.02] dark:hover:bg-white/[.03] transition-colors">
@@ -87,7 +87,7 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
 
           <div>
             <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1.5"><span>{phaseText}</span><span className="tabular-nums">{Math.round(p.progress * 100)}%</span></div>
-            <div className="h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden" role="progressbar" aria-valuenow={Math.round(p.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
+            <div className="h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden" role="progressbar" aria-valuenow={Math.round(p.progress * 100)} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-full bg-[var(--color-accent-vibrant)] transition-[width] duration-500" style={{ width: `${p.progress * 100}%` }} />
             </div>
           </div>
@@ -111,8 +111,8 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
             </form>
             {(p.injected.length > 0 || p.limits.excludedDomains.length > 0) && (
               <div className="flex flex-wrap gap-1.5">
-                {p.injected.map((t, i) => <span key={i} className="inline-flex items-center gap-1 h-6 pl-2.5 pr-1 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold max-w-full"><span className="truncate">{t}</span><button aria-label="Remove instruction" onClick={() => r.removeInjected(p.id, i)} className="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button></span>)}
-                {p.limits.excludedDomains.map((d) => <span key={d} className="inline-flex items-center h-6 px-2.5 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold">Excluding {d}</span>)}
+                {p.injected.map((t, i) => <span key={i} className="inline-flex items-center gap-1 h-6 pl-2.5 pr-1 rounded-[6px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold max-w-full"><span className="truncate">{t}</span><button aria-label="Remove instruction" onClick={() => r.removeInjected(p.id, i)} className="w-4 h-4 rounded-full hover:bg-black/10 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button></span>)}
+                {p.limits.excludedDomains.map((d) => <span key={d} className="inline-flex items-center h-6 px-2.5 rounded-[6px] bg-[var(--c-red)]/10 text-rose-700 dark:text-rose-300 text-xs font-semibold">Excluding {d}</span>)}
               </div>
             )}
             <p className="text-xs text-[var(--color-text-muted)]">Instructions apply from each agent's next round. Excluded domains also remove sources already collected.</p>

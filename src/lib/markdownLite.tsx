@@ -10,7 +10,7 @@ function inline(text: string, keyBase: string): React.ReactNode[] {
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     const t = m[0], k = `${keyBase}-${i++}`;
-    if (t.startsWith('`')) out.push(<code key={k} className="px-1 py-px rounded bg-white/10 text-[0.92em]">{t.slice(1, -1)}</code>);
+    if (t.startsWith('`')) out.push(<code key={k} className="px-1 py-px rounded-[6px] bg-white/10 text-[0.92em]">{t.slice(1, -1)}</code>);
     else if (t.startsWith('**')) out.push(<strong key={k} className="font-semibold">{t.slice(2, -2)}</strong>);
     else if (t.startsWith('*')) out.push(<em key={k}>{t.slice(1, -1)}</em>);
     else out.push(<span key={k} className="underline underline-offset-2 break-all">{t}</span>);
