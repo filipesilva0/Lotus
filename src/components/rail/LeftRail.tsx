@@ -87,9 +87,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
     >
       {/* Leaves room for the window's traffic-light / title-bar area on platforms that draw it inside the content. */}
       <div className={`h-[68px] shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <span className="w-11 h-11 rounded-[12px] inline-flex items-center justify-center bg-[var(--color-text-main)]">
-          <Logo size={26} className="text-[var(--color-bg-panel)]" />
-        </span>
+        <Logo size={30} />
         {!collapsed && <span className="text-[17px] font-semibold tracking-[-0.01em]">Lotus</span>}
       </div>
 

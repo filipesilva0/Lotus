@@ -175,10 +175,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <div
                   key={s.id}
                   onClick={() => onSelectSession(s.id)}
-                  className={`group flex items-center justify-between p-2.5 rounded-[10px] cursor-pointer transition-all border ${
+                  className={`group flex items-center justify-between px-2.5 py-2 rounded-[8px] cursor-pointer transition-colors ${
                     isActive
-                      ? 'bg-[var(--color-accent-pastel)] border-[var(--color-accent-pastel-border)] text-[var(--color-accent-vibrant)] font-semibold '
-                      : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-bg-card)] dark:hover:bg-[#282B34] hover:text-[var(--color-text-main)]'
+                      ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-semibold'
+                      : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'
                   }`}
                 >
                   <div className="min-w-0 flex-1">

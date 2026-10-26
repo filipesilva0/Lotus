@@ -10,6 +10,7 @@ import { IconBtn } from './components/common/ui';
 import { Symbol } from './components/common/Symbol';
 import { PanelLeft } from 'lucide-react';
 import { ToolbarSlotContext } from './components/common/ToolbarSlot';
+import { applyWindowGlass } from './lib/glass';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
@@ -126,6 +127,7 @@ export default function App() {
 
   useEffect(() => {
     applyThemeToDocument(settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode);
+    void applyWindowGlass(settings.darkMode);
   }, [settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode]);
 
   // The window starts hidden to avoid a white flash; show it once we have painted.
@@ -283,7 +285,7 @@ export default function App() {
   // ── Layout ────────────────────────────────────────────────────────────────
   // Split view: translucent sidebar | content pane with a unified toolbar on top.
   const panel = (
-    <main className="w-full h-full flex overflow-hidden rounded-[16px] lotus-window text-[var(--color-text-main)]">
+    <main className="w-full h-full flex overflow-hidden text-[var(--color-text-main)]">
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
@@ -350,7 +352,7 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-screen p-2.5 lotus-backdrop">
+    <div className="h-screen w-screen">
       {panel}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
