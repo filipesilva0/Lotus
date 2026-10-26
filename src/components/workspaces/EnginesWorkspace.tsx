@@ -10,7 +10,7 @@ import { voicebox, ModelStatus, DownloadTask } from '../../services/voicebox';
 import { comfy } from '../../services/comfyService';
 import { reportActivity } from '../../lib/bus';
 import { openExternal, revealPath } from '../../lib/open';
-import { Btn, Card, Segmented, TextInput, Banner, Spinner, Empty, Label, cx } from '../common/ui';
+import { Btn, Card, Tabs, TextInput, Banner, Spinner, Empty, Label, cx } from '../common/ui';
 
 type Eng = ReturnType<typeof useEngines>;
 type Tab = 'engines' | 'models' | 'storage';
@@ -39,14 +39,11 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
-      <header className="flex items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-[var(--color-border-subtle)]">
-        <div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-main)] leading-tight">Engines</h2>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">The local programs Lotus talks to. Everything runs on this PC.</p>
-        </div>
-        <Segmented value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
+      <header className="h-11 shrink-0 flex items-center px-3 border-b border-[var(--sep)]">
+        <Tabs label="Engine sections" value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <p className="text-[13px] text-[var(--color-text-muted)] mb-4">The local programs Lotus talks to. Everything runs on this PC.</p>
         {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
         {tab === 'models' && <ModelsTab eng={eng} goEngines={() => setTab('engines')} />}
         {tab === 'storage' && <StorageTab />}

@@ -281,7 +281,7 @@ export default function App() {
   // ── Layout ────────────────────────────────────────────────────────────────
   // Split view: translucent sidebar | content pane with a unified toolbar on top.
   const panel = (
-    <main className="w-full h-full flex overflow-hidden bg-[var(--color-bg-panel)] text-[var(--color-text-main)]">
+    <main className="w-full h-full flex overflow-hidden bg-[var(--color-bg-base)] text-[var(--color-text-main)]">
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
@@ -291,8 +291,8 @@ export default function App() {
         collapsed={sidebarCollapsed}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[var(--color-bg-panel)]">
-        <header className="material-toolbar h-12 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--sep)]" role="banner">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden my-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
+        <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--sep)]" role="banner">
           <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
             <Symbol glyph={PanelLeft} weight="medium" />
           </IconBtn>

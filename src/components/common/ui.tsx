@@ -109,6 +109,45 @@ export function Segmented<T extends string>({
   );
 }
 
+/** Underline tabs for a pane header: a text row with an accent line under the selected tab. Arrow keys move selection. */
+export function Tabs<T extends string>({
+  value, onChange, options, className, label,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { id: T; label: string; icon?: React.ReactNode }[];
+  className?: string;
+  label?: string;
+}) {
+  const onKey = (e: React.KeyboardEvent) => {
+    const i = options.findIndex((o) => o.id === value);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); onChange(options[(i + 1) % options.length].id); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); onChange(options[(i - 1 + options.length) % options.length].id); }
+  };
+  return (
+    <div role="tablist" aria-label={label} onKeyDown={onKey} className={cx('flex items-stretch self-stretch gap-1', className)}>
+      {options.map((o) => (
+        <button
+          key={o.id}
+          role="tab"
+          tabIndex={value === o.id ? 0 : -1}
+          aria-selected={value === o.id}
+          onClick={() => onChange(o.id)}
+          className={cx(
+            'relative px-3 inline-flex items-center gap-1.5 text-[13px] rounded-[6px] transition-colors duration-100',
+            value === o.id ? 'font-semibold text-[var(--color-text-main)]' : 'font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]',
+            ringFocus,
+          )}
+        >
+          {o.icon}
+          {o.label}
+          {value === o.id && <span aria-hidden="true" className="absolute left-3 right-3 -bottom-px h-0.5 rounded-[1px] bg-[var(--color-accent-fill)]" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export const Label: React.FC<{ children: React.ReactNode; hint?: React.ReactNode; className?: string }> = ({ children, hint, className }) => (
   <div className={cx('flex items-baseline justify-between mb-1', className)}>
     <span className="text-[12px] font-medium text-[var(--color-text-muted)]">{children}</span>

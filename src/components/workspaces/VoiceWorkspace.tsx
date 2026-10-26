@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AudioLines, Mic2, Film, Mic, Library, Power, FolderSearch } from 'lucide-react';
-import { Segmented, Btn, Empty, Banner, Spinner, cx } from '../common/ui';
+import { Tabs, Btn, Empty, Banner, Spinner, cx } from '../common/ui';
 import { useVoiceData, useSelectedProfile } from '../voice/useVoiceData';
 import { SpeakTab } from '../voice/SpeakTab';
 import { VoicesTab } from '../voice/VoicesTab';
@@ -59,8 +59,8 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
-      <header className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-[var(--color-border-subtle)]">
-        <Segmented value={tab} onChange={go} options={tabs} />
+      <header className="h-11 shrink-0 flex items-center gap-3 px-3 pr-5 border-b border-[var(--sep)]">
+        <Tabs label="Voice sections" value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />
         <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
           <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-[var(--c-green)]' : data.status === 'checking' ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]')} />

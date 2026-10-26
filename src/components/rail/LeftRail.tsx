@@ -49,10 +49,10 @@ export const VIEW_TITLES: Record<ViewMode, string> = {
 };
 
 const row =
-  'group relative w-full flex items-center gap-2 h-7 rounded-[6px] text-[13px] select-none transition-colors duration-100 ' +
+  'group relative w-full flex items-center gap-3 h-9 rounded-[8px] text-[14px] select-none transition-colors duration-100 ' +
   'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-0';
 
-/** Source-list sidebar on translucent material. Selection uses the accent colour at rest, like Finder/Mail. */
+/** Source-list sidebar that sits directly on the window field. The selected row is a raised white item; the content pane floats beside it. */
 export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, engines, updateAvailable = false, collapsed = false }) => {
   const nav = [
     { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
@@ -67,12 +67,12 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
     return (
       <button key={id} type="button" onClick={() => onSelectView(id)} aria-label={aria ?? label} title={collapsed ? label : undefined}
         aria-current={on ? 'page' : undefined}
-        className={`${row} ${collapsed ? 'justify-center px-0' : 'px-2'} ${on ? 'bg-[var(--color-accent-fill)] text-white' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]'}`}>
+        className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3'} ${on ? 'bg-[var(--color-bg-card)] text-[var(--color-text-main)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]'}`}>
         <span className="relative inline-flex">
-          <Symbol glyph={glyph} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? undefined : 'var(--color-accent-vibrant)'} effect={on ? 'bounce' : undefined} />
+          <Symbol glyph={glyph} size={20} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? 'var(--color-accent-vibrant)' : 'currentColor'} effect={on ? 'bounce' : undefined} />
           {collapsed && badge}
         </span>
-        {!collapsed && <span className="flex-1 text-left truncate font-medium">{label}</span>}
+        {!collapsed && <span className={`flex-1 text-left truncate ${on ? 'font-semibold' : 'font-medium'}`}>{label}</span>}
         {!collapsed && badge}
       </button>
     );
@@ -82,27 +82,28 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
 
   return (
     <aside
-      className={`material-sidebar shrink-0 flex flex-col border-r border-[var(--sep)] select-none transition-[width] duration-200 ${collapsed ? 'w-[52px]' : 'w-[216px]'}`}
+      className={`shrink-0 flex flex-col select-none transition-[width] duration-200 ${collapsed ? 'w-[60px]' : 'w-[232px]'}`}
       aria-label="Sidebar"
     >
       {/* Leaves room for the window's traffic-light / title-bar area on platforms that draw it inside the content. */}
-      <div className={`h-12 shrink-0 flex items-center gap-2 ${collapsed ? 'justify-center' : 'px-3.5'}`}>
-        <Logo size={22} />
-        {!collapsed && <span className="text-[15px] font-semibold tracking-[-0.01em]">Lotus</span>}
+      <div className={`h-14 shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
+        <span className="w-9 h-9 rounded-[8px] inline-flex items-center justify-center bg-[var(--color-text-main)]">
+          <Logo size={22} className="text-[var(--color-bg-panel)]" />
+        </span>
+        {!collapsed && <span className="text-[17px] font-semibold tracking-[-0.01em]">Lotus</span>}
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2" aria-label="Workspaces">
-        {!collapsed && <div className="px-2 pt-1 pb-1 text-[11px] font-semibold text-[var(--color-text-muted)]">Workspaces</div>}
+      <nav className="flex flex-col gap-1 px-2" aria-label="Workspaces">
         {nav.map((n) => item(n.id, n.glyph, n.label))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-0.5 p-2 border-t border-[var(--sep)]">
+      <div className="mt-auto flex flex-col gap-1 p-2 pb-3">
         {item('engines', Server, 'Engines', `Engines. ${healthLabel}`, dot(DOT[health]))}
         <button type="button" onClick={onOpenSettings} title={collapsed ? 'Settings' : undefined}
           aria-label={updateAvailable ? 'Settings. An update is available' : 'Settings'}
-          className={`${row} ${collapsed ? 'justify-center px-0' : 'px-2'} text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]`}>
+          className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3'} text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]`}>
           <span className="relative inline-flex">
-            <Symbol glyph={SettingsIcon} mode="hierarchical" tone="var(--color-accent-vibrant)" />
+            <Symbol glyph={SettingsIcon} size={20} mode="hierarchical" tone="currentColor" />
             {collapsed && updateAvailable && dot('bg-[var(--color-accent-vibrant)]')}
           </span>
           {!collapsed && <span className="flex-1 text-left font-medium">Settings</span>}

@@ -88,8 +88,8 @@ export function applyThemeToDocument(
     root.classList.add('dark');
     root.style.colorScheme = 'dark';
     // windowBackgroundColor / controlBackgroundColor / sidebar / separatorColor / labelColor / secondaryLabelColor
-    root.style.setProperty('--color-bg-base', '#1E1E1E');
-    root.style.setProperty('--color-bg-panel', '#232326');
+    root.style.setProperty('--color-bg-base', '#1C1C1E');
+    root.style.setProperty('--color-bg-panel', '#272729');
     root.style.setProperty('--color-bg-card', '#2C2C2F');
     root.style.setProperty('--color-bg-sidebar', '#2A2A2D');
     root.style.setProperty('--color-border-subtle', 'rgba(255,255,255,0.12)');
@@ -106,7 +106,7 @@ export function applyThemeToDocument(
   } else {
     root.classList.remove('dark');
     root.style.colorScheme = 'light';
-    root.style.setProperty('--color-bg-base', '#ECECEC');
+    root.style.setProperty('--color-bg-base', '#E8E8EB');
     root.style.setProperty('--color-bg-panel', '#FFFFFF');
     root.style.setProperty('--color-bg-card', '#FFFFFF');
     root.style.setProperty('--color-bg-sidebar', '#E8E8EA');

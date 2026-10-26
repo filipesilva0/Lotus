@@ -90,3 +90,8 @@
 | A10 | `localStorage` capacity in WebView2 is adequate. | Silent data loss for long chats. | Measure (T11). |
 | A11 | Deep Research UI is usable in the real WebView2 window at 980 px wide (inspector auto-hidden < 1240 px). | Cramped layout. | T3 visual pass. |
 | A12 | `backdrop-filter` blur and `color-mix()` render correctly in the user's WebView2 (Chromium 105+ target; `color-mix` needs 111+). | Flat/untinted surfaces if unsupported (fallbacks exist for blur only). | Run the app on Windows (T3). |
+
+## 5. Shell layout (Oct 2026)
+| ID | Decision | Who | Rationale |
+|---|---|---|---|
+| D23 | Shell follows the user's reference screenshot (frosted sidebar + one floating white content pane), expressed in macOS HIG terms: sidebar sits on the window field (`--color-bg-base`), 36 px rows, selected row is a raised white item, content pane is inset 8 px with 12 px radius, section sub-navigation uses underline `Tabs` (`components/common/ui.tsx`). Only one panel, no nested boxes, no capsules. | User (look) + Me (mapping) | ⚠️ Edited without a build or screenshot (sandbox had no network): run `npx tsc --noEmit` and `npm run build`, then look at it. Real wallpaper translucency needs a transparent window plus Mica/Acrylic (Rust/config change, not done). |
