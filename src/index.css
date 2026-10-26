@@ -35,6 +35,14 @@
   --blur-regular: blur(24px) saturate(1.7);
   --blur-thick: blur(40px) saturate(1.8);
 
+  /* Ambient wallpaper behind the window and the frosted glass over it (the sidebar is the glass). */
+  --backdrop:
+    radial-gradient(58% 52% at 6% 10%, #F3A27C 0%, transparent 70%),
+    radial-gradient(48% 46% at 16% 92%, #EE8C7A 0%, transparent 70%),
+    radial-gradient(52% 50% at 96% 8%, #A5CBEF 0%, transparent 70%),
+    radial-gradient(58% 58% at 72% 98%, #F4CBD6 0%, transparent 70%),
+    #EBDCDA;
+  --mat-window: rgba(255, 255, 255, 0.58);
   --sep: var(--color-border-subtle);
   --hover: rgba(0, 0, 0, 0.05);
   --pressed: rgba(0, 0, 0, 0.09);
@@ -43,6 +51,13 @@
   --shadow-float: 0 0 0 0.5px rgba(0,0,0,.14), 0 10px 30px rgba(0,0,0,.18);
 }
 .dark {
+  --backdrop:
+    radial-gradient(58% 52% at 6% 10%, #7A3B3A 0%, transparent 70%),
+    radial-gradient(48% 46% at 16% 92%, #6A2F4A 0%, transparent 70%),
+    radial-gradient(52% 50% at 96% 8%, #24456B 0%, transparent 70%),
+    radial-gradient(58% 58% at 72% 98%, #3B2C52 0%, transparent 70%),
+    #1B1A20;
+  --mat-window: rgba(36, 36, 40, 0.58);
   --hover: rgba(255, 255, 255, 0.07);
   --pressed: rgba(255, 255, 255, 0.12);
   --shadow-1: 0 0.5px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.4);
@@ -77,6 +92,19 @@
 ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.45); background-clip: content-box; }
 .dark ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); background-clip: content-box; }
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.48); background-clip: content-box; }
+
+/* Window chrome: wallpaper, then one frosted rounded window on top of it. */
+.lotus-backdrop { background: var(--backdrop); }
+.lotus-window {
+  background: var(--mat-window);
+  backdrop-filter: blur(40px) saturate(1.8); -webkit-backdrop-filter: blur(40px) saturate(1.8);
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,.2), 0 8px 28px rgba(0,0,0,.14);
+}
+.dark .lotus-window { box-shadow: 0 0 0 0.5px rgba(255,255,255,.16), 0 8px 28px rgba(0,0,0,.5); }
+@media (prefers-reduced-transparency: reduce) {
+  .lotus-backdrop { background: var(--color-bg-base); }
+  .lotus-window { background: var(--color-bg-sidebar); backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
 
 /* Material utilities */
 .material-sidebar { background: var(--mat-sidebar); backdrop-filter: var(--blur-regular); -webkit-backdrop-filter: var(--blur-regular); }

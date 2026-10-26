@@ -15,6 +15,7 @@ import {
   X,
   Activity,
   Square,
+  Search,
 } from 'lucide-react';
 import { ChatSession } from '../../types/lotus';
 import { voicebox } from '../../services/voicebox';
@@ -65,6 +66,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const recorder = useRef<MicRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -142,10 +144,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] overflow-hidden select-none">
       {/* Session List Sidebar */}
-      <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] p-4 flex flex-col justify-between shrink-0 bg-[var(--color-bg-sidebar)]">
+      <div className="w-full md:w-72 md:order-last border-t md:border-t-0 md:border-l border-[var(--sep)] p-4 flex flex-col justify-between shrink-0 bg-[var(--color-bg-panel)]">
         <div>
           <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-xs font-semibold text-[var(--color-text-main)] uppercase tracking-wider">
+            <span className="text-[15px] font-semibold text-[var(--color-text-main)]">
               Conversations
             </span>
             <button
@@ -157,8 +159,17 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </button>
           </div>
 
+          <div className="relative mb-3">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
+            <input type="search" aria-label="Search conversations" placeholder="Search conversations" value={query} onChange={(e) => setQuery(e.target.value)}
+              className="w-full h-8 pl-8 pr-2 rounded-[8px] bg-[var(--hover)] text-[13px] text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" />
+          </div>
+
           <div className="space-y-1.5 overflow-y-auto max-h-[420px] pr-1 no-scrollbar">
-            {sessions.map((s) => {
+            {query.trim() && !sessions.some((s) => s.title.toLowerCase().includes(query.trim().toLowerCase())) && (
+              <p className="px-2 py-3 text-[13px] text-[var(--color-text-muted)]">No conversations match “{query.trim()}”.</p>
+            )}
+            {sessions.filter((s) => !query.trim() || s.title.toLowerCase().includes(query.trim().toLowerCase())).map((s) => {
               const isActive = s.id === activeSession?.id;
               return (
                 <div

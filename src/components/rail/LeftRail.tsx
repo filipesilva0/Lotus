@@ -49,7 +49,7 @@ export const VIEW_TITLES: Record<ViewMode, string> = {
 };
 
 const row =
-  'group relative w-full flex items-center gap-3 h-9 rounded-[8px] text-[14px] select-none transition-colors duration-100 ' +
+  'group relative w-full flex items-center gap-3 h-11 rounded-[12px] text-[15px] select-none transition-colors duration-100 ' +
   'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-0';
 
 /** Source-list sidebar that sits directly on the window field. The selected row is a raised white item; the content pane floats beside it. */
@@ -67,9 +67,9 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
     return (
       <button key={id} type="button" onClick={() => onSelectView(id)} aria-label={aria ?? label} title={collapsed ? label : undefined}
         aria-current={on ? 'page' : undefined}
-        className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3'} ${on ? 'bg-[var(--color-bg-card)] text-[var(--color-text-main)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]'}`}>
+        className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3.5'} ${on ? 'bg-[var(--color-bg-card)] text-[var(--color-text-main)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]'}`}>
         <span className="relative inline-flex">
-          <Symbol glyph={glyph} size={20} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? 'var(--color-accent-vibrant)' : 'currentColor'} effect={on ? 'bounce' : undefined} />
+          <Symbol glyph={glyph} size={22} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? 'var(--color-accent-vibrant)' : 'currentColor'} effect={on ? 'bounce' : undefined} />
           {collapsed && badge}
         </span>
         {!collapsed && <span className={`flex-1 text-left truncate ${on ? 'font-semibold' : 'font-medium'}`}>{label}</span>}
@@ -82,28 +82,28 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
 
   return (
     <aside
-      className={`shrink-0 flex flex-col select-none transition-[width] duration-200 ${collapsed ? 'w-[60px]' : 'w-[232px]'}`}
+      className={`shrink-0 flex flex-col select-none transition-[width] duration-200 ${collapsed ? 'w-[68px]' : 'w-[244px]'}`}
       aria-label="Sidebar"
     >
       {/* Leaves room for the window's traffic-light / title-bar area on platforms that draw it inside the content. */}
-      <div className={`h-14 shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <span className="w-9 h-9 rounded-[8px] inline-flex items-center justify-center bg-[var(--color-text-main)]">
-          <Logo size={22} className="text-[var(--color-bg-panel)]" />
+      <div className={`h-[68px] shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
+        <span className="w-11 h-11 rounded-[12px] inline-flex items-center justify-center bg-[var(--color-text-main)]">
+          <Logo size={26} className="text-[var(--color-bg-panel)]" />
         </span>
         {!collapsed && <span className="text-[17px] font-semibold tracking-[-0.01em]">Lotus</span>}
       </div>
 
-      <nav className="flex flex-col gap-1 px-2" aria-label="Workspaces">
+      <nav className="flex flex-col gap-1 px-3" aria-label="Workspaces">
         {nav.map((n) => item(n.id, n.glyph, n.label))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-1 p-2 pb-3">
+      <div className="mt-auto flex flex-col gap-1 px-3 pb-3">
         {item('engines', Server, 'Engines', `Engines. ${healthLabel}`, dot(DOT[health]))}
         <button type="button" onClick={onOpenSettings} title={collapsed ? 'Settings' : undefined}
           aria-label={updateAvailable ? 'Settings. An update is available' : 'Settings'}
-          className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3'} text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]`}>
+          className={`${row} ${collapsed ? 'justify-center px-0' : 'px-3.5'} text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]`}>
           <span className="relative inline-flex">
-            <Symbol glyph={SettingsIcon} size={20} mode="hierarchical" tone="currentColor" />
+            <Symbol glyph={SettingsIcon} size={22} mode="hierarchical" tone="currentColor" />
             {collapsed && updateAvailable && dot('bg-[var(--color-accent-vibrant)]')}
           </span>
           {!collapsed && <span className="flex-1 text-left font-medium">Settings</span>}

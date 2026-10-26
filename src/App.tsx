@@ -9,6 +9,7 @@ import { LeftRail, VIEW_TITLES } from './components/rail/LeftRail';
 import { IconBtn } from './components/common/ui';
 import { Symbol } from './components/common/Symbol';
 import { PanelLeft } from 'lucide-react';
+import { ToolbarSlotContext } from './components/common/ToolbarSlot';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
@@ -93,6 +94,7 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => load<boolean>('lotus.sidebar.v1', false));
   useEffect(() => { localStorage.setItem('lotus.sidebar.v1', JSON.stringify(sidebarCollapsed)); }, [sidebarCollapsed]);
   useEffect(() => {
@@ -281,7 +283,7 @@ export default function App() {
   // ── Layout ────────────────────────────────────────────────────────────────
   // Split view: translucent sidebar | content pane with a unified toolbar on top.
   const panel = (
-    <main className="w-full h-full flex overflow-hidden bg-[var(--color-bg-base)] text-[var(--color-text-main)]">
+    <main className="w-full h-full flex overflow-hidden rounded-[16px] lotus-window text-[var(--color-text-main)]">
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
@@ -292,12 +294,14 @@ export default function App() {
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden my-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
-        <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--sep)]" role="banner">
+        <header className="h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]" role="banner">
           <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
             <Symbol glyph={PanelLeft} weight="medium" />
           </IconBtn>
-          <h1 className="text-[15px] font-semibold tracking-[-0.01em]">{VIEW_TITLES[currentView]}</h1>
+          <h1 className={currentView === 'voice' || currentView === 'engines' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
+          <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
+        <ToolbarSlotContext.Provider value={toolbarSlot}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
           <ChatWorkspace
@@ -340,12 +344,13 @@ export default function App() {
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>
+        </ToolbarSlotContext.Provider>
       </div>
     </main>
   );
 
   return (
-    <div className="h-screen w-screen" style={{ background: 'var(--color-bg-base)' }}>
+    <div className="h-screen w-screen p-2.5 lotus-backdrop">
       {panel}
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>

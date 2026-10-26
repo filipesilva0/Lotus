@@ -134,14 +134,14 @@ export function Tabs<T extends string>({
           aria-selected={value === o.id}
           onClick={() => onChange(o.id)}
           className={cx(
-            'relative px-3 inline-flex items-center gap-1.5 text-[13px] rounded-[6px] transition-colors duration-100',
+            'relative px-3.5 inline-flex items-center gap-1.5 text-[15px] rounded-[8px] transition-colors duration-100',
             value === o.id ? 'font-semibold text-[var(--color-text-main)]' : 'font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]',
             ringFocus,
           )}
         >
           {o.icon}
           {o.label}
-          {value === o.id && <span aria-hidden="true" className="absolute left-3 right-3 -bottom-px h-0.5 rounded-[1px] bg-[var(--color-accent-fill)]" />}
+          {value === o.id && <span aria-hidden="true" className="absolute left-3.5 right-3.5 -bottom-px h-[3px] rounded-t-[2px] bg-[var(--color-accent-fill)]" />}
         </button>
       ))}
     </div>

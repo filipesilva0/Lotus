@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AudioLines, Mic2, Film, Mic, Library, Power, FolderSearch } from 'lucide-react';
+import { ToolbarContent } from '../common/ToolbarSlot';
 import { Tabs, Btn, Empty, Banner, Spinner, cx } from '../common/ui';
 import { useVoiceData, useSelectedProfile } from '../voice/useVoiceData';
 import { SpeakTab } from '../voice/SpeakTab';
@@ -59,7 +60,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
-      <header className="h-11 shrink-0 flex items-center gap-3 px-3 pr-5 border-b border-[var(--sep)]">
+      <ToolbarContent>
         <Tabs label="Voice sections" value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />
         <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
@@ -68,7 +69,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
             ? `Voicebox${data.health?.gpu_type ? ` · ${data.health.gpu_type}` : data.health?.gpu_available ? ' · GPU' : ' · CPU'}`
             : data.status === 'checking' ? 'Connecting…' : 'Voicebox offline'}
         </span>
-      </header>
+      </ToolbarContent>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {data.status === 'checking' ? (
