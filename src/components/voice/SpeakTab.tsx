@@ -48,6 +48,8 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
   const [recent, setRecent] = useState<Generation[]>([]);
   const ctrl = useRef<AbortController | null>(null);
   const genId = useRef<string | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const [runSec, setRunSec] = useState<number | null>(null);
 
   // A new voice resets per-voice choices to that voice's defaults.
   useEffect(() => {
@@ -93,7 +95,9 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
       };
       const queued = await voicebox.generate(body);
       genId.current = queued.id;
+      const t0 = performance.now();
       const done = await voicebox.waitFor(queued.id, undefined, c.signal);
+      setRunSec((performance.now() - t0) / 1000);
       setResult({ gen: done, url: await voicebox.audioUrl(done.id) });
       void loadRecent();
     } catch (e) {
@@ -110,6 +114,13 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
     setBusy(false);
   };
 
+  const insertTag = (tag: string) => {
+    const el = taRef.current;
+    const at = el ? el.selectionStart : text.length, end = el ? el.selectionEnd : text.length;
+    onText(`${text.slice(0, at)}${tag}${text.slice(end)}`);
+    setTimeout(() => { el?.focus(); el?.setSelectionRange(at + tag.length, at + tag.length); }, 0);
+  };
+  const rtf = result?.gen.duration && runSec ? runSec / result.gen.duration : null;
   const modelHint = err && /model|download|not (found|loaded)/i.test(err);
 
   if (data.profilesLoading) return <div className="p-6 flex justify-center"><Spinner className="w-5 h-5 text-[var(--color-accent-vibrant)]" /></div>;
@@ -136,7 +147,14 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
         </div>
 
         <div>
-          <TextArea aria-label="Text to speak" rows={9} value={text} maxLength={50000}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2" role="group" aria-label="Expression tags">
+            <span className="text-xs text-[var(--color-text-muted)] mr-1">Insert</span>
+            {['[laugh]', '[sigh]', '[gasp]', '[cough]', '[pause: 1.5s]'].map((t) => (
+              <button key={t} type="button" onClick={() => insertTag(t)} className="h-6 px-2 rounded-full text-[11px] font-mono bg-[var(--hover)] hover:bg-[var(--pressed)]">{t}</button>
+            ))}
+            <span className="text-[11px] text-[var(--color-text-muted)] ml-1">Tags are read by engines that support them (such as Chatterbox).</span>
+          </div>
+          <TextArea ref={taRef} aria-label="Text to speak" rows={9} value={text} maxLength={50000}
             placeholder="Type or paste what this voice should say…"
             onChange={(e) => onText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void run(); } }}
@@ -175,6 +193,8 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
               <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
                 {engineLabel(result.gen.engine)} · {fmtDuration(result.gen.duration)}
                 {result.gen.seed != null && <> · seed {result.gen.seed}</>}
+                {rtf !== null && <> · {rtf.toFixed(2)}× real time ({rtf < 1 ? 'faster than playback' : 'slower than playback'})</>}
+                {data.health?.vram_used_mb ? <> · {(data.health.vram_used_mb / 1024).toFixed(1)} GB video memory</> : null}
               </p>
               <Btn size="sm" variant="ghost" onClick={() => onAddToStory(result.gen.id)}>Add to story</Btn>
             </div>

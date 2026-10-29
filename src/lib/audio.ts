@@ -149,3 +149,96 @@ export function downloadBlob(blob: Blob, name: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
+
+// ── Reference-sample tools ──────────────────────────────────────────────────
+
+export interface SampleHealth {
+  durationSec: number;
+  sampleRate: number;
+  /** Rough signal-to-noise estimate in dB: loudest 10% of 50 ms frames vs quietest 10%. */
+  snrDb: number | null;
+  peakDb: number;
+  clipped: boolean;
+  verdict: 'good' | 'ok' | 'poor';
+  advice: string;
+}
+
+export async function analyzeSample(blob: Blob): Promise<SampleHealth> {
+  const ctx = new AudioContext();
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const ch = buf.getChannelData(0);
+    const frame = Math.max(1, Math.floor(buf.sampleRate * 0.05));
+    const rms: number[] = [];
+    let peak = 0, hot = 0;
+    for (let i = 0; i + frame <= ch.length; i += frame) {
+      let s = 0;
+      for (let j = 0; j < frame; j++) { const v = ch[i + j]; s += v * v; const a = Math.abs(v); if (a > peak) peak = a; if (a >= 0.999) hot++; }
+      rms.push(Math.sqrt(s / frame));
+    }
+    rms.sort((a, b) => a - b);
+    const n = Math.max(1, Math.floor(rms.length * 0.1));
+    const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+    const noise = avg(rms.slice(0, n)), speech = avg(rms.slice(-n));
+    const snr = rms.length >= 10 && noise > 1e-6 ? Math.round(20 * Math.log10(speech / noise)) : null;
+    const clipped = hot > 5;
+    const dur = buf.duration;
+    let verdict: SampleHealth['verdict'] = 'good', advice = 'Looks clean.';
+    if (dur < 3) { verdict = 'poor'; advice = 'Too short. Aim for 3–10 seconds of speech.'; }
+    else if (clipped) { verdict = 'poor'; advice = 'The recording clips (too loud). Record again a bit quieter.'; }
+    else if (snr !== null && snr < 15) { verdict = 'poor'; advice = 'Background noise is high. Try a quieter room or closer mic.'; }
+    else if (dur > 15) { verdict = 'ok'; advice = 'Longer than needed. Trim to the clearest 3–10 seconds.'; }
+    else if (snr !== null && snr < 25) { verdict = 'ok'; advice = 'Some background noise. Usable, but cleaner is better.'; }
+    return { durationSec: dur, sampleRate: buf.sampleRate, snrDb: snr, peakDb: peak > 0 ? Math.round(20 * Math.log10(peak)) : -100, clipped, verdict, advice };
+  } finally { void ctx.close(); }
+}
+
+/** Cuts a clip to [start, end] seconds and returns a WAV. */
+export async function trimAudio(blob: Blob, start: number, end: number): Promise<{ wav: Blob; durationSec: number }> {
+  const ctx = new AudioContext();
+  try {
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const a = Math.max(0, Math.floor(start * buf.sampleRate)), b = Math.min(buf.length, Math.floor(end * buf.sampleRate));
+    const out = ctx.createBuffer(buf.numberOfChannels, Math.max(1, b - a), buf.sampleRate);
+    for (let c = 0; c < buf.numberOfChannels; c++) out.copyToChannel(buf.getChannelData(c).slice(a, b), c);
+    return { wav: encodeWav(out), durationSec: out.duration };
+  } finally { void ctx.close(); }
+}
+
+/** Records what the PC is playing. The system shows its own picker; choose a screen or tab and tick “share audio”. */
+export class SystemAudioRecorder {
+  private stream: MediaStream | null = null;
+  private rec: MediaRecorder | null = null;
+  private chunks: Blob[] = [];
+  private startedAt = 0;
+  private timer = 0;
+  constructor(private onTick?: (elapsedSec: number) => void) {}
+
+  async start() {
+    const md = navigator.mediaDevices as MediaDevices & { getDisplayMedia?: (c: unknown) => Promise<MediaStream> };
+    if (!md.getDisplayMedia) throw new Error('This window can’t capture system audio. Record with the microphone or upload a file instead.');
+    const s = await md.getDisplayMedia({ audio: true, video: true });
+    const audio = s.getAudioTracks();
+    if (!audio.length) { s.getTracks().forEach((t) => t.stop()); throw new Error('No audio was shared. Pick a screen or tab and tick “Share audio” in the picker.'); }
+    s.getVideoTracks().forEach((t) => t.stop());
+    this.stream = new MediaStream(audio);
+    this.rec = new MediaRecorder(this.stream);
+    this.chunks = [];
+    this.rec.ondataavailable = (e) => { if (e.data.size) this.chunks.push(e.data); };
+    this.rec.start();
+    this.startedAt = Date.now();
+    this.timer = window.setInterval(() => this.onTick?.((Date.now() - this.startedAt) / 1000), 200);
+  }
+
+  async stop(): Promise<RecordingResult> {
+    const rec = this.rec!;
+    const done = new Promise<void>((r) => { rec.onstop = () => r(); });
+    rec.stop(); await done;
+    clearInterval(this.timer);
+    this.stream?.getTracks().forEach((t) => t.stop());
+    const wav = await toWav(new Blob(this.chunks, { type: rec.mimeType }));
+    return { wav, durationSec: (Date.now() - this.startedAt) / 1000 };
+  }
+
+  cancel() { try { this.rec?.stop(); } catch { /* already stopped */ } clearInterval(this.timer); this.stream?.getTracks().forEach((t) => t.stop()); }
+}

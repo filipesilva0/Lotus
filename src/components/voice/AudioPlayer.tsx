@@ -19,12 +19,14 @@ export const AudioPlayer: React.FC<{
   const [duration, setDuration] = useState(0);
   const [pos, setPos] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [rate, setRate] = useState(1);
 
   useEffect(() => {
     setPeaks([]); setPos(0); setPlaying(false);
     if (!src) return;
     const a = new Audio(src);
     audioRef.current = a;
+    a.playbackRate = rate; a.preservesPitch = true;
     let raf = 0;
     const tick = () => { setPos(a.currentTime); raf = requestAnimationFrame(tick); };
     a.onloadedmetadata = () => setDuration(isFinite(a.duration) ? a.duration : 0);
@@ -66,6 +68,8 @@ export const AudioPlayer: React.FC<{
       <span className="text-xs tabular-nums text-[var(--color-text-muted)] w-[74px] text-right">
         {fmtDuration(pos)} / {fmtDuration(duration)}
       </span>
+      <button type="button" onClick={() => { const r = [1, 1.25, 1.5, 2, 0.75][([1, 1.25, 1.5, 2, 0.75].indexOf(rate) + 1) % 5]; setRate(r); if (audioRef.current) audioRef.current.playbackRate = r; }}
+        aria-label={`Playback speed ${rate}×. Click to change`} className="h-6 px-1.5 rounded-[6px] text-[11px] font-medium tabular-nums bg-black/5 dark:bg-white/10 hover:bg-black/10">{rate}×</button>
       {onDownload && <IconBtn label="Save as WAV" onClick={onDownload}><Download className="w-4 h-4" /></IconBtn>}
     </div>
   );

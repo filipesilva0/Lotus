@@ -1,329 +1,353 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Sparkles,
-  Download,
-  Copy,
-  Check,
-  RefreshCw,
-  Sliders,
-  ChevronDown,
-  ImageIcon,
-  Square,
-} from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, PanelRight, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
-import { PillSlider } from '../common/PillSlider';
-import { Banner, Btn, Empty } from '../common/ui';
+import { ChatFolder } from '../../types/lotus';
+import { DEFAULT_PARAMS, ImageParams, useGallery } from '../../hooks/useGallery';
+import { comfy, ComfyStats, dimensionsFor } from '../../services/comfyService';
 import { engineUrl } from '../../services/engineConfig';
+import { usePersisted, uid } from '../../lib/persist';
+import { ToolbarContent } from '../common/ToolbarSlot';
+import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
+import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../common/Pane';
+import { ImageSidebar } from '../images/ImageSidebar';
+import { MaskEditor } from '../images/MaskEditor';
 
-interface ImageWorkspaceProps {
-  images: GeneratedImage[];
-  onGenerate: (params: {
-    prompt: string;
-    negativePrompt?: string;
-    steps: number;
-    cfg: number;
-    checkpoint: string;
-    aspectRatio: string;
-  }) => void;
-  isGenerating: boolean;
-  checkpoints: string[];
-  comfyUp: boolean | null;
-  error: string | null;
-  elapsedSec: number;
-  onCancel: () => void;
-  onOpenEngines: () => void;
-}
+const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
+interface Style { id: string; name: string; prompt: string; negative?: string }
+interface Props { comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void }
 
-export const ImageWorkspace: React.FC<ImageWorkspaceProps> = ({
-  images,
-  onGenerate,
-  isGenerating,
-  checkpoints,
-  comfyUp,
-  error,
-  elapsedSec,
-  onCancel,
-  onOpenEngines,
-}) => {
+const SLASH = [
+  { name: 'ar', args: '<16:9 | 1024x768>', help: 'Aspect ratio or size' },
+  { name: 'seed', args: '<number|random>', help: 'Lock or unlock the seed' },
+  { name: 'steps', args: '<n>', help: 'Sampling steps' },
+  { name: 'cfg', args: '<n>', help: 'Guidance scale' },
+  { name: 'count', args: '<1|2|4|8>', help: 'Images per run' },
+  { name: 'neg', args: '<text>', help: 'Negative prompt' },
+];
+
+export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEngines }) => {
+  const g = useGallery(comfyUp);
+  const [params, setParams] = usePersisted<ImageParams>('lotus.image.params.v1', DEFAULT_PARAMS);
+  const [folders, setFolders] = usePersisted<ChatFolder[]>('lotus.imgfolders.v1', []);
+  const [styles, setStyles] = usePersisted<Style[]>('lotus.styles.v1', []);
+  const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.image.inspector.v1', true);
+  const [tab, setTab] = usePersisted<'params' | 'styles' | 'details'>('lotus.image.tab.v1', 'params');
   const [prompt, setPrompt] = useState('');
-  const [negativePrompt, setNegativePrompt] = useState('lowres, blurry, distorted, text, watermark');
-  const [steps, setSteps] = useState(28);
-  const [cfg, setCfg] = useState(7.0);
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState(() => localStorage.getItem('lotus.image.checkpoint') || '');
-  const [aspectRatio, setAspectRatio] = useState('1:1');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeImage, setActiveImage] = useState<GeneratedImage | undefined>(images[0]);
+  const [ref, setRef] = useState<{ blob: Blob; url: string; name: string } | null>(null);
+  const [drag, setDrag] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [maskOpen, setMaskOpen] = useState(false);
+  const [sel, setSel] = useState(0);
+  const [styleName, setStyleName] = useState('');
+  const [stats, setStats] = useState<ComfyStats | null>(null);
+  const [lists, setLists] = useState<{ samplers: string[]; schedulers: string[] }>({ samplers: [], schedulers: [] });
+  const set = (p: Partial<ImageParams>) => setParams((x) => ({ ...x, ...p }));
 
-  // The newest generation becomes the one on show.
-  useEffect(() => { setActiveImage(images[0]); }, [images[0]?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Default to the first installed checkpoint (or the remembered one if it still exists).
+  useEffect(() => { if (checkpoints.length && !checkpoints.includes(params.checkpoint)) set({ checkpoint: checkpoints[0] }); }, [checkpoints]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!comfyUp) { setStats(null); return; } void comfy.samplers().then(setLists); }, [comfyUp]);
   useEffect(() => {
-    if (checkpoints.length && !checkpoints.includes(selectedCheckpoint)) setSelectedCheckpoint(checkpoints[0]);
-  }, [checkpoints]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!comfyUp) return;
+    let off = false;
+    const tick = () => comfy.stats().then((s) => { if (!off) setStats(s); }).catch(() => undefined);
+    void tick(); const t = setInterval(tick, 4000);
+    return () => { off = true; clearInterval(t); };
+  }, [comfyUp]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim() || isGenerating || !selectedCheckpoint) return;
-    localStorage.setItem('lotus.image.checkpoint', selectedCheckpoint);
-    onGenerate({
-      prompt,
-      negativePrompt,
-      steps,
-      cfg,
-      checkpoint: selectedCheckpoint,
-      aspectRatio,
-    });
+  const cur = g.current;
+  const dims = useMemo(() => dimensionsFor(params.aspect, params.checkpoint), [params.aspect, params.checkpoint]);
+  const vramUsed = stats && stats.vramTotalGb ? 1 - stats.vramFreeGb / stats.vramTotalGb : 0;
+
+  // ── Prompt deck: / commands and @Style ────────────────────────────────────
+  const slashQ = /^\/(\w*)$/.exec(prompt)?.[1];
+  const atQ = /(?:^|\s)@([\w-]*)$/.exec(prompt)?.[1];
+  const slashItems = slashQ === undefined ? [] : SLASH.filter((c) => c.name.startsWith(slashQ.toLowerCase()));
+  const atItems = atQ === undefined ? [] : styles.filter((s) => s.name.toLowerCase().replace(/\s+/g, '-').includes(atQ.toLowerCase()));
+  const menu = slashItems.length ? 'slash' : atItems.length ? 'at' : null;
+  useEffect(() => setSel(0), [menu, slashQ, atQ]);
+  const handle = (s: Style) => s.name.toLowerCase().replace(/\s+/g, '-');
+
+  const runCommand = (name: string, arg: string): string => {
+    switch (name) {
+      case 'ar': { const ok = /^\d+:\d+$/.test(arg) || /^\d{2,5}\s*[x×]\s*\d{2,5}$/.test(arg); if (!ok) return 'Use a ratio like 16:9 or a size like 1024x768.'; set({ aspect: arg.replace(/\s+/g, '') }); return `Canvas ${arg}`; }
+      case 'seed': if (arg === 'random' || arg === 'off') { set({ seed: null }); return 'Seed unlocked.'; } else { const v = parseInt(arg, 10); if (!(v >= 0)) return 'Use a whole number, or “random”.'; set({ seed: v }); return `Seed ${v}`; }
+      case 'steps': { const v = parseInt(arg, 10); if (!(v >= 1 && v <= 150)) return 'Steps: 1–150.'; set({ steps: v }); return `Steps ${v}`; }
+      case 'cfg': { const v = parseFloat(arg); if (!(v >= 0 && v <= 30)) return 'CFG: 0–30.'; set({ cfg: v }); return `CFG ${v}`; }
+      case 'count': { const v = parseInt(arg, 10); if (![1, 2, 4, 8].includes(v)) return 'Count: 1, 2, 4 or 8.'; set({ count: v }); return `${v} per run`; }
+      case 'neg': set({ negative: arg }); return 'Negative prompt updated.';
+    }
+    return '';
   };
 
-  const handleCopyPrompt = (p: string, id: string) => {
-    navigator.clipboard.writeText(p);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const expand = (text: string) => {
+    let p = text, neg = params.negative;
+    for (const s of styles) { const tag = `@${handle(s)}`; if (p.includes(tag)) { p = p.replace(tag, s.prompt); if (s.negative) neg = `${neg}, ${s.negative}`; } }
+    return { p: p.replace(/\s{2,}/g, ' ').trim(), neg };
   };
+
+  const go = () => {
+    const t = prompt.trim();
+    const cmd = /^\/(\w+)\s*(.*)$/s.exec(t);
+    if (cmd && SLASH.some((c) => c.name === cmd[1])) { setNotice(runCommand(cmd[1], cmd[2].trim())); setPrompt(''); return; }
+    if (!t || g.busy || !params.checkpoint) return;
+    setNotice(null);
+    const { p, neg } = expand(t);
+    void g.generate(p, { ...params, negative: neg }, ref?.blob);
+  };
+
+  const pick = (i: number) => {
+    if (menu === 'slash') setPrompt(`/${slashItems[i].name} `);
+    else if (menu === 'at') setPrompt((t) => t.replace(/@[\w-]*$/, `@${handle(atItems[i])} `));
+  };
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (menu) {
+      const n = menu === 'slash' ? slashItems.length : atItems.length;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => (s + 1) % n); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => (s - 1 + n) % n); return; }
+      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); pick(sel); return; }
+      if (e.key === 'Escape') { setPrompt((t) => t.replace(/[/@][\w-]*$/, '')); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); }
+  };
+
+  const takeRef = (f?: File | null) => {
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { setNotice('A reference has to be an image.'); return; }
+    setRef({ blob: f, url: URL.createObjectURL(f), name: f.name });
+  };
+
+  const copyPrompt = () => { if (!cur) return; void navigator.clipboard.writeText(cur.prompt); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const download = () => { if (!cur) return; const a = document.createElement('a'); a.href = cur.url; a.download = `lotus-${cur.seed}-${cur.id}.png`; a.click(); };
+  const useAsReference = () => { if (cur?.blob) setRef({ blob: cur.blob, url: cur.url, name: 'Current image' }); };
+  const reuse = (im: GeneratedImage) => { setPrompt(im.prompt); set({ negative: im.negativePrompt ?? params.negative, steps: im.steps, cfg: im.cfg, seed: im.seed, checkpoint: im.checkpoint, ...(im.sampler ? { sampler: im.sampler } : {}) }); };
+
+  const actionBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-[7px] text-[12px] font-medium text-white hover:bg-white/20 disabled:opacity-40';
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] overflow-hidden select-none">
-      {/* Parameters Panel */}
-      <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r border-[var(--color-border-subtle)] p-5 flex flex-col justify-between bg-[var(--color-bg-sidebar)] overflow-y-auto">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${comfyUp ? 'bg-[var(--c-green)]' : comfyUp === null ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]'}`} />
-              <h3 className="text-xs font-semibold text-[var(--color-text-main)] uppercase tracking-wider">
-                {comfyUp ? 'ComfyUI running' : comfyUp === null ? 'Connecting…' : 'ComfyUI stopped'}
-              </h3>
+    <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
+      <ToolbarContent>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Popover trigger={(_o, t) => (
+            <button type="button" onClick={t} aria-haspopup="menu" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)] max-w-[300px]">
+              <ImageIcon className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span className="truncate">{params.checkpoint || (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+            </button>)}>
+            {(close) => (<>
+              {!checkpoints.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">{comfyUp ? 'No checkpoints found in ComfyUI’s models folder.' : 'Start ComfyUI to list checkpoints.'}</p>}
+              {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate">{c}</span></MenuItem>)}
+            </>)}
+          </Popover>
+          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={stats ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : 'Start ComfyUI to see video memory'}>
+            <div className="flex-1"><Gauge value={vramUsed} label="Video memory in use" /></div>
+            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{stats && stats.vramTotalGb ? `VRAM ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)}/${stats.vramTotalGb.toFixed(0)} GB` : 'VRAM —'}</span>
+          </div>
+          <div className="flex-1" />
+          <IconBtn label={showInspector ? 'Hide inspector' : 'Show inspector'} active={showInspector} onClick={() => setShowInspector((v) => !v)}><PanelRight className="w-4 h-4" /></IconBtn>
+        </div>
+      </ToolbarContent>
+
+      <ImageSidebar sessions={g.sessions} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={() => { g.newSession(); setPrompt(''); set({ seed: null }); setRef(null); }} onDelete={g.remove} onPatch={g.patch} />
+
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        {comfyUp === false && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>ComfyUI isn't running at {engineUrl('comfyui')}. Start it to generate images.</Banner></div>}
+        {g.error && <div className="px-6 pt-3"><Banner tone="error" action={<IconBtn label="Dismiss" onClick={() => g.setError(null)}><X className="w-3.5 h-3.5" /></IconBtn>}>{g.error}</Banner></div>}
+
+        {/* Canvas */}
+        <div className="flex-1 min-h-0 p-5 flex flex-col items-center justify-center">
+          {!cur && !g.busy && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body="Describe an image below and press Generate. ComfyUI makes it on your own GPU." className="flex-1" />}
+          {(cur || g.busy) && (
+            <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
+              {cur && <img src={cur.url} alt={cur.prompt} className={cx('max-w-full max-h-full object-contain rounded-[12px] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', g.busy && 'opacity-40 blur-[1px]')} />}
+              {!cur && <div className="rounded-[12px] bg-[var(--hover)] shadow-[inset_0_0_0_0.5px_var(--sep)]" style={{ aspectRatio: `${dims.width}/${dims.height}`, height: '60%', maxWidth: '100%' }} />}
+
+              {g.busy && (
+                <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
+                  <div className="flex items-center justify-between text-[13px] mb-2"><span className="font-medium">{g.label}…</span><span className="tabular-nums text-[var(--color-text-muted)]">{Math.floor(g.elapsed)}s</span></div>
+                  <Progress label="Generating" />
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[11px] text-[var(--color-text-muted)]">
+                    <div className="flex justify-between"><dt>Size</dt><dd className="tabular-nums">{g.info ? `${g.info.width}×${g.info.height}` : '—'}</dd></div>
+                    <div className="flex justify-between"><dt>Steps</dt><dd className="tabular-nums">{g.info?.steps ?? '—'}</dd></div>
+                    <div className="flex justify-between col-span-2"><dt>Checkpoint</dt><dd className="truncate ml-3">{g.info?.checkpoint ?? '—'}</dd></div>
+                  </dl>
+                  <Btn size="sm" className="mt-2.5 w-full" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={g.cancel}>Cancel</Btn>
+                  <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">ComfyUI doesn't report step progress over the connection Lotus uses, so this shows elapsed time.</p>
+                </div>
+              )}
+
+              {cur && !g.busy && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-[10px] bg-black/65 backdrop-blur-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" role="toolbar" aria-label="Image actions">
+                  <button type="button" className={actionBtn} onClick={download}><Download className="w-3.5 h-3.5" />Download</button>
+                  <Popover up={false} trigger={(_o, t) => <button type="button" className={actionBtn} onClick={t} disabled={!cur.blob}><ZoomIn className="w-3.5 h-3.5" />Upscale</button>}>
+                    {(close) => (<><MenuItem onClick={() => { close(); void g.upscale(cur, 2); }}>×2 (Lanczos)</MenuItem><MenuItem onClick={() => { close(); void g.upscale(cur, 4); }}>×4 (Lanczos)</MenuItem></>)}
+                  </Popover>
+                  <button type="button" className={actionBtn} onClick={() => void g.variation(cur, params)} disabled={!comfyUp || !cur.blob}><Shuffle className="w-3.5 h-3.5" />Variations</button>
+                  <Popover trigger={(_o, t) => <button type="button" className={actionBtn} onClick={t} disabled={!comfyUp || !cur.blob}><Paintbrush className="w-3.5 h-3.5" />Edit</button>}>
+                    {(close) => {
+                      const [w, h] = cur.dimensions.split('×').map(Number);
+                      const out = (pad: { left: number; top: number; right: number; bottom: number }) => { close(); void g.outpaint(cur, pad, prompt.trim() || cur.prompt, params); };
+                      return (<>
+                        <MenuItem onClick={() => { close(); setMaskOpen(true); }}>Inpaint: paint an area…</MenuItem>
+                        <p className="px-2.5 pt-1.5 text-[11px] text-[var(--color-text-muted)]">Outpaint: extend by 25%</p>
+                        <MenuItem onClick={() => out({ left: w / 4, top: 0, right: 0, bottom: 0 })}>Left</MenuItem>
+                        <MenuItem onClick={() => out({ left: 0, top: 0, right: w / 4, bottom: 0 })}>Right</MenuItem>
+                        <MenuItem onClick={() => out({ left: 0, top: h / 4, right: 0, bottom: 0 })}>Top</MenuItem>
+                        <MenuItem onClick={() => out({ left: 0, top: 0, right: 0, bottom: h / 4 })}>Bottom</MenuItem>
+                        <MenuItem onClick={() => out({ left: w / 8, top: h / 8, right: w / 8, bottom: h / 8 })}>All sides</MenuItem>
+                      </>);
+                    }}
+                  </Popover>
+                  <button type="button" className={actionBtn} onClick={copyPrompt}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}Copy prompt</button>
+                </div>
+              )}
+
+              {g.active.versions.length > 1 && !g.busy && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-1 h-8 rounded-[10px] bg-black/65 text-white text-[12px] tabular-nums backdrop-blur-md">
+                  <button type="button" aria-label="Previous version" disabled={g.active.index === 0} onClick={() => g.stepVersion(-1)} className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] hover:bg-white/20 disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
+                  {g.active.index + 1} / {g.active.versions.length}
+                  <button type="button" aria-label="Next version" disabled={g.active.index === g.active.versions.length - 1} onClick={() => g.stepVersion(1)} className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] hover:bg-white/20 disabled:opacity-40"><ChevronRight className="w-4 h-4" /></button>
+                </div>
+              )}
             </div>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-[6px] bg-[var(--color-badge-bg)] text-[var(--color-badge-text)]">
-              {engineUrl('comfyui').replace('http://', '')}
-            </span>
-          </div>
-
-          {/* Model Checkpoint Picker */}
-          <div>
-            <label className="text-xs font-semibold text-[var(--color-text-muted)] block mb-1.5">
-              Checkpoint
-            </label>
-            <div className="relative">
-              <select
-                value={selectedCheckpoint}
-                onChange={(e) => setSelectedCheckpoint(e.target.value)}
-                className="w-full h-9 bg-[var(--color-bg-panel)] rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] appearance-none cursor-pointer"
-              >
-                {checkpoints.length === 0 && <option value="">{comfyUp ? 'No checkpoints found' : 'Start ComfyUI to list checkpoints'}</option>}
-                {checkpoints.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-[var(--color-text-muted)] absolute right-3 top-3 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Prompt Area */}
-          <div>
-            <label className="text-xs font-semibold text-[var(--color-text-muted)] block mb-1.5">
-              Positive Prompt
-            </label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={3}
-              placeholder="Describe the image you want"
-              className="w-full p-3 bg-[var(--color-bg-panel)] rounded-[10px] text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-vibrant)] resize-none leading-relaxed"
-            />
-          </div>
-
-          {/* Aspect Ratio Pills */}
-          <div>
-            <label className="text-xs font-semibold text-[var(--color-text-muted)] block mb-1.5">
-              Aspect Ratio
-            </label>
-            <div className="grid grid-cols-5 gap-1.5">
-              {['1:1', '16:9', '9:16', '4:3', '3:4'].map((ratio) => (
-                <button
-                  key={ratio}
-                  type="button"
-                  onClick={() => setAspectRatio(ratio)}
-                  className={`py-1.5 text-xs font-semibold rounded-[10px] transition-all ${
-                    aspectRatio === ratio
-                      ? 'bg-[var(--color-accent-vibrant)] text-white '
-                      : 'bg-[var(--color-bg-panel)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]'
-                  }`}
-                >
-                  {ratio}
+          )}
+          {g.active.versions.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto max-w-full py-1" role="list" aria-label="Versions">
+              {g.active.versions.map((v, i) => (
+                <button key={v.id} type="button" role="listitem" aria-label={`Version ${i + 1}`} aria-current={i === g.active.index} onClick={() => g.selectVersion(i)}
+                  className={cx('w-12 h-12 rounded-[8px] overflow-hidden shrink-0', i === g.active.index ? 'shadow-[0_0_0_2px_var(--color-accent-fill)]' : 'shadow-[0_0_0_0.5px_var(--sep)] opacity-80 hover:opacity-100')}>
+                  <img src={v.url} alt="" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Advanced toggle */}
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] transition-colors"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>{showAdvanced ? 'Hide Advanced' : 'Show Advanced'}</span>
-            </button>
-          </div>
-
-          {showAdvanced && (
-            <div className="space-y-3 pt-2 border-t border-[var(--color-border-subtle)]">
-              <div>
-                <label className="text-xs font-semibold text-[var(--color-text-muted)] block mb-1.5">
-                  Negative Prompt
-                </label>
-                <textarea
-                  value={negativePrompt}
-                  onChange={(e) => setNegativePrompt(e.target.value)}
-                  rows={2}
-                  className="w-full p-2.5 bg-[var(--color-bg-panel)] rounded-[10px] text-xs text-[var(--color-text-main)] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] focus:outline-none resize-none"
-                />
-              </div>
-
-              {/* Steps Slider */}
-              <div>
-                <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1">
-                  <span>Inference Steps</span>
-                  <span className="text-[var(--color-accent-vibrant)] font-semibold tabular-nums">{steps}</span>
-                </div>
-                <PillSlider
-                  value={steps}
-                  onChange={setSteps}
-                  min={4}
-                  max={50}
-                  unit=" steps"
-                />
-              </div>
-
-              {/* CFG Slider */}
-              <div>
-                <div className="flex justify-between text-xs font-semibold text-[var(--color-text-muted)] mb-1">
-                  <span>CFG Guidance</span>
-                  <span className="text-[var(--color-accent-vibrant)] font-semibold tabular-nums">{cfg.toFixed(1)}</span>
-                </div>
-                <PillSlider
-                  value={Math.round(cfg * 10)}
-                  onChange={(val) => setCfg(val / 10)}
-                  min={10}
-                  max={150}
-                  unit=""
-                />
-              </div>
-            </div>
           )}
+        </div>
 
-          {/* Submit Action Button */}
-          <button
-            type="submit"
-            disabled={isGenerating || !prompt.trim() || !selectedCheckpoint || !comfyUp}
-            className="w-full h-11 rounded-[6px] bg-[var(--color-accent-vibrant)] text-white font-semibold text-xs tracking-wider flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.99] disabled:opacity-40 transition-all "
-          >
-            {isGenerating ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>GENERATING · {Math.floor(elapsedSec)}s</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>GENERATE IMAGE</span>
-              </>
+        {/* Prompt deck */}
+        <div className="px-6 pb-4 shrink-0">
+          <div className="max-w-[820px] mx-auto relative">
+            {menu && (
+              <div role="listbox" className="absolute bottom-full mb-2 left-0 w-[340px] max-h-56 overflow-y-auto p-1 rounded-[10px] material-overlay z-20">
+                {menu === 'slash' ? slashItems.map((c, i) => (
+                  <button key={c.name} type="button" role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); pick(i); }} className={cx('w-full flex items-baseline gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px]', i === sel && 'bg-[var(--color-accent-fill)] text-white')}>
+                    <span className="font-medium">/{c.name}</span><span className="opacity-70 text-[12px]">{c.args}</span><span className="ml-auto text-[12px] opacity-70">{c.help}</span>
+                  </button>
+                )) : atItems.map((s, i) => (
+                  <button key={s.id} type="button" role="option" aria-selected={i === sel} onMouseDown={(e) => { e.preventDefault(); pick(i); }} className={cx('w-full flex items-baseline gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px]', i === sel && 'bg-[var(--color-accent-fill)] text-white')}>
+                    <span className="font-medium">@{handle(s)}</span><span className="ml-auto text-[12px] opacity-70 truncate">{s.prompt}</span>
+                  </button>
+                ))}
+              </div>
             )}
-          </button>
-        </form>
-
-        <div className="pt-4 space-y-2">
-          {isGenerating && (
-            <Btn variant="secondary" className="w-full" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={onCancel}>Cancel</Btn>
-          )}
-          {error && <Banner tone="error">{error}</Banner>}
-          {comfyUp === false && (
-            <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>ComfyUI isn't running. Start it to generate images.</Banner>
-          )}
-        </div>
-      </div>
-
-      {/* Main Preview & Gallery */}
-      <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-[var(--color-bg-panel)]">
-        {!activeImage && !isGenerating && (
-          <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet"
-            body="Write a prompt on the left and press Generate. Images are made by ComfyUI on your own GPU." className="flex-1" />
-        )}
-        {/* Large Active Image Showcase */}
-        {activeImage && (
-          <div className="relative rounded-[22px] overflow-hidden bg-[var(--color-accent-pastel)] dark:bg-[#202228] border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] mb-6 flex items-center justify-center max-h-[380px]">
-            <img
-              src={activeImage.url}
-              alt={activeImage.prompt}
-              className="w-full h-full object-contain max-h-[380px]"
-            />
-
-            {/* Floating Info Overlay */}
-            <div className="absolute bottom-3 left-3 right-3 bg-white/95 dark:bg-[#18191E]/95 backdrop-blur-md p-3 rounded-[10px] flex items-center justify-between  border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]">
-              <div className="min-w-0 pr-3">
-                <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">
-                  {activeImage.prompt}
-                </p>
-                <p className="text-xs text-[var(--color-text-muted)] font-medium mt-0.5">
-                  {activeImage.dimensions} · Seed: {activeImage.seed} · Steps: {activeImage.steps} · {activeImage.checkpoint}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleCopyPrompt(activeImage.prompt, activeImage.id)}
-                  className="p-2 rounded-[10px] hover:bg-[var(--color-accent-pastel)] text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] transition-colors"
-                  title="Copy Prompt"
-                >
-                  {copiedId === activeImage.id ? (
-                    <Check className="w-4 h-4 text-[var(--c-green)]" />
-                  ) : (
-                    <Copy className="w-4 h-4" />
-                  )}
-                </button>
-                <a
-                  href={activeImage.url}
-                  download={`lotus-${activeImage.id}.png`}
-                  className="p-2 rounded-[10px] bg-[var(--color-accent-vibrant)] text-white hover:brightness-110 transition-all "
-                  title="Download Image"
-                >
-                  <Download className="w-4 h-4" />
-                </a>
+            {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
+            <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
+              className={cx('rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', drag && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
+              {(ref || drag) && (
+                <div className="flex items-center gap-2 p-2.5 pb-0">
+                  {ref ? (
+                    <span className="inline-flex items-center gap-2 h-10 pl-1 pr-1.5 rounded-[8px] bg-[var(--hover)] text-[12px]">
+                      <img src={ref.url} alt="" className="w-8 h-8 rounded-[5px] object-cover" /><span className="max-w-[140px] truncate">Reference: {ref.name}</span>
+                      <span className="text-[var(--color-text-muted)]">strength {Math.round(params.denoise * 100)}%</span>
+                      <IconBtn label="Remove reference" className="!w-5 !h-5" onClick={() => setRef(null)}><X className="w-3 h-3" /></IconBtn>
+                    </span>
+                  ) : <p className="text-[12px] text-[var(--color-text-muted)] py-2">Drop an image to use it as a reference (image-to-image).</p>}
+                </div>
+              )}
+              <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKey} rows={2} aria-label="Prompt"
+                placeholder="Describe the image… (/ for settings, @ for saved styles)"
+                className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+              <div className="flex items-center gap-1 px-2 pb-2">
+                <label className="w-7 h-7 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] cursor-default" title="Add a reference image">
+                  <input type="file" accept="image/*" className="sr-only" aria-label="Add a reference image" onChange={(e) => { takeRef(e.target.files?.[0]); e.target.value = ''; }} /><Layers className="w-4 h-4" />
+                </label>
+                {cur?.blob && <IconBtn label="Use the current image as the reference" onClick={useAsReference}><MoveDiagonal className="w-4 h-4" /></IconBtn>}
+                <span className="ml-1 text-[11px] text-[var(--color-text-muted)] tabular-nums">{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</span>
+                <div className="flex-1" />
+                {g.busy ? <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={g.cancel}>Stop</Btn>
+                  : <Btn variant="primary" disabled={!prompt.trim() || !params.checkpoint || !comfyUp} onClick={go} icon={<ArrowUp className="w-3.5 h-3.5" />}>Generate</Btn>}
               </div>
             </div>
           </div>
-        )}
-
-        {/* Generated Images Grid */}
-        <div>
-          <h4 className="text-xs font-semibold text-[var(--color-text-main)] uppercase tracking-wider mb-3">
-            Output History & Cache
-          </h4>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {images.map((img) => (
-              <div
-                key={img.id}
-                onClick={() => setActiveImage(img)}
-                className={`relative group rounded-[10px] overflow-hidden cursor-pointer border-2 transition-all aspect-square bg-[var(--color-bg-sidebar)] ${
-                  activeImage?.id === img.id
-                    ? 'border-[var(--color-accent-vibrant)] shadow-sm scale-102'
-                    : 'border-transparent hover:border-[var(--color-accent-pastel-border)]'
-                }`}
-              >
-                <img
-                  src={img.url}
-                  alt={img.prompt}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 text-xs text-white">
-                  <span className="truncate">{img.prompt}</span>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
+
+      {showInspector && (
+        <InspectorPane label="Generation inspector">
+          <div className="shrink-0 p-2 border-b border-[var(--sep)]">
+            <div role="tablist" aria-label="Inspector" className="grid grid-cols-3 gap-0.5 p-0.5 rounded-[8px] bg-[var(--hover)]">
+              {([['params', 'Parameters'], ['styles', 'Styles'], ['details', 'Details']] as const).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cx('h-7 rounded-[6px] text-[12px] font-medium', tab === id ? 'bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_1px_2px_rgba(0,0,0,.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]')}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {tab === 'params' && (<>
+              <Section title="Canvas">
+                <div className="grid grid-cols-4 gap-1.5 mb-2">
+                  {ASPECTS.map((a) => <button key={a} type="button" aria-pressed={params.aspect === a} onClick={() => set({ aspect: a })} className={cx('h-7 rounded-[6px] text-[12px] font-medium', params.aspect === a ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{a}</button>)}
+                  <button type="button" aria-pressed={!ASPECTS.includes(params.aspect)} onClick={() => set({ aspect: '768x1024' })} className={cx('h-7 rounded-[6px] text-[12px] font-medium', !ASPECTS.includes(params.aspect) ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>Custom</button>
+                </div>
+                {!ASPECTS.includes(params.aspect) && <TextInput aria-label="Custom size, for example 768x1024" value={params.aspect} onChange={(e) => set({ aspect: e.target.value })} placeholder="768x1024" />}
+                <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">{dims.width}×{dims.height} px (rounded to multiples of 64)</p>
+              </Section>
+              <Section title="Images per run">
+                <div className="grid grid-cols-4 gap-1.5">{[1, 2, 4, 8].map((n) => <button key={n} type="button" aria-pressed={params.count === n} onClick={() => set({ count: n })} className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums', params.count === n ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{n}</button>)}</div>
+              </Section>
+              <Section title="Negative prompt" hint="Things to leave out.">
+                <TextArea rows={2} value={params.negative} onChange={(e) => set({ negative: e.target.value })} aria-label="Negative prompt" />
+              </Section>
+              <Section title="Sampling">
+                <SliderField label="Guidance scale (CFG)" value={params.cfg} min={1} max={20} step={0.5} onChange={(v) => set({ cfg: v })} format={(v) => v.toFixed(1)} hint="How closely the image follows the prompt. FLUX models usually want 1–4." />
+                <SliderField label="Steps" value={params.steps} min={4} max={80} step={1} onChange={(v) => set({ steps: v })} />
+                <SliderField label="Reference strength" value={params.denoise} min={0.1} max={1} step={0.05} onChange={(v) => set({ denoise: v })} format={(v) => `${Math.round(v * 100)}%`} hint="With a reference image: higher changes more of it." />
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <label className="text-[12px]">Sampler<select aria-label="Sampler" value={params.sampler} onChange={(e) => set({ sampler: e.target.value })} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px]">
+                    {(lists.samplers.length ? lists.samplers : [params.sampler]).map((s) => <option key={s}>{s}</option>)}</select></label>
+                  <label className="text-[12px]">Scheduler<select aria-label="Scheduler" value={params.scheduler} onChange={(e) => set({ scheduler: e.target.value })} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px]">
+                    {(lists.schedulers.length ? lists.schedulers : [params.scheduler]).map((s) => <option key={s}>{s}</option>)}</select></label>
+                </div>
+              </Section>
+              <Section title="Seed">
+                <div className="flex items-center gap-1.5 text-[12px]">
+                  {params.seed === null ? <span className="text-[var(--color-text-muted)] flex-1">Random each run</span> : <div className="flex-1"><Stepper label="Seed" value={params.seed} min={0} max={2 ** 31 - 1} onChange={(v) => set({ seed: v })} /></div>}
+                  <IconBtn label="Lock a random seed" onClick={() => set({ seed: Math.floor(Math.random() * 2 ** 31) })}><Dices className="w-4 h-4" /></IconBtn>
+                  {params.seed !== null && <IconBtn label="Unlock seed" onClick={() => set({ seed: null })}><X className="w-4 h-4" /></IconBtn>}
+                </div>
+              </Section>
+            </>)}
+
+            {tab === 'styles' && (
+              <Section title="Saved styles" hint="Type @name in the prompt to insert a style's text (and its negative prompt).">
+                <div className="flex gap-1.5">
+                  <TextInput value={styleName} onChange={(e) => setStyleName(e.target.value)} placeholder="Style name" aria-label="Style name" />
+                  <Btn size="sm" disabled={!prompt.trim() || !styleName.trim()} onClick={() => { setStyles((s) => [...s, { id: uid('sty'), name: styleName.trim(), prompt: prompt.trim(), negative: undefined }]); setStyleName(''); }}>Save</Btn>
+                </div>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">Saves what is typed in the prompt box.</p>
+                <ul className="mt-3 space-y-1.5">
+                  {styles.map((s) => (
+                    <li key={s.id} className="flex items-start gap-2 p-2 rounded-[8px] bg-[var(--hover)]">
+                      <span className="flex-1 min-w-0"><span className="block text-[13px] font-medium">@{handle(s)}</span><span className="block text-[11px] text-[var(--color-text-muted)] line-clamp-2">{s.prompt}</span></span>
+                      <IconBtn label={`Delete style ${s.name}`} className="!w-6 !h-6" onClick={() => setStyles((l) => l.filter((x) => x.id !== s.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                    </li>
+                  ))}
+                  {!styles.length && <p className="text-[13px] text-[var(--color-text-muted)]">No styles yet. Write the prompt text you reuse, then save it here.</p>}
+                </ul>
+              </Section>
+            )}
+
+            {tab === 'details' && (cur ? (
+              <Section title="This image" action={<Btn size="sm" variant="ghost" onClick={() => reuse(cur)}>Reuse settings</Btn>}>
+                <p className="text-[12px] leading-snug mb-2">{cur.prompt}</p>
+                <KV k="Type" v={cur.kind ?? 'txt2img'} /><KV k="Size" v={cur.dimensions} /><KV k="Seed" v={cur.seed} /><KV k="Steps" v={cur.steps} /><KV k="CFG" v={cur.cfg} />
+                {cur.sampler && <KV k="Sampler" v={cur.sampler} />}{cur.denoise !== undefined && <KV k="Strength" v={`${Math.round(cur.denoise * 100)}%`} />}
+                <KV k="Checkpoint" v={cur.checkpoint} mono /><KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
+                {cur.negativePrompt && <KV k="Negative" v={cur.negativePrompt} />}
+                <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => g.removeVersion(g.active.id, cur.id)}>Delete this image</Btn>
+              </Section>
+            ) : <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Generate an image to see its details.</p>)}
+          </div>
+        </InspectorPane>
+      )}
+
+      {cur && <MaskEditor open={maskOpen} src={cur.url} onClose={() => setMaskOpen(false)} onDone={(png) => { setMaskOpen(false); void g.inpaint(cur, png, prompt.trim() || cur.prompt, params); }} />}
     </div>
   );
 };

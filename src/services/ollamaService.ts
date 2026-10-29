@@ -19,7 +19,15 @@ export interface ChatOptions {
   numCtx?: number;
   frequencyPenalty?: number;
   presencePenalty?: number;
+  topK?: number;
+  stop?: string[];
+  seed?: number;
+  numPredict?: number;
   signal?: AbortSignal;
+  /** Receives the exact JSON body sent (for the developer inspector). */
+  onRequest?: (body: unknown) => void;
+  /** Receives the final streamed chunk (token counts, durations). */
+  onFinal?: (chunk: any) => void;
   /** Called with reasoning tokens from "thinking" models; hidden by default. */
   onThinking?: (token: string) => void;
 }
@@ -165,25 +173,26 @@ export class OllamaService {
     opts: ChatOptions,
     onStats?: (s: ChatStats) => void,
   ): AsyncGenerator<string, void, unknown> {
+    const body = {
+      model: opts.model,
+      messages,
+      stream: true,
+      options: {
+        temperature: opts.temperature,
+        top_p: opts.topP,
+        top_k: opts.topK,
+        num_ctx: opts.numCtx,
+        frequency_penalty: opts.frequencyPenalty,
+        presence_penalty: opts.presencePenalty,
+        stop: opts.stop?.length ? opts.stop : undefined,
+        seed: opts.seed,
+        num_predict: opts.numPredict,
+      },
+    };
+    opts.onRequest?.(body);
     const res = await this.raw(
       '/api/chat',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: opts.signal,
-        body: JSON.stringify({
-          model: opts.model,
-          messages,
-          stream: true,
-          options: {
-            temperature: opts.temperature,
-            top_p: opts.topP,
-            num_ctx: opts.numCtx,
-            frequency_penalty: opts.frequencyPenalty,
-            presence_penalty: opts.presencePenalty,
-          },
-        }),
-      },
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: opts.signal, body: JSON.stringify(body) },
       30 * 60_000,
     );
 
@@ -204,6 +213,7 @@ export class OllamaService {
         });
         yield token;
       }
+      if (chunk.done) opts.onFinal?.(chunk);
       if (chunk.done && chunk.eval_count && chunk.eval_duration) {
         // Ollama reports exact generation speed on the final chunk.
         onStats?.({
@@ -213,6 +223,15 @@ export class OllamaService {
         });
       }
     }
+  }
+
+  /** Loads a model into memory (empty prompt) and keeps it there until unloaded or idle for `keepAlive`. */
+  async load(name: string, keepAlive: string | number = '30m') {
+    await this.raw('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, keep_alive: keepAlive }) }, 10 * 60_000);
+  }
+
+  async unload(name: string) {
+    await this.raw('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, keep_alive: 0 }) });
   }
 
   /** Non-streaming call that reports real token counts (used by Deep Research). */

@@ -108,3 +108,7 @@ Design layer rewritten; **not compiled, type-checked against React types, or vie
 - Whether the user has a Windows machine for manual testing.
 - The user's intended licence, audience, and hardware.
 - How Voicebox's Windows installer lays out `voicebox-server.exe`.
+
+
+## 8. Session 2 addendum: spec coverage pass
+Chat, Images, Models (new page) and Voice were rebuilt/extended to the four UI specs. See `SPEC_COVERAGE.md` for what is done, unverified, or deliberately omitted. **None of it has been built, tested or run**: the sandbox had no `node_modules`/network, only a loose type-check with shimmed externals. B2 partly resolved (`sendOnEnter`, `autoScroll`, `reasoningBlockMode` now work); B6 still open; B9 resolved for images (IndexedDB gallery). Existing test harnesses were not updated.

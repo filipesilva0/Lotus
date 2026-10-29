@@ -1,428 +1,123 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  Send,
-  Paperclip,
-  Mic,
-  MicOff,
-  Copy,
-  Check,
-  ChevronDown,
-  Sparkles,
-  Bot,
-  User,
-  Plus,
-  Trash2,
-  X,
-  Activity,
-  Square,
-  Search,
-} from 'lucide-react';
-import { ChatSession } from '../../types/lotus';
-import { voicebox } from '../../services/voicebox';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, EyeOff, PanelRight, Sparkles } from 'lucide-react';
+import { LotusSettings } from '../../types/lotus';
+import { useChat } from '../../hooks/useChat';
+import { ToolbarContent } from '../common/ToolbarSlot';
+import { Banner, Btn, Empty, Gauge, IconBtn } from '../common/ui';
+import { MenuItem, Popover } from '../common/Pane';
+import { ChatSidebar } from '../chat/ChatSidebar';
+import { ChatStream } from '../chat/ChatStream';
+import { Composer } from '../chat/Composer';
+import { ChatInspector, InspectorTab } from '../chat/ChatInspector';
+import { contextItemFromText, estimateTokens, contextTokens, TEXT_EXT } from '../../chat/helpers';
+import { usePersisted } from '../../lib/persist';
 import { engineUrl } from '../../services/engineConfig';
-import { MicRecorder, micErrorMessage } from '../../lib/audio';
 
 export interface ModelOption { id: string; name: string; tag: string }
 
-interface ChatWorkspaceProps {
-  sessions: ChatSession[];
-  activeSessionId: string;
-  onSelectSession: (id: string) => void;
-  onNewSession: () => void;
-  onSendMessage: (text: string, file?: File) => void;
-  onDeleteSession: (id: string) => void;
-  isStreaming: boolean;
-  selectedModel: string;
-  onSelectModel: (model: string) => void;
-  models: ModelOption[];
-  ollamaUp: boolean | null;
-  onStop: () => void;
-  onOpenEngines: () => void;
-  /** Text sent in from the island or the Dictate tab. `nonce` changes on every send. */
+interface Props {
+  chat: ReturnType<typeof useChat>;
+  settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void;
+  models: ModelOption[]; ollamaUp: boolean | null; onOpenModels: () => void;
   prefill?: { text: string; nonce: number } | null;
 }
 
-export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
-  sessions,
-  activeSessionId,
-  onSelectSession,
-  onNewSession,
-  onSendMessage,
-  onDeleteSession,
-  isStreaming,
-  selectedModel,
-  onSelectModel,
-  models,
-  ollamaUp,
-  onStop,
-  onOpenEngines,
-  prefill,
-}) => {
-  const [inputText, setInputText] = useState('');
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [micError, setMicError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const recorder = useRef<MicRecorder | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill }) => {
+  const { active: session } = chat;
+  const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.chat.inspector.v1', true);
+  const [tab, setTab] = usePersisted<InspectorTab>('lotus.chat.tab.v1', 'artifacts');
+  const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null);
 
-  useEffect(() => {
-    if (prefill?.text) setInputText((prev) => (prev ? `${prev} ${prefill.text}` : prefill.text));
-  }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => recorder.current?.cancel(), []);
+  const used = useMemo(() => {
+    if (session.usedTokens && !chat.isStreaming) return { n: session.usedTokens, exact: true };
+    const n = estimateTokens(settings.systemPrompt + session.messages.map((m) => m.content + (m.thinking ? '' : '')).join('')) + contextTokens(session.context);
+    return { n, exact: false };
+  }, [session, settings.systemPrompt, chat.isStreaming]);
+  const frac = used.n / Math.max(1, settings.contextWindow);
 
-  const activeSession =
-    sessions.find((s) => s.id === activeSessionId) || sessions[0];
-  const lastTps = [...(activeSession?.messages ?? [])].reverse().find((m) => m.role === 'assistant' && m.tokensPerSec)?.tokensPerSec ?? 0;
+  const mentions = [
+    ...(session.context ?? []).map((c) => ({ id: c.id, label: c.name, kind: 'file' as const })),
+    ...models.map((m) => ({ id: m.id, label: m.id, kind: 'model' as const })),
+  ];
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeSession?.messages, isStreaming]);
+  const onSend = async (text: string, files: File[]) => {
+    // @mentions: a model name switches the model for this message; a file name forces its chunks in.
+    let t = text, modelOverride: string | undefined; const forceFiles: string[] = [];
+    for (const m of mentions) {
+      const tag = `@${m.label}`;
+      if (t.includes(tag)) { t = t.replace(tag, '').replace(/\s{2,}/g, ' ').trim(); if (m.kind === 'model') modelOverride = m.id; else forceFiles.push(m.label); }
+    }
+    return chat.send(t, { files, modelOverride, forceFiles });
+  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setAttachedFile(file);
-      const url = URL.createObjectURL(file);
-      setFilePreview(url);
+  const onCommand = (name: string, arg: string): string | void => {
+    switch (name) {
+      case 'new': chat.newChat(); return;
+      case 'clear': chat.clearChat(); return;
+      case 'incognito': chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito })); return session.incognito ? 'Incognito off. This chat will be saved.' : 'Incognito on. This chat won’t be saved and creates no memories.';
+      case 'search': chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources })); return session.searchSources ? 'Source search off.' : 'Source search on: keywords go to OpenAlex, arXiv and PubMed.';
+      case 'model': { const m = models.find((x) => x.id.toLowerCase().includes(arg.toLowerCase())); if (!arg || !m) return `No installed model matches “${arg}”.`; onSettings({ selectedModel: m.id }); return `Model: ${m.id}`; }
+      case 'temp': { const v = parseFloat(arg); if (!(v >= 0 && v <= 2)) return 'Use a number from 0 to 2.'; onSettings({ temperature: v }); return `Temperature ${v}`; }
+      case 'seed': if (arg === 'off') { onSettings({ seed: null }); return 'Seed unlocked.'; } else { const v = parseInt(arg, 10); if (!Number.isFinite(v) || v < 0) return 'Use a whole number, or “off”.'; onSettings({ seed: v }); return `Seed locked to ${v}`; }
+      case 'system': if (!arg) return 'Add the new system prompt after /system.'; onSettings({ systemPrompt: arg }); return 'System prompt updated.';
+      case 'pin': chat.patchSession(session.id, (s) => ({ ...s, pinned: !s.pinned })); return;
     }
   };
 
-  const removeAttachment = () => {
-    setAttachedFile(null);
-    setFilePreview(null);
+  const mountFiles = async (files: File[]) => {
+    for (const f of files) if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') chat.addContext(contextItemFromText(f.name, await f.text()));
   };
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() && !attachedFile) return;
-    onSendMessage(inputText, attachedFile || undefined);
-    setInputText('');
-    removeAttachment();
-  };
-
-  // Dictation runs Whisper locally through Voicebox; no audio leaves this PC.
-  const toggleRecording = async () => {
-    setMicError(null);
-    if (isTranscribing) return;
-    if (!isRecording) {
-      try {
-        recorder.current = new MicRecorder();
-        await recorder.current.start();
-        setIsRecording(true);
-      } catch (e) {
-        setMicError(micErrorMessage(e));
-      }
-      return;
-    }
-    setIsRecording(false);
-    setIsTranscribing(true);
-    try {
-      const r = await recorder.current!.stop();
-      const t = await voicebox.transcribe(r.wav);
-      if (t.text.trim()) setInputText((prev) => (prev ? `${prev} ${t.text.trim()}` : t.text.trim()));
-      else setMicError('Heard nothing. Try again a little closer to the mic.');
-    } catch (e) {
-      setMicError((e as Error).message);
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const availableModels = models;
+  const offline = ollamaUp === false;
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-full min-h-[580px] bg-[var(--color-bg-panel)] overflow-hidden select-none">
-      {/* Session List Sidebar */}
-      <div className="w-full md:w-72 md:order-last border-t md:border-t-0 md:border-l border-[var(--sep)] p-4 flex flex-col justify-between shrink-0 bg-[var(--color-bg-panel)]">
-        <div>
-          <div className="flex items-center justify-between mb-3 px-1">
-            <span className="text-[15px] font-semibold text-[var(--color-text-main)]">
-              Conversations
-            </span>
-            <button
-              onClick={onNewSession}
-              className="p-1 rounded-[6px] bg-[var(--color-accent-vibrant)] text-white hover:brightness-110 active:scale-95 transition-all "
-              title="New Chat Session"
-            >
-              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-            </button>
-          </div>
+    <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
+      <ToolbarContent>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Popover trigger={(_o, t) => (
+            <button type="button" onClick={t} aria-haspopup="menu" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)] max-w-[260px]">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span className="truncate">{settings.selectedModel || 'No model'}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+            </button>)}>
+            {(close) => (<>
+              {!models.length && <div className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No models installed yet. <button className="font-semibold text-[var(--color-accent-vibrant)]" onClick={() => { close(); onOpenModels(); }}>Open Models</button></div>}
+              {models.map((m) => <MenuItem key={m.id} active={settings.selectedModel === m.id} onClick={() => { onSettings({ selectedModel: m.id }); close(); }}><span className="flex-1 truncate">{m.name}</span><span className="text-[11px] opacity-70">{m.tag}</span></MenuItem>)}
+            </>)}
+          </Popover>
 
-          <div className="relative mb-3">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
-            <input type="search" aria-label="Search conversations" placeholder="Search conversations" value={query} onChange={(e) => setQuery(e.target.value)}
-              className="w-full h-8 pl-8 pr-2 rounded-[8px] bg-[var(--hover)] text-[13px] text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" />
+          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={`${used.exact ? 'Measured by Ollama' : 'Estimated'}: ${used.n.toLocaleString()} of ${settings.contextWindow.toLocaleString()} tokens`}>
+            <div className="flex-1"><Gauge value={frac} label="Context used" warnAt={0.75} critAt={0.92} /></div>
+            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{used.exact ? '' : '~'}{used.n.toLocaleString()} / {settings.contextWindow >= 1000 ? `${Math.round(settings.contextWindow / 1024)}k` : settings.contextWindow}</span>
           </div>
-
-          <div className="space-y-1.5 overflow-y-auto max-h-[420px] pr-1 no-scrollbar">
-            {query.trim() && !sessions.some((s) => s.title.toLowerCase().includes(query.trim().toLowerCase())) && (
-              <p className="px-2 py-3 text-[13px] text-[var(--color-text-muted)]">No conversations match “{query.trim()}”.</p>
-            )}
-            {sessions.filter((s) => !query.trim() || s.title.toLowerCase().includes(query.trim().toLowerCase())).map((s) => {
-              const isActive = s.id === activeSession?.id;
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => onSelectSession(s.id)}
-                  className={`group flex items-center justify-between px-2.5 py-2 rounded-[8px] cursor-pointer transition-colors ${
-                    isActive
-                      ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-semibold'
-                      : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs truncate">{s.title}</p>
-                    <p className="text-xs opacity-70 font-normal">
-                      {[s.category || 'Local AI', s.modelTag || s.model].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  {sessions.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteSession(s.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[var(--c-red)] hover:text-rose-600 transition-opacity"
-                      title="Delete chat"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <div className="flex-1" />
+          <Btn size="sm" variant={session.incognito ? 'primary' : 'ghost'} icon={<EyeOff className="w-3.5 h-3.5" />} aria-pressed={!!session.incognito}
+            onClick={() => chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito }))} title="Incognito chats aren't saved and create no memories">Incognito</Btn>
+          <IconBtn label={showInspector ? 'Hide inspector' : 'Show inspector'} active={showInspector} onClick={() => setShowInspector((v) => !v)}><PanelRight className="w-4 h-4" /></IconBtn>
         </div>
+      </ToolbarContent>
 
-        {/* Engine status indicator */}
-        <div className="pt-3 border-t border-[var(--color-border-subtle)] text-xs text-[var(--color-text-muted)] flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${ollamaUp ? 'bg-[var(--c-green)]' : ollamaUp === null ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]'}`} />
-            <span className="font-semibold text-[var(--color-text-main)]">{ollamaUp ? 'Ollama running' : ollamaUp === null ? 'Connecting…' : 'Ollama stopped'}</span>
-          </div>
-          <span className="tabular-nums font-mono text-xs">{engineUrl('ollama').replace('http://', '')}</span>
-        </div>
+      <ChatSidebar sessions={chat.sessions} activeId={chat.activeId} folders={chat.folders} onFolders={chat.setFolders}
+        onSelect={chat.setActiveId} onNew={() => chat.newChat()} onDelete={chat.deleteChat} onPatch={chat.patchSession} />
+
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
+        {offline && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenModels}>Models</Btn>}>Ollama isn't running at {engineUrl('ollama')}. Start it from Engines to chat.</Banner></div>}
+        {session.incognito && <p className="px-6 pt-3 text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5"><EyeOff className="w-3.5 h-3.5" />Incognito: this conversation isn't saved and creates no memories.</p>}
+        {session.messages.length === 0 ? (
+          <div className="flex-1 flex"><Empty icon={<Sparkles className="w-5 h-5" />} title="What can I help with?" body={`Chatting with ${settings.selectedModel || 'a local model'} on this PC. Type / for commands or @ to mention a model or file.`} className="flex-1" /></div>
+        ) : (
+          <ChatStream session={session} isStreaming={chat.isStreaming} autoScroll={settings.autoScroll} reasoningMode={settings.reasoningBlockMode}
+            onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory}
+            onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }} />
+        )}
+        <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
+          searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))}
+          mentions={mentions} prefill={prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />
       </div>
 
-      {/* Main Chat Thread */}
-      <div className="flex-1 flex flex-col justify-between h-full bg-[var(--color-bg-panel)]">
-        {/* Header with Model Selector */}
-        <div className="h-14 px-6 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
-          {/* Model Selector Pill */}
-          <div className="relative">
-            <button
-              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
-              className="h-8 px-3.5 bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] hover:brightness-95 rounded-[6px] flex items-center gap-2 text-xs font-semibold text-[var(--color-accent-vibrant)] transition-all "
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{selectedModel}</span>
-              <ChevronDown className="w-3 h-3 opacity-70" />
-            </button>
-
-            {modelDropdownOpen && (
-              <div className="absolute top-10 left-0 z-30 w-64 bg-[var(--color-bg-card)] rounded-[10px] shadow-xl border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] p-1.5 space-y-1">
-                {availableModels.length === 0 && (
-                  <div className="p-3 text-xs text-[var(--color-text-muted)] leading-relaxed">
-                    No models installed yet.
-                    <button onClick={onOpenEngines} className="block mt-1 font-semibold text-[var(--color-accent-vibrant)] hover:underline">Pull one from Engines</button>
-                  </div>
-                )}
-                {availableModels.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      onSelectModel(m.id);
-                      setModelDropdownOpen(false);
-                    }}
-                    className={`w-full text-left p-2 rounded-[6px] text-xs flex flex-col transition-colors ${
-                      selectedModel === m.id
-                        ? 'bg-[var(--color-accent-vibrant)] text-white'
-                        : 'hover:bg-[var(--color-accent-pastel)] text-[var(--color-text-main)]'
-                    }`}
-                  >
-                    <span className="font-semibold">{m.name}</span>
-                    <span className="text-xs opacity-80">{m.tag}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Speed of the latest reply in this conversation (hidden until there is one) */}
-          {lastTps > 0 && (
-            <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" title="Speed of the latest reply">
-              <Activity className="w-3.5 h-3.5 text-[var(--c-green)]" />
-              <span className="tabular-nums font-semibold px-2 py-0.5 rounded-[6px] bg-[var(--color-badge-bg)] text-[var(--color-badge-text)] text-xs">
-                {lastTps} tok/s
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Message Log */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {activeSession?.messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex gap-3 ${
-                msg.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              {msg.role !== 'user' && (
-                <div className="w-7 h-7 rounded-full bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />
-                </div>
-              )}
-
-              <div
-                className={`max-w-[78%] rounded-[10px] p-4 text-sm leading-relaxed group relative  ${
-                  msg.role === 'user'
-                    ? 'bg-[var(--color-accent-vibrant)] text-white rounded-br-sm'
-                    : 'bg-[var(--color-accent-pastel)] dark:bg-[#22242B] text-[var(--color-text-main)] rounded-bl-sm border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)]'
-                }`}
-              >
-                {/* Image attachment preview if present */}
-                {msg.attachment && (
-                  <div className="mb-2 rounded-[10px] overflow-hidden max-w-[240px]">
-                    <img
-                      src={msg.attachment.url}
-                      alt={msg.attachment.name}
-                      className="w-full object-cover"
-                    />
-                  </div>
-                )}
-
-                <div className="whitespace-pre-wrap">{msg.content}</div>
-
-                {/* Tokens per sec footer */}
-                {msg.tokensPerSec ? (
-                  <div className="mt-2 pt-2 border-t border-[var(--sep)] flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-                    <span>Local VRAM inference</span>
-                    <span className="tabular-nums font-medium">
-                      {msg.tokensPerSec} tok/s · {msg.durationMs}ms
-                    </span>
-                  </div>
-                ) : null}
-
-                {/* Copy button */}
-                <button
-                  onClick={() => copyToClipboard(msg.content, msg.id)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded-[6px] bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current transition-opacity"
-                  title="Copy message"
-                >
-                  {copiedId === msg.id ? (
-                    <Check className="w-3 h-3 text-[var(--c-green)]" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </button>
-              </div>
-
-              {msg.role === 'user' && (
-                <div className="w-7 h-7 rounded-full bg-[var(--color-accent-vibrant)] text-white flex items-center justify-center shrink-0 mt-0.5 ">
-                  <User className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-          ))}
-
-          {isStreaming && (
-            <div className="flex gap-3 items-center text-xs text-[var(--color-text-muted)] animate-pulse">
-              <div className="w-7 h-7 rounded-full bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] flex items-center justify-center shrink-0">
-                <Bot className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />
-              </div>
-              <span>Generating on your GPU…</span>
-              <button onClick={onStop} className="ml-1 h-6 px-2.5 rounded-[6px] bg-black/5 dark:bg-white/10 text-xs font-semibold text-[var(--color-text-main)] hover:bg-black/10 dark:hover:bg-white/15 not-italic">Stop</button>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input Composer Box */}
-        <div className="p-4 border-t border-[var(--color-border-subtle)]">
-          {/* File Attachment Pill */}
-          {filePreview && (
-            <div className="mb-2 flex items-center gap-2 p-1.5 pl-3 bg-[var(--color-accent-pastel)] border border-[var(--color-accent-pastel-border)] rounded-[6px] w-fit max-w-sm">
-              <img
-                src={filePreview}
-                alt="Upload preview"
-                className="w-5 h-5 rounded-full object-cover"
-              />
-              <span className="text-xs font-medium text-[var(--color-accent-vibrant)] truncate">
-                {attachedFile?.name}
-              </span>
-              <button
-                onClick={removeAttachment}
-                className="p-1 rounded-[6px] hover:bg-black/10 dark:hover:bg-white/10"
-              >
-                <X className="w-3 h-3 text-[var(--color-text-muted)]" />
-              </button>
-            </div>
-          )}
-
-          {micError && <p role="alert" className="mb-2 px-3 text-xs text-[var(--c-red)]">{micError}</p>}
-          <form
-            onSubmit={handleSend}
-            className="flex items-center gap-2 bg-[var(--color-bg-sidebar)] rounded-[6px] p-2 pl-4 border border-[var(--color-accent-pastel-border)] dark:border-[var(--color-border-subtle)] "
-          >
-            {/* Attachment Button */}
-            <label className="cursor-pointer text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white transition-colors p-1">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <Paperclip className="w-4 h-4" />
-            </label>
-
-            {/* Dictation STT Mic */}
-            <button
-              type="button"
-              onClick={toggleRecording}
-              className={`p-1.5 rounded-[6px] transition-colors ${
-                isRecording
-                  ? 'bg-[var(--c-red)] text-white animate-pulse'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-accent-vibrant)] dark:text-slate-400 dark:hover:text-white'
-              }`}
-              title={isRecording ? 'Stop dictation' : isTranscribing ? 'Transcribing…' : 'Dictate (local Whisper)'}
-              aria-label={isRecording ? 'Stop dictation' : 'Dictate'}
-            >
-              {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </button>
-
-            {/* Input field */}
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={`Message ${selectedModel}`}
-              className="flex-1 bg-transparent text-xs text-[var(--color-text-main)] placeholder-[#9CA3AF] focus:outline-none"
-            />
-
-            {/* Send button */}
-            <button
-              type="submit"
-              disabled={(!inputText.trim() && !attachedFile) || isStreaming}
-              className="w-8 h-8 rounded-full bg-[var(--color-accent-vibrant)] text-white flex items-center justify-center hover:brightness-110 active:scale-95 disabled:opacity-40 transition-all shrink-0 "
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
-        </div>
-      </div>
+      {showInspector && (
+        <ChatInspector tab={tab} onTab={setTab} session={session} settings={settings} onSettings={onSettings}
+          memory={chat.memory} onMemory={chat.setMemory} onContext={chat.patchContext} onAddFiles={mountFiles} raw={chat.raw}
+          focusArtifact={focus} searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))} />
+      )}
     </div>
   );
 };

@@ -3,7 +3,8 @@ import { Mic, Upload, Square, Trash2, Wand2 } from 'lucide-react';
 import {
   voicebox, VoiceProfile, VoiceType, LANGUAGES, TTS_ENGINES, PresetVoice, ProfileSample, fmtDuration, TtsEngine,
 } from '../../services/voicebox';
-import { MicRecorder, micErrorMessage } from '../../lib/audio';
+import { MicRecorder, SystemAudioRecorder, micErrorMessage } from '../../lib/audio';
+import { SampleHealthPanel } from './SampleHealth';
 import { Modal } from '../common/Modal';
 import { Btn, Segmented, Label, TextInput, TextArea, Select, Banner, Spinner, IconBtn, cx } from '../common/ui';
 
@@ -44,7 +45,8 @@ export const VoiceEditor: React.FC<{
   const [recording, setRecording] = useState(false);
   const [level, setLevel] = useState(0);
   const [secs, setSecs] = useState(0);
-  const rec = useRef<MicRecorder | null>(null);
+  const rec = useRef<MicRecorder | SystemAudioRecorder | null>(null);
+  const [source, setSource] = useState<'mic' | 'system'>('mic');
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export const VoiceEditor: React.FC<{
   const startRec = async () => {
     setErr(null);
     try {
-      rec.current = new MicRecorder((l, t) => { setLevel(l); setSecs(t); });
+      rec.current = source === 'mic' ? new MicRecorder((l, t) => { setLevel(l); setSecs(t); }) : new SystemAudioRecorder((t) => { setLevel(0.4); setSecs(t); });
       await rec.current.start();
       setRecording(true);
     } catch (e) {
@@ -179,6 +181,7 @@ export const VoiceEditor: React.FC<{
                   {s.durationSec != null && <span className="text-xs text-[var(--color-text-muted)] tabular-nums">{fmtDuration(s.durationSec)}</span>}
                   <IconBtn label="Remove sample" onClick={() => setSamples((c) => c.filter((x) => x.key !== s.key))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                 </div>
+                <SampleHealthPanel blob={s.blob} onTrim={(wav, d) => setSamples((c) => c.map((x) => (x.key === s.key ? { ...x, blob: wav, durationSec: d } : x)))} />
                 <TextArea rows={2} value={s.text} placeholder="Type exactly what is said in this clip" maxLength={1000}
                   onChange={(e) => setSamples((c) => c.map((x) => (x.key === s.key ? { ...x, text: e.target.value } : x)))} />
                 <Btn size="sm" variant="secondary" loading={s.transcribing} icon={<Wand2 className="w-3 h-3" />} onClick={() => transcribe(s.key)}>
@@ -197,6 +200,7 @@ export const VoiceEditor: React.FC<{
                 </>
               ) : (
                 <>
+                  <Segmented label="Record from" value={source} onChange={setSource} options={[{ id: 'mic', label: 'Microphone' }, { id: 'system', label: 'System audio' }]} />
                   <Btn variant="secondary" icon={<Mic className="w-3.5 h-3.5" />} onClick={startRec}>Record</Btn>
                   <Btn variant="secondary" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => fileInput.current?.click()}>Upload audio</Btn>
                   <input ref={fileInput} type="file" accept="audio/*" multiple hidden onChange={(e) => {

@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AudioLines, Mic2, Film, Mic, Library, Power, FolderSearch } from 'lucide-react';
+import { Power, FolderSearch } from 'lucide-react';
 import { ToolbarContent } from '../common/ToolbarSlot';
-import { Tabs, Btn, Empty, Banner, Spinner, cx } from '../common/ui';
+import { Btn, Empty, Banner, Spinner, cx } from '../common/ui';
+import { VoiceSidebar, VoiceMode } from '../voice/VoiceSidebar';
+import { VoiceInspector } from '../voice/VoiceInspector';
 import { useVoiceData, useSelectedProfile } from '../voice/useVoiceData';
 import { SpeakTab } from '../voice/SpeakTab';
 import { VoicesTab } from '../voice/VoicesTab';
@@ -12,7 +14,7 @@ import { startEngine, browseForExe, NeedsExecutable } from '../../services/engin
 import { onEvent } from '../../lib/bus';
 import { voicebox } from '../../services/voicebox';
 
-type Tab = 'speak' | 'voices' | 'stories' | 'dictate' | 'library';
+type Tab = VoiceMode;
 
 export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngines }) => {
   const data = useVoiceData();
@@ -21,6 +23,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
   const [text, setText] = useState('');
   const [createRequested, setCreateRequested] = useState(false);
   const [storyClip, setStoryClip] = useState<string | null>(null);
+  const [newStory, setNewStory] = useState(0);
   const [starting, setStarting] = useState(false);
   const [startErr, setStartErr] = useState<string | null>(null);
   const [needsExe, setNeedsExe] = useState(false);
@@ -50,18 +53,9 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
 
   useEffect(() => { if (data.status === 'online') { setStarting(false); } }, [data.status]);
 
-  const tabs = [
-    { id: 'speak' as const, label: 'Speak', icon: <AudioLines className="w-3.5 h-3.5" /> },
-    { id: 'voices' as const, label: 'Voices', icon: <Mic2 className="w-3.5 h-3.5" /> },
-    { id: 'stories' as const, label: 'Stories', icon: <Film className="w-3.5 h-3.5" /> },
-    { id: 'dictate' as const, label: 'Dictate', icon: <Mic className="w-3.5 h-3.5" /> },
-    { id: 'library' as const, label: 'Library', icon: <Library className="w-3.5 h-3.5" /> },
-  ];
-
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
+    <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
       <ToolbarContent>
-        <Tabs label="Voice sections" value={tab} onChange={go} options={tabs} />
         <div className="flex-1" />
         <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
           <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-[var(--c-green)]' : data.status === 'checking' ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]')} />
@@ -71,7 +65,10 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
         </span>
       </ToolbarContent>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <VoiceSidebar mode={tab} onMode={go} data={data} online={data.status === 'online'} profile={profile} onSelectProfile={selectProfile}
+        onNew={() => { if (tab === 'voices') setCreateRequested(true); else if (tab === 'speak' || tab === 'library') { setText(''); go('speak'); } else if (tab === 'dictate') go('dictate'); else setNewStory((n) => n + 1); }}
+        onReuse={(g) => { setText(g.text); selectProfile(g.profile_id); go('speak'); }} />
+      <div className="flex-1 min-w-0 min-h-0 overflow-y-auto">
         {data.status === 'checking' ? (
           <div className="flex justify-center py-24"><Spinner className="w-5 h-5 text-[var(--color-accent-vibrant)]" /></div>
         ) : data.status === 'offline' ? (
@@ -97,13 +94,14 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
               onAddToStory={(id) => { setStoryClip(id); go('stories'); }} />}
             {tab === 'voices' && <VoicesTab data={data} selectedId={profile?.id ?? null} onUse={(id) => { selectProfile(id); }}
               openCreate={createRequested} onCreateHandled={() => setCreateRequested(false)} />}
-            {tab === 'stories' && <StoriesTab data={data} pendingGeneration={storyClip} onPendingHandled={() => setStoryClip(null)} />}
+            {tab === 'stories' && <StoriesTab key={newStory} data={data} pendingGeneration={storyClip} onPendingHandled={() => setStoryClip(null)} />}
             {tab === 'dictate' && <DictateTab onSpeak={(t) => { setText(t); go('speak'); }} onOpenModels={onOpenEngines} />}
             {tab === 'library' && <LibraryTab data={data} onSpeakAgain={(t, pid) => { setText(t); selectProfile(pid); go('speak'); }}
               onAddToStory={(id) => { setStoryClip(id); go('stories'); }} />}
           </>
         )}
       </div>
+      <VoiceInspector mode={tab} data={data} profile={profile} />
     </div>
   );
 };

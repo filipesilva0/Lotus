@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, FlaskConical } from 'lucide-react';
+import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, FlaskConical, Boxes } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { Symbol } from '../common/Symbol';
 import { ViewMode } from '../../types/lotus';
@@ -45,7 +45,7 @@ interface LeftRailProps {
 }
 
 export const VIEW_TITLES: Record<ViewMode, string> = {
-  chat: 'Chat', images: 'Images', voice: 'Voice', research: 'Research', engines: 'Engines',
+  chat: 'Chat', images: 'Images', voice: 'Voice', research: 'Research', models: 'Models', engines: 'Engines',
 };
 
 const row =
@@ -59,6 +59,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
     { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
     { id: 'voice' as ViewMode, glyph: AudioLines, label: 'Voice' },
     { id: 'research' as ViewMode, glyph: FlaskConical, label: 'Research' },
+    { id: 'models' as ViewMode, glyph: Boxes, label: 'Models' },
   ];
   const { health, label: healthLabel } = engineHealth(engines);
 
