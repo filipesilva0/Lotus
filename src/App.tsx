@@ -15,11 +15,11 @@ import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspac
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
 import { EnginesWorkspace } from './components/workspaces/EnginesWorkspace';
+import { BuilderWorkspace } from './components/builder/BuilderWorkspace';
 import { ResearchWorkspace } from './components/research/ResearchWorkspace';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
-import { ModelsWorkspace } from './components/workspaces/ModelsWorkspace';
 import { useChat } from './hooks/useChat';
 import { useEngines } from './hooks/useEngines';
 import { useUpdates } from './hooks/useUpdates';
@@ -71,11 +71,12 @@ function load<T>(key: string, fallback: T): T {
 }
 
 /** Modules from the specs: entering one collapses the app-switcher rail to icons. */
-const COLLAPSING: ViewMode[] = ['chat', 'images', 'voice', 'models'];
+const COLLAPSING: ViewMode[] = ['chat', 'images', 'voice', 'builder'];
 
 export default function App() {
   const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('lotus.setup.dismissed'));
   const [currentView, setCurrentViewRaw] = useState<ViewMode>(firstRun.current ? 'engines' : 'chat');
+  const [builderSeen, setBuilderSeen] = useState(false);
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
   const [settings, setSettings] = useState<LotusSettings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<LotusSettings>>(SETTINGS_KEY, {}) }));
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -127,11 +128,12 @@ export default function App() {
   useEffect(() => { if (comfyUp) comfy.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp]);
 
   // ── Messages from other windows ───────────────────────────────────────────
+  useEffect(() => { if (currentView === 'builder') setBuilderSeen(true); }, [currentView]);
   const openEngines = useCallback((tab: 'engines' | 'models' = 'engines') => { setEnginesTab(tab); setCurrentView('engines'); }, []);
 
   useEffect(() => {
     const offs: (() => void)[] = [];
-    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'models' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
+    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'builder' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
@@ -155,17 +157,17 @@ export default function App() {
           <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
             <Symbol glyph={PanelLeft} weight="medium" />
           </IconBtn>
-          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'models' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
+          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
         <ToolbarSlotContext.Provider value={toolbarSlot}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
           <ChatWorkspace chat={chat} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
-            onOpenModels={() => setCurrentView('models')} prefill={prefill} />
+            onOpenModels={() => openEngines('models')} prefill={prefill} />
         )}
 
-        {currentView === 'images' && <ImageWorkspace checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} />}
+        {currentView === 'images' && <ImageWorkspace checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
         {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} />}
 
@@ -173,7 +175,13 @@ export default function App() {
           <ResearchWorkspace model={settings.selectedModel} models={models.map((m) => m.id)} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('models')} />
         )}
 
-        {currentView === 'models' && <ModelsWorkspace engines={eng.engines} onOpenEngines={() => openEngines('engines')} />}
+
+        {/* The App Builder stays mounted once opened so dev servers, terminals and the agent keep going while you use other pages. */}
+        {(builderSeen || currentView === 'builder') && (
+          <div className={currentView === 'builder' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
+            <BuilderWorkspace active={currentView === 'builder'} models={models} selectedModel={settings.selectedModel} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('engines')} />
+          </div>
+        )}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>

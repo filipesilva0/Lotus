@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GeneratedImage } from '../types/lotus';
-import { comfy, ComfyBatch, dimensionsFor, TxtToImageInput } from '../services/comfyService';
+import { comfy, ComfyBatch, dimensionsFor, LoraUse, TxtToImageInput } from '../services/comfyService';
 import { idbGet, idbSet } from '../lib/idb';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
@@ -13,11 +13,13 @@ export interface GenSession {
 export interface ImageParams {
   checkpoint: string; aspect: string; count: number; negative: string; cfg: number; steps: number;
   sampler: string; scheduler: string; seed: number | null; denoise: number;
+  /** LoRAs to apply (optional; saved settings from older versions have none). */
+  loras?: LoraUse[];
 }
 
 export const DEFAULT_PARAMS: ImageParams = {
   checkpoint: '', aspect: '1:1', count: 1, negative: 'lowres, blurry, distorted, text, watermark',
-  cfg: 7, steps: 28, sampler: 'euler', scheduler: 'normal', seed: null, denoise: 0.65,
+  cfg: 7, steps: 28, sampler: 'euler', scheduler: 'normal', seed: null, denoise: 0.65, loras: [],
 };
 
 const KEY = 'gallery.v1';
@@ -102,9 +104,9 @@ export function useGallery(comfyUp: boolean | null) {
     const d = dimensionsFor(p.aspect, p.checkpoint);
     const width = o.width ?? d.width, height = o.height ?? d.height;
     setInfo({ width, height, checkpoint: p.checkpoint, steps: p.steps, sampler: p.sampler });
-    return { prompt, negativePrompt: p.negative, checkpoint: p.checkpoint, steps: p.steps, cfg: p.cfg, width, height, seed: p.seed ?? undefined, sampler: p.sampler, scheduler: p.scheduler, count: p.count };
+    return { prompt, negativePrompt: p.negative, checkpoint: p.checkpoint, steps: p.steps, cfg: p.cfg, width, height, seed: p.seed ?? undefined, sampler: p.sampler, scheduler: p.scheduler, count: p.count, loras: p.loras?.filter((l) => l.name) };
   };
-  const metaOf = (prompt: string, p: ImageParams, w: number, h: number) => ({ prompt, negativePrompt: p.negative, steps: p.steps, cfg: p.cfg, dimensions: `${w}×${h}`, checkpoint: p.checkpoint, sampler: p.sampler });
+  const metaOf = (prompt: string, p: ImageParams, w: number, h: number) => ({ prompt, negativePrompt: p.negative, steps: p.steps, cfg: p.cfg, dimensions: `${w}×${h}`, checkpoint: p.checkpoint, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined });
 
   const generate = (prompt: string, p: ImageParams, reference?: Blob) => {
     const inp = input(prompt, p);

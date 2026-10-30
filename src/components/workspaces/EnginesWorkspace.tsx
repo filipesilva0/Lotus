@@ -1,17 +1,15 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Play, Square, FolderSearch, ExternalLink, Check, Circle, Download, Trash2, FolderOpen, Cpu, HardDrive, X,
+  Play, Square, FolderSearch, ExternalLink, Check, Circle, FolderOpen, Cpu, HardDrive,
 } from 'lucide-react';
 import { useEngines, Policy } from '../../hooks/useEngines';
 import { EngineId, engineUrl, setEngineUrl, DEFAULT_URLS } from '../../services/engineConfig';
 import { browseForExe, appPaths, AppPaths } from '../../services/engineControl';
-import { ollamaClient, OllamaModel } from '../../services/ollamaService';
-import { voicebox, ModelStatus, DownloadTask } from '../../services/voicebox';
-import { comfy } from '../../services/comfyService';
-import { reportActivity } from '../../lib/bus';
+import { ModelsWorkspace } from './ModelsWorkspace';
+import { browseModelsDir, findModelsDir, folderPath, savedModelsDir } from '../../services/downloadService';
 import { openExternal, revealPath } from '../../lib/open';
 import { ToolbarContent } from '../common/ToolbarSlot';
-import { Btn, Card, Tabs, TextInput, Banner, Spinner, Empty, Label, cx } from '../common/ui';
+import { Btn, Card, Tabs, TextInput, Banner, Spinner, Label, cx } from '../common/ui';
 
 type Eng = ReturnType<typeof useEngines>;
 type Tab = 'engines' | 'models' | 'storage';
@@ -43,12 +41,15 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
       <ToolbarContent>
         <Tabs label="Engine sections" value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
       </ToolbarContent>
-      <div className="flex-1 min-h-0 overflow-y-auto p-6">
-        <p className="text-[13px] text-[var(--color-text-muted)] mb-4">The local programs Lotus talks to. Everything runs on this PC.</p>
-        {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
-        {tab === 'models' && <ModelsTab eng={eng} goEngines={() => setTab('engines')} />}
-        {tab === 'storage' && <StorageTab />}
-      </div>
+      {tab === 'models'
+        ? <ModelsWorkspace engines={eng.engines} onOpenEngines={() => setTab('engines')} />
+        : (
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            <p className="text-[13px] text-[var(--color-text-muted)] mb-4">The local programs Lotus talks to. Everything runs on this PC.</p>
+            {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
+            {tab === 'storage' && <StorageTab />}
+          </div>
+        )}
     </div>
   );
 };
@@ -167,173 +168,14 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
   );
 };
 
-// ── Models ─────────────────────────────────────────────────────────────────
-
-const gb = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(bytes < 1024 ** 3 ? 2 : 1)} GB`;
-const SUGGESTIONS = ['llama3.2:3b', 'qwen2.5-coder:7b', 'llava:7b', 'deepseek-r1:8b'];
-
-const Section: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
-  <section className="space-y-2.5">
-    <div><h3 className="text-sm font-semibold text-[var(--color-text-main)]">{title}</h3>{hint && <p className="text-xs text-[var(--color-text-muted)]">{hint}</p>}</div>
-    {children}
-  </section>
-);
-
-const ModelsTab: React.FC<{ eng: Eng; goEngines: () => void }> = ({ eng, goEngines }) => {
-  const { engines } = eng;
-  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
-  const [checkpoints, setCheckpoints] = useState<string[]>([]);
-  const [vbModels, setVbModels] = useState<ModelStatus[]>([]);
-  const [tasks, setTasks] = useState<DownloadTask[]>([]);
-  const [pull, setPull] = useState('');
-  const [pulling, setPulling] = useState<{ name: string; status: string; pct: number | null } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const abort = useRef<AbortController | null>(null);
-
-  const loadOllama = useCallback(() => ollamaClient.listModels().then(setOllamaModels).catch(() => setOllamaModels([])), []);
-  const loadVb = useCallback(() => voicebox.modelStatus().then(setVbModels).catch(() => setVbModels([])), []);
-  useEffect(() => { if (engines.ollama.up) void loadOllama(); }, [engines.ollama.up, loadOllama]);
-  useEffect(() => { if (engines.comfyui.up) comfy.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([])); }, [engines.comfyui.up]);
-  useEffect(() => { if (engines.voicebox.up) void loadVb(); }, [engines.voicebox.up, loadVb]);
-
-  // While Voicebox downloads something, follow its progress and mirror it on the island.
-  const downloading = vbModels.some((m) => m.downloading);
-  useEffect(() => {
-    if (!downloading || !engines.voicebox.up) return;
-    const t = setInterval(async () => {
-      const a = await voicebox.activeTasks().catch(() => null);
-      if (a) {
-        setTasks(a.downloads);
-        a.downloads.forEach((d) => reportActivity({ id: `dl-${d.model_name}`, kind: 'download', label: d.model_name, progress: d.progress != null ? d.progress / 100 : undefined }));
-      }
-      await loadVb();
-    }, 1500);
-    return () => clearInterval(t);
-  }, [downloading, engines.voicebox.up, loadVb]);
-
-  const doPull = async (name: string) => {
-    const n = name.trim();
-    if (!n) return;
-    setErr(null);
-    abort.current = new AbortController();
-    setPulling({ name: n, status: 'Starting…', pct: null });
-    try {
-      for await (const p of ollamaClient.pull(n, abort.current.signal)) {
-        const pct = p.total ? (p.completed ?? 0) / p.total : null;
-        setPulling({ name: n, status: p.status, pct });
-        reportActivity({ id: `pull-${n}`, kind: 'download', label: n, progress: pct ?? undefined });
-      }
-      setPull('');
-      await loadOllama();
-      reportActivity({ id: `pull-${n}`, kind: 'download', label: `${n} ready`, done: true });
-    } catch (e) {
-      if (!abort.current?.signal.aborted) setErr((e as Error).message);
-      reportActivity({ id: `pull-${n}`, kind: 'download', label: n, done: true });
-    } finally { setPulling(null); abort.current = null; }
-  };
-
-  const vbAction = async (fn: () => Promise<unknown>) => { setErr(null); try { await fn(); await loadVb(); } catch (e) { setErr((e as Error).message); } };
-
-  const Offline: React.FC<{ name: string }> = ({ name }) => (
-    <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={goEngines}>Engines</Btn>}>{name} isn't running, so its models can't be listed.</Banner>
-  );
-
-  return (
-    <div className="space-y-8 max-w-4xl">
-      {err && <Banner tone="error">{err}</Banner>}
-
-      <Section title="Chat models" hint="Downloaded with Ollama. Type a model name to download it.">
-        {engines.ollama.up === false ? <Offline name="Ollama" /> : (
-          <>
-            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void doPull(pull); }}>
-              <TextInput aria-label="Model name" value={pull} onChange={(e) => setPull(e.target.value)} placeholder="e.g. llama3.2:3b" disabled={!!pulling} className="font-mono" />
-              {pulling
-                ? <Btn variant="secondary" icon={<X className="w-3.5 h-3.5" />} onClick={() => abort.current?.abort()}>Cancel</Btn>
-                : <Btn variant="primary" type="submit" disabled={!pull.trim()} icon={<Download className="w-3.5 h-3.5" />}>Download</Btn>}
-            </form>
-            {pulling ? (
-              <div className="space-y-1.5" role="status">
-                <div className="h-1.5 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden">
-                  <div className={cx('h-full bg-[var(--color-accent-vibrant)] transition-[width]', pulling.pct === null && 'animate-pulse w-1/3')} style={pulling.pct !== null ? { width: `${pulling.pct * 100}%` } : undefined} />
-                </div>
-                <p className="text-xs text-[var(--color-text-muted)] tabular-nums">{pulling.name} · {pulling.status}{pulling.pct !== null && ` · ${Math.round(pulling.pct * 100)}%`}</p>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5 text-xs">
-                {SUGGESTIONS.filter((x) => !ollamaModels.some((m) => m.name === x)).map((x) => (
-                  <button key={x} onClick={() => setPull(x)} className="px-2.5 h-6 rounded-[6px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-mono font-semibold hover:brightness-95">{x}</button>
-                ))}
-              </div>
-            )}
-            {engines.ollama.up && ollamaModels.length === 0 && !pulling && <Empty title="No chat models yet" body="Download one above to start chatting. A 3B model is a good first choice." className="!py-6" />}
-            <ul className="space-y-2">
-              {ollamaModels.map((m) => (
-                <li key={m.name}><Card className="px-4 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-xs font-semibold flex items-center justify-center shrink-0">{m.details?.parameter_size ?? '?'}</div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">{m.name}</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">{[m.details?.family, m.details?.quantization_level, gb(m.size)].filter(Boolean).join(' · ')}</p>
-                  </div>
-                  <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={async () => { await ollamaClient.deleteModel(m.name).catch((e) => setErr(e.message)); await loadOllama(); }}>Delete</Btn>
-                </Card></li>
-              ))}
-            </ul>
-          </>
-        )}
-      </Section>
-
-      <Section title="Voice models" hint="Speech synthesis and transcription models, managed by Voicebox.">
-        {engines.voicebox.up === false ? <Offline name="Voicebox" /> : vbModels.length === 0 ? <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" /> : (
-          <ul className="space-y-2">
-            {vbModels.map((m) => {
-              const t = tasks.find((d) => d.model_name === m.model_name);
-              return (
-                <li key={m.model_name}><Card className="px-4 py-3 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[var(--color-text-main)] truncate">{m.display_name}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
-                      {m.size_mb ? `${(m.size_mb / 1024).toFixed(1)} GB` : 'Size unknown'}
-                      {m.downloaded && !m.downloading && ' · Downloaded'}{m.loaded && ' · In memory'}
-                      {m.downloading && ` · Downloading${t?.progress != null ? ` ${Math.round(t.progress)}%` : '…'}`}
-                    </p>
-                    {m.downloading && <div className="mt-1.5 h-1 rounded-[6px] bg-black/10 dark:bg-white/10 overflow-hidden"><div className="h-full bg-[var(--color-accent-vibrant)] transition-[width]" style={{ width: `${t?.progress ?? 8}%` }} /></div>}
-                  </div>
-                  {m.downloading ? <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" /> : !m.downloaded ? (
-                    <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => vbAction(() => voicebox.downloadModel(m.model_name))}>Download</Btn>
-                  ) : (
-                    <div className="flex gap-1.5">
-                      {m.loaded
-                        ? <Btn size="sm" variant="secondary" onClick={() => vbAction(() => voicebox.unloadModel(m.model_name))}>Unload</Btn>
-                        : <Btn size="sm" variant="secondary" onClick={() => vbAction(() => voicebox.loadModel(m.model_name))}>Load</Btn>}
-                      <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => vbAction(() => voicebox.deleteModel(m.model_name))}>Delete</Btn>
-                    </div>
-                  )}
-                </Card></li>
-              );
-            })}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Image checkpoints" hint="Stored in ComfyUI's models/checkpoints folder. Add files there and they appear here.">
-        {engines.comfyui.up === false ? <Offline name="ComfyUI" /> : checkpoints.length === 0 ? (
-          <Empty title="No checkpoints found" body="Put a Stable Diffusion or FLUX checkpoint file in ComfyUI's models/checkpoints folder, then restart ComfyUI." className="!py-6" />
-        ) : (
-          <ul className="space-y-2">{checkpoints.map((c) => (
-            <li key={c}><Card className="px-4 py-3 text-xs font-semibold text-[var(--color-text-main)] truncate">{c}</Card></li>
-          ))}</ul>
-        )}
-      </Section>
-    </div>
-  );
-};
-
 // ── Storage ────────────────────────────────────────────────────────────────
 
 const StorageTab: React.FC = () => {
   const [paths, setPaths] = useState<AppPaths | null | undefined>(undefined);
   const [err, setErr] = useState<string | null>(null);
+  const [modelsDir, setModelsDir] = useState(savedModelsDir());
   useEffect(() => { appPaths().then((p) => setPaths(p ?? null)); }, []);
+  useEffect(() => { if (!modelsDir) void findModelsDir().then((d) => d && setModelsDir(d)); }, [modelsDir]);
 
   if (paths === undefined) return <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" />;
   if (paths === null) return <Banner tone="info">Storage details are available in the Lotus desktop app.</Banner>;
@@ -342,7 +184,8 @@ const StorageTab: React.FC = () => {
     ['Chats, settings and the island', paths.portable ? `${paths.dataDir}\\webview` : "Lotus's app profile in your user folder"],
     ['Voices, history and stories (Voicebox)', `${paths.dataDir}\\voicebox`],
     ['Chat models (Ollama)', "Ollama's own model folder"],
-    ['Image checkpoints (ComfyUI)', "ComfyUI's models folder"],
+    ['Image checkpoints and LoRAs (ComfyUI)', modelsDir ? `${folderPath(modelsDir, 'checkpoints')}  ·  ${folderPath(modelsDir, 'loras')}` : "ComfyUI's models folder (not set yet)"],
+    ['App projects (App Builder)', `${paths.dataDir}\\projects`],
   ];
   return (
     <div className="space-y-5 max-w-3xl">
@@ -370,6 +213,14 @@ const StorageTab: React.FC = () => {
             <span className="text-[var(--color-text-muted)] break-all">{v}</span>
           </div>
         ))}
+      </Card>
+      <Card className="p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-[var(--color-text-main)]">ComfyUI models folder</h3>
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Where downloaded checkpoints and LoRAs are saved: the folder that contains <span className="font-mono">checkpoints</span> and <span className="font-mono">loras</span>.</p>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 text-xs bg-black/[.04] dark:bg-white/5 rounded-[6px] px-3 py-2 truncate">{modelsDir || 'Not set'}</code>
+          <Btn variant="secondary" onClick={async () => { const d = await browseModelsDir(); if (d) setModelsDir(d); }}>{modelsDir ? 'Change…' : 'Choose…'}</Btn>
+        </div>
       </Card>
       <Label>Models are large, so Ollama and ComfyUI keep them in their own folders and Lotus does not copy them.</Label>
     </div>

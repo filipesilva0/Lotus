@@ -8,6 +8,41 @@
 - ⚠️ New lotus line-art logo (`Logo.tsx`) and regenerated `src-tauri/icons/*`.
 - ⚠️ Engine connection: `http()` now sends `Origin` = the engine's own address (needs `unsafe-headers` on `tauri-plugin-http`, added in `Cargo.toml`); new Rust command `engine_ping` + `diagnose()` show *why* an engine looks offline on the Engines cards. Root cause of "Ollama won't connect" is **not confirmed**; the diagnostic message will say.
 
+## 0b. Session 4 changes: App Builder, merged Models, LoRA (⚠️ not built, not run on Windows)
+
+What was asked: (1) an **App Builder** page in the spirit of an agent-first IDE, to build Windows/Mac/iOS/Android/web apps and see them running inside Lotus; (2) merge the new Models page into the old one's place (Engines → Models) and let the user **type any model name/link** to download (language, image, LoRA, voice); (3) a **LoRA** picker in Images, with LoRA downloads in Models.
+
+**Verified here ✅** (commands run in the sandbox):
+- Loose TypeScript check of the whole `src/` against hand-written React/Tauri shims (`tsc`, strict + noUnusedLocals on the new files): no errors other than shim noise. ⚠️ Not the real `@types/react`, so JSX prop typing of DOM elements was not checked; run the real `npx tsc --noEmit` first thing.
+- `bash handover/verification/run-builder-tests.sh` (**34 tests**, new): action-tag parser (streaming/partial, fenced bodies, path-escape rejection, void/self-closing tags), unified-diff counter, dev-server URL detection, dangerous-command detector, history trimming, all 6 templates (no leftover placeholders, valid JSON, valid icons, workflow `${{ }}` intact), Hugging Face/Civitai link normalising, file-name validation, ComfyUI graph with 0/1/2/6 LoRAs, and the **whole agent loop against a scripted model and in-memory files** (fast mode, plan gate, failed edit → fix, denied command, auto-run vs dangerous, server without address, abort, empty/cut-off reply, step limit). In the sandbox they were run on `tsc`-transpiled output; the runner script uses esbuild like the other suites and has not been run as written.
+- The existing suites (`run-tests.sh`, 63 tests) were **not re-run** this session (no esbuild offline); the files they cover were not changed except `comfyService.ts` (LoRA chain; no-LoRA graph is byte-for-byte what it was, asserted in the new tests).
+
+**Written but never compiled or run ⚠️:**
+- `src-tauri/src/appbuilder.rs` (project files, processes, static preview server, toolchain probe, adb helpers) and `src-tauri/src/downloads.rs` (model downloader). **No Rust toolchain existed in this sandbox**, so neither was compiled. They use only `std` plus `tauri_plugin_http::reqwest` (assumed re-exported; `Response::chunk()` assumed available) so `Cargo.lock` is unchanged. Expect a few compile errors on the first Windows CI run (see T14).
+- `tauri.conf.json` CSP gained `frame-src http://127.0.0.1:* http://localhost:*` (needed for the preview iframe).
+- All new UI (`components/builder/*`, `components/models/*`, `LoraPicker`, the merged Models tab) was **never rendered**: no screenshots, no WebView2. Layout at the 980 px minimum width is the main risk (sidebar + centre + 360 px inspector).
+
+**What changed for users**
+- Rail: **Models** removed; **App Builder** added (hammer). Models content is now Engines → Models (Library with a model-type list, Arena, Monitor). `ViewMode` `'models'` → `'builder'`.
+- Engines → Storage: new "ComfyUI models folder" card (auto-found from the launcher or chosen), plus the Builder projects path.
+- Images: LoRA button in the toolbar + LoRA section in the inspector; LoRAs are stored per image (`GeneratedImage.loras`) and restored by "reuse settings".
+- Island: new activity kind `build`.
+- The Builder stays mounted after first use (hidden on other pages) so dev servers, terminals and an agent run survive page changes.
+
+**New known limitations (B18–B27)**
+| ID | Issue |
+|---|---|
+| B18 | Rust modules above never compiled; `reqwest` re-export and `chunk()` are assumptions. |
+| B19 | Builder/Models UI never rendered; narrow-window layout unchecked; no accessibility pass. |
+| B20 | Agent quality with real local models is untested. The tag protocol (`builder/protocol.ts`) was chosen because small models are poor at JSON tool calls; expect to tune the system prompt (`agent.ts`). A 7B+ code model with 16K context is the assumed minimum. |
+| B21 | "Seeing it run": web/PWA/Capacitor interfaces run in an iframe; dev servers need Node; **Windows desktop apps open in their own window** (not embeddable); Android is a screenshot mirror (~1 fps, adb); **iOS/macOS cannot be built or shown on Windows**: only a phone-frame web preview and a GitHub Actions workflow. |
+| B22 | Terminal is non-interactive (no stdin): a command that prompts waits until Stop or the agent's 4-minute limit. Processes inherit the PATH Lotus started with (install Node, then restart Lotus). |
+| B23 | Model downloads: no resume, no checksum check (Hugging Face/Civitai give none we use), tokens are not saved, no delete-model-file button. ComfyUI may need a refresh or restart to list new files. |
+| B24 | Editor: no syntax colouring, search, or undo beyond the textarea's; files over 2 MB are not opened. |
+| B25 | The static preview server follows symlinks inside the project and serves any file in the previewed folder to anything on 127.0.0.1. |
+| B26 | Template versions (React 18, Vite 5, Capacitor 6, Tauri 2) were written from memory, not resolved against the registry; `icon.icns` is absent so macOS bundles may warn. The generated workflows are untested. |
+| B27 | Agent file edits are not undoable (no checkpoints/diff review yet); only the project folder is protected from path escapes, commands can touch anything the user can. |
+
 ## 1. Development stage
 
 **Feature-complete prototype (v0.1.0). Compiles on Windows CI (user-reported); MSI linking fails (§5), and the app has never been run on Windows.** All five product areas have working code that is verified only in a Linux sandbox against mocks and fixtures. **The GitHub Actions Windows build has never succeeded.** The nearest milestone is *first green CI build, then a smoke test on a real Windows machine*.

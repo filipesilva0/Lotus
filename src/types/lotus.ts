@@ -1,4 +1,4 @@
-export type ViewMode = 'chat' | 'images' | 'voice' | 'research' | 'models' | 'engines';
+export type ViewMode = 'chat' | 'images' | 'voice' | 'research' | 'builder' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
 export interface ChatToolCall { id: string; label: string; status: 'running' | 'done' | 'error'; detail?: string }
@@ -104,6 +104,8 @@ export interface GeneratedImage {
   /** The image data itself; `url` is an object URL made from it each launch. */
   blob?: Blob;
   sampler?: string;
+  /** LoRAs used for this image. */
+  loras?: { name: string; strength: number }[];
   denoise?: number;
   kind?: 'txt2img' | 'img2img' | 'upscale' | 'inpaint' | 'outpaint' | 'variation';
   prompt: string;

@@ -35,7 +35,7 @@ export async function invokeNative<T = unknown>(cmd: string, args?: Record<strin
 
 export interface ActivityReport {
   id: string;
-  kind: 'image' | 'voice' | 'chat' | 'download' | 'research';
+  kind: 'image' | 'voice' | 'chat' | 'download' | 'research' | 'build';
   label: string;
   progress?: number;
   done?: boolean;

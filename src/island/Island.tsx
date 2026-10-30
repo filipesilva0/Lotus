@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MessageSquare, Mic, Volume2, LayoutGrid, Image as ImageIcon, AudioLines, Download, Bot, FlaskConical } from 'lucide-react';
+import { MessageSquare, Mic, Volume2, LayoutGrid, Image as ImageIcon, AudioLines, Download, Bot, FlaskConical, Hammer } from 'lucide-react';
 import { invokeNative, onEvent } from '../lib/bus';
 import { voicebox } from '../services/voicebox';
 import { applyThemeToDocument } from '../styles/theme';
@@ -164,7 +164,7 @@ export const Island: React.FC = () => {
 
   const Chip: React.FC<{ a: Activity }> = ({ a }) => (
     <span className="inline-flex items-center gap-1.5 h-6 w-[92px] px-2 rounded-[6px] bg-white/10 text-[11px] font-semibold text-white/90" title={a.label}>
-      {a.kind === 'image' ? <ImageIcon className="w-3 h-3 shrink-0" /> : a.kind === 'voice' ? <AudioLines className="w-3 h-3 shrink-0" /> : a.kind === 'download' ? <Download className="w-3 h-3 shrink-0" /> : a.kind === 'research' ? <FlaskConical className="w-3 h-3 shrink-0" /> : a.id.startsWith('agent') ? <Bot className="w-3 h-3 shrink-0" /> : <MessageSquare className="w-3 h-3 shrink-0" />}
+      {a.kind === 'image' ? <ImageIcon className="w-3 h-3 shrink-0" /> : a.kind === 'voice' ? <AudioLines className="w-3 h-3 shrink-0" /> : a.kind === 'download' ? <Download className="w-3 h-3 shrink-0" /> : a.kind === 'research' ? <FlaskConical className="w-3 h-3 shrink-0" /> : a.kind === 'build' ? <Hammer className="w-3 h-3 shrink-0" /> : a.id.startsWith('agent') ? <Bot className="w-3 h-3 shrink-0" /> : <MessageSquare className="w-3 h-3 shrink-0" />}
       <span className="truncate">{a.progress != null && !a.done ? `${Math.round(a.progress * 100)}%` : a.label}</span>
     </span>
   );

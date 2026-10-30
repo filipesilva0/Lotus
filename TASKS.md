@@ -70,3 +70,16 @@ T1 ──► T2 ──► T3 ──┬─► T4
                    └─► (real WebView2 visual pass, a11y audit)
 T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user)
 ```
+
+## Session 4 additions (App Builder, merged Models, LoRA)
+
+| ID | Task | Priority | Notes |
+|---|---|---|---|
+| T14 | **First CI run will compile `appbuilder.rs` and `downloads.rs` for the first time.** Fix compile errors one by one (likely suspects: `tauri_plugin_http::reqwest` path, `Response::chunk`, `emit_to` payload bounds, `raw_arg`, `matches!` on `try_wait`). Run `cargo clippy` after. | P0 (with T2) | Never compiled; no Rust in the last sandbox. |
+| T15 | Real `npx tsc --noEmit`, `npm run build`, `run-tests.sh` and the new `run-builder-tests.sh` on a machine with `npm install`. | P0 | Only shim-checked so far. |
+| T16 | **Builder smoke test on Windows**: create each template; static preview + auto reload; npm install and dev server detection (needs Node); phone/tablet frame; agent (try qwen2.5-coder 7B/14B) build a to-do app in Plan and Direct mode; stop; approval card; terminal; "Remove from list". Record how often a 7B model breaks the tag protocol and tune `systemPrompt()` in `builder/agent.ts`. | P1 | Core acceptance test. |
+| T17 | **Downloads smoke test**: a small LoRA from Hugging Face and a Civitai file with a token; cancel; existing-file error; ComfyUI lists it after refresh; LoRA applied in Images (check the generated image changes). | P1 | |
+| T18 | Android: install Android Studio, create an AVD, build the Capacitor template (`gradlew.bat assembleDebug`), install, and check the mirror (screenshot rate, tap mapping, swipe). Check JAVA_HOME handling. | P2 | |
+| T19 | Visual pass of Builder and Engines → Models at 980 px and 1280 px, light/dark; fix cramped layouts (consider a collapsible agent panel). | P1 | |
+| T20 | Builder improvements: syntax colouring (small tokenizer or CodeMirror loaded lazily), search in files, undo checkpoints / diff review of agent edits, stdin for the terminal, run-as-app log capture for Tauri projects, open an existing project's `package.json` scripts as run buttons, GitHub push helper. | P2/P3 | |
+| T21 | Models: delete downloaded checkpoint/LoRA files from the UI, show file sizes, resume interrupted downloads, optional checksum entry, HF repo browser. | P2 | |

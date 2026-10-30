@@ -14,10 +14,11 @@ so the app itself is small; the engines you connect to bring their own weight.
 | Area | What you get |
 |---|---|
 | **Chat** | Streaming Ollama chat, vision (attach an image), Stop, saved conversations, tokens/sec, local dictation |
-| **Images** | ComfyUI text-to-image with your installed checkpoints, aspect ratios, seed, cancel |
+| **Images** | ComfyUI text-to-image with your installed checkpoints, optional **LoRAs** (up to four, each with a strength), aspect ratios, seed, cancel |
 | **Voice** | Powered by [Voicebox](https://github.com/jamiepine/voicebox) (see below) |
 | **Research** | Scoping wizard, editable plan, expert personas, parallel search agents, live steering, cited report |
-| **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Lotus", model downloads (Ollama and Voicebox), storage/portable info |
+| **App Builder** | Describe an app; a local-model agent writes the files and runs the commands while you watch it run in a built-in preview. Websites, web apps, installable phone web apps, Windows/macOS/Linux desktop apps and Android/iPhone apps (see *App Builder*) |
+| **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Lotus", **Models** (language, image, LoRA and voice models, download by name or link, Arena, hardware monitor), storage/portable info |
 | **Island** | Floating pill: peek, chat, dictate, read clipboard aloud, file/image drop, activity pills, Claude Code permission prompts |
 
 ### Voice (Voicebox)
@@ -30,7 +31,7 @@ the Voicebox app.
 - **Stories**: multi-voice timeline with drag to retime, trim, split, duplicate, volume, mixed playback and WAV export
 - **Dictate**: local Whisper transcription with optional clean-up, copy / speak / send to chat
 - **Library**: searchable history with favourites, retry, export
-- Voice **models** are downloaded from Engines → Models.
+- Voice **models** are downloaded from Engines → Models → Voice models (by list, or by typing a model name).
 
 Not included (yet): Voicebox's audio-channel routing, its global push-to-talk hotkey, and its MCP
 "give agents voices" server. They keep working inside Voicebox itself.
@@ -56,6 +57,7 @@ middle, and an inspector on the right whose tabs change with the mode.
 
 **Privacy:** Update checks (only when you ask, or at launch if you enable it) contact GitHub; see *Updating Lotus*.
 Deep Research contacts arXiv, PubMed (NCBI), OpenAlex and Crossref directly from your PC.
+Model file downloads (Engines → Models) connect to the https address you paste (usually huggingface.co or civitai.com) only when you press Download.
 Only the keyword queries the agents write are sent; each repository can be switched off (Crossref
 starts off). Requests are rate-limited per host (arXiv: one per 3 s) and agents share that budget,
 so a run takes a few minutes. The desktop app's network permission is limited to those four hosts
@@ -65,6 +67,30 @@ plus `127.0.0.1`.
 the literature, not a replacement for reading the papers. Quality depends on the model; a 7B model or
 larger is recommended. Runs don't survive closing Lotus (partial results are kept and a report can be
 written from them).
+
+### Models (Engines → Models)
+
+One place for every model Lotus uses, with a **model type** list in its sidebar:
+
+- **Language models** (Ollama): catalogue, quantisation picker with a VRAM estimate, load/unload, delete. **Add model…** takes *any* Ollama name (`qwen2.5-coder:7b`) or a Hugging Face GGUF (`hf.co/user/repo:Q4_K_M`).
+- **Image checkpoints** and **LoRAs** (ComfyUI): lists what ComfyUI sees and **downloads new files** from a Hugging Face or Civitai link into ComfyUI's `models/checkpoints` or `models/loras` folder (Lotus finds the folder from the launcher you located, or you choose it once). Gated or login-only files take an access token, used for that download only and never saved. `.safetensors` is recommended; `.ckpt/.pt/.pth/.bin` files can contain code and the dialog says so.
+- **Voice models** (Voicebox): download, load, unload, delete, or download a model by name.
+- **Arena & Benchmark** and **Hardware & Runtime** (from the earlier Models page) are here too.
+
+In **Images**, the **LoRA** button (and the LoRA section of the inspector) lets you stack up to four LoRAs, each with its own strength. A LoRA has to match the checkpoint family (an SDXL LoRA needs an SDXL checkpoint).
+
+### App Builder
+
+A page for building real apps with your local model, in the spirit of an agent-first IDE:
+
+- **Projects** are folders on your PC (default: `<Lotus data folder>\projects`); start from a template (website, React web app, installable phone web app, Tauri desktop app, Capacitor Android/iPhone app, or empty) or open any folder.
+- **Agent** (right): you describe what you want; with *Plan first* it proposes an editable checklist you approve, then it writes files, edits them, runs commands and fixes errors until the app works. You see every action (files changed with +/- lines, command output) and can stop at any time. Commands ask for your approval unless you switch on "Run commands without asking" for that project; commands that look destructive always ask.
+- **Editor, files, terminal**: a plain code editor (no syntax colouring yet), a file tree, and a terminal that shows every command, yours or the agent's.
+- **Preview**: static sites are served by Lotus itself (no Node needed) and reload when you save; dev servers (Vite etc.) are detected and shown. Switch between full width, **phone** and **tablet** frames. **Android**: a connected phone or emulator is mirrored in the preview (screenshots about once a second; taps and swipes work).
+- **Building**: the *Build* tab lists what each project type can run (install, dev server, build) and checks which tools are installed (Node, Rust, Java, Android SDK…). Windows and Android builds run on your PC. **macOS, Linux and iPhone apps cannot be built on Windows**, so those templates include a GitHub Actions workflow (`.github/workflows/build.yml`): push the folder to GitHub and run it there.
+- Needs a model that can follow instructions and write code; a code-tuned model of 7B or more works best, with a context of at least 16K (the default for the Builder).
+
+**Privacy:** the Builder itself sends nothing anywhere. Commands you or the agent run (for example `npm install`) use the network the way they normally do.
 
 ### Island
 

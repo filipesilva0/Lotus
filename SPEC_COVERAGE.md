@@ -32,7 +32,8 @@ Evidence: ✅ written and type-checked loosely in the sandbox (no `node_modules`
 | Prompt deck, reference dock (img2img), `/ar /seed /steps /cfg /count /neg`, `@Style` saved styles, Generate↔Stop | ✅ |
 | Parameters: aspect (incl. custom), count 1/2/4/8, negative, CFG, steps, sampler+scheduler (from ComfyUI), seed | ✅ |
 
-## Models (Models_Page.txt): new "Models" page in the rail
+## Models (Models_Page.txt): merged into Engines → Models (session 4)
+> The standalone rail page was removed; everything below now lives in Engines → Models (Library / Arena / Monitor), together with image, LoRA and voice models and "add any model by name or link".
 | Spec item | Status |
 |---|---|
 | Import/Download, search, mode switcher | ✅ Ollama names or `hf.co/user/repo:QUANT`. ❌ importing a local GGUF file (needs multi-GB hashing/upload) |

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, PanelRight, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, PanelRight, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
 import { DEFAULT_PARAMS, ImageParams, useGallery } from '../../hooks/useGallery';
@@ -11,10 +11,11 @@ import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextIn
 import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../common/Pane';
 import { ImageSidebar } from '../images/ImageSidebar';
 import { MaskEditor } from '../images/MaskEditor';
+import { LoraPicker } from '../images/LoraPicker';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
-interface Props { comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void }
+interface Props { comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void; onOpenModels: () => void }
 
 const SLASH = [
   { name: 'ar', args: '<16:9 | 1024x768>', help: 'Aspect ratio or size' },
@@ -25,9 +26,12 @@ const SLASH = [
   { name: 'neg', args: '<text>', help: 'Negative prompt' },
 ];
 
-export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEngines }) => {
+export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEngines, onOpenModels }) => {
   const g = useGallery(comfyUp);
-  const [params, setParams] = usePersisted<ImageParams>('lotus.image.params.v1', DEFAULT_PARAMS);
+  const [stored, setParams] = usePersisted<ImageParams>('lotus.image.params.v1', DEFAULT_PARAMS);
+  const params: ImageParams = { ...DEFAULT_PARAMS, ...stored };
+  const [loraList, setLoraList] = useState<string[]>([]);
+  const loras = params.loras ?? [];
   const [folders, setFolders] = usePersisted<ChatFolder[]>('lotus.imgfolders.v1', []);
   const [styles, setStyles] = usePersisted<Style[]>('lotus.styles.v1', []);
   const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.image.inspector.v1', true);
@@ -46,6 +50,18 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
 
   useEffect(() => { if (checkpoints.length && !checkpoints.includes(params.checkpoint)) set({ checkpoint: checkpoints[0] }); }, [checkpoints]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!comfyUp) { setStats(null); return; } void comfy.samplers().then(setLists); }, [comfyUp]);
+  // LoRAs: read when ComfyUI is up and again whenever the window regains focus (after a download in Models).
+  useEffect(() => {
+    if (!comfyUp) { setLoraList([]); return; }
+    const load = () => { void comfy.loras().then(setLoraList); };
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
+  }, [comfyUp]);
+  // A LoRA that was deleted from disk is dropped from the selection once the list has loaded.
+  useEffect(() => {
+    if (loraList.length && loras.some((l) => !loraList.includes(l.name))) setParams((x) => ({ ...x, loras: (x.loras ?? []).filter((l) => loraList.includes(l.name)) }));
+  }, [loraList]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!comfyUp) return;
     let off = false;
@@ -120,7 +136,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
   const copyPrompt = () => { if (!cur) return; void navigator.clipboard.writeText(cur.prompt); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const download = () => { if (!cur) return; const a = document.createElement('a'); a.href = cur.url; a.download = `lotus-${cur.seed}-${cur.id}.png`; a.click(); };
   const useAsReference = () => { if (cur?.blob) setRef({ blob: cur.blob, url: cur.url, name: 'Current image' }); };
-  const reuse = (im: GeneratedImage) => { setPrompt(im.prompt); set({ negative: im.negativePrompt ?? params.negative, steps: im.steps, cfg: im.cfg, seed: im.seed, checkpoint: im.checkpoint, ...(im.sampler ? { sampler: im.sampler } : {}) }); };
+  const reuse = (im: GeneratedImage) => { setPrompt(im.prompt); set({ negative: im.negativePrompt ?? params.negative, steps: im.steps, cfg: im.cfg, seed: im.seed, checkpoint: im.checkpoint, loras: im.loras ?? [], ...(im.sampler ? { sampler: im.sampler } : {}) }); };
 
   const actionBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-[7px] text-[12px] font-medium text-white hover:bg-white/20 disabled:opacity-40';
 
@@ -136,6 +152,12 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
               {!checkpoints.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">{comfyUp ? 'No checkpoints found in ComfyUI’s models folder.' : 'Start ComfyUI to list checkpoints.'}</p>}
               {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate">{c}</span></MenuItem>)}
             </>)}
+          </Popover>
+          <Popover trigger={(_o, t) => (
+            <button type="button" onClick={t} aria-haspopup="menu" title="LoRA (optional)" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)]">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span>{loras.length ? `LoRA · ${loras.length}` : 'LoRA'}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
+            </button>)} className="w-[300px] !p-3">
+            {() => <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />}
           </Popover>
           <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={stats ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : 'Start ComfyUI to see video memory'}>
             <div className="flex-1"><Gauge value={vramUsed} label="Video memory in use" /></div>
@@ -294,6 +316,9 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
               <Section title="Negative prompt" hint="Things to leave out.">
                 <TextArea rows={2} value={params.negative} onChange={(e) => set({ negative: e.target.value })} aria-label="Negative prompt" />
               </Section>
+              <Section title="LoRA" hint="Optional. Small add-on models that steer style or subject.">
+                <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />
+              </Section>
               <Section title="Sampling">
                 <SliderField label="Guidance scale (CFG)" value={params.cfg} min={1} max={20} step={0.5} onChange={(v) => set({ cfg: v })} format={(v) => v.toFixed(1)} hint="How closely the image follows the prompt. FLUX models usually want 1–4." />
                 <SliderField label="Steps" value={params.steps} min={4} max={80} step={1} onChange={(v) => set({ steps: v })} />
@@ -338,7 +363,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 <p className="text-[12px] leading-snug mb-2">{cur.prompt}</p>
                 <KV k="Type" v={cur.kind ?? 'txt2img'} /><KV k="Size" v={cur.dimensions} /><KV k="Seed" v={cur.seed} /><KV k="Steps" v={cur.steps} /><KV k="CFG" v={cur.cfg} />
                 {cur.sampler && <KV k="Sampler" v={cur.sampler} />}{cur.denoise !== undefined && <KV k="Strength" v={`${Math.round(cur.denoise * 100)}%`} />}
-                <KV k="Checkpoint" v={cur.checkpoint} mono /><KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
+                <KV k="Checkpoint" v={cur.checkpoint} mono />{cur.loras?.length ? <KV k="LoRA" v={cur.loras.map((l) => `${l.name} ×${l.strength}`).join(', ')} mono /> : null}<KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
                 {cur.negativePrompt && <KV k="Negative" v={cur.negativePrompt} />}
                 <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => g.removeVersion(g.active.id, cur.id)}>Delete this image</Btn>
               </Section>

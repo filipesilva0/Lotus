@@ -1,3 +1,5 @@
+mod appbuilder;
+mod downloads;
 mod engines;
 mod hooks;
 mod island;
@@ -64,6 +66,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(engines::Engines::default())
+        .manage(appbuilder::AppBuilder::default())
+        .manage(downloads::Downloads::default())
         .manage(hooks::Pending::default())
         .invoke_handler(tauri::generate_handler![
             app_paths,
@@ -84,6 +88,30 @@ pub fn run() {
             engines::engine_supervised,
             engines::engine_find,
             engines::engine_ping,
+            downloads::download_start,
+            downloads::download_cancel,
+            downloads::comfy_models_dir,
+            downloads::list_model_files,
+            appbuilder::proj_create,
+            appbuilder::proj_tree,
+            appbuilder::proj_read,
+            appbuilder::proj_write,
+            appbuilder::proj_mkdir,
+            appbuilder::proj_delete,
+            appbuilder::proj_rename,
+            appbuilder::proc_spawn,
+            appbuilder::proc_kill,
+            appbuilder::proc_running,
+            appbuilder::preview_serve,
+            appbuilder::preview_stop,
+            appbuilder::toolchain_check,
+            appbuilder::android_paths,
+            appbuilder::adb_devices,
+            appbuilder::emulator_avds,
+            appbuilder::adb_screenshot,
+            appbuilder::adb_tap,
+            appbuilder::adb_swipe,
+            appbuilder::adb_key,
             updates::update_check,
             updates::update_install,
         ])
@@ -156,6 +184,7 @@ pub fn run() {
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
             engines::kill_all(&handle.state::<engines::Engines>());
+            appbuilder::kill_all(&handle.state::<appbuilder::AppBuilder>());
         }
     });
 }

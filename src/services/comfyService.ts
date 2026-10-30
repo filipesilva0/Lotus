@@ -5,6 +5,8 @@ import { engineUrl } from './engineConfig';
 
 const ENGINE = 'ComfyUI';
 
+export interface LoraUse { name: string; strength: number }
+
 export interface TxtToImageInput {
   prompt: string;
   negativePrompt?: string;
@@ -18,6 +20,8 @@ export interface TxtToImageInput {
   scheduler?: string;
   /** Images per run (1–8). */
   count?: number;
+  /** LoRAs applied on top of the checkpoint, in order (at most 4). */
+  loras?: LoraUse[];
   signal?: AbortSignal;
   onTick?: (elapsedMs: number, queued: boolean) => void;
 }
@@ -98,6 +102,14 @@ class ComfyService {
     return j?.CheckpointLoaderSimple?.input?.required?.ckpt_name?.[0] ?? [];
   }
 
+  /** LoRA files ComfyUI can load (its models/loras folder). */
+  async loras(): Promise<string[]> {
+    try {
+      const j = await (await this.raw('/object_info/LoraLoader')).json();
+      return j?.LoraLoader?.input?.required?.lora_name?.[0] ?? [];
+    } catch { return []; }
+  }
+
   async interrupt() {
     await this.raw('/interrupt', { method: 'POST' }).catch(() => undefined);
   }
@@ -120,25 +132,48 @@ class ComfyService {
     return j.name as string;
   }
 
+  /**
+   * LoRAs are chained one after another between the checkpoint and everything that uses its model and
+   * text encoder: checkpoint → LoraLoader 20 → LoraLoader 21 → … Node ids 20+ are reserved for them.
+   * With no LoRAs the checkpoint feeds the graph directly, exactly as before.
+   */
+  private lora(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [string, number]; clip: [string, number] } {
+    const nodes: Record<string, unknown> = {};
+    let model: [string, number] = ['4', 0];
+    let clip: [string, number] = ['4', 1];
+    (i.loras ?? []).slice(0, 4).forEach((l, k) => {
+      const id = String(20 + k);
+      nodes[id] = { class_type: 'LoraLoader', inputs: { model, clip, lora_name: l.name, strength_model: l.strength, strength_clip: l.strength } };
+      model = [id, 0];
+      clip = [id, 1];
+    });
+    return { nodes, model, clip };
+  }
+
   private sampler(i: TxtToImageInput, seed: number, latent: [string, number], denoise: number) {
     return {
       class_type: 'KSampler',
       inputs: {
         seed, steps: i.steps, cfg: i.cfg, sampler_name: i.sampler ?? 'euler', scheduler: i.scheduler ?? 'normal', denoise,
-        model: ['4', 0], positive: ['6', 0], negative: ['7', 0], latent_image: latent,
+        model: this.lora(i).model, positive: ['6', 0], negative: ['7', 0], latent_image: latent,
       },
     };
   }
 
   private base(i: TxtToImageInput) {
+    const l = this.lora(i);
     return {
       '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: i.checkpoint } },
-      '6': { class_type: 'CLIPTextEncode', inputs: { text: i.prompt, clip: ['4', 1] } },
-      '7': { class_type: 'CLIPTextEncode', inputs: { text: i.negativePrompt ?? '', clip: ['4', 1] } },
+      ...l.nodes,
+      '6': { class_type: 'CLIPTextEncode', inputs: { text: i.prompt, clip: l.clip } },
+      '7': { class_type: 'CLIPTextEncode', inputs: { text: i.negativePrompt ?? '', clip: l.clip } },
       '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ['4', 2] } },
       '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'lotus', images: ['8', 0] } },
     };
   }
+
+  /** Exposed for tests: the workflow that would be queued for a text-to-image run. */
+  buildTxt2ImgGraph(i: TxtToImageInput, seed: number) { return this.graph(i, seed); }
 
   /** Text → image. */
   private graph(i: TxtToImageInput, seed: number) {

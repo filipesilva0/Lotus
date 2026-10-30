@@ -29,6 +29,12 @@ Update checks and downloads use the project's own GitHub Releases (github.com an
 arXiv API, NCBI PubMed E-utilities, OpenAlex and Crossref are queried over HTTPS with short keyword
 queries. Please follow each service's terms of use; Lotus rate-limits its requests accordingly.
 
+## Model downloads and App Builder templates (not bundled)
+
+Engines → Models downloads the model file at the https link the user pastes (Hugging Face and Civitai links are recognised). Each model has its own licence; check it before use.
+
+The App Builder's starter projects reference public packages that are installed only when the user runs "Install packages": React, Vite, @vitejs/plugin-react (MIT), Tauri (MIT or Apache-2.0), Capacitor (MIT). The generated GitHub workflows use actions from actions/*, dtolnay/rust-toolchain and tauri-apps (MIT or Apache-2.0).
+
 ## Engines Lotus connects to (not bundled)
 
 - Ollama: MIT

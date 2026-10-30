@@ -50,7 +50,7 @@ export function mainSettings(): { model: string; systemPrompt: string; palette: 
 /** A task running somewhere in Lotus that deserves a pill on the island. */
 export interface Activity {
   id: string;
-  kind: 'image' | 'voice' | 'chat' | 'download' | 'research';
+  kind: 'image' | 'voice' | 'chat' | 'download' | 'research' | 'build';
   label: string;
   /** 0..1, omitted when indeterminate */
   progress?: number;
