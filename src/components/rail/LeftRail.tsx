@@ -1,6 +1,8 @@
 import React from 'react';
 import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, FlaskConical, Hammer, SquareKanban } from 'lucide-react';
-import { Logo } from '../common/Logo';
+import { ProfileButton } from '../account/ProfileButton';
+import type { AccountView } from '../account/AccountModal';
+import lotusIcon from '../../assets/lotus-petals.png';
 import { Symbol } from '../common/Symbol';
 import { ViewMode } from '../../types/lotus';
 import type { EngineState } from '../../hooks/useEngines';
@@ -37,6 +39,8 @@ interface LeftRailProps {
   currentView: ViewMode;
   onSelectView: (view: ViewMode) => void;
   onOpenSettings: () => void;
+  onOpenModels: () => void;
+  onOpenAccount: (view: AccountView) => void;
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
@@ -53,7 +57,7 @@ const row =
   'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-0';
 
 /** Source-list sidebar that sits directly on the window field. The selected row is a raised white item; the content pane floats beside it. */
-export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, engines, updateAvailable = false, collapsed = false }) => {
+export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenModels, onOpenAccount, engines, updateAvailable = false, collapsed = false }) => {
   const nav = [
     { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
     { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
@@ -87,9 +91,9 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
       className={`shrink-0 flex flex-col select-none transition-[width] duration-200 ${collapsed ? 'w-[68px]' : 'w-[244px]'}`}
       aria-label="Sidebar"
     >
-      {/* Leaves room for the window's traffic-light / title-bar area on platforms that draw it inside the content. */}
-      <div className={`h-[68px] shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
-        <Logo size={30} />
+      {/* App identity row; the custom title bar sits above the sidebar and the content pane. */}
+      <div className={`h-14 shrink-0 flex items-center gap-3 ${collapsed ? 'justify-center' : 'px-4'}`}>
+        <img src={lotusIcon} alt="" width={30} height={30} draggable={false} className="w-[30px] h-[30px] object-contain shrink-0" />
         {!collapsed && <span className="text-[17px] font-semibold tracking-[-0.01em]">Lotus</span>}
       </div>
 
@@ -109,6 +113,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
           {!collapsed && <span className="flex-1 text-left font-medium">Settings</span>}
           {!collapsed && updateAvailable && (<><span className="text-[11px] text-[var(--color-text-muted)]">Update</span>{dot('bg-[var(--color-accent-vibrant)]')}</>)}
         </button>
+        <ProfileButton collapsed={collapsed} rowClass={row} onOpenSettings={onOpenSettings} onOpenModels={onOpenModels} onOpenAccount={onOpenAccount} />
       </div>
     </aside>
   );

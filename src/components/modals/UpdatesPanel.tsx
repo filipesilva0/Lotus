@@ -62,7 +62,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
             )}
           </div>
           {state.info.notes && (
-            <pre className="text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto rounded-[10px] p-3 bg-[var(--color-bg-sidebar)] text-[var(--color-text-main)] font-sans">
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto rounded-[10px] p-3 bg-[var(--hover)] text-[var(--color-text-main)] font-sans">
               {state.info.notes}
             </pre>
           )}

@@ -9,7 +9,7 @@ import { memoryStore, useMemoryStore } from '../../memory/store';
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
 const Row: React.FC<{ title: string; hint: React.ReactNode; children: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] flex items-center justify-between gap-4 border border-[var(--sep)]">
+  <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
     <div className="min-w-0">
       <span className="text-xs font-semibold text-[var(--color-text-main)]">{title}</span>
       <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>
@@ -32,7 +32,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
         <Segmented label="Model server" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'llama.cpp' }]} />
       </Row>
       {s.llmBackend === 'llamacpp' && (
-        <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] border border-[var(--sep)] space-y-2">
+        <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
           <span className="text-xs font-semibold">llama-server address</span>
           <div className="flex gap-2"><TextInput value={s.llamacppUrl} onChange={(e) => set({ llamacppUrl: e.target.value })} aria-label="llama-server address" className="font-mono" /><Btn onClick={() => void test()}>Test</Btn></div>
           {probe && <p className="text-xs text-[var(--color-text-muted)]" role="status">{probe}</p>}
@@ -60,7 +60,7 @@ export const WebSearchPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set
       <Segmented label="Web search provider" value={s.webSearchProvider} onChange={(v) => set({ webSearchProvider: v })} options={[{ id: 'duckduckgo', label: 'DuckDuckGo' }, { id: 'searxng', label: 'SearXNG' }]} />
     </Row>
     {s.webSearchProvider === 'searxng' && (
-      <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] border border-[var(--sep)] space-y-2">
+      <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
         <span className="text-xs font-semibold">SearXNG address</span>
         <TextInput value={s.searxngUrl} onChange={(e) => set({ searxngUrl: e.target.value })} aria-label="SearXNG address" className="font-mono" />
         <p className="text-xs text-[var(--color-text-muted)]">Enable the JSON format in SearXNG's settings.yml (search → formats → json).</p>
@@ -89,7 +89,7 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
       <Row title="Write and improve skills" hint="After a complex chat or a finished task, Lotus writes the procedure as a skill; it uses matching skills later and rewrites one when you correct it. Manage them in Tasks → Skills.">
         <Toggle checked={s.autoSkills} onChange={(v) => set({ autoSkills: v })} ariaLabel="Write and improve skills" />
       </Row>
-      <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] border border-[var(--sep)] space-y-2">
+      <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
         <span className="text-xs font-semibold">Stored on this PC</span>
         <p className="text-xs text-[var(--color-text-muted)]">
           {memories.length} memories · {skills.length} skills{status ? ` · ${status.messages.toLocaleString()} searchable messages` : ''}

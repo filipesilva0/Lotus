@@ -6,9 +6,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ViewMode, LotusSettings } from './types/lotus';
 import { LeftRail, VIEW_TITLES } from './components/rail/LeftRail';
-import { IconBtn } from './components/common/ui';
-import { Symbol } from './components/common/Symbol';
-import { PanelLeft } from 'lucide-react';
+import { TitleBar, MenuDef } from './components/common/TitleBar';
 import { ToolbarSlotContext } from './components/common/ToolbarSlot';
 import { applyWindowGlass } from './lib/glass';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
@@ -23,6 +21,8 @@ import { startHardwareMonitor } from './hardware/monitor';
 import { startScheduler } from './tasks/store';
 import { loadMemory } from './memory/store';
 import { SettingsModal } from './components/modals/SettingsModal';
+import { AccountModal, AccountView } from './components/account/AccountModal';
+import { ModelsSheet } from './components/modals/ModelsSheet';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
@@ -98,6 +98,8 @@ export default function App() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [accountView, setAccountView] = useState<AccountView | null>(null);
+  const [modelsOpen, setModelsOpen] = useState(false);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => load<boolean>('lotus.sidebar.v1', false));
   useEffect(() => { localStorage.setItem('lotus.sidebar.v1', JSON.stringify(sidebarCollapsed)); }, [sidebarCollapsed]);
@@ -109,10 +111,45 @@ export default function App() {
 
   const [checkpoints, setCheckpoints] = useState<string[]>([]);
 
-  const setCurrentView = useCallback((v: ViewMode) => {
+  // Page history for the title bar's back / forward buttons (in memory, per run).
+  const [past, setPast] = useState<ViewMode[]>([]);
+  const [future, setFuture] = useState<ViewMode[]>([]);
+  const viewRef = useRef(currentView);
+  const showView = useCallback((v: ViewMode) => {
+    viewRef.current = v;
     setCurrentViewRaw(v);
     if (COLLAPSING.includes(v)) setSidebarCollapsed(true);
   }, []);
+  const setCurrentView = useCallback((v: ViewMode) => {
+    const here = viewRef.current;
+    if (v === here) return;
+    setPast((p) => [...p.slice(-49), here]);
+    setFuture([]);
+    showView(v);
+  }, [showView]);
+  const goBack = useCallback(() => {
+    if (!past.length) return;
+    const here = viewRef.current;
+    setFuture((f) => [here, ...f]);
+    setPast(past.slice(0, -1));
+    showView(past[past.length - 1]);
+  }, [past, showView]);
+  const goForward = useCallback(() => {
+    if (!future.length) return;
+    const here = viewRef.current;
+    setPast((p) => [...p, here]);
+    setFuture(future.slice(1));
+    showView(future[0]);
+  }, [future, showView]);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); goForward(); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [goBack, goForward]);
   useEffect(() => { if (COLLAPSING.includes(currentView)) setSidebarCollapsed(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const eng = useEngines();
@@ -158,24 +195,88 @@ export default function App() {
     return () => offs.forEach((o) => o());
   }, [chat.importMessages]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Title-bar menus (every item does something real) ─────────────────────
+  const edit = (cmd: string) => () => { document.execCommand(cmd); };
+  const paste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) document.execCommand('insertText', false, text);
+    } catch {
+      document.execCommand('paste');
+    }
+  };
+  const closeWindow = async () => {
+    try { const { getCurrentWindow } = await import('@tauri-apps/api/window'); await getCurrentWindow().close(); } catch { /* browser preview */ }
+  };
+  const go = (v: ViewMode) => () => setCurrentView(v);
+  const menus: MenuDef[] = [
+    { label: 'File', items: [
+      { label: 'New Chat', shortcut: 'Ctrl+N', onSelect: () => { chat.newChat(); setCurrentView('chat'); } },
+      'separator',
+      { label: 'Settings…', shortcut: 'Ctrl+,', onSelect: () => setIsSettingsOpen(true) },
+      'separator',
+      { label: 'Close Window', onSelect: () => void closeWindow() },
+      { label: 'Quit Lotus', onSelect: () => void invokeNative('quit_app') },
+    ] },
+    { label: 'Edit', items: [
+      { label: 'Undo', shortcut: 'Ctrl+Z', onSelect: edit('undo') },
+      { label: 'Redo', shortcut: 'Ctrl+Y', onSelect: edit('redo') },
+      'separator',
+      { label: 'Cut', shortcut: 'Ctrl+X', onSelect: edit('cut') },
+      { label: 'Copy', shortcut: 'Ctrl+C', onSelect: edit('copy') },
+      { label: 'Paste', shortcut: 'Ctrl+V', onSelect: () => void paste() },
+      'separator',
+      { label: 'Select All', shortcut: 'Ctrl+A', onSelect: edit('selectAll') },
+    ] },
+    { label: 'View', items: [
+      { label: sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar', shortcut: 'Ctrl+Alt+S', onSelect: () => setSidebarCollapsed((c) => !c) },
+      { label: 'Dark Appearance', checked: settings.darkMode, onSelect: () => setSettings((s) => ({ ...s, darkMode: !s.darkMode })) },
+      'separator',
+      { label: 'Chat', checked: currentView === 'chat', onSelect: go('chat') },
+      { label: 'Images', checked: currentView === 'images', onSelect: go('images') },
+      { label: 'Voice', checked: currentView === 'voice', onSelect: go('voice') },
+      { label: 'Research', checked: currentView === 'research', onSelect: go('research') },
+      { label: 'App Builder', checked: currentView === 'builder', onSelect: go('builder') },
+      { label: 'Tasks', checked: currentView === 'tasks', onSelect: go('tasks') },
+      { label: 'Engines', checked: currentView === 'engines', onSelect: go('engines') },
+      'separator',
+      { label: 'Back', shortcut: 'Alt+Left', onSelect: goBack, disabled: !past.length },
+      { label: 'Forward', shortcut: 'Alt+Right', onSelect: goForward, disabled: !future.length },
+    ] },
+    { label: 'Help', items: [
+      { label: 'Check for Updates…', onSelect: () => { void updates.check(); setIsSettingsOpen(true); } },
+      { label: 'Models & Engines', onSelect: () => openEngines('models') },
+    ] },
+  ];
+
+  // Ctrl+N and Ctrl+, are listed in the menus, so they must work from the keyboard too.
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
+      if (e.key.toLowerCase() === 'n') { e.preventDefault(); chat.newChat(); setCurrentView('chat'); }
+      else if (e.key === ',') { e.preventDefault(); setIsSettingsOpen(true); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [chat.newChat, setCurrentView]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Layout ────────────────────────────────────────────────────────────────
   // Split view: translucent sidebar | content pane with a unified toolbar on top.
   const panel = (
-    <main className="w-full h-full flex overflow-hidden text-[var(--color-text-main)]">
+    <main className="w-full flex-1 min-h-0 flex overflow-hidden text-[var(--color-text-main)]">
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenModels={() => setModelsOpen(true)}
+        onOpenAccount={setAccountView}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
         collapsed={sidebarCollapsed}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden my-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden mb-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
         <header className="h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]" role="banner">
-          <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
-            <Symbol glyph={PanelLeft} weight="medium" />
-          </IconBtn>
           <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
@@ -212,8 +313,12 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-screen">
+    <div className="h-screen w-screen flex flex-col">
+      <TitleBar canGoBack={past.length > 0} canGoForward={future.length > 0} onBack={goBack} onForward={goForward}
+        sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((c) => !c)} menus={menus} />
       {panel}
+      <ModelsSheet open={modelsOpen} onClose={() => setModelsOpen(false)} engines={eng.engines} onOpenEngines={() => openEngines('engines')} />
+      <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );

@@ -19,7 +19,7 @@ const Row: React.FC<{ title: string; hint?: string; children: React.ReactNode }>
 );
 
 const Group: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] border border-[var(--sep)]">
+  <section className="py-3.5 border-b border-[var(--sep)] last:border-b-0">
     <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1">{title}</h4>
     <div className="divide-y divide-black/5 dark:divide-white/5">{children}</div>
   </section>

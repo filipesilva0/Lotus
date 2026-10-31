@@ -130,3 +130,11 @@ Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native
 - **Thinking mode = multi-pass deliberation** (analyse, draft, check, final) plus native `think` where Ollama reports the capability, so it works with any model.
 - **Routines run in-app** (timer in the main window, which stays alive in the tray), not as OS scheduled tasks: simpler and honest about when they run. "Catch up if missed" is opt-in.
 - **Rejected**: storing memory in localStorage (no FTS, size limits); letting the model rewrite user-saved memories; automatic writes into the user's `memory.md` (Lotus never writes to project files).
+
+
+## Session 6: title bar, accounts, sheets
+- **Custom title bar** (`decorations: false`, `components/common/TitleBar.tsx`): back/forward, sidebar toggle, File/Edit/View/Help menus, own window controls. Loses Windows 11 snap-layout flyout on the maximise button. Unverified on WebView2.
+- **Accounts use Supabase-compatible APIs** (`services/account.ts`, `services/sync.ts`, `sync-server/schema.sql`): GoTrue for auth, PostgREST for a per-user key/value `user_state` table with row-level security. Chosen because it is free to start, self-hostable, and needs no server code of ours. The user brings the server (sign-in sheet → Sync server) until an official one is set via `VITE_LOTUS_SYNC_URL/KEY`. Assumption: tokens in localStorage are acceptable for now (keyring later).
+- **Profile button** under Settings in the sidebar: menu rises upward with Log in / profile, Settings, Models, Log out.
+- **Settings and Models open as sheets** sharing the profile sheet's shell (top-aligned, 44 px header, flat sections, no nested cards). Engines → Models page unchanged.
+- **App mark** is the coloured lotus petals (`src/assets/lotus-petals.png`, cut from the app icon without its dark square); the old line-art `Logo.tsx` is no longer used.

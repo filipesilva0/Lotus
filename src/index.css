@@ -41,6 +41,11 @@
   --ring: color-mix(in srgb, var(--color-accent-vibrant) 55%, transparent);
   --shadow-1: 0 0.5px 0 rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.06);
   --shadow-float: 0 0 0 0.5px rgba(0,0,0,.14), 0 10px 30px rgba(0,0,0,.18);
+
+  /* Custom title bar: the close button uses the Windows caption red, as the native one does. */
+  --titlebar-close: #C42B1C;
+  --titlebar-close-pressed: #C84031;
+  --titlebar-close-fg: #FFFFFF;
 }
 .dark {
   --hover: rgba(255, 255, 255, 0.07);
@@ -116,10 +121,17 @@ html.no-glass body { background: var(--color-bg-base); }
 @keyframes lotus-pulse { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes lotus-spin { to { transform: rotate(360deg); } }
 
+/* ── Profile menu: rises from the profile button, items follow one by one (lowest first) ── */
+@keyframes menu-rise { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes item-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.profile-menu { transform-origin: bottom left; animation: menu-rise .22s cubic-bezier(.2,.8,.2,1) both; }
+.profile-menu-item { animation: item-rise .26s cubic-bezier(.2,.8,.2,1) both; }
+
 /* Reduced motion: movement is replaced by a plain fade; looping effects stop. */
 @media (prefers-reduced-motion: reduce) {
   [data-lotus-anim] { animation: none !important; }
   .sym-pulse, .sym-bounce, .sym-rotate, .sym-wiggle, .sym-variable > * { animation: none !important; }
+  .profile-menu, .profile-menu-item { animation: sym-fade .15s linear 1 both !important; }
   .sym-appear { animation: sym-fade .15s linear 1 !important; }
   .animate-spin, .animate-pulse { animation: none !important; }
   * { transition-duration: .01ms !important; scroll-behavior: auto !important; }

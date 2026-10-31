@@ -26,7 +26,7 @@ import {
 import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
-import { Segmented, Select, IconBtn } from '../common/ui';
+import { Segmented, Select, IconBtn, Btn } from '../common/ui';
 import { PALETTES, FONTS } from '../../styles/theme';
 import type { ColorPalette, FontFamily } from '../../types/lotus';
 import { PillSlider } from '../common/PillSlider';
@@ -100,60 +100,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Settings" className="material-overlay w-full max-w-4xl rounded-[12px] flex flex-col md:flex-row h-[90vh] max-h-[640px] overflow-hidden">
-        {/* Left Settings Sidebar */}
-        <div className="material-sidebar w-full md:w-56 p-3 flex flex-col justify-between border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] shrink-0">
-          <div>
-            <div className="px-2 py-1 mb-3">
-              <h2 className="text-[15px] font-semibold text-[var(--color-text-main)] leading-tight">Settings</h2>
-            </div>
-
-            <nav className="space-y-1 overflow-y-auto max-h-[460px] no-scrollbar">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div role="dialog" aria-modal="true" aria-label="Settings" className="material-overlay w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
+        {/* Header: same as every other sheet (profile, sign in) */}
+        <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-[var(--sep)]">
+          <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">Settings</h2>
+          <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
+        </div>
+        <div className="flex-1 min-h-0 flex">
+        {/* Sections */}
+        <div className="w-48 shrink-0 p-2 flex flex-col justify-between border-r border-[var(--sep)]">
+            <nav className="flex flex-col gap-0.5 overflow-y-auto" aria-label="Settings sections">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
+                    type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-2 px-2 h-7 rounded-[6px] text-[13px] transition-colors text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--color-accent-fill)] text-white font-medium' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)]'}`}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full flex items-center gap-2.5 px-2.5 h-8 rounded-[8px] text-[13px] transition-colors text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)]'}`}
                   >
-                    <Icon className="w-4 h-4 shrink-0" strokeWidth={1.7} aria-hidden="true" />
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[var(--color-accent-vibrant)]' : 'text-[var(--color-text-muted)]'}`} strokeWidth={1.7} aria-hidden="true" />
                     <span className="truncate">{tab.label}</span>
                   </button>
                 );
               })}
             </nav>
-          </div>
-
-          <div className="pt-3 border-t border-[var(--color-border-subtle)] px-2 text-xs text-[var(--color-text-muted)]">
-            <span>{updates.version ? `Lotus ${updates.version}` : 'Lotus'} · Local AI Studio</span>
-          </div>
+          <p className="px-2.5 pt-2 text-[12px] text-[var(--color-text-muted)]">{updates.version ? `Lotus ${updates.version}` : 'Lotus'}</p>
         </div>
 
-        {/* Right Settings Content Area */}
-        <div className="flex-1 flex flex-col justify-between overflow-hidden bg-[var(--color-bg-panel)]">
-          {/* Header */}
-          <div className="h-14 px-6 border-b border-[var(--color-border-subtle)] flex items-center justify-between shrink-0">
-            <h3 className="text-[15px] font-semibold text-[var(--color-text-main)]">
-              {tabs.find((t) => t.id === activeTab)?.label}
-            </h3>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        {/* Section content */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <h3 className="px-5 pt-4 pb-1 text-[13px] font-semibold text-[var(--color-text-main)] shrink-0">
+            {tabs.find((t) => t.id === activeTab)?.label}
+          </h3>
 
           {/* Body Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto px-5 pb-5">
             {/* 1. Model & Inference Parameters (formerly in Card B & Weights) */}
             {activeTab === 'inference' && (
               <div className="space-y-5">
                 {/* Default Model */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-2 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-xs font-semibold text-[var(--color-text-main)]">
@@ -177,7 +167,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Temperature Pill Slider */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-3 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-3">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-xs font-semibold text-[var(--color-text-main)]">
@@ -227,7 +217,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Top-P Nucleus Sampling */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-2 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-xs font-semibold text-[var(--color-text-main)]">
@@ -251,7 +241,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Context Window Length */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-2 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
                   <div className="flex justify-between items-center">
                     <div>
                       <span className="text-xs font-semibold text-[var(--color-text-main)]">
@@ -281,7 +271,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Reasoning <think> Block Mode */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-2 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
                   <div>
                     <span className="text-xs font-semibold text-[var(--color-text-main)]">
                       Deep Reasoning &lt;think&gt; Display
@@ -313,7 +303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* System Prompt / Custom Instructions */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] space-y-2 border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-semibold text-[var(--color-text-main)]">
                       Custom System Instructions (Odysseus / ChatGPT Persona)
@@ -347,7 +337,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'chat' && (
               <div className="space-y-4">
                 {/* Send on Enter */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] flex items-center justify-between border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-semibold text-[var(--color-text-main)]">
                       Send Message with Enter
@@ -363,7 +353,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Auto Scroll */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] flex items-center justify-between border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-semibold text-[var(--color-text-main)]">
                       Auto-Scroll During Generation
@@ -379,7 +369,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Code Copy Language */}
-                <div className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] flex items-center justify-between border border-[var(--sep)]">
+                <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between">
                   <div>
                     <span className="text-xs font-semibold text-[var(--color-text-main)]">
                       Include Language Header on Code Copy
@@ -405,9 +395,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* 4. Voice & Speech (Kokoro & Whisper) */}
             {activeTab === 'appearance' && (
               <div className="space-y-5">
-                <section aria-labelledby="appearance-h" className="rounded-[10px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] divide-y divide-[var(--sep)]">
+                <section aria-labelledby="appearance-h" className="divide-y divide-[var(--sep)] border-b border-[var(--sep)]">
                   <h4 id="appearance-h" className="sr-only">Appearance</h4>
-                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 py-3">
                     <span className="text-[13px]">Appearance</span>
                     <Segmented
                       label="Appearance"
@@ -420,7 +410,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 py-3">
                     <span className="text-[13px]">Accent colour</span>
                     <div role="radiogroup" aria-label="Accent colour" className="flex items-center gap-2">
                       {(Object.keys(PALETTES) as ColorPalette[]).map((id) => {
@@ -437,7 +427,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 py-3">
                     <div>
                       <span className="text-[13px] block">Interface font</span>
                       <span className="text-[12px] text-[var(--color-text-muted)]">System uses San Francisco on Mac and Segoe UI on Windows.</span>
@@ -449,7 +439,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex items-center justify-between gap-4 py-3">
                     <div>
                       <span className="text-[13px] block">Text size</span>
                       <span className="text-[12px] text-[var(--color-text-muted)]">Scales every label and control.</span>
@@ -476,25 +466,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span className="text-xs font-semibold text-[var(--color-text-main)]">
                   Open Source Notices & THIRD_PARTY_LICENSES.md
                 </span>
-                <pre className="p-4 bg-[var(--color-bg-sidebar)] rounded-[10px] text-xs text-[var(--color-text-main)] dark:text-slate-300 font-mono whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed border border-[var(--sep)]">
+                <pre className="p-4 bg-[var(--hover)] rounded-[10px] text-xs text-[var(--color-text-main)] dark:text-slate-300 font-mono whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
                   {THIRD_PARTY_LICENSES_TEXT}
                 </pre>
               </div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="h-14 px-6 border-t border-[#EBECEF] dark:border-[#1E293B] flex items-center justify-between shrink-0">
-            <span className="text-xs text-[var(--color-text-muted)]">
-              Configuration changes are saved automatically.
-            </span>
-            <button
-              onClick={onClose}
-              className="px-5 py-2 rounded-[6px] bg-[var(--color-accent-fill)] text-white text-xs font-semibold hover:scale-105 active:scale-95 transition-transform"
-            >
-              Done
-            </button>
-          </div>
+        </div>
+        </div>
+
+        {/* Footer: same as the other sheets */}
+        <div className="px-4 py-3 border-t border-[var(--sep)] flex items-center justify-between gap-2 shrink-0">
+          <span className="text-[12px] text-[var(--color-text-muted)]">Changes are saved automatically.</span>
+          <Btn variant="primary" onClick={onClose}>Done</Btn>
         </div>
       </div>
     </div>
