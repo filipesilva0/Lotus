@@ -118,6 +118,7 @@ pub fn run() {
             appbuilder::adb_key,
             hardware::hw_snapshot,
             context_files::ctx_discover,
+            context_files::ctx_read_folder,
             memory_db::mem_status,
             memory_db::mem_index,
             memory_db::mem_forget_session,

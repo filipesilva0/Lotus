@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Mic, MicOff, Paperclip, Square, X, FileText, Search, Navigation, AtSign, Brain, Globe, Eye, PenLine } from 'lucide-react';
-import { MarkdownLite } from '../../lib/markdownLite';
+import { ArrowUp, Mic, MicOff, Plus, Square, X, FileText, Navigation, AtSign, Brain, Globe, FolderPlus, Paperclip, ChevronDown, Check, Boxes, Puzzle } from 'lucide-react';
 import { Btn, IconBtn, cx } from '../common/ui';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { voicebox } from '../../services/voicebox';
+import { isTauri } from '../../lib/http';
 
 export interface SlashCommand { name: string; args?: string; help: string }
 export const SLASH: SlashCommand[] = [
@@ -19,11 +19,21 @@ export const SLASH: SlashCommand[] = [
   { name: 'seed', args: '<number|off>', help: 'Lock or unlock the seed' },
   { name: 'system', args: '<text>', help: 'Change the system prompt' },
   { name: 'pin', help: 'Pin or unpin this chat' },
+  { name: 'plugins', help: 'Open your plugins (create one with Lotus)' },
+  { name: 'library', help: 'Read the skills, memory and soul Lotus uses' },
 ];
+
+export interface ComposerModel { id: string; name: string; tag: string }
+/** A slash command added by a plugin (shown with the built-ins). */
+export interface ExtraCommand { name: string; args?: string; help: string }
 
 interface Props {
   model: string; streaming: boolean; disabled?: boolean; sendOnEnter: boolean;
-  searchOn: boolean; onToggleSearch: () => void;
+  /** Installed models for the picker in the composer. */
+  models: ComposerModel[]; onModel: (id: string) => void; onOpenModels: () => void;
+  /** Desktop: opens the folder dialog; returns a notice to show. Browser: the composer reads the picked files itself. */
+  onAttachFolder: (files?: FileList) => Promise<string | void>;
+  extraCommands?: ExtraCommand[];
   thinkingOn: boolean; onToggleThinking: () => void;
   webOn: boolean; onToggleWeb: () => void;
   mentions: { id: string; label: string; kind: 'model' | 'file' }[];
@@ -33,9 +43,14 @@ interface Props {
   onStop: () => void;
 }
 
-export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, searchOn, onToggleSearch, thinkingOn, onToggleThinking, webOn, onToggleWeb, mentions, prefill, onSend, onCommand, onStop }) => {
+export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, models, onModel, onOpenModels, onAttachFolder, extraCommands = [], thinkingOn, onToggleThinking, webOn, onToggleWeb, mentions, prefill, onSend, onCommand, onStop }) => {
   const [text, setText] = useState('');
-  const [preview, setPreview] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [folderBusy, setFolderBusy] = useState(false);
+  const dirInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
@@ -48,12 +63,27 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
 
   useEffect(() => { if (prefill?.text) setText((p) => (p ? `${p} ${prefill.text}` : prefill.text)); }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => recorder.current?.cancel(), []);
+  useEffect(() => {
+    if (!plusOpen && !modelOpen) return;
+    const away = (e: MouseEvent) => { if (!bar.current?.contains(e.target as Node)) { setPlusOpen(false); setModelOpen(false); } };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { setPlusOpen(false); setModelOpen(false); } };
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+  }, [plusOpen, modelOpen]);
+
+  const attachFolder = async (list?: FileList) => {
+    setPlusOpen(false); setNotice(null); setFolderBusy(true);
+    try { const r = await onAttachFolder(list); if (r) setNotice(r); }
+    catch (e) { setNotice(`Couldn't read that folder. ${(e as Error).message ?? e}`); }
+    finally { setFolderBusy(false); }
+  };
   useEffect(() => { const el = ta.current; if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 200)}px`; } }, [text]);
 
   // Slash menu: shown while the text is "/word" with no space yet. @ menu: shown for a trailing "@word".
   const slashQ = /^\/(\w*)$/.exec(text)?.[1];
   const atQ = /(?:^|\s)@([\w.\-:]*)$/.exec(text)?.[1];
-  const slashItems = useMemo(() => (slashQ === undefined ? [] : SLASH.filter((c) => c.name.startsWith(slashQ.toLowerCase()))), [slashQ]);
+  const commands = useMemo(() => [...SLASH, ...extraCommands.filter((c) => !SLASH.some((b) => b.name === c.name))], [extraCommands]);
+  const slashItems = useMemo(() => (slashQ === undefined ? [] : commands.filter((c) => c.name.startsWith(slashQ.toLowerCase()))), [slashQ, commands]);
   const atItems = useMemo(() => (atQ === undefined ? [] : mentions.filter((m) => m.label.toLowerCase().includes(atQ.toLowerCase())).slice(0, 8)), [atQ, mentions]);
   const menu = slashItems.length ? 'slash' : atItems.length ? 'at' : null;
   useEffect(() => setSel(0), [menu, slashQ, atQ]);
@@ -75,14 +105,14 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     if (!t && !files.length) return;
     setNotice(null);
     const cmd = /^\/(\w+)\s*(.*)$/s.exec(t);
-    if (cmd && SLASH.some((c) => c.name === cmd[1].toLowerCase())) {
+    if (cmd && commands.some((c) => c.name === cmd[1].toLowerCase())) {
       const r = onCommand(cmd[1].toLowerCase(), cmd[2].trim());
       if (r) setNotice(r);
       setText(''); return;
     }
     const errs = await onSend(t, files);
     if (errs.length) setNotice(errs.join(' '));
-    setText(''); setFiles([]); setPreviews({}); setPreview(false);
+    setText(''); setFiles([]); setPreviews({});
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -126,7 +156,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
             {menu === 'slash' ? slashItems.map((c, i) => (
               <button key={c.name} role="option" aria-selected={i === sel} type="button" onMouseDown={(e) => { e.preventDefault(); pick(i); }}
                 className={cx('w-full flex items-baseline gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px]', i === sel && 'bg-[var(--color-accent-fill)] text-white')}>
-                <span className="font-medium">/{c.name}</span>{c.args && <span className="opacity-70 text-[12px]">{c.args}</span>}<span className="ml-auto text-[12px] opacity-70 truncate">{c.help}</span>
+                {!SLASH.some((b) => b.name === c.name) && <Puzzle className="w-3 h-3 self-center shrink-0 opacity-70" aria-label="Plugin command" />}<span className="font-medium">/{c.name}</span>{c.args && <span className="opacity-70 text-[12px]">{c.args}</span>}<span className="ml-auto text-[12px] opacity-70 truncate">{c.help}</span>
               </button>
             )) : atItems.map((m, i) => (
               <button key={m.kind + m.id} role="option" aria-selected={i === sel} type="button" onMouseDown={(e) => { e.preventDefault(); pick(i); }}
@@ -157,29 +187,67 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               })}
             </div>
           )}
-          {preview && (
-            <div className="px-3.5 pt-3 pb-1 min-h-[44px] max-h-[200px] overflow-y-auto text-[14px] leading-relaxed" aria-label="Message preview" aria-live="polite">
-              {text.trim() ? <MarkdownLite text={text} onDark={false} /> : <p className="text-[var(--color-text-muted)]">Nothing to preview.</p>}
-            </div>
-          )}
-          <textarea ref={ta} hidden={preview} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
+          <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
             aria-label="Message" placeholder={streaming ? 'Type to steer the reply…' : `Message ${model || 'a model'} — / for commands, @ to mention`}
             className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
-          <div className="flex items-center gap-1 px-2 pb-2">
-            <label className="w-7 h-7 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] cursor-default" title="Attach images, text or code files">
-              <input type="file" multiple className="sr-only" aria-label="Attach files" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
-              <Paperclip className="w-4 h-4" />
-            </label>
-            <IconBtn label={searchOn ? 'Source search on: sends keywords to arXiv, PubMed and OpenAlex' : 'Search academic sources before answering'} active={searchOn} onClick={onToggleSearch}><Search className="w-4 h-4" /></IconBtn>
+          <div ref={bar} className="relative flex items-center gap-1 px-2 pb-2">
+            <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
+            {/* Browser preview only: the desktop app uses the system folder dialog. */}
+            <input ref={dirInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true"
+              {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+              onChange={(e) => { const l = e.target.files; if (l?.length) void attachFolder(l); e.target.value = ''; }} />
+            <IconBtn label="Add files or a folder" aria-haspopup="menu" aria-expanded={plusOpen} active={plusOpen} onClick={() => { setPlusOpen((o) => !o); setModelOpen(false); }}>
+              <Plus className={cx('w-4 h-4 transition-transform duration-150', plusOpen && 'rotate-45')} />
+            </IconBtn>
+            {plusOpen && (
+              <div role="menu" aria-label="Add to chat" className="material-frosted absolute bottom-full left-1 mb-2 w-[260px] p-1 rounded-[10px] z-30">
+                <button type="button" role="menuitem" onClick={() => { setPlusOpen(false); fileInput.current?.click(); }}
+                  className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-[6px] text-left hover:bg-[var(--hover)] focus:outline-none focus-visible:bg-[var(--hover)]">
+                  <Paperclip className="w-4 h-4 mt-0.5 text-[var(--petal-blue)]" /><span className="flex flex-col"><span className="text-[13px] font-medium">Attach files</span><span className="text-[12px] text-[var(--color-text-muted)]">Images, text and code</span></span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => { if (isTauri) void attachFolder(); else { setPlusOpen(false); dirInput.current?.click(); } }}
+                  className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-[6px] text-left hover:bg-[var(--hover)] focus:outline-none focus-visible:bg-[var(--hover)]">
+                  <FolderPlus className="w-4 h-4 mt-0.5 text-[var(--petal-orange)]" /><span className="flex flex-col"><span className="text-[13px] font-medium">Attach a folder</span><span className="text-[12px] text-[var(--color-text-muted)]">Its text and code files join this chat's context</span></span>
+                </button>
+              </div>
+            )}
             <span className="w-px h-4 mx-1 bg-[var(--sep)]" aria-hidden="true" />
             <Btn size="sm" variant={thinkingOn ? 'primary' : 'ghost'} aria-pressed={thinkingOn} icon={<Brain className="w-3.5 h-3.5" />} onClick={onToggleThinking}
               title={thinkingOn ? 'Thinking on: the model analyses, drafts and checks before answering (slower)' : 'Thinking: analyse, draft and check before answering. Takes longer, answers better.'}>Think</Btn>
             <Btn size="sm" variant={webOn ? 'primary' : 'ghost'} aria-pressed={webOn} icon={<Globe className="w-3.5 h-3.5" />} onClick={onToggleWeb}
               title={webOn ? 'Web search on: your question is searched on the web and the top pages are read' : 'Web search: search the current web and read the top pages before answering'}>Web</Btn>
-            <span className="w-px h-4 mx-1 bg-[var(--sep)]" aria-hidden="true" />
-            <IconBtn label={preview ? 'Back to writing' : 'Preview Markdown'} active={preview} onClick={() => { setPreview((p) => !p); if (preview) setTimeout(() => ta.current?.focus(), 0); }}>{preview ? <PenLine className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</IconBtn>
             <IconBtn label={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate (local Whisper)'} active={rec} onClick={toggleMic} className={rec ? '!text-[var(--c-red)] animate-pulse' : ''}>{rec ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}</IconBtn>
+            {folderBusy && <span className="ml-1 text-[12px] text-[var(--color-text-muted)] animate-pulse" role="status">Reading folder…</span>}
             <div className="flex-1" />
+
+            {/* Model for this chat, right where you type (like the reference composer). */}
+            <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} onClick={() => { setModelOpen((o) => !o); setPlusOpen(false); }}
+              title="Model for this chat"
+              className={cx('h-7 max-w-[220px] inline-flex items-center gap-1.5 pl-2 pr-1.5 rounded-[8px] text-[12px] font-medium transition-colors duration-100 focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]',
+                modelOpen ? 'bg-[var(--pressed)] text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
+              <span aria-hidden="true" className="w-2 h-2 rounded-full shrink-0 bg-[var(--petal-green)]" style={{ background: model ? undefined : 'var(--color-text-muted)' }} />
+              <span className="truncate">{model || 'Choose a model'}</span>
+              <ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', modelOpen && 'rotate-180')} />
+            </button>
+            {modelOpen && (
+              <div role="listbox" aria-label="Models" className="material-frosted absolute bottom-full right-2 mb-2 w-[300px] max-h-[320px] overflow-y-auto p-1 rounded-[10px] z-30">
+                <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--color-text-muted)]">Chat model</p>
+                {!models.length && <p className="px-2.5 py-2 text-[12px] text-[var(--color-text-muted)]">No models listed. Start Ollama, or download a model.</p>}
+                {models.map((m) => (
+                  <button key={m.id} type="button" role="option" aria-selected={m.id === model} onClick={() => { onModel(m.id); setModelOpen(false); ta.current?.focus(); }}
+                    className={cx('w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px] focus:outline-none focus-visible:bg-[var(--hover)]', m.id === model ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-[var(--hover)]')}>
+                    <span className="w-4 shrink-0">{m.id === model && <Check className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />}</span>
+                    <span className="flex-1 min-w-0 truncate">{m.name}</span>
+                    <span className="text-[11px] text-[var(--color-text-muted)] shrink-0">{m.tag}</span>
+                  </button>
+                ))}
+                <div role="separator" className="my-1 mx-2 h-px bg-[var(--sep)]" />
+                <button type="button" onClick={() => { setModelOpen(false); onOpenModels(); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px] hover:bg-[var(--hover)] focus:outline-none focus-visible:bg-[var(--hover)]">
+                  <Boxes className="w-3.5 h-3.5 ml-0.5 mr-0.5 text-[var(--color-text-muted)]" />Get more models…
+                </button>
+              </div>
+            )}
             {streaming && !steer ? (
               <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={onStop}>Stop</Btn>
             ) : (

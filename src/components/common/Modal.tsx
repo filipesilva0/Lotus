@@ -5,7 +5,9 @@ import { IconBtn, cx } from './ui';
 /** Sheet: a floating overlay on thick material. Escape closes; focus moves in and returns on close. */
 export const Modal: React.FC<{
   open: boolean; onClose: () => void; title: string; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean;
-}> = ({ open, onClose, title, children, footer, wide }) => {
+  /** Extra-wide sheet (profile with usage charts). */
+  xl?: boolean;
+}> = ({ open, onClose, title, children, footer, wide, xl }) => {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -19,7 +21,7 @@ export const Modal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
-        className={cx('material-overlay w-full max-h-[84vh] flex flex-col rounded-[12px] outline-none', wide ? 'max-w-2xl' : 'max-w-md')}>
+        className={cx('material-frosted w-full max-h-[86vh] flex flex-col rounded-[12px] outline-none', xl ? 'max-w-[980px]' : wide ? 'max-w-2xl' : 'max-w-md')}>
         <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-[var(--sep)]">
           <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">{title}</h2>
           <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>

@@ -41,6 +41,7 @@ interface LeftRailProps {
   onOpenSettings: () => void;
   onOpenModels: () => void;
   onOpenAccount: (view: AccountView) => void;
+  onOpenLibrary: (tab: 'skills' | 'plugins') => void;
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
@@ -57,7 +58,7 @@ const row =
   'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-0';
 
 /** Source-list sidebar that sits directly on the window field. The selected row is a raised white item; the content pane floats beside it. */
-export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenModels, onOpenAccount, engines, updateAvailable = false, collapsed = false }) => {
+export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenModels, onOpenAccount, onOpenLibrary, engines, updateAvailable = false, collapsed = false }) => {
   const nav = [
     { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
     { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
@@ -113,7 +114,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
           {!collapsed && <span className="flex-1 text-left font-medium">Settings</span>}
           {!collapsed && updateAvailable && (<><span className="text-[11px] text-[var(--color-text-muted)]">Update</span>{dot('bg-[var(--color-accent-vibrant)]')}</>)}
         </button>
-        <ProfileButton collapsed={collapsed} rowClass={row} onOpenSettings={onOpenSettings} onOpenModels={onOpenModels} onOpenAccount={onOpenAccount} />
+        <ProfileButton collapsed={collapsed} rowClass={row} onOpenSettings={onOpenSettings} onOpenModels={onOpenModels} onOpenAccount={onOpenAccount} onOpenLibrary={onOpenLibrary} />
       </div>
     </aside>
   );

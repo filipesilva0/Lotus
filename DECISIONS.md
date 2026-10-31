@@ -138,3 +138,17 @@ Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native
 - **Profile button** under Settings in the sidebar: menu rises upward with Log in / profile, Settings, Models, Log out.
 - **Settings and Models open as sheets** sharing the profile sheet's shell (top-aligned, 44 px header, flat sections, no nested cards). Engines → Models page unchanged.
 - **App mark** is the coloured lotus petals (`src/assets/lotus-petals.png`, cut from the app icon without its dark square); the old line-art `Logo.tsx` is no longer used.
+
+## Session 7: choices, usage, Library, plugins, background model, island, frosted glass
+- **Options come from a ```choices JSON block**, asked for in the system prompt (`chat/choices.ts CHOICES_INSTRUCTIONS`), with a conservative plain-list fallback. Rejected: asking the model for tool calls (many local models lack tool support) and turning every list into buttons (false positives in ordinary answers). The block is hidden while it streams and never shown as raw JSON.
+- **Plugins are data, not code**: instructions + slash-command templates + skills, validated (`plugins/store.ts validatePlugin`) before install. Rejected: JavaScript plugins (would need a sandbox and would break the "nothing runs that you didn't approve" model). Built-in command names are reserved.
+- **The plugin creator is a system skill** (`skills/system.ts PLUGIN_CREATOR_SKILL`) run on the chat model as user-started work (priority 0). Its output is shown for review; installing is always a click.
+- **System skills are the real texts** the features send (imported, not copied), so Library cannot drift from behaviour.
+- **"Active Model Checkpoint" became "Background tasks model"** (`settings.backgroundModel`, '' = chat model). Used for `memory`, `skill` and `rename` jobs only (`agents/pool.ts modelForJob`); tasks/routines keep the VRAM scaler's agent model. The old select listed four hard-coded models (a no-fake-UI violation) and has been removed.
+- **Auto-rename** replaces only a title Lotus set itself (`session.autoTitle`).
+- **Chat model picker lives in the composer** (reference: the user's screenshot of a composer with the model next to Send); the toolbar picker was removed to avoid two controls for one setting.
+- **Usage analytics are computed locally from saved chats** (`analytics/usage.ts`), never sent anywhere; incognito never counted. Chart colours are the app icon's petals in a validated categorical order (`--chart-1…5`); yellow is UI-only (too light for marks on white).
+- **Frosted glass** = tint (≈80 % light, 76 % dark) + 30 px blur + saturation + faint SVG grain + light top edge (`.material-frosted`, `.material-titlebar`); `.material-overlay` uses the same look so every floating surface matches. In `index.css`, the `-webkit-` form must come before the standard property (minifier keeps the last one).
+- **Island**: smoked glass with a conic petal rim instead of a black notch pill; rim state follows activity (idle / working / done / alert). Kept: size/position logic, mascot, views.
+- **Composer**: removed the source-search (magnifier) and Markdown preview (eye) buttons on request; `/search` and the inspector's Research tab still toggle source search.
+

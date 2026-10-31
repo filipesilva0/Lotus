@@ -42,6 +42,8 @@ interface SettingsModalProps {
   settings: LotusSettings;
   onUpdateSettings: (newSettings: Partial<LotusSettings>) => void;
   updates: Updates;
+  /** Installed chat models (for the background tasks model). */
+  models: { id: string; name: string; tag: string }[];
 }
 
 type SettingsTab =
@@ -61,6 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onUpdateSettings,
   updates,
+  models,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('inference');
   const [ollamaCheckStatus, setOllamaCheckStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle');
@@ -101,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Settings" className="material-overlay w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Settings" className="material-frosted w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
         {/* Header: same as every other sheet (profile, sign in) */}
         <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-[var(--sep)]">
           <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">Settings</h2>
@@ -142,28 +145,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* 1. Model & Inference Parameters (formerly in Card B & Weights) */}
             {activeTab === 'inference' && (
               <div className="space-y-5">
-                {/* Default Model */}
+                {/* Background tasks model (session 7). The chat model is picked in the chat composer. */}
                 <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="text-xs font-semibold text-[var(--color-text-main)]">
-                        Active Model Checkpoint
-                      </span>
-                      <p className="text-xs text-[var(--color-text-muted)]">
-                        Default neural weights used for conversation and vision analysis.
-                      </p>
-                    </div>
+                  <div>
+                    <span className="text-xs font-semibold text-[var(--color-text-main)]">Background tasks model</span>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Runs Lotus's own housekeeping: learning memories, writing skills and naming chats. A small, fast model keeps this light; the chat model is chosen next to the message box.
+                    </p>
                   </div>
                   <select
-                    value={settings.selectedModel}
-                    onChange={(e) => onUpdateSettings({ selectedModel: e.target.value })}
-                    className="w-full h-9 bg-[var(--color-bg-card)]  rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--sep)] focus:outline-none cursor-pointer"
+                    aria-label="Background tasks model"
+                    value={settings.backgroundModel}
+                    onChange={(e) => onUpdateSettings({ backgroundModel: e.target.value })}
+                    className="w-full h-9 bg-[var(--color-bg-card)] rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--sep)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] cursor-pointer"
                   >
-                    <option value="llama3.2:3b">Llama 3.2 3B Instruct (Ultra Fast · Meta)</option>
-                    <option value="qwen2.5-coder:7b">Qwen 2.5 Coder 7B (Code Specialist · Alibaba)</option>
-                    <option value="mistral-nemo:12b">Mistral NeMo 12B (Extended Reasoning · Mistral)</option>
-                    <option value="deepseek-r1:8b">DeepSeek R1 Distill 8B (Deep Thinking)</option>
+                    <option value="">Same as the chat model{settings.selectedModel ? ` (${settings.selectedModel})` : ''}</option>
+                    {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.tag ? ` · ${m.tag}` : ''}</option>)}
+                    {settings.backgroundModel && !models.some((m) => m.id === settings.backgroundModel) && (
+                      <option value={settings.backgroundModel}>{settings.backgroundModel} (not installed)</option>
+                    )}
                   </select>
+                  {settings.backgroundModel && !models.some((m) => m.id === settings.backgroundModel) && models.length > 0 && (
+                    <p className="text-xs text-[var(--c-red)]">This model is not installed, so background tasks will fail. Pick another or download it in Models.</p>
+                  )}
+                  {!models.length && <p className="text-xs text-[var(--color-text-muted)]">Start Ollama to list your installed models.</p>}
+                  <div className="flex items-center justify-between pt-1.5">
+                    <div>
+                      <span className="text-xs font-semibold text-[var(--color-text-main)]">Auto-rename chats</span>
+                      <p className="text-xs text-[var(--color-text-muted)]">After the first reply, give the chat a short title. Titles you type yourself are never changed.</p>
+                    </div>
+                    <Toggle checked={settings.autoRename} onChange={(v) => onUpdateSettings({ autoRename: v })} ariaLabel="Auto-rename chats" />
+                  </div>
                 </div>
 
                 {/* Temperature Pill Slider */}

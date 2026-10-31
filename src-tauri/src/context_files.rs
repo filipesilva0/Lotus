@@ -136,6 +136,141 @@ pub async fn ctx_discover(root: String) -> Result<Vec<ContextFile>, String> {
     .map_err(|e| e.to_string())?
 }
 
+// ── Attach a folder to a chat (session 6) ──────────────────────────────────
+// Reads the text and code files of a folder the user picked, so they can be mounted as chat
+// context. Read-only. Skips dependency/build folders, binaries and very large files, and stops at
+// a total budget so a huge repository cannot freeze the app or flood the context window.
+
+/// Folders never walked into.
+const SKIP_DIRS: &[&str] = &[
+    ".git", ".hg", ".svn", "node_modules", "target", "dist", "build", "out", ".next", ".nuxt", ".svelte-kit",
+    "__pycache__", ".venv", "venv", "env", ".tox", ".mypy_cache", ".pytest_cache", "vendor", ".idea", ".vs",
+    ".vscode", "bin", "obj", ".gradle", ".dart_tool", "Pods", ".cache", "coverage", ".turbo", ".parcel-cache",
+];
+
+/// Extensions read as text (lower-case, without the dot). Files with no extension are read when
+/// they look like text (README, LICENSE, Makefile, Dockerfile…).
+const TEXT_EXTS: &[&str] = &[
+    "txt", "md", "markdown", "mdx", "mdc", "rst", "json", "jsonc", "csv", "tsv", "log", "yaml", "yml", "toml", "ini", "cfg",
+    "conf", "env.example", "xml", "html", "htm", "css", "scss", "sass", "less", "js", "jsx", "mjs", "cjs", "ts", "tsx",
+    "vue", "svelte", "py", "rs", "go", "java", "kt", "kts", "swift", "c", "h", "cpp", "hpp", "cc", "cs", "rb", "php",
+    "sh", "bash", "zsh", "ps1", "bat", "cmd", "sql", "tex", "lua", "dart", "r", "scala", "gradle", "proto", "graphql",
+    "gql", "tf", "nix", "zig", "ex", "exs", "erl", "hs", "ml", "clj", "el", "vim", "dockerfile", "gitignore", "editorconfig",
+];
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderFile {
+    pub rel: String,
+    pub content: String,
+    pub truncated: bool,
+}
+
+#[derive(Serialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderRead {
+    pub name: String,
+    pub files: Vec<FolderFile>,
+    /// Files seen but not read: binary, too large, or past the limits.
+    pub skipped: u32,
+    /// True when the walk stopped early because a limit was reached.
+    pub limited: bool,
+}
+
+fn looks_textual(name: &str) -> bool {
+    let l = name.to_lowercase();
+    if let Some(dot) = l.rfind('.') {
+        if dot > 0 {
+            return TEXT_EXTS.contains(&&l[dot + 1..]);
+        }
+        // ".gitignore", ".editorconfig" style names
+        return TEXT_EXTS.contains(&&l[1..]);
+    }
+    matches!(l.as_str(), "readme" | "license" | "licence" | "makefile" | "dockerfile" | "procfile" | "gemfile" | "rakefile" | "changelog" | "authors" | "notice")
+}
+
+pub fn read_folder(root: &Path, max_files: usize, max_file_bytes: usize, max_total: usize) -> FolderRead {
+    let mut out = FolderRead { name: root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "folder".into()), ..Default::default() };
+    let mut total = 0usize;
+    let mut stack = vec![root.to_path_buf()];
+    let mut visited_dirs = 0usize;
+    while let Some(dir) = stack.pop() {
+        visited_dirs += 1;
+        if visited_dirs > 5000 {
+            out.limited = true;
+            break;
+        }
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut entries: Vec<_> = rd.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        let mut subdirs = Vec::new();
+        for e in entries {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_symlink() {
+                continue; // never follow links out of the folder
+            }
+            if ft.is_dir() {
+                if !SKIP_DIRS.iter().any(|d| d.eq_ignore_ascii_case(&name)) {
+                    subdirs.push(e.path());
+                }
+                continue;
+            }
+            if !ft.is_file() {
+                continue;
+            }
+            if !looks_textual(&name) || out.files.len() >= max_files || total >= max_total {
+                out.skipped += 1;
+                if out.files.len() >= max_files || total >= max_total {
+                    out.limited = true;
+                }
+                continue;
+            }
+            let Ok(meta) = e.metadata() else { continue };
+            if meta.len() as usize > max_file_bytes * 4 {
+                out.skipped += 1;
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(e.path()) else { out.skipped += 1; continue };
+            if bytes.iter().take(4096).any(|b| *b == 0) {
+                out.skipped += 1; // binary
+                continue;
+            }
+            let cap = max_file_bytes.min(max_total - total);
+            let truncated = bytes.len() > cap;
+            let mut text = String::from_utf8_lossy(&bytes[..bytes.len().min(cap)]).into_owned();
+            if truncated {
+                if let Some(i) = text.rfind('\n') {
+                    text.truncate(i);
+                }
+            }
+            if text.trim().is_empty() {
+                continue;
+            }
+            total += text.len();
+            let rel = e.path().strip_prefix(root).map(|p| p.to_string_lossy().replace('\\', "/")).unwrap_or(name);
+            out.files.push(FolderFile { rel, content: text, truncated });
+        }
+        // Depth-first in name order: push in reverse so the first sub-folder is read first.
+        subdirs.reverse();
+        stack.extend(subdirs);
+    }
+    out
+}
+
+#[tauri::command]
+pub async fn ctx_read_folder(root: String, max_files: Option<usize>, max_chars: Option<usize>) -> Result<FolderRead, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = Path::new(&root);
+        if !p.is_dir() {
+            return Err(format!("The folder {root} does not exist."));
+        }
+        Ok(read_folder(p, max_files.unwrap_or(200).min(1000), 200 * 1024, max_chars.unwrap_or(1_500_000).min(8_000_000)))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +298,28 @@ mod tests {
         assert!(!rels.contains(&"AGENTS.md"), "blank files are skipped");
         assert_eq!(f.iter().find(|x| x.rel == "SOUL.md").unwrap().kind, "soul");
         assert_eq!(f.iter().find(|x| x.rel == ".lotus/memory.md").unwrap().kind, "memory");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn reads_text_files_and_skips_noise() {
+        let d = std::env::temp_dir().join(format!("lotus-foldertest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("src/deep")).unwrap();
+        std::fs::create_dir_all(d.join("node_modules/pkg")).unwrap();
+        std::fs::write(d.join("README.md"), "# Hi").unwrap();
+        std::fs::write(d.join("src/main.rs"), "fn main() {}").unwrap();
+        std::fs::write(d.join("src/deep/notes.txt"), "deep").unwrap();
+        std::fs::write(d.join("node_modules/pkg/index.js"), "module.exports = 1").unwrap();
+        std::fs::write(d.join("logo.png"), [137u8, 80, 78, 71, 0, 0]).unwrap();
+        std::fs::write(d.join("data.json"), [123u8, 0, 125]).unwrap();
+        let r = read_folder(&d, 100, 1024, 10_000);
+        let rels: Vec<&str> = r.files.iter().map(|f| f.rel.as_str()).collect();
+        assert_eq!(rels, vec!["README.md", "src/main.rs", "src/deep/notes.txt"]);
+        assert_eq!(r.skipped, 2, "png (not text) and json with NUL bytes");
+        let capped = read_folder(&d, 1, 1024, 10_000);
+        assert_eq!(capped.files.len(), 1);
+        assert!(capped.limited);
         let _ = std::fs::remove_dir_all(d);
     }
 }

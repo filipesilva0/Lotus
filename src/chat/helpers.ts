@@ -63,6 +63,7 @@ export function artifactsFrom(messages: ChatMessage[]): { id: string; lang: stri
     let x: RegExpExecArray | null, i = 0;
     while ((x = re.exec(m.content))) {
       const lang = (x[1] || 'text').toLowerCase();
+      if (lang === 'choices') continue; // options cards, not code
       if (x[2].trim().split('\n').length < 3 && !['html', 'svg'].includes(lang)) continue;
       out.push({ id: `${m.id}-${i}`, lang, code: x[2], msgId: m.id, title: `${lang.toUpperCase()} · ${x[2].trim().split('\n')[0].slice(0, 36) || 'snippet'}` });
       i++;

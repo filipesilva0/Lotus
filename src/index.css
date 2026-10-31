@@ -42,12 +42,50 @@
   --shadow-1: 0 0.5px 0 rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.06);
   --shadow-float: 0 0 0 0.5px rgba(0,0,0,.14), 0 10px 30px rgba(0,0,0,.18);
 
+  /* Petal palette: the six colours of the app icon (session 7). Use for accents and identity.
+     --chart-1…5 is the same palette in a validated categorical order (adjacent pairs stay apart
+     for colour-blind readers; checked with the dataviz validator, light and dark). Yellow is
+     UI-only: too light for chart marks on a white surface. */
+  --petal-blue: #0A6FE0;
+  --petal-orange: #D97000;
+  --petal-green: #2E9E4C;
+  --petal-violet: #B455D6;
+  --petal-red: #E8344E;
+  --petal-yellow: #C29600;
+  --chart-1: var(--petal-blue);
+  --chart-2: var(--petal-orange);
+  --chart-3: var(--petal-green);
+  --chart-4: var(--petal-violet);
+  --chart-5: var(--petal-red);
+
+  /* Frosted glass (settings, sheets, menus, title bar): a tinted, blurred, faintly grained
+     surface with a light top edge. Never fully transparent. */
+  --frost-tint: color-mix(in srgb, var(--color-bg-card) 80%, transparent);
+  --frost-tint-bar: color-mix(in srgb, var(--color-bg-sidebar) 62%, transparent);
+  --frost-sheen: linear-gradient(180deg, rgba(255,255,255,.45) 0%, rgba(255,255,255,0) 42%);
+  --frost-edge: rgba(255,255,255,.7);
+  --frost-rim: rgba(0,0,0,.12);
+  --frost-blur: blur(30px) saturate(1.9) brightness(1.03);
+  --frost-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+
   /* Custom title bar: the close button uses the Windows caption red, as the native one does. */
   --titlebar-close: #C42B1C;
   --titlebar-close-pressed: #C84031;
   --titlebar-close-fg: #FFFFFF;
 }
 .dark {
+  --petal-blue: #3B86EE;
+  --petal-orange: #CC7417;
+  --petal-green: #36A657;
+  --petal-violet: #AE66D2;
+  --petal-red: #EE5267;
+  --petal-yellow: #F5CF3A;
+  --frost-tint: color-mix(in srgb, var(--color-bg-card) 76%, transparent);
+  --frost-tint-bar: color-mix(in srgb, var(--color-bg-sidebar) 58%, transparent);
+  --frost-sheen: linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 40%);
+  --frost-edge: rgba(255,255,255,.14);
+  --frost-rim: rgba(255,255,255,.1);
+  --frost-blur: blur(30px) saturate(1.6) brightness(.96);
   --hover: rgba(255, 255, 255, 0.07);
   --pressed: rgba(255, 255, 255, 0.12);
   --shadow-1: 0 0.5px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.4);
@@ -87,14 +125,33 @@
    sidebar shows the user's real wallpaper. If the effect is unavailable, glass.ts adds .no-glass. */
 html.no-glass body { background: var(--color-bg-base); }
 
-/* Material utilities */
-.material-sidebar { background: var(--mat-sidebar); backdrop-filter: var(--blur-regular); -webkit-backdrop-filter: var(--blur-regular); }
-.material-toolbar { background: var(--mat-toolbar); backdrop-filter: var(--blur-thin); -webkit-backdrop-filter: var(--blur-thin); }
-.material-overlay { background: var(--mat-overlay); backdrop-filter: var(--blur-thick); -webkit-backdrop-filter: var(--blur-thick); box-shadow: var(--shadow-float); }
+/* Material utilities. The -webkit- form must come FIRST: the CSS minifier keeps only the last of the
+   two, and WebView2 (Chromium) ignores the prefixed one, so the old order shipped with no blur at all. */
+.material-sidebar { background: var(--mat-sidebar); -webkit-backdrop-filter: var(--blur-regular); backdrop-filter: var(--blur-regular); }
+.material-toolbar { background: var(--mat-toolbar); -webkit-backdrop-filter: var(--blur-thin); backdrop-filter: var(--blur-thin); }
+/* Frosted glass. Overlays (menus, popovers, sheets, settings) and the title bar use it, so no
+   floating surface is ever fully see-through. */
+.material-overlay, .material-frosted {
+  background-color: var(--frost-tint);
+  background-image: var(--frost-sheen), var(--frost-grain);
+  -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
+  box-shadow: inset 0 0.5px 0 0 var(--frost-edge), 0 0 0 0.5px var(--frost-rim), var(--shadow-float);
+}
+.material-titlebar {
+  background-color: var(--frost-tint-bar);
+  background-image: var(--frost-sheen), var(--frost-grain);
+  -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
+  box-shadow: inset 0 -0.5px 0 0 var(--sep);
+}
 @supports not (backdrop-filter: blur(1px)) {
   .material-sidebar { background: var(--color-bg-sidebar); }
   .material-toolbar { background: var(--color-bg-panel); }
-  .material-overlay { background: var(--color-bg-card); }
+  .material-overlay, .material-frosted { background: var(--color-bg-card); }
+  .material-titlebar { background: var(--color-bg-sidebar); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .material-overlay, .material-frosted { background: var(--color-bg-card); backdrop-filter: none; }
+  .material-titlebar { background: var(--color-bg-sidebar); backdrop-filter: none; }
 }
 
 /* ── Symbol effects (SF Symbols-style, see components/common/Symbol.tsx) ── */
@@ -120,6 +177,37 @@ html.no-glass body { background: var(--color-bg-base); }
 @keyframes lotus-dots { 0%,20% { opacity: .15; } 50% { opacity: 1; } 80%,100% { opacity: .15; } }
 @keyframes lotus-pulse { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes lotus-spin { to { transform: rotate(360deg); } }
+
+/* ── Island (session 7 redesign): a floating "pod" of smoked glass with a petal-coloured rim.
+   The rim rests faintly, sweeps round while Lotus works, and turns warm when it needs you. ── */
+@keyframes island-spin { to { transform: rotate(360deg); } }
+@keyframes island-breathe { 0%,100% { opacity: .55; } 50% { opacity: .8; } }
+.island-shell { position: relative; overflow: hidden; isolation: isolate; }
+.island-aura {
+  position: absolute; inset: -150%; z-index: -2; pointer-events: none;
+  background: conic-gradient(from 90deg, var(--petal-blue), var(--petal-violet), var(--petal-red), var(--petal-orange), var(--petal-yellow), var(--petal-green), var(--petal-blue));
+  opacity: .6; animation: island-breathe 5s ease-in-out infinite; transition: opacity .4s ease;
+}
+.island-shell[data-state="working"] .island-aura { opacity: .95; animation: island-spin 2.8s linear infinite; }
+.island-shell[data-state="done"] .island-aura { opacity: .75; animation: none; }
+.island-shell[data-state="alert"] .island-aura {
+  background: conic-gradient(from 0deg, var(--petal-red), var(--petal-orange), var(--petal-yellow), var(--petal-orange), var(--petal-red));
+  opacity: 1; animation: island-spin 1.4s linear infinite;
+}
+.island-core {
+  position: absolute; inset: 1.5px; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 45%),
+    linear-gradient(165deg, #1f1d26 0%, #141319 55%, #0e0d12 100%);
+  background-image:
+    radial-gradient(120% 160% at 0% 0%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 45%),
+    var(--frost-grain),
+    linear-gradient(165deg, #1f1d26 0%, #141319 55%, #0e0d12 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), inset 0 -1px 0 rgba(0,0,0,.4);
+}
+.island-tile { background: rgba(255,255,255,.055); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,.08); }
+.island-tile:hover { background: rgba(255,255,255,.11); }
+@media (prefers-reduced-motion: reduce) { .island-aura { animation: none !important; } }
 
 /* ── Profile menu: rises from the profile button, items follow one by one (lowest first) ── */
 @keyframes menu-rise { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }

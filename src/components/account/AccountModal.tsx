@@ -7,6 +7,8 @@ import {
   AccountError, getServer, imageToAvatar, setServer, signIn, signOut, signUp, updateProfile, useAccount,
 } from '../../services/account';
 import { openExternal } from '../../lib/open';
+import { UsageDashboard } from './UsageDashboard';
+import type { ChatSession } from '../../types/lotus';
 
 export type AccountView = 'signin' | 'signup' | 'profile' | 'server';
 
@@ -14,16 +16,29 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
 
 /** Sign in, create an account, edit the profile, or point Lotus at a sync server. */
-export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: (v: AccountView) => void; onClose: () => void }> = ({ open, view, onView, onClose }) => {
+export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: (v: AccountView) => void; onClose: () => void; sessions: ChatSession[] }> = ({ open, view, onView, onClose, sessions }) => {
   const account = useAccount();
   const server = getServer();
   const title = { signin: 'Sign in to Lotus', signup: 'Create a Lotus account', profile: 'Your profile', server: 'Sync server' }[view];
   return (
-    <Modal open={open} onClose={onClose} title={title}>
+    <Modal open={open} onClose={onClose} title={title} xl={view === 'profile'}>
       {view === 'server' && <ServerForm onDone={() => onView(account.kind === 'signed-in' ? 'profile' : 'signin')} />}
       {view === 'signin' && (server ? <SignInForm onSignUp={() => onView('signup')} onServer={() => onView('server')} onDone={onClose} /> : <NoServer onSetUp={() => onView('server')} />)}
       {view === 'signup' && (server ? <SignUpForm onSignIn={() => onView('signin')} onDone={onClose} /> : <NoServer onSetUp={() => onView('server')} />)}
-      {view === 'profile' && (account.kind === 'signed-in' ? <ProfileForm onSignedOut={onClose} /> : <SignInForm onSignUp={() => onView('signup')} onServer={() => onView('server')} onDone={onClose} />)}
+      {view === 'profile' && (
+        <div className="flex flex-col gap-5">
+          {account.kind === 'signed-in'
+            ? <div className="max-w-[560px]"><ProfileForm onSignedOut={onClose} /></div>
+            : (
+              <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--hover)]">
+                <Avatar user={null} size={36} />
+                <p className="flex-1 text-[13px] text-[var(--color-text-main)]">Not signed in. Your usage below is counted on this PC; sign in to keep your studio in sync between PCs.</p>
+                <Btn variant="primary" onClick={() => onView('signin')}>Sign in</Btn>
+              </div>
+            )}
+          <UsageDashboard sessions={sessions} />
+        </div>
+      )}
     </Modal>
   );
 };

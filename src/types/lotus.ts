@@ -35,6 +35,8 @@ export interface ChatMessage {
   recall?: { memories: number; sessions: number; skills: string[]; skillIds?: string[]; projectFiles: number };
   /** The reply came from Thinking mode (several passes) or used web results. */
   mode?: { thinking?: boolean; web?: boolean };
+  /** The answer the user picked on this reply's options card (session 7). */
+  pollAnswer?: string;
 }
 
 export interface ChatSession {
@@ -68,6 +70,8 @@ export interface ChatSession {
   folder?: string;
   /** Context files the user switched off for this chat (relative paths). */
   folderOff?: string[];
+  /** Title Lotus set itself (first words, then the auto-rename). A different title was set by the user and is never replaced. */
+  autoTitle?: string;
 }
 
 export interface ContextChunk { id: string; text: string; on: boolean }
@@ -138,6 +142,11 @@ export interface LotusSettings {
   autoSkills: boolean;
   /** Search past conversations for relevant context. */
   sessionRecall: boolean;
+  // ── Background tasks (session 7) ──
+  /** Model for housekeeping work: memory learning, skill writing and chat titles. '' = the chat model. */
+  backgroundModel: string;
+  /** Give new chats a short title after the first reply (uses the background model). */
+  autoRename: boolean;
 }
 
 export interface GeneratedImage {

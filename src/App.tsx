@@ -23,6 +23,7 @@ import { loadMemory } from './memory/store';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { AccountModal, AccountView } from './components/account/AccountModal';
 import { ModelsSheet } from './components/modals/ModelsSheet';
+import { LibrarySheet, LibraryTab } from './components/library/LibrarySheet';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
@@ -75,6 +76,8 @@ const DEFAULT_SETTINGS: LotusSettings = {
   autoMemory: true,
   autoSkills: true,
   sessionRecall: true,
+  backgroundModel: '',
+  autoRename: true,
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -100,6 +103,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
   const [modelsOpen, setModelsOpen] = useState(false);
+  const [library, setLibrary] = useState<LibraryTab | null>(null);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => load<boolean>('lotus.sidebar.v1', false));
   useEffect(() => { localStorage.setItem('lotus.sidebar.v1', JSON.stringify(sidebarCollapsed)); }, [sidebarCollapsed]);
@@ -240,6 +244,9 @@ export default function App() {
       { label: 'Tasks', checked: currentView === 'tasks', onSelect: go('tasks') },
       { label: 'Engines', checked: currentView === 'engines', onSelect: go('engines') },
       'separator',
+      { label: 'Library…', onSelect: () => setLibrary('skills') },
+      { label: 'Plugins…', onSelect: () => setLibrary('plugins') },
+      'separator',
       { label: 'Back', shortcut: 'Alt+Left', onSelect: goBack, disabled: !past.length },
       { label: 'Forward', shortcut: 'Alt+Right', onSelect: goForward, disabled: !future.length },
     ] },
@@ -270,6 +277,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenModels={() => setModelsOpen(true)}
         onOpenAccount={setAccountView}
+        onOpenLibrary={setLibrary}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
         collapsed={sidebarCollapsed}
@@ -284,7 +292,7 @@ export default function App() {
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
           <ChatWorkspace chat={chat} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
-            onOpenModels={() => openEngines('models')} prefill={prefill} />
+            onOpenModels={() => openEngines('models')} prefill={prefill} onOpenLibrary={setLibrary} />
         )}
 
         {currentView === 'images' && <ImageWorkspace checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
@@ -318,8 +326,9 @@ export default function App() {
         sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((c) => !c)} menus={menus} />
       {panel}
       <ModelsSheet open={modelsOpen} onClose={() => setModelsOpen(false)} engines={eng.engines} onOpenEngines={() => openEngines('engines')} />
-      <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} />
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
+      <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} />
+      <LibrarySheet open={library !== null} tab={library ?? 'skills'} onTab={setLibrary} onClose={() => setLibrary(null)} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} folder={chat.active?.folder} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );
 }

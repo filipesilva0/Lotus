@@ -4,11 +4,15 @@ import { ChatMessage, ChatSession } from '../../types/lotus';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { openExternal } from '../../lib/open';
 import { Btn, IconBtn, TextArea, cx } from '../common/ui';
+import { parseChoices } from '../../chat/choices';
+import { ChoiceCard } from './ChoiceCard';
 
 interface Props {
   session: ChatSession; isStreaming: boolean; autoScroll: boolean; reasoningMode: 'collapsed' | 'expanded' | 'hidden';
   onEdit: (id: string, text: string) => void; onRegenerate: (id: string) => void; onSwitch: (id: string, d: -1 | 1) => void;
   onMemory: (id: string, v: 'confirmed' | 'forgotten') => void; onOpenArtifact: (lang: string, code: string) => void;
+  /** The user clicked an option on a reply's choices card. */
+  onAnswer?: (msgId: string, text: string) => void;
 }
 
 const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
@@ -40,7 +44,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
   );
 };
 
-export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact }) => {
+export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer }) => {
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -52,9 +56,13 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
       <div className="max-w-[760px] mx-auto space-y-5">
-        {session.messages.map((m) => {
+        {session.messages.map((m, mi) => {
           const user = m.role === 'user';
           const b = m.branch;
+          const parsed = user ? null : parseChoices(m.content);
+          const body = parsed ? parsed.text : m.content;
+          const next = session.messages[mi + 1];
+          const isLast = mi === session.messages.length - 1;
           return (
             <div key={m.id} className={cx('group flex gap-3', user && 'flex-row-reverse')}>
               <div className={cx('w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5', user ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] shadow-[0_0_0_0.5px_var(--sep)]')}>
@@ -76,15 +84,22 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                       ? <img key={f.name} src={f.url} alt={f.name} className="mb-2 max-w-[240px] rounded-[8px]" />
                       : <span key={f.name} className="mb-2 mr-1 inline-flex items-center gap-1 px-2 h-6 rounded-[6px] bg-black/10 text-[12px]"><FileText className="w-3 h-3" />{f.name}</span>)}
                     {m.attachment && <img src={m.attachment.url} alt={m.attachment.name} className="mb-2 max-w-[240px] rounded-[8px]" />}
-                    {m.content
-                      ? <MarkdownLite text={m.content} onDark={user} sources={m.sources}
+                    {body
+                      ? <MarkdownLite text={body} onDark={user} sources={m.sources}
                           codeActions={(lang, code) => (<>
                             <button type="button" onClick={() => void navigator.clipboard.writeText(code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px]">Copy</button>
                             <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Artifacts</button>
                           </>)} />
                       : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? 'Thinking…' : 'Working…')}</span> : null}
+                    {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
                     {m.interrupted && <p className="mt-1.5 text-[11px] opacity-70">Stopped here.</p>}
                   </div>
+                )}
+
+                {parsed?.poll && !m.isStreaming && (
+                  <ChoiceCard poll={parsed.poll} enabled={!!onAnswer && isLast && !isStreaming}
+                    answered={m.pollAnswer ?? (next?.role === 'user' ? next.content : undefined)}
+                    onAnswer={(text) => onAnswer?.(m.id, text)} />
                 )}
 
                 {m.sources && m.sources.length > 0 && (

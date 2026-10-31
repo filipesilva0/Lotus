@@ -17,6 +17,9 @@ import { loadMemory, memoryStore, useMemoryStore } from '../memory/store';
 import { buildRecall } from '../memory/recall';
 import { considerSkill, correction, isComplexExchange, positiveFeedback, recordUse, recordWin, reflect, refineSkill, shouldReflect } from '../memory/learn';
 import type { ContextFile } from '../context/discover';
+import { CHOICES_INSTRUCTIONS } from '../chat/choices';
+import { shouldRename, suggestTitle } from '../chat/rename';
+import { pluginSystemBlock } from '../plugins/store';
 
 const SESSIONS_KEY = 'lotus.sessions.v1';
 const ACTIVE_KEY = 'lotus.activeSession.v1';
@@ -109,6 +112,18 @@ export function useChat(settings: LotusSettings) {
     if (st.autoSkills && !usedSkillIds.length && isComplexExchange(turns, { thinking: o.thinking })) void considerSkill(turns).catch(() => undefined);
   }, []);
 
+  /** After the first reply: let the background tasks model name the chat (only if Lotus chose the title). */
+  const autoRename = useCallback((sid: string) => {
+    const s = ref.current.find((x) => x.id === sid);
+    if (!s || !setRef.current.autoRename || !shouldRename(s)) return;
+    const was = s.title;
+    void suggestTitle(s).then((title) => {
+      if (!title) return;
+      // The user may have renamed it meanwhile: only replace the title Lotus set.
+      patchSession(sid, (x) => (x.title === was && x.autoTitle === was ? { ...x, title, autoTitle: title } : x));
+    }).catch(() => undefined);
+  }, [patchSession]);
+
   // ── Generation ───────────────────────────────────────────────────────────
   const generate = useCallback(async (sid: string, aiId: string, o: GenOpts) => {
     const s = setRef.current;
@@ -189,6 +204,8 @@ export function useChat(settings: LotusSettings) {
       });
       usedSkillIds = recall.usedSkills.map((k) => k.id);
       let system = `${s.systemPrompt}\n\nToday's date is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Format replies with GitHub Flavored Markdown when it helps (tables, task lists, code blocks).`;
+      system += CHOICES_INSTRUCTIONS;
+      system += pluginSystemBlock(o.query ?? '');
       system += recall.system;
       system += contextPayload(session0.context, o.force, Math.max(2000, budget - system.length - sourceText.length));
       if (sourceText) {
@@ -254,6 +271,7 @@ export function useChat(settings: LotusSettings) {
     }
 
     if (!ctrl.signal.aborted && acc) afterReply(sid, aiId, o, usedSkillIds);
+    if (!ctrl.signal.aborted && acc) autoRename(sid);
 
     if (setRef.current.autoReadResponses && acc && !ctrl.signal.aborted) {
       try {
@@ -262,7 +280,7 @@ export function useChat(settings: LotusSettings) {
         await new Audio(await voicebox.audioUrl(done.id)).play();
       } catch { /* read-aloud is best effort */ }
     }
-  }, [patchMsg, patchSession, afterReply]);
+  }, [patchMsg, patchSession, afterReply, autoRename]);
 
   const start = useCallback((sid: string, aiId: string, o: GenOpts) => {
     const p = generate(sid, aiId, o);
@@ -322,7 +340,9 @@ export function useChat(settings: LotusSettings) {
     }
     patchSession(sid, (x) => ({
       ...x, updatedAt: 'Just now', ts: stamp, model,
-      title: x.messages.length === 0 || x.title === 'New conversation' ? (text.slice(0, 40) || refs[0]?.name || 'New conversation') : x.title,
+      ...(x.messages.length === 0 || x.title === 'New conversation'
+        ? (() => { const t = text.replace(/\s+/g, ' ').trim().slice(0, 40) || refs[0]?.name || 'New conversation'; return { title: t, autoTitle: t }; })()
+        : {}),
       context: [...(x.context ?? []), ...ctx],
       messages: [...x.messages, user, ai],
     }));
@@ -352,6 +372,13 @@ export function useChat(settings: LotusSettings) {
     patchSession(s.id, (x) => ({ ...x, messages: addBranch(x.messages, i, [user, ai]) }));
     void start(s.id, ai.id, genOpts(s, setRef.current.selectedModel, text));
   }, [activeId, patchSession, start]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** The user clicked an option on a reply's choices card: record it and send it as their message. */
+  const answerPoll = useCallback((msgId: string, text: string) => {
+    if (!text.trim()) return Promise.resolve([] as string[]);
+    patchMsg(activeId, msgId, { pollAnswer: text });
+    return send(text);
+  }, [activeId, patchMsg, send]);
 
   const switchTo = useCallback((msgId: string, dir: -1 | 1) => {
     if (abort.current) abort.current.abort();
@@ -392,7 +419,7 @@ export function useChat(settings: LotusSettings) {
     if (activeId === id) setActiveId(rest[0].id);
   }, [activeId, mutate]);
 
-  const clearChat = useCallback(() => { stop(); void memoryStore.forgetSession(activeId); patchSession(activeId, (s) => ({ ...s, messages: [], title: 'New conversation', usedTokens: 0 })); }, [activeId, patchSession, stop]);
+  const clearChat = useCallback(() => { stop(); void memoryStore.forgetSession(activeId); patchSession(activeId, (s) => ({ ...s, messages: [], title: 'New conversation', autoTitle: undefined, usedTokens: 0 })); }, [activeId, patchSession, stop]);
 
   const importMessages = useCallback((msgs: { role: 'user' | 'assistant'; content: string }[]) => {
     const s = newSession(setRef.current.selectedModel, {
@@ -409,7 +436,7 @@ export function useChat(settings: LotusSettings) {
 
   return {
     sessions, active, activeId: active?.id ?? '', setActiveId, folders, setFolders, memory, setMemory, isStreaming, raw,
-    send, stop, regenerate, editMessage, switchTo, rateMemory, newChat, deleteChat, clearChat, importMessages,
+    send, answerPoll, stop, regenerate, editMessage, switchTo, rateMemory, newChat, deleteChat, clearChat, importMessages,
     patchSession, addContext, patchContext, estimateTokens, toggleMemory, setProjectContext,
   };
 }

@@ -66,7 +66,7 @@ Two WebView windows, one Rust process.
 - `single-instance` plugin: a second launch just shows `main`.
 
 ### Rust Tauri commands ✅ (`lib.rs` handler list)
-`app_paths`, `main_ready`, `open_main(view?)`, `quit_app`, `island_resize/show/hide/focus/visible`, `hook_answer`, `hooks_installed/install/uninstall`, `engine_start/stop/supervised/find`, `engine_ping`; **session 4:** `download_start/cancel`, `comfy_models_dir`, `list_model_files` (`downloads.rs`); `proj_create/tree/read/write/mkdir/delete/rename`, `proc_spawn/kill/running`, `preview_serve/stop`, `toolchain_check`, `android_paths`, `adb_devices/screenshot/tap/swipe/key`, `emulator_avds` (`appbuilder.rs`).
+`app_paths`, `main_ready`, `open_main(view?)`, `quit_app`, `island_resize/show/hide/focus/visible`, `hook_answer`, `hooks_installed/install/uninstall`, `engine_start/stop/supervised/find`, `engine_ping`; **session 4:** `download_start/cancel`, `comfy_models_dir`, `list_model_files` (`downloads.rs`); `proj_create/tree/read/write/mkdir/delete/rename`, `proc_spawn/kill/running`, `preview_serve/stop`, `toolchain_check`, `android_paths`, `adb_devices/screenshot/tap/swipe/key`, `emulator_avds` (`appbuilder.rs`); **session 5:** `hw_snapshot`, `ctx_discover`, `mem_*`, `memories_*`, `skills_*`; **session 7:** `ctx_read_folder(root, maxFiles?, maxChars?)` (`context_files.rs`, read-only folder walk for Attach a folder).
 
 ### Global shortcuts ✅ (registered in `lib.rs`, failures ignored)
 Ctrl+Alt+Space → `island:open-chat`; Ctrl+Alt+D → `island:dictate`; Ctrl+Alt+T → `island:toggle`.
@@ -156,10 +156,20 @@ src-tauri/src/memory_db.rs  mem_status|index|forget_session|wipe_history|search,
 Request assembly in chat (`hooks/useChat.ts generate`): system prompt + date → recall block (≤ 50 % of the plan's context budget) → mounted files (trimmed to what is left) → academic/web sources → history. `num_ctx` = the plan's context when auto-scaling is on. After a reply (memory on only): index the exchange, `reflect()` every 3rd user turn or when the user talks about themselves, `considerSkill()` for complex exchanges; a correction after a skill-assisted reply runs `refineSkill()`.
 No new cross-window events. Tasks/routines report progress through the existing `activity` event (island pills).
 
+## 5d. Session 7 map ⚠️ not run on Windows
+- **Choices**: `chat/choices.ts` (parser, instructions, answer text) → `components/chat/ChoiceCard.tsx`, rendered by `ChatStream`; `useChat.answerPoll` records `pollAnswer` and sends the answer.
+- **Plugins**: `plugins/store.ts` (types, validation, store, `pluginSystemBlock` added to the system prompt after the choices instructions, `pluginCommands` for the composer), `plugins/creator.ts` (`draftPlugin`, agent pool priority 0), UI in `components/library/LibrarySheet.tsx` (Plugins tab).
+- **Library**: `components/library/LibrarySheet.tsx` + `library/docs.ts` (SKILL.md / memory.md / soul text) + `skills/system.ts` (system skills).
+- **Background model / rename**: `agents/pool.ts modelForJob` (`memory|skill|rename` → `settings.backgroundModel`), `chat/rename.ts` (`suggestTitle`, job kind `rename`, priority 2), called from `useChat` after the first reply.
+- **Usage**: `analytics/usage.ts` (pure) → `components/account/UsageDashboard.tsx` in the profile sheet (`AccountModal` view `profile`, shown signed in or not).
+- **Folder attach**: composer + menu → `ChatWorkspace.attachFolder` → `chat/folder.ts` (`pickAndReadFolder` → Rust `ctx_read_folder`, or `readPickedFiles` in the browser) → one context item per file.
+- **Styling**: petal/chart tokens and `.material-frosted`/`.material-titlebar`/island classes in `index.css`.
+
 ## 6. Persistence map ✅ (all `localStorage`, shared by both windows)
 
 `lotus.settings.v1`, `lotus.sessions.v1` (≤ 60 chats; blob attachments stripped), `lotus.activeSession.v1`, `lotus.engineUrls.v1`, `lotus.engine.<id>.exe`, `lotus.engine.<id>.policy`, `lotus.setup.dismissed`, `lotus.voice.profile|tab|story`, `lotus.dictate.lang`, `lotus.image.checkpoint`, `lotus.island.v1`, `lotus.island.chat.v1`, `lotus.research.v1` (≤ 40 projects, debounced, quota failures swallowed), `lotus.research.limits.v1`.
 Session 5 keys: `lotus.tasks.v1`, `lotus.routines.v1`, `lotus.tasks.tab.v1`, `lotus.skills.meta.v1` (skill change notes), `lotus.memory.backfilled.v1`; in a plain browser only: `lotus.memory.v1` (also the legacy key, migrated into `lotus.db` and removed on first desktop run) and `lotus.skills.v1`. `lotus.settings.v1` gained `llmBackend, llamacppUrl, autoScale, vramReserveMb, maxSubagents, webSearchProvider, searxngUrl, webPagesToRead, autoMemory, autoSkills, sessionRecall`; chat sessions gained `memoryOff, thinking, webSearch, folder, folderOff`; messages gained `recall, mode`. Accounts (session 6): `lotus.account.v1` (signed-in session: tokens + name/email/avatar), `lotus.account.server.v1` (sync server URL + anon key), `lotus.sidebar.v1`. Synced to the account server (`user_state` table, see `sync-server/`): `profile.avatar`. On disk: `<data>/lotus.db` (SQLite, WAL) and `<data>/skills/<slug>/SKILL.md`.
+Session 7 keys: `lotus.plugins.v1` (installed plugins). `lotus.settings.v1` gained `backgroundModel, autoRename`; chat sessions gained `autoTitle`; messages gained `pollAnswer`.
 Session 4 keys: `lotus.comfy.modelsDir.v1` (ComfyUI models folder), `lotus.models.mode.v1`, `lotus.models.kind.v1`, `lotus.builder.projects.v1`, `lotus.builder.active.v1`, `lotus.builder.view.v1|term.v1|mode.v1|ctx.v1|model.v1`; `lotus.image.params.v1` gained optional `loras`.
 Generated images are **session-only** (blob URLs). Portable mode relocates the WebView2 profile (hence localStorage) to `<exe dir>\data\webview`.
 

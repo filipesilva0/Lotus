@@ -121,10 +121,11 @@ export const Island: React.FC = () => {
 
   // ── Window size follows the target dimensions ─────────────────────────────
   const dims = useMemo(() => {
-    if (view === 'chat') return { w: 460, h: hasChat ? 500 : 214, r: 28 };
-    if (view === 'approval') return { w: 480, h: 236, r: 26 };
-    if (view === 'peek') return { w: Math.max(340, 120 + shown.length * 100), h: 96, r: 26 };
-    return { w: 56 + 44 + shown.length * 100 + 12, h: 36, r: 18 };
+    // Session 7: squarer corners than a notch-style pill, so the island reads as its own object.
+    if (view === 'chat') return { w: 460, h: hasChat ? 500 : 214, r: 20 };
+    if (view === 'approval') return { w: 480, h: 236, r: 20 };
+    if (view === 'peek') return { w: Math.max(340, 120 + shown.length * 100), h: 100, r: 18 };
+    return { w: 56 + 44 + shown.length * 100 + 12, h: 36, r: 12 };
   }, [view, hasChat, shown.length]);
 
   const prev = useRef({ w: 0, h: 0 });
@@ -157,13 +158,30 @@ export const Island: React.FC = () => {
     setGaze({ x: Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2)), y: Math.max(-1, Math.min(1, ((e.clientY - r.top) / Math.max(r.height, 60) - 0.5) * 2)) });
   };
 
-  const dot = (up: boolean | null, label: string) => (
-    <span key={label} title={`${label}: ${up === null ? 'checking' : up ? 'running' : 'stopped'}`}
-      className={`w-1.5 h-1.5 rounded-full ${up === null ? 'bg-white/25' : up ? 'bg-emerald-400' : 'bg-white/25'}`} />
-  );
+  // Engines as a tiny lotus: one petal per engine, lit in its petal colour while it runs.
+  const enginePetals = () => {
+    const list: { label: string; up: boolean | null; color: string; rot: number }[] = [
+      { label: 'Ollama', up: engines.ollama, color: 'var(--petal-blue)', rot: -34 },
+      { label: 'Voicebox', up: engines.voicebox, color: 'var(--petal-orange)', rot: 0 },
+      { label: 'ComfyUI', up: engines.comfyui, color: 'var(--petal-green)', rot: 34 },
+    ];
+    const text = list.map((e) => `${e.label}: ${e.up === null ? 'checking' : e.up ? 'running' : 'stopped'}`).join(' · ');
+    return (
+      <svg width="20" height="16" viewBox="0 0 20 16" role="img" aria-label={text} className="shrink-0"><title>{text}</title>
+        {list.map((e) => (
+          <ellipse key={e.label} cx="10" cy="8" rx="3.1" ry="6.6" transform={`rotate(${e.rot} 10 14)`}
+            fill={e.up ? e.color : 'rgba(255,255,255,.07)'} stroke={e.up ? 'rgba(0,0,0,.25)' : 'rgba(255,255,255,.32)'} strokeWidth=".7"
+            style={{ transition: 'fill .3s' }} />
+        ))}
+      </svg>
+    );
+  };
 
+  const tint: Record<Activity['kind'], string> = { image: 'var(--petal-green)', voice: 'var(--petal-orange)', chat: 'var(--petal-blue)', download: 'var(--petal-yellow)', research: 'var(--petal-violet)', build: 'var(--petal-red)' };
   const Chip: React.FC<{ a: Activity }> = ({ a }) => (
-    <span className="inline-flex items-center gap-1.5 h-6 w-[92px] px-2 rounded-[6px] bg-white/10 text-[11px] font-semibold text-white/90" title={a.label}>
+    <span className="island-tile relative inline-flex items-center gap-1.5 h-6 w-[92px] pl-2.5 pr-2 rounded-[7px] text-[11px] font-semibold text-white/90 overflow-hidden" title={a.label}>
+      <span aria-hidden="true" className="absolute left-0 top-1 bottom-1 w-[2.5px] rounded-r-[2px]" style={{ background: tint[a.kind] }} />
+      {a.progress != null && !a.done && <span aria-hidden="true" className="absolute left-0 bottom-0 h-[2px] transition-[width] duration-300" style={{ width: `${Math.round(a.progress * 100)}%`, background: tint[a.kind] }} />}
       {a.kind === 'image' ? <ImageIcon className="w-3 h-3 shrink-0" /> : a.kind === 'voice' ? <AudioLines className="w-3 h-3 shrink-0" /> : a.kind === 'download' ? <Download className="w-3 h-3 shrink-0" /> : a.kind === 'research' ? <FlaskConical className="w-3 h-3 shrink-0" /> : a.kind === 'build' ? <Hammer className="w-3 h-3 shrink-0" /> : a.id.startsWith('agent') ? <Bot className="w-3 h-3 shrink-0" /> : <MessageSquare className="w-3 h-3 shrink-0" />}
       <span className="truncate">{a.progress != null && !a.done ? `${Math.round(a.progress * 100)}%` : a.label}</span>
     </span>
@@ -175,12 +193,15 @@ export const Island: React.FC = () => {
     <div className="w-screen h-screen flex justify-center items-start select-none overflow-hidden">
       {visible && (
         <div
+          data-state={pending ? 'alert' : anyWorking ? 'working' : justDone ? 'done' : 'idle'}
           onPointerEnter={() => { if (view === 'strip') { clearTimeout(hover.current); hover.current = window.setTimeout(() => setView('peek'), 140); } }}
           onPointerLeave={() => { clearTimeout(hover.current); if (view === 'peek') hover.current = window.setTimeout(() => setView('strip'), 450); }}
           onPointerMove={onMove}
           role="region" aria-label="Lotus island"
-          className="relative bg-black text-white overflow-hidden ring-1 ring-white/10 shadow-[0_10px_34px_rgba(0,0,0,.5)]"
+          className="island-shell text-white"
           style={{ width: dims.w, height: dims.h, borderRadius: dims.r, transition: `width .34s ${ease}, height .34s ${ease}, border-radius .34s ${ease}` }}>
+          <span aria-hidden="true" className="island-aura" />
+          <span aria-hidden="true" className="island-core" style={{ borderRadius: Math.max(0, dims.r - 1.5), transition: `border-radius .34s ${ease}` }} />
 
           {/* Mascot sits in the top-left corner in every view */}
           <div className="absolute left-3 top-[6px] z-10"><Mascot mood={mood} size={24} gaze={gaze} /></div>
@@ -188,27 +209,27 @@ export const Island: React.FC = () => {
           {/* strip + peek header */}
           <div className={cls('strip')} inert={view !== 'strip'}>
             <div className="h-9 pl-12 pr-3 flex items-center gap-2">
-              <span className="flex items-center gap-1" aria-label="Engine status">{dot(engines.ollama, 'Ollama')}{dot(engines.voicebox, 'Voicebox')}{dot(engines.comfyui, 'ComfyUI')}</span>
+              {enginePetals()}
               {shown.map((a) => <Chip key={a.id} a={a} />)}
             </div>
           </div>
 
           <div className={cls('peek')} inert={view !== 'peek'}>
             <div className="h-9 pl-12 pr-3 flex items-center gap-2">
-              <span className="flex items-center gap-1" aria-label="Engine status">{dot(engines.ollama, 'Ollama')}{dot(engines.voicebox, 'Voicebox')}{dot(engines.comfyui, 'ComfyUI')}</span>
+              {enginePetals()}
               {shown.map((a) => <Chip key={a.id} a={a} />)}
-              {toast && <span role="status" className="text-[11px] text-amber-300 truncate flex-1 text-right">{toast}</span>}
+              {toast && <span role="status" className="text-[11px] text-[var(--petal-yellow)] truncate flex-1 text-right">{toast}</span>}
             </div>
             <div className="px-3 pb-2.5 grid grid-cols-4 gap-1.5">
               {[
-                { l: 'Chat', i: <MessageSquare className="w-4 h-4" />, f: openChat },
-                { l: 'Dictate', i: <Mic className="w-4 h-4" />, f: () => { openChat(); setTimeout(() => chat.current?.toggleDictation(), 150); } },
-                { l: 'Read clipboard', i: <Volume2 className="w-4 h-4" />, f: speakClipboard },
-                { l: 'Open Lotus', i: <LayoutGrid className="w-4 h-4" />, f: () => void invokeNative('open_main', {}) },
+                { l: 'Chat', i: <MessageSquare className="w-4 h-4" />, f: openChat, c: 'var(--petal-blue)' },
+                { l: 'Dictate', i: <Mic className="w-4 h-4" />, f: () => { openChat(); setTimeout(() => chat.current?.toggleDictation(), 150); }, c: 'var(--petal-red)' },
+                { l: 'Read clipboard', i: <Volume2 className="w-4 h-4" />, f: speakClipboard, c: 'var(--petal-orange)' },
+                { l: 'Open Lotus', i: <LayoutGrid className="w-4 h-4" />, f: () => void invokeNative('open_main', {}), c: 'var(--petal-green)' },
               ].map((b) => (
                 <button key={b.l} onClick={b.f} title={b.l} aria-label={b.l}
-                  className="h-11 rounded-[14px] bg-white/[.07] hover:bg-white/15 flex flex-col items-center justify-center gap-0.5 text-white/80 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-                  {b.i}<span className="text-[10px] font-semibold">{b.l === 'Read clipboard' ? 'Read aloud' : b.l}</span>
+                  className="island-tile h-12 rounded-[10px] flex flex-col items-center justify-center gap-1 text-white/85 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+                  <span style={{ color: b.c }}>{b.i}</span><span className="text-[10px] font-semibold tracking-[.01em]">{b.l === 'Read clipboard' ? 'Read aloud' : b.l}</span>
                 </button>
               ))}
             </div>

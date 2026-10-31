@@ -5,7 +5,8 @@ import { isTauri } from '../../lib/http';
 
 /**
  * Custom window title bar. The native Windows caption is turned off (`decorations: false` in
- * tauri.conf.json) so the bar sits on the same acrylic as the sidebar and blends into the app.
+ * tauri.conf.json). Session 7: the bar is frosted glass (tinted, blurred, grained) instead of fully
+ * transparent, so it reads as a surface above the wallpaper.
  *
  * Left: back / forward through pages, sidebar toggle, and a real menu bar (File, Edit, View, Help).
  * Right: minimise, maximise/restore, close. Empty space drags the window; double-click maximises.
@@ -91,7 +92,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onB
   const select = useCallback((item: MenuItem) => { setOpen(null); if (!item.disabled) item.onSelect(); }, []);
 
   return (
-    <div ref={barRef} data-tauri-drag-region className="relative z-40 h-10 shrink-0 flex items-center pl-2 select-none text-[var(--color-text-main)]" role="banner">
+    <div ref={barRef} data-tauri-drag-region className="material-titlebar relative z-40 h-10 shrink-0 flex items-center pl-2 select-none text-[var(--color-text-main)]" role="banner">
       <div className="flex items-center gap-0.5">
         <button type="button" className={navBtn} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" title="Back (Alt+Left)">
           <Symbol glyph={ArrowLeft} size={16} />
@@ -162,7 +163,7 @@ const Dropdown: React.FC<{ items: MenuEntry[]; onSelect: (i: MenuItem) => void }
   return (
     <div ref={ref} role="menu"
       onKeyDown={(e) => { if (e.key === 'ArrowDown') { e.preventDefault(); focusAt(1); } else if (e.key === 'ArrowUp') { e.preventDefault(); focusAt(-1); } }}
-      className="material-overlay absolute left-0 top-full mt-1 min-w-[220px] p-1 rounded-[8px] text-[13px] z-50">
+      className="material-frosted absolute left-0 top-full mt-1 min-w-[220px] p-1 rounded-[8px] text-[13px] z-50">
       {items.map((it, i) => it === 'separator'
         ? <div key={`s${i}`} role="separator" className="my-1 mx-2 h-px bg-[var(--sep)]" />
         : (

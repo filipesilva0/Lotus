@@ -3,6 +3,48 @@
 > Snapshot taken at the end of session 1. Evidence legend: ✅ confirmed (command/test output seen) · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
+## 0e. Session 7: choices, usage charts, Library, plugins, background model, island, frosted glass (⚠️ not run on Windows)
+
+What was asked (condensed): (1) clickable options/polls when the model asks a multiple-choice question or a questionnaire; (2) usage graphs on the profile page in the app-icon colours; (3) a way to read system skills, memory files and soul definitions, and to attach folders to a chat; (4) custom plugins with a dedicated plugin-creator skill; (5) turn "Active Model Checkpoint" into the model for background tasks (memory, auto-rename), and pick the chat model inside the chat; (6) a more distinctive floating island; (7) frosted glass instead of full transparency on Settings, the profile menu and the title bar; (8) remove the magnifier (source search) and eye (Markdown preview) buttons from the composer.
+
+**Environment this session:** npm registry reachable (real `npm ci`), Rust 1.97 + crates.io for a standalone module build, Chromium (Playwright) for screenshots. No Windows, no WebView2, no Ollama.
+
+**Verified here ✅**
+- `npx tsc --noEmit` clean; `npm run build` OK (real dependencies, first time since session 3).
+- All existing suites pass: `run-tests.sh` (all three parts), `run-builder-tests.sh` 34/34, `run-s5-tests.sh` 56/56 + 13/13 (one session-5 render check updated: the composer no longer has the preview button, which was removed on request).
+- New `run-s7-tests.sh`: **27/27** logic/flow tests (choices parser incl. false-positive guards, plugin validation/store/system block, plugin creator against a fake Ollama, background-model routing, auto-rename, usage maths, folder filters with real `File` objects, Library documents) and **11/11** render tests.
+- `context_files.rs` (new `ctx_read_folder`) compiled with **no warnings** and its **2 tests pass**, built as a standalone crate with real serde (tauri attributes stripped).
+- Chart palette validated with the dataviz validator: light `#0A6FE0 #D97000 #2E9E4C #B455D6 #E8344E` and dark `#3B86EE #CC7417 #36A657 #AE66D2 #EE5267` pass all checks (CVD 6.2–6.6 in the floor band, so every chart also labels its marks directly).
+- Screens reviewed in Chromium at 1360×860, light and dark (`handover/screenshots/shoot-s7.mjs`): questionnaire card, list-style poll, composer + menu and model picker, profile usage, Library (skills, memory, soul, plugins, creator, plugin detail), Settings, title-bar menu (desktop layout), island strip/peek/working/chat.
+
+**Found and fixed: the glass was never blurred on Windows.** The CSS minifier keeps only the last of `backdrop-filter` / `-webkit-backdrop-filter`, and every material class listed the prefixed one last, so the shipped CSS had only `-webkit-backdrop-filter`, which Chromium/WebView2 ignores. Sidebar, toolbar and every overlay rendered as flat semi-transparent fills, which is the "full transparency" the user saw. The order is fixed in `index.css` (checked in the built CSS).
+
+**Written but not run against reality ⚠️**
+- Real Ollama replies for the ```choices block, the plugin creator and chat titles (only a fake Ollama). Small models may ignore the choices instruction; the list fallback then covers lettered/numbered options.
+- `ctx_read_folder` inside the real app (dialog → Rust → context items); the WebView2 `webkitdirectory` path is only used in the browser preview.
+- Frosted glass and the island rim on WebView2 over the real acrylic window.
+
+**What changed for users**
+- Replies that ask the user to choose show an options card (single choice sends on click; multi-choice and questionnaires collect answers, then "Send answers"; "Something else…" for a free answer). Answered cards stay as a record.
+- Composer: **+** menu (Attach files / Attach a folder), Think, Web, mic, and a **model picker** next to Send. The magnifier and eye buttons are gone (source search remains under `/search` and in the inspector's Research tab). The header model picker moved into the composer.
+- Profile (profile menu → your profile or **Your usage**): tiles and four charts (activity, models, hour of day, features) from saved chats on this PC.
+- **Library** (profile menu, View menu, `/library`): system skills, learned skills, plugin skills; memory.md + project memory/rules files; soul = system prompt (editable) + project SOUL.md + plugin instructions. Read/Source views, copy.
+- **Plugins** (profile menu, View menu, `/plugins`): create with Lotus (plugin-creator skill), revise, edit JSON, install, toggle, export/import `.lotus-plugin.json`. Plugin slash commands appear in the `/` menu.
+- Settings → Model & Inference: **Background tasks model** (replaces the hard-coded "Active Model Checkpoint" list, which offered four fixed models regardless of what was installed) and **Auto-rename chats**.
+- Island: smoked-glass pod with a petal-coloured rim (rests, sweeps while working, turns warm for approvals), engines as a three-petal lotus, petal-tinted chips and tiles, squarer corners.
+- Settings, sheets, menus, the profile menu and the title bar use frosted glass (tint + blur + grain + light top edge); honours "reduce transparency".
+
+**New known limitations (B38–B44)**
+| ID | Issue |
+|---|---|
+| B38 | The list fallback for options is deliberately conservative (2–8 short items, one marker style, a choice word or a question tied to the list). It will miss some phrasings and can, rarely, offer buttons for a list that wasn't a choice; the user can always type instead. |
+| B39 | Usage analytics only cover saved chats (incognito excluded, ≤ 80 chats kept by the session store) and messages whose ids carry a timestamp (all since session 1). Per-message model isn't stored, so "Models" counts by the chat's model; `@model` overrides are attributed to the chat's model. |
+| B40 | Plugins live in `localStorage` (`lotus.plugins.v1`), not yet in the sync server or on disk. They are prompts only: no code, no tools, no network. |
+| B41 | Attach folder: 200 files / 1.5 M characters / 200 KB per file; skips dependency and build folders, binaries and symlinks. Each file becomes its own context item (chunks follow the VRAM plan). Not re-read when files change. |
+| B42 | Auto-rename runs once (after the first reply) and only when the title is still the one Lotus set; it waits behind streaming like all housekeeping. |
+| B43 | The background tasks model must be installed; if not, Settings says so and memory/skill/title jobs fail quietly (as before when the chat model was missing). |
+| B44 | Not yet looked at in WebView2: `backdrop-filter` over the transparent acrylic window, the island's rotating conic rim (GPU cost is a single composited layer, unmeasured). |
+
 ## 0. Session 2 changes (unverified, nothing was built or run)
 - ⚠️ Renamed Tomo → Lotus everywhere (UI, installer, tray, identifier `app.lotus.studio`, crate `lotus`/`lotus_lib`, `lotus.portable`, localStorage keys `lotus.*`; `Cargo.lock` root entry and `package-lock.json` name edited by hand). Old `tomo.*` saved data is not migrated.
 - ⚠️ New lotus line-art logo (`Logo.tsx`) and regenerated `src-tauri/icons/*`.

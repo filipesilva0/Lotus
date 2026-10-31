@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Boxes, LogIn, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { BarChart3, BookOpen, Boxes, LogIn, LogOut, Puzzle, Settings as SettingsIcon } from 'lucide-react';
 import { Symbol } from '../common/Symbol';
 import { Avatar } from './Avatar';
 import { signOut, useAccount } from '../../services/account';
@@ -12,13 +12,14 @@ interface Props {
   onOpenSettings: () => void;
   onOpenModels: () => void;
   onOpenAccount: (view: AccountView) => void;
+  onOpenLibrary: (tab: 'skills' | 'plugins') => void;
 }
 
 /**
  * Profile button at the foot of the sidebar. Clicking it raises a small menu upward:
- * signed out → Log in · Settings · Models; signed in → your profile · Settings · Models · Log out.
+ * signed out → Log in · Usage · Library · Plugins · Settings · Models; signed in → your profile (with usage) · Library · Plugins · Settings · Models · Log out.
  */
-export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSettings, onOpenModels, onOpenAccount }) => {
+export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSettings, onOpenModels, onOpenAccount, onOpenLibrary }) => {
   const account = useAccount();
   const user = account.kind === 'signed-in' ? account.user : null;
   const [open, setOpen] = useState(false);
@@ -44,6 +45,9 @@ export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSett
       ? { id: 'profile', aria: `Your profile, ${user.name}`, icon: <Avatar user={user} size={28} />, onSelect: pick(() => onOpenAccount('profile')),
           label: (<span className="flex flex-col min-w-0 leading-tight"><span className="font-semibold truncate">{user.name}</span><span className="text-[12px] text-[var(--color-text-muted)] truncate">{user.email}</span></span>) }
       : { id: 'login', aria: 'Log in', label: 'Log in', icon: <Symbol glyph={LogIn} size={18} />, onSelect: pick(() => onOpenAccount('signin')) },
+    ...(user ? [] : [{ id: 'usage', aria: 'Your usage', label: 'Your usage', icon: <Symbol glyph={BarChart3} size={18} />, onSelect: pick(() => onOpenAccount('profile')) }]),
+    { id: 'library', aria: 'Library: skills, memory and soul', label: 'Library', icon: <Symbol glyph={BookOpen} size={18} />, onSelect: pick(() => onOpenLibrary('skills')) },
+    { id: 'plugins', aria: 'Plugins', label: 'Plugins', icon: <Symbol glyph={Puzzle} size={18} />, onSelect: pick(() => onOpenLibrary('plugins')) },
     { id: 'settings', aria: 'Settings', label: 'Settings', icon: <Symbol glyph={SettingsIcon} size={18} />, onSelect: pick(onOpenSettings) },
     { id: 'models', aria: 'Models', label: 'Models', icon: <Symbol glyph={Boxes} size={18} />, onSelect: pick(onOpenModels) },
     ...(user ? [{ id: 'logout', aria: 'Log out', label: 'Log out', icon: <Symbol glyph={LogOut} size={18} />, onSelect: pick(() => void signOut()), danger: true }] : []),
@@ -61,10 +65,10 @@ export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSett
     <div ref={wrap} className="relative">
       {open && (
         <div role="menu" aria-label="Account" onKeyDown={move}
-          className="profile-menu material-overlay absolute bottom-full left-0 mb-2 w-[248px] p-1.5 rounded-[12px] z-50 flex flex-col gap-0.5">
+          className="profile-menu material-frosted absolute bottom-full left-0 mb-2 w-[248px] p-1.5 rounded-[12px] z-50 flex flex-col gap-0.5">
           {entries.map((it, i) => (
             <React.Fragment key={it.id}>
-              {(it.id === 'settings' || it.id === 'logout') && <div role="separator" className="profile-menu-item my-1 mx-2 h-px bg-[var(--sep)]" style={{ animationDelay: `${(entries.length - i) * 35}ms` }} />}
+              {(it.id === 'library' || it.id === 'settings' || it.id === 'logout') && <div role="separator" className="profile-menu-item my-1 mx-2 h-px bg-[var(--sep)]" style={{ animationDelay: `${(entries.length - i) * 35}ms` }} />}
               <button type="button" role="menuitem" aria-label={it.aria} onClick={it.onSelect}
                 // Items rise from the button one after another: the lowest first.
                 style={{ animationDelay: `${(entries.length - 1 - i) * 35}ms` }}

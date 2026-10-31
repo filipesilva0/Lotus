@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BrainCircuit, ChevronDown, EyeOff, PanelRight, Sparkles } from 'lucide-react';
+import { BrainCircuit, EyeOff, PanelRight, Sparkles } from 'lucide-react';
 import { useProjectContext } from '../../context/discover';
 import { hardware, useHardware } from '../../hardware/monitor';
 import { LotusSettings } from '../../types/lotus';
 import { useChat, memoryOnFor } from '../../hooks/useChat';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn } from '../common/ui';
-import { MenuItem, Popover } from '../common/Pane';
 import { ChatSidebar } from '../chat/ChatSidebar';
 import { ChatStream } from '../chat/ChatStream';
 import { Composer } from '../chat/Composer';
@@ -14,6 +13,9 @@ import { ChatInspector, InspectorTab } from '../chat/ChatInspector';
 import { contextItemFromText, estimateTokens, contextTokens, TEXT_EXT } from '../../chat/helpers';
 import { usePersisted } from '../../lib/persist';
 import { engineUrl } from '../../services/engineConfig';
+import { folderSummary, folderToContext, pickAndReadFolder, readPickedFiles } from '../../chat/folder';
+import { expandCommand, pluginCommands, usePlugins } from '../../plugins/store';
+import type { LibraryTab } from '../library/LibrarySheet';
 
 export interface ModelOption { id: string; name: string; tag: string }
 
@@ -22,9 +24,12 @@ interface Props {
   settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void;
   models: ModelOption[]; ollamaUp: boolean | null; onOpenModels: () => void;
   prefill?: { text: string; nonce: number } | null;
+  onOpenLibrary: (tab: LibraryTab) => void;
 }
 
-export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill }) => {
+export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary }) => {
+  const installedPlugins = usePlugins();
+  const pluginCmds = useMemo(() => pluginCommands(installedPlugins), [installedPlugins]);
   const { active: session } = chat;
   const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.chat.inspector.v1', true);
   const [tab, setTab] = usePersisted<InspectorTab>('lotus.chat.tab.v1', 'artifacts');
@@ -59,7 +64,15 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
   };
 
   const onCommand = (name: string, arg: string): string | void => {
+    const pc = pluginCmds.find((c) => c.name === name);
+    if (pc) {
+      const text = expandCommand(pc.prompt, arg);
+      void onSend(text, []).then((errs) => { if (errs.length) console.warn(errs.join(' ')); });
+      return;
+    }
     switch (name) {
+      case 'plugins': onOpenLibrary('plugins'); return;
+      case 'library': onOpenLibrary('skills'); return;
       case 'new': chat.newChat(); return;
       case 'clear': chat.clearChat(); return;
       case 'incognito': chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito })); return session.incognito ? 'Incognito off. This chat will be saved.' : 'Incognito on. This chat won’t be saved and creates no memories.';
@@ -81,20 +94,19 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
 
   const offline = ollamaUp === false;
 
+  /** + → Attach a folder: desktop reads it in Rust; the browser preview passes the picked files. */
+  const attachFolder = async (list?: FileList): Promise<string | void> => {
+    const r = list ? await readPickedFiles(list) : await pickAndReadFolder();
+    if (!r) return;
+    folderToContext(r, hardware.get().plan.chunkChars).forEach((item) => chat.addContext(item));
+    if (r.files.length) { setTab('context'); setShowInspector(true); }
+    return folderSummary(r);
+  };
+
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <ToolbarContent>
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Popover trigger={(_o, t) => (
-            <button type="button" onClick={t} aria-haspopup="menu" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)] max-w-[260px]">
-              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span className="truncate">{settings.selectedModel || 'No model'}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
-            </button>)}>
-            {(close) => (<>
-              {!models.length && <div className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No models installed yet. <button className="font-semibold text-[var(--color-accent-vibrant)]" onClick={() => { close(); onOpenModels(); }}>Open Models</button></div>}
-              {models.map((m) => <MenuItem key={m.id} active={settings.selectedModel === m.id} onClick={() => { onSettings({ selectedModel: m.id }); close(); }}><span className="flex-1 truncate">{m.name}</span><span className="text-[11px] opacity-70">{m.tag}</span></MenuItem>)}
-            </>)}
-          </Popover>
-
           <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={`${used.exact ? 'Measured by the model server' : 'Estimated'}: ${used.n.toLocaleString()} of ${numCtx.toLocaleString()} tokens${settings.autoScale ? ' (context sized to free video memory)' : ''}`}>
             <div className="flex-1"><Gauge value={frac} label="Context used" warnAt={0.75} critAt={0.92} /></div>
             <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{used.exact ? '' : '~'}{used.n.toLocaleString()} / {numCtx >= 1000 ? `${Math.round(numCtx / 1024)}k` : numCtx}</span>
@@ -121,10 +133,12 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
         ) : (
           <ChatStream session={session} isStreaming={chat.isStreaming} autoScroll={settings.autoScroll} reasoningMode={settings.reasoningBlockMode}
             onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory}
-            onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }} />
+            onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }}
+            onAnswer={(id, text) => void chat.answerPoll(id, text)} />
         )}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
-          searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))}
+          models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels}
+          onAttachFolder={attachFolder} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}
           thinkingOn={!!session.thinking} onToggleThinking={() => chat.patchSession(session.id, (s) => ({ ...s, thinking: !s.thinking }))}
           webOn={!!session.webSearch} onToggleWeb={() => chat.patchSession(session.id, (s) => ({ ...s, webSearch: !s.webSearch }))}
           mentions={mentions} prefill={prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />

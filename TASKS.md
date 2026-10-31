@@ -94,3 +94,14 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T20 | **Memory loop live pass**: talk for ~10 turns about yourself, confirm learned items appear and are sensible; pause Memory and confirm nothing is recalled or added; incognito; delete a learned item; restart and check `lotus.db`. Skill: finish a multi-step task, check Tasks → Skills and `skills/<name>/SKILL.md`, then correct it and check version 2. | P1 | B34 |
 | T21 | Board polish: keyboard move between columns (today: Status select in the inspector), task templates, due-date reminders through the island. | P2 | |
 | T22 | Optional: let task agents use tools (read project files via `proj_*`, run approved commands) by reusing the App Builder's tag protocol and approval card. Needs a decision (safety). | P3 | B35 |
+
+## Session 7 additions (choices, usage, Library, plugins, background model, island, frosted glass)
+
+| ID | Task | Priority | Notes |
+|---|---|---|---|
+| T23 | **Live pass with Ollama**: ask a llama3.1 8B and a 3B model to "ask me 3 questions to plan X"; check the ```choices block appears and the card answers correctly; check the list fallback on a model that ignores it. Draft two plugins with the creator and run their commands. Confirm chat titles appear after the first reply with a small background model (e.g. gemma3:1b). | P1 | B38, B42, B43 |
+| T24 | **WebView2 visual pass** of the frosted surfaces (Settings, sheets, menus, title bar) over the acrylic window, and of the island rim while working; check GPU use with the island idle and working. | P1 | B44; the blur never worked before this session |
+| T25 | Attach a large real repository (e.g. Lotus itself) and time `ctx_read_folder`; confirm skipped counts and that the chat stays responsive. | P2 | B41 |
+| T26 | Plugins: sync through the account server (`user_state`), mirror to `<data>/plugins/*.json`, and an optional "share" export with a checksum. | P2 | B40 |
+| T27 | Store the model per assistant message so usage and the Models chart attribute `@model` overrides correctly. | P3 | B39 |
+

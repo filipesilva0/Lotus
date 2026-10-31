@@ -207,6 +207,8 @@ src-tauri/           Rust shell: windows, tray, shortcuts, engine launcher, hook
 
 ## Status
 
+**Session 7 (options cards, usage charts, Library, plugins + plugin creator, background tasks model, in-chat model picker, folder attach, island redesign, frosted glass)** type-checks and builds with the real dependencies; all earlier test suites pass, plus 27 new logic tests and 11 render tests; screens were checked in Chromium (light and dark). It has not run on Windows or against a live Ollama yet. This session also fixed a CSS ordering bug that had removed the blur from every glass surface in the built app. See `CURRENT_STATE.md` §0e.
+
 **Session 5 (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM) is not built yet.** Checked in a sandbox without package-registry access: every new TypeScript file type-checks against stand-in type definitions and bundles; 56 logic/flow tests (VRAM maths, Markdown parser, cron, Kanban rules, memory and skill learning, Thinking mode and the task agent against a fake Ollama) and 13 render tests pass; the new screens were looked at in Chromium screenshots (light/dark, 980 px). The Rust GPU reader and context-file finder compile and pass their tests against stand-ins for serde/tauri; the SQLite statements were run against real SQLite FTS5. `rusqlite` itself has never been compiled here, and nothing has run against a real GPU, Ollama, llama.cpp, DuckDuckGo or SearXNG. See `CURRENT_STATE.md` §0c.
 
 Verified in a Linux sandbox:

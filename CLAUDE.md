@@ -23,17 +23,25 @@ npm run check:tauri               # Rust-crate vs npm-package minor alignment (a
 bash handover/verification/run-tests.sh   # 63 TS tests: research engine 25 · UI render 22 · service clients 16
 bash handover/verification/run-builder-tests.sh   # 34 TS tests (session 4): builder protocol/agent loop/templates, download links, LoRA graph
 bash handover/verification/run-s5-tests.sh        # 56 logic/flow + 13 render tests (session 5): VRAM scaler, GFM, cron, Kanban, memory/skills, Thinking, task agent
-cd src-tauri && cargo test --lib          # 9 Rust tests: hook installer, approve/deny server + session 5 (GPU parsers 2, context files 1, memory db 4). Not --locked until Cargo.lock includes rusqlite
+bash handover/verification/run-s7-tests.sh        # 27 logic/flow + 11 render tests (session 7): choices, plugins, creator, background model, rename, usage, folder attach, Library
+node handover/screenshots/shoot-s7.mjs            # Chromium screenshots (serve dist on :8123 first, same command); PNGs in /tmp/shots
+cd src-tauri && cargo test --lib          # 10 Rust tests: hook installer, approve/deny server + session 5 (GPU parsers 2, context files 1, memory db 4) + session 7 (folder reader 1). Not --locked until Cargo.lock includes rusqlite
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 13 session 5 tests; 9 Rust tests. **Session 5 Rust (`memory_db.rs` with rusqlite) has never been compiled against the real crate.** **Session 4 Rust (`appbuilder.rs`, `downloads.rs`) has never been compiled**: expect fixes on the first `cargo check`.
+**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 13 session 5 tests; 27 + 11 session 7 tests; 10 Rust tests (session 7 added a folder-reader test). **Session 5 Rust (`memory_db.rs` with rusqlite) has never been compiled against the real crate.** **Session 4 Rust (`appbuilder.rs`, `downloads.rs`) has never been compiled**: expect fixes on the first `cargo check`.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 7 map (choices, plugins, Library, usage, background model, island, frosted glass)
+- Map: `ARCHITECTURE.md` §5d. Options cards: `chat/choices.ts` + `ChoiceCard.tsx`. Plugins: `plugins/*` (data only, validated; never execute anything). Library: `components/library/LibrarySheet.tsx`. Usage: `analytics/usage.ts` (pure, tested).
+- Background housekeeping (memory, skills, titles) uses `settings.backgroundModel` via `agents/pool.ts modelForJob`; add new housekeeping job kinds to `BACKGROUND_KINDS`.
+- **CSS gotcha:** write `-webkit-backdrop-filter` BEFORE `backdrop-filter`; the minifier keeps only the last, and WebView2 ignores the prefixed one.
+- Chart colours: `--chart-1…5` (validated order). Never use `--petal-yellow` for chart marks.
 
 ## Session 5 map (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM)
 - Map and request flow: `ARCHITECTURE.md` §5c. All background model work goes through `agents/pool.ts` (never call the model in a loop outside it), and through `services/llm.ts` (so llama.cpp works too).
