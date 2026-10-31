@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Ban, Check, ChevronRight, FileEdit, FilePlus2, FileSearch, ListTree, Play, Rocket, Send, Square, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
-import { Banner, Btn, Card, IconBtn, Segmented, Spinner, TextArea, cx } from '../common/ui';
+import { Ban, Check, ChevronDown, ChevronRight, FileEdit, FilePlus2, FileSearch, ListChecks, ListTree, MessageSquarePlus, Play, Rocket, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
+import { Banner, Btn, Card, IconBtn, Spinner, TextArea, cx } from '../common/ui';
+import { MenuItem, Popover } from '../common/Pane';
+import { ModeButton, PickerButton, PromptShell, SendButton, TrayButton } from '../common/PromptBox';
 import type { AgentItem } from '../../builder/types';
 import type { PendingApproval } from '../../builder/useAgent';
 
@@ -63,8 +65,10 @@ export const AgentPanel: React.FC<{
   items: AgentItem[]; running: boolean; approval: PendingApproval | null;
   mode: 'plan' | 'fast'; onMode: (m: 'plan' | 'fast') => void;
   model: string; ollamaUp: boolean | null; hasProject: boolean;
+  /** Installed models; the picker sits in the prompt box like Chat's. */
+  models: { id: string; name: string }[]; onModel: (id: string) => void;
   onSend: (t: string) => void; onStop: () => void; onApprovePlan: (id: string, md: string) => void; onReset: () => void; onOpenEngines: () => void;
-}> = ({ items, running, approval, mode, onMode, model, ollamaUp, hasProject, onSend, onStop, onApprovePlan, onReset, onOpenEngines }) => {
+}> = ({ items, running, approval, mode, onMode, model, ollamaUp, hasProject, models, onModel, onSend, onStop, onApprovePlan, onReset, onOpenEngines }) => {
   const [text, setText] = useState('');
   const list = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -76,15 +80,9 @@ export const AgentPanel: React.FC<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="h-10 shrink-0 flex items-center gap-2 px-3 border-b border-[var(--sep)]">
-        <Segmented<'plan' | 'fast'> label="How the agent works" value={mode} onChange={onMode} options={[{ id: 'plan', label: 'Plan first' }, { id: 'fast', label: 'Build directly' }]} />
-        <span className="flex-1" />
-        <Btn size="sm" variant="ghost" onClick={onReset} disabled={running || !items.length}>New chat</Btn>
-      </div>
-
       <div ref={list} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2.5" aria-live="polite" aria-label="Agent conversation">
         {ollamaUp === false && <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>Ollama isn't running, so the agent can't think. Start it in Engines.</Banner>}
-        {ollamaUp !== false && !model && <Banner tone="info">Pick a model at the top. A code-tuned model of 7B or more (for example qwen2.5-coder) works best for building.</Banner>}
+        {ollamaUp !== false && !model && <Banner tone="info">Pick a model in the box below. A code-tuned model of 7B or more (for example qwen2.5-coder) works best for building.</Banner>}
         {!items.length && hasProject && (
           <div className="pt-2">
             <p className="text-[13px] font-medium mb-1">What should we build?</p>
@@ -120,18 +118,32 @@ export const AgentPanel: React.FC<{
         </div>
       )}
 
-      <div className="shrink-0 p-3 border-t border-[var(--sep)]">
-        <div className="relative">
-          <TextArea aria-label="Message to the agent" value={text} rows={3} disabled={!hasProject}
+      <div className="shrink-0 px-3 pb-3 pt-1">
+        <PromptShell tray={<>
+          <TrayButton onClick={onReset} disabled={running || !items.length} icon={<MessageSquarePlus className="w-4 h-4" />} label="New chat" title="Start a new conversation with the agent (the project files stay)" />
+        </>}>
+          <textarea aria-label="Message to the agent" value={text} rows={2} disabled={!hasProject}
             onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={planWaiting ? 'Approve the plan above, or describe what to change' : running ? 'The agent is working…' : 'Describe what to build or change'} className="!pr-10" />
-          <div className="absolute right-1.5 bottom-1.5">
+            placeholder={planWaiting ? 'Approve the plan above, or describe what to change' : running ? 'The agent is working…' : 'Describe what to build or change'}
+            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[13px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none disabled:opacity-60" />
+          <div className="flex items-center gap-1 px-2 pb-2">
+            <ModeButton on={mode === 'plan'} onClick={() => onMode(mode === 'plan' ? 'fast' : 'plan')} icon={<ListChecks className="w-4 h-4" />} label="Plan first"
+              title={mode === 'plan' ? 'Plan first: the agent shows a plan for you to approve before it writes anything. Click to build directly.' : 'Building directly. Click to have the agent show a plan first.'} />
+            <div className="flex-1" />
+            <Popover up align="right" className="w-[260px]" trigger={(o, t) => (
+              <PickerButton open={o} onClick={t} title="Model the agent uses" text={model || 'Choose a model'} className="!max-w-[150px]"
+                chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
+            )}>
+              {(close) => (<>
+                {!models.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No models installed. Start Ollama, or download a model.</p>}
+                {models.map((m) => <MenuItem key={m.id} active={m.id === model} onClick={() => { onModel(m.id); close(); }}><span className="truncate">{m.name}</span></MenuItem>)}
+              </>)}
+            </Popover>
             {running
-              ? <IconBtn label="Stop the agent" onClick={onStop}><Square className="w-3.5 h-3.5" fill="currentColor" /></IconBtn>
-              : <IconBtn label="Send" disabled={!canSend} onClick={() => send()}><Send className="w-3.5 h-3.5" /></IconBtn>}
+              ? <SendButton stop onClick={onStop} label="Stop the agent" />
+              : <SendButton disabled={!canSend} onClick={() => send()} label="Send" tip="Send (Enter)" />}
           </div>
-        </div>
-        <p className="mt-1 text-[11px] text-[var(--color-text-muted)] truncate">{model ? `Model: ${model}` : 'No model selected'} · Enter to send, Shift+Enter for a new line</p>
+        </PromptShell>
       </div>
     </div>
   );

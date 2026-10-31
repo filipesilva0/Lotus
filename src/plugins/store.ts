@@ -37,7 +37,7 @@ const KEY = 'lotus.plugins.v1';
 export const LIMITS = { name: 48, description: 280, instructions: 4000, commands: 12, skills: 8, prompt: 4000, skillBody: 8000 } as const;
 
 /** Built-in slash commands a plugin may not take over. Kept in sync with SLASH in Composer.tsx. */
-export const RESERVED_COMMANDS = ['new', 'clear', 'incognito', 'search', 'think', 'web', 'memory', 'model', 'temp', 'seed', 'system', 'pin', 'plugins', 'library'];
+export const RESERVED_COMMANDS = ['new', 'clear', 'incognito', 'research', 'search', 'think', 'web', 'memory', 'model', 'temp', 'seed', 'system', 'pin', 'plugins', 'library'];
 
 const s = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 export const commandSlug = (v: string) => v.toLowerCase().replace(/^\//, '').replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);

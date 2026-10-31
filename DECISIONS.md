@@ -152,3 +152,12 @@ Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native
 - **Island**: smoked glass with a conic petal rim instead of a black notch pill; rim state follows activity (idle / working / done / alert). Kept: size/position logic, mascot, views.
 - **Composer**: removed the source-search (magnifier) and Markdown preview (eye) buttons on request; `/search` and the inspector's Research tab still toggle source search.
 
+
+## Session 8: petals, panels, chat bar, appearance
+- **The logo is the user's art and is never redrawn.** Pages are organised to fit its five petals instead: Research became a mode of Chat (user's choice over merging Images+Voice, Research into Tasks, or Tasks into Builder). Accents follow the page; the accent-colour setting was removed; Engines & Models is graphite.
+- **One prompt box component for every model input** (`PromptBox.tsx`), following the user's reference composer.
+- **Appearance defaults to Auto** and follows Windows; existing saved `darkMode` is not carried over (user asked for an OS-following mode). ⚠️ Assumption: users who had Dark set will now see Auto until they pick Dark again.
+- **Title bar is transparent over the window acrylic** instead of its own frosted layer (user: "too dark", wants it seamless with the area below). It must not get `backdrop-filter` again (breaks the menus' frost).
+- **The app rail is always folded**; the title bar's two panel buttons control each page's own list (left) and inspector (right), remembered per page.
+- **Chat bar** follows the user's reference composer, adapted: memory and incognito are icon-only toggles with tips in the tray; the context meter is a bar on the box's top edge without text.
+- **Redundant surfaces removed** rather than kept "for convenience": one place for models (Engines & Models), one for settings (rail button).

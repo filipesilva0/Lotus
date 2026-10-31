@@ -12,6 +12,7 @@ import {
   Download,
   Trash2,
   Check,
+  SunMoon,
   RefreshCw,
   Folder,
   Sparkles,
@@ -27,8 +28,9 @@ import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
 import { Segmented, Select, IconBtn, Btn } from '../common/ui';
-import { PALETTES, FONTS } from '../../styles/theme';
-import type { ColorPalette, FontFamily } from '../../types/lotus';
+import { PALETTES, FONTS, PAGE_PALETTE, PETAL_ORDER } from '../../styles/theme';
+import type { FontFamily } from '../../types/lotus';
+import { VIEW_TITLES } from '../rail/LeftRail';
 import { PillSlider } from '../common/PillSlider';
 import { THIRD_PARTY_LICENSES_TEXT } from '../../data/licenses';
 import { ollamaClient } from '../../services/ollamaService';
@@ -410,12 +412,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <section aria-labelledby="appearance-h" className="divide-y divide-[var(--sep)] border-b border-[var(--sep)]">
                   <h4 id="appearance-h" className="sr-only">Appearance</h4>
                   <div className="flex items-center justify-between gap-4 py-3">
-                    <span className="text-[13px]">Appearance</span>
+                    <div>
+                      <span className="text-[13px] block">Appearance</span>
+                      <span className="text-[12px] text-[var(--color-text-muted)]">Auto follows the light or dark setting in Windows.</span>
+                    </div>
                     <Segmented
                       label="Appearance"
-                      value={settings.darkMode ? 'dark' : 'light'}
-                      onChange={(v) => onUpdateSettings({ darkMode: v === 'dark' })}
+                      value={settings.appearance}
+                      onChange={(v) => onUpdateSettings({ appearance: v })}
                       options={[
+                        { id: 'auto', label: 'Auto', icon: <SunMoon className="w-3.5 h-3.5" aria-hidden="true" /> },
                         { id: 'light', label: 'Light', icon: <Sun className="w-3.5 h-3.5" aria-hidden="true" /> },
                         { id: 'dark', label: 'Dark', icon: <Moon className="w-3.5 h-3.5" aria-hidden="true" /> },
                       ]}
@@ -423,20 +429,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-3">
-                    <span className="text-[13px]">Accent colour</span>
-                    <div role="radiogroup" aria-label="Accent colour" className="flex items-center gap-2">
-                      {(Object.keys(PALETTES) as ColorPalette[]).map((id) => {
-                        const pal = PALETTES[id]; const on = settings.palette === id;
-                        return (
-                          <button key={id} type="button" role="radio" aria-checked={on} aria-label={pal.name} title={pal.name}
-                            onClick={() => onUpdateSettings({ palette: id })}
-                            className="w-5 h-5 rounded-full flex items-center justify-center focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] focus-visible:outline-offset-2"
-                            style={{ background: pal.vibrant, boxShadow: on ? `0 0 0 2px var(--color-bg-card), 0 0 0 4px ${pal.vibrant}` : 'inset 0 0 0 0.5px rgba(0,0,0,.25)' }}>
-                            {on && <Check className="w-3 h-3 text-white" strokeWidth={3.4} aria-hidden="true" />}
-                          </button>
-                        );
-                      })}
+                    <div>
+                      <span className="text-[13px] block">Accent colours</span>
+                      <span className="text-[12px] text-[var(--color-text-muted)]">Each page uses its own petal of the Lotus mark.</span>
                     </div>
+                    <ul className="flex items-center gap-2" aria-label="Page colours">
+                      {PETAL_ORDER.map((id) => {
+                        const pal = PALETTES[PAGE_PALETTE[id]];
+                        return <li key={id} title={VIEW_TITLES[id]} aria-label={`${VIEW_TITLES[id]}: ${pal.name}`} className="w-4 h-4 rounded-full" style={{ background: pal.vibrant }} />;
+                      })}
+                    </ul>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-3">

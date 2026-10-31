@@ -17,7 +17,6 @@ import { useFileDownloads } from '../models/useFileDownloads';
 import { findModelsDir, savedModelsDir, setSavedModelsDir } from '../../services/downloadService';
 import { InspectorPane, KV, Section, SidebarPane } from '../common/Pane';
 import { reportActivity } from '../../lib/bus';
-import { ScalingCard } from '../hardware/ScalingCard';
 
 type Mode = 'hub' | 'arena' | 'monitor';
 interface Props { engines: Record<EngineId, EngineState>; onOpenEngines: () => void }
@@ -263,16 +262,8 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
-      <div className="grid grid-cols-3 gap-3">
-        {(['ollama', 'comfyui', 'voicebox'] as EngineId[]).map((id) => {
-          const e = engines[id];
-          return <Card key={id} className="p-3.5"><div className="flex items-center gap-2"><span className={cx('w-2.5 h-2.5 rounded-full', e.up ? 'bg-[var(--c-green)]' : e.up === null ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]')} /><span className="text-[14px] font-semibold capitalize">{id === 'comfyui' ? 'ComfyUI' : id}</span></div>
-            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{e.up ? `Online${e.version ? ` · v${e.version}` : ''}` : e.up === null ? 'Checking…' : 'Offline'}{e.supervised ? ' · started by Lotus' : ''}</p></Card>;
-        })}
-      </div>
-
-      <ScalingCard />
-
+      {/* Engine on/off status lives on the Engines tab and the auto-scaling card in Settings → Local Engine & VRAM;
+          they are not repeated here (session 8). This page is live memory use and the request log. */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">GPU video memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.vramTotalGb ? `${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} / ${stats.vramTotalGb.toFixed(1)} GB` : '—'}</span></div>
           {stats && stats.vramTotalGb ? <><Gauge value={(stats.vramTotalGb - stats.vramFreeGb) / stats.vramTotalGb} label="Video memory" className="mb-2" /><Spark values={samples.map((s) => s.vram)} max={stats.vramTotalGb} label="Video memory over the last two minutes" /><p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">{stats.device} · whole-GPU figure reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">GPU memory is read from ComfyUI. Start it to see this.</p>}</Card>
@@ -355,7 +346,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
   const wins = useMemo(() => { const m = new Map<string, { w: number; n: number; tps: number[] }>(); history.forEach((h) => h.results.forEach((r) => { const e = m.get(r.model) ?? { w: 0, n: 0, tps: [] }; e.n++; if (h.winner === r.model) e.w++; if (r.tps) e.tps.push(r.tps); m.set(r.model, e); })); return [...m.entries()].sort((a, b) => b[1].w - a[1].w); }, [history]);
 
   const modes = [
-    { id: 'hub' as const, label: 'Library', icon: <Boxes className="w-4 h-4" /> },
+    { id: 'hub' as const, label: 'Browse & install', icon: <Boxes className="w-4 h-4" /> },
     { id: 'arena' as const, label: 'Arena & Benchmark', icon: <Swords className="w-4 h-4" /> },
     { id: 'monitor' as const, label: 'Hardware & Runtime', icon: <Activity className="w-4 h-4" /> },
   ];

@@ -37,3 +37,5 @@ export const ollama = {
   if (u.endsWith('/api/ps')) return new Response(JSON.stringify({ models: [] }), { status: 200 });
   return new Response('not found', { status: 404 });
 };
+// Session 8: the render smoke now mounts the rail (profile button → account service), which listens for storage events.
+if (typeof (globalThis as any).addEventListener !== 'function') { (globalThis as any).addEventListener = () => undefined; (globalThis as any).removeEventListener = () => undefined; }

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BrainCircuit, EyeOff, PanelRight, Sparkles } from 'lucide-react';
+import { BrainCircuit, EyeOff, Sparkles } from 'lucide-react';
 import { useProjectContext } from '../../context/discover';
 import { hardware, useHardware } from '../../hardware/monitor';
 import { LotusSettings } from '../../types/lotus';
 import { useChat, memoryOnFor } from '../../hooks/useChat';
-import { ToolbarContent } from '../common/ToolbarSlot';
-import { Banner, Btn, Empty, Gauge, IconBtn } from '../common/ui';
+import { Banner, Btn, Empty } from '../common/ui';
+import { usePanels } from '../../lib/panels';
 import { ChatSidebar } from '../chat/ChatSidebar';
 import { ChatStream } from '../chat/ChatStream';
 import { Composer } from '../chat/Composer';
@@ -16,6 +16,8 @@ import { engineUrl } from '../../services/engineConfig';
 import { folderSummary, folderToContext, pickAndReadFolder, readPickedFiles } from '../../chat/folder';
 import { expandCommand, pluginCommands, usePlugins } from '../../plugins/store';
 import type { LibraryTab } from '../library/LibrarySheet';
+import type { ResearchApi } from '../../research/store';
+import { ResearchView } from '../research/ResearchWorkspace';
 
 export interface ModelOption { id: string; name: string; tag: string }
 
@@ -25,13 +27,15 @@ interface Props {
   models: ModelOption[]; ollamaUp: boolean | null; onOpenModels: () => void;
   prefill?: { text: string; nonce: number } | null;
   onOpenLibrary: (tab: LibraryTab) => void;
+  /** Deep research (owned by App so runs keep going on other pages). */
+  research: ResearchApi; onOpenEngines: () => void;
 }
 
-export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary }) => {
+export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary, research, onOpenEngines }) => {
   const installedPlugins = usePlugins();
   const pluginCmds = useMemo(() => pluginCommands(installedPlugins), [installedPlugins]);
   const { active: session } = chat;
-  const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.chat.inspector.v1', true);
+  const { right: showInspector, setRight: setShowInspector } = usePanels();
   const [tab, setTab] = usePersisted<InspectorTab>('lotus.chat.tab.v1', 'artifacts');
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null);
   const hw = useHardware();
@@ -39,6 +43,21 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
   const project = useProjectContext(session.folder);
   useEffect(() => { chat.setProjectContext(session.id, project.files); }, [session.id, project.files]); // eslint-disable-line react-hooks/exhaustive-deps
   const memOn = memoryOnFor(session);
+
+  // Deep research: a task opens in place of the conversation. `pending` waits one render for a new task to exist.
+  const [openResearch, setOpenResearch] = usePersisted<string | null>('lotus.chat.research.v1', null);
+  const [pending, setPending] = useState<{ id: string; q: string } | null>(null);
+  const rp = openResearch ? research.projects.find((x) => x.id === openResearch) ?? null : null;
+  useEffect(() => { if (openResearch && !rp) setOpenResearch(null); }, [openResearch, rp]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (pending && research.projects.some((x) => x.id === pending.id)) { void research.startScoping(pending.id, pending.q); setPending(null); }
+  }, [pending, research.projects]); // eslint-disable-line react-hooks/exhaustive-deps
+  const startResearch = (q?: string) => {
+    const id = research.create();
+    setOpenResearch(id);
+    if (q) setPending({ id, q });
+  };
+  const selectChat = (id: string) => { setOpenResearch(null); chat.setActiveId(id); };
   const toggleMemory = () => chat.toggleMemory(session.id);
 
   const used = useMemo(() => {
@@ -71,6 +90,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
       return;
     }
     switch (name) {
+      case 'research': if (arg.length < 8) return 'Add the research question after /research.'; startResearch(arg); return;
       case 'plugins': onOpenLibrary('plugins'); return;
       case 'library': onOpenLibrary('skills'); return;
       case 'new': chat.newChat(); return;
@@ -105,24 +125,13 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
 
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
-      <ToolbarContent>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={`${used.exact ? 'Measured by the model server' : 'Estimated'}: ${used.n.toLocaleString()} of ${numCtx.toLocaleString()} tokens${settings.autoScale ? ' (context sized to free video memory)' : ''}`}>
-            <div className="flex-1"><Gauge value={frac} label="Context used" warnAt={0.75} critAt={0.92} /></div>
-            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{used.exact ? '' : '~'}{used.n.toLocaleString()} / {numCtx >= 1000 ? `${Math.round(numCtx / 1024)}k` : numCtx}</span>
-          </div>
-          <div className="flex-1" />
-          <Btn size="sm" variant={memOn ? 'primary' : 'ghost'} icon={<BrainCircuit className="w-3.5 h-3.5" />} aria-pressed={memOn} disabled={!!session.incognito}
-            onClick={toggleMemory}
-            title={session.incognito ? 'Incognito chats never read or write memory' : memOn ? 'Memory on: recalls past chats, facts and skills, and keeps learning. Click to pause it for this chat.' : 'Memory paused for this chat: nothing is recalled or learned. Click to resume.'}>Memory</Btn>
-          <Btn size="sm" variant={session.incognito ? 'primary' : 'ghost'} icon={<EyeOff className="w-3.5 h-3.5" />} aria-pressed={!!session.incognito}
-            onClick={() => chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito }))} title="Incognito chats aren't saved and create no memories">Incognito</Btn>
-          <IconBtn label={showInspector ? 'Hide inspector' : 'Show inspector'} active={showInspector} onClick={() => setShowInspector((v) => !v)}><PanelRight className="w-4 h-4" /></IconBtn>
-        </div>
-      </ToolbarContent>
-
       <ChatSidebar sessions={chat.sessions} activeId={chat.activeId} folders={chat.folders} onFolders={chat.setFolders}
-        onSelect={chat.setActiveId} onNew={() => chat.newChat()} onDelete={chat.deleteChat} onPatch={chat.patchSession} />
+        onSelect={selectChat} onNew={() => { setOpenResearch(null); chat.newChat(); }} onDelete={chat.deleteChat} onPatch={chat.patchSession}
+        research={{ projects: research.projects, openId: rp?.id ?? null, onOpen: (id) => { research.setActiveId(id); setOpenResearch(id); }, onNew: () => startResearch(), onDelete: research.remove }} />
+
+      {rp ? (
+        <ResearchView r={research} p={rp} models={models.map((m) => m.id)} ollamaUp={ollamaUp} onOpenEngines={onOpenEngines} onClose={() => setOpenResearch(null)} />
+      ) : (<>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {offline && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenModels}>Models</Btn>}>Ollama isn't running at {engineUrl('ollama')}. Start it from Engines to chat.</Banner></div>}
@@ -141,6 +150,10 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
           onAttachFolder={attachFolder} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}
           thinkingOn={!!session.thinking} onToggleThinking={() => chat.patchSession(session.id, (s) => ({ ...s, thinking: !s.thinking }))}
           webOn={!!session.webSearch} onToggleWeb={() => chat.patchSession(session.id, (s) => ({ ...s, webSearch: !s.webSearch }))}
+          memoryOn={memOn} incognito={!!session.incognito} onToggleMemory={toggleMemory}
+          onToggleIncognito={() => chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito }))}
+          contextUsed={frac} contextTitle={`Context: ${used.exact ? '' : 'about '}${used.n.toLocaleString()} of ${numCtx.toLocaleString()} tokens used${used.exact ? ' (measured by the model server)' : ' (estimated)'}${settings.autoScale ? '. Context is sized to free video memory.' : ''}`}
+          onOpenLibrary={onOpenLibrary} onResearch={(q) => startResearch(q)}
           mentions={mentions} prefill={prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />
       </div>
 
@@ -151,6 +164,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
           project={project} onFolder={(folder) => chat.patchSession(session.id, (s) => ({ ...s, folder: folder ?? undefined, folderOff: [] }))}
           onToggleFile={(rel) => chat.patchSession(session.id, (s) => ({ ...s, folderOff: s.folderOff?.includes(rel) ? s.folderOff.filter((r) => r !== rel) : [...(s.folderOff ?? []), rel] }))} />
       )}
+      </>)}
     </div>
   );
 };

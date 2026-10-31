@@ -102,10 +102,6 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
               </span>
             )}
             <span className="flex-1" />
-            <Select aria-label="Model the agent uses" value={model} onChange={(e) => setChosen(e.target.value)} className="!w-[190px] !h-7" disabled={!models.length}>
-              {!models.length && <option value="">No models installed</option>}
-              {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </Select>
             <Segmented<View> label="Layout" value={view} onChange={setView} options={[{ id: 'code', label: 'Code' }, { id: 'split', label: 'Split' }, { id: 'preview', label: 'Preview' }]} />
             <IconBtn label={termOpen ? 'Hide terminal' : 'Show terminal'} active={termOpen} onClick={() => setTermOpen(!termOpen)}><PanelBottom className="w-4 h-4" /></IconBtn>
           </div>
@@ -185,6 +181,7 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
         </div>
         {side === 'agent'
           ? <AgentPanel items={agent.items} running={agent.running} approval={agent.approval} mode={mode} onMode={setMode} model={model} ollamaUp={ollamaUp} hasProject={!!project}
+              models={models} onModel={setChosen}
               onSend={(t) => void agent.send(t)} onStop={agent.stop} onApprovePlan={(id, md) => void agent.approvePlan(id, md)} onReset={agent.reset} onOpenEngines={onOpenEngines} />
           : project
             ? <BuildPanel project={project} template={template} hasWorkflow={hasWorkflow} numCtx={numCtx} onNumCtx={setNumCtx} onAutoRun={(on) => projects.update(project.id, { autoRun: on })}

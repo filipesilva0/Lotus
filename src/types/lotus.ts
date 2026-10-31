@@ -1,4 +1,5 @@
-export type ViewMode = 'chat' | 'images' | 'voice' | 'research' | 'builder' | 'tasks' | 'engines';
+/** Pages. Five workspaces, one per petal of the logo (Research moved into Chat in session 8), plus Engines & Models. */
+export type ViewMode = 'chat' | 'images' | 'voice' | 'builder' | 'tasks' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
 export interface ChatToolCall { id: string; label: string; status: 'running' | 'done' | 'error'; detail?: string }
@@ -85,12 +86,16 @@ export interface MemoryItem {
   uses?: number; updated?: number;
 }
 
-export type ColorPalette = 'blue' | 'amber' | 'purple' | 'green' | 'pink';
+/** Accent palettes. Since session 8 each page has its own (one petal of the logo per page); there is no user choice. */
+export type ColorPalette = 'blue' | 'amber' | 'purple' | 'green' | 'pink' | 'red' | 'yellow' | 'graphite';
+/** Light, dark, or follow the operating system. */
+export type Appearance = 'auto' | 'light' | 'dark';
 export type FontFamily = 'jakarta' | 'inter' | 'outfit' | 'mono';
 export type FontSize = 'sm' | 'md' | 'lg';
 
 export interface LotusSettings {
-  darkMode: boolean;
+  /** 'auto' follows Windows' light/dark setting live. Replaces the old `darkMode` boolean (migrated on load). */
+  appearance: Appearance;
   lotusFolderPath: string;
   keepEnginesRunningOnQuit: boolean;
   selectedModel: string;
@@ -117,7 +122,6 @@ export interface LotusSettings {
   autoReadResponses: boolean;
   whisperLanguage: string;
   density: 'comfortable' | 'compact';
-  palette: ColorPalette;
   fontFamily: FontFamily;
   fontSize: FontSize;
   // ── Local execution layer (session 5) ──

@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, PanelLeft } from 'lucide-react';
+import { ArrowLeft, ArrowRight, PanelLeft, PanelRight } from 'lucide-react';
 import { Symbol } from './Symbol';
 import { isTauri } from '../../lib/http';
 
 /**
  * Custom window title bar. The native Windows caption is turned off (`decorations: false` in
- * tauri.conf.json). Session 7: the bar is frosted glass (tinted, blurred, grained) instead of fully
- * transparent, so it reads as a surface above the wallpaper.
+ * tauri.conf.json). Session 8: the bar has no surface of its own; it sits on the same window
+ * acrylic as the page rail under it, so the frosted field is one seamless piece. (It must not use
+ * backdrop-filter: that made it a backdrop root, and its menus then had nothing to blur.)
  *
- * Left: back / forward through pages, sidebar toggle, and a real menu bar (File, Edit, View, Help).
+ * Left: back / forward through pages, left / right panel toggles, and a real menu bar (File, Edit, View, Help).
  * Right: minimise, maximise/restore, close. Empty space drags the window; double-click maximises.
  * Window controls only render inside Tauri, where they work.
  */
@@ -29,8 +30,11 @@ interface TitleBarProps {
   canGoForward: boolean;
   onBack: () => void;
   onForward: () => void;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
+  /** The current page's left panel (its list) and right panel (its inspector). */
+  leftPanel: boolean;
+  rightPanel: boolean;
+  onToggleLeft: () => void;
+  onToggleRight: () => void;
   menus: MenuDef[];
 }
 
@@ -54,7 +58,7 @@ const navBtn =
   'hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)] ' +
   'disabled:opacity-35 disabled:pointer-events-none focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]';
 
-export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onBack, onForward, sidebarCollapsed, onToggleSidebar, menus }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onBack, onForward, leftPanel, rightPanel, onToggleLeft, onToggleRight, menus }) => {
   const [win, setWin] = useState<Win | null>(null);
   const [maximized, setMaximized] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
@@ -94,15 +98,19 @@ export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onB
   return (
     <div ref={barRef} data-tauri-drag-region className="material-titlebar relative z-40 h-10 shrink-0 flex items-center pl-2 select-none text-[var(--color-text-main)]" role="banner">
       <div className="flex items-center gap-0.5">
-        <button type="button" className={navBtn} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" title="Back (Alt+Left)">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" data-tip="Back (Alt+Left)" data-tip-side="below">
           <Symbol glyph={ArrowLeft} size={16} />
         </button>
-        <button type="button" className={navBtn} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" title="Forward (Alt+Right)">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" data-tip="Forward (Alt+Right)" data-tip-side="below">
           <Symbol glyph={ArrowRight} size={16} />
         </button>
-        <button type="button" className={`${navBtn} ml-1`} onMouseDown={keepFocus} onClick={onToggleSidebar}
-          aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} title={`${sidebarCollapsed ? 'Show' : 'Hide'} sidebar (Ctrl+Alt+S)`}>
+        <button type="button" className={`tip ${navBtn} ml-1`} onMouseDown={keepFocus} onClick={onToggleLeft} aria-pressed={leftPanel}
+          aria-label={leftPanel ? 'Hide left panel' : 'Show left panel'} data-tip={`${leftPanel ? 'Hide' : 'Show'} left panel (Ctrl+Alt+S)`} data-tip-side="below">
           <Symbol glyph={PanelLeft} size={16} />
+        </button>
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onToggleRight} aria-pressed={rightPanel}
+          aria-label={rightPanel ? 'Hide right panel' : 'Show right panel'} data-tip={`${rightPanel ? 'Hide' : 'Show'} right panel (Ctrl+Alt+I)`} data-tip-side="below">
+          <Symbol glyph={PanelRight} size={16} />
         </button>
       </div>
 

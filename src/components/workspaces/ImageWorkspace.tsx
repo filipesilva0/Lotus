@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, PanelRight, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
+import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
 import { DEFAULT_PARAMS, ImageParams, useGallery } from '../../hooks/useGallery';
 import { comfy, ComfyStats, dimensionsFor } from '../../services/comfyService';
 import { engineUrl } from '../../services/engineConfig';
+import { usePanels } from '../../lib/panels';
+import { EdgeMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
 import { usePersisted, uid } from '../../lib/persist';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
@@ -34,7 +36,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
   const loras = params.loras ?? [];
   const [folders, setFolders] = usePersisted<ChatFolder[]>('lotus.imgfolders.v1', []);
   const [styles, setStyles] = usePersisted<Style[]>('lotus.styles.v1', []);
-  const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.image.inspector.v1', true);
+  const { right: showInspector, setRight: setShowInspector } = usePanels();
   const [tab, setTab] = usePersisted<'params' | 'styles' | 'details'>('lotus.image.tab.v1', 'params');
   const [prompt, setPrompt] = useState('');
   const [ref, setRef] = useState<{ blob: Blob; url: string; name: string } | null>(null);
@@ -142,31 +144,6 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
 
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
-      <ToolbarContent>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <Popover trigger={(_o, t) => (
-            <button type="button" onClick={t} aria-haspopup="menu" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)] max-w-[300px]">
-              <ImageIcon className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span className="truncate">{params.checkpoint || (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
-            </button>)}>
-            {(close) => (<>
-              {!checkpoints.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">{comfyUp ? 'No checkpoints found in ComfyUI’s models folder.' : 'Start ComfyUI to list checkpoints.'}</p>}
-              {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate">{c}</span></MenuItem>)}
-            </>)}
-          </Popover>
-          <Popover trigger={(_o, t) => (
-            <button type="button" onClick={t} aria-haspopup="menu" title="LoRA (optional)" className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-[6px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)]">
-              <Sparkles className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)] shrink-0" /><span>{loras.length ? `LoRA · ${loras.length}` : 'LoRA'}</span><ChevronDown className="w-3 h-3 opacity-60 shrink-0" />
-            </button>)} className="w-[300px] !p-3">
-            {() => <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />}
-          </Popover>
-          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={stats ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : 'Start ComfyUI to see video memory'}>
-            <div className="flex-1"><Gauge value={vramUsed} label="Video memory in use" /></div>
-            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{stats && stats.vramTotalGb ? `VRAM ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)}/${stats.vramTotalGb.toFixed(0)} GB` : 'VRAM —'}</span>
-          </div>
-          <div className="flex-1" />
-          <IconBtn label={showInspector ? 'Hide inspector' : 'Show inspector'} active={showInspector} onClick={() => setShowInspector((v) => !v)}><PanelRight className="w-4 h-4" /></IconBtn>
-        </div>
-      </ToolbarContent>
 
       <ImageSidebar sessions={g.sessions} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={() => { g.newSession(); setPrompt(''); set({ seed: null }); setRef(null); }} onDelete={g.remove} onPatch={g.patch} />
 
@@ -260,10 +237,19 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
               </div>
             )}
             {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
-            <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
-              className={cx('rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', drag && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
+            <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
+              tray={<>
+                <TrayButton onClick={() => { setTab('params'); setShowInspector(true); }} icon={<SlidersHorizontal className="w-4 h-4" />} label="Parameters" title="Canvas, images per run, negative prompt, sampling" />
+                <TrayButton onClick={() => { setTab('styles'); setShowInspector(true); }} icon={<Palette className="w-4 h-4" />} label="Styles" title="Saved styles you can call with @ in the prompt" />
+                <TrayButton onClick={onOpenModels} icon={<Boxes className="w-4 h-4" />} label="Models" title="Get checkpoints and LoRAs" />
+                <div className="flex-1" />
+                <TrayNote>{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</TrayNote>
+              </>}>
+              {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
+              <EdgeMeter value={stats && stats.vramTotalGb ? vramUsed : null} label="Video memory in use"
+                title={stats && stats.vramTotalGb ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : 'Start ComfyUI to see video memory'} />
               {(ref || drag) && (
-                <div className="flex items-center gap-2 p-2.5 pb-0">
+                <div className="flex items-center gap-2 px-3.5 pt-3">
                   {ref ? (
                     <span className="inline-flex items-center gap-2 h-10 pl-1 pr-1.5 rounded-[8px] bg-[var(--hover)] text-[12px]">
                       <img src={ref.url} alt="" className="w-8 h-8 rounded-[5px] object-cover" /><span className="max-w-[140px] truncate">Reference: {ref.name}</span>
@@ -275,18 +261,34 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
               )}
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKey} rows={2} aria-label="Prompt"
                 placeholder="Describe the image… (/ for settings, @ for saved styles)"
-                className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
-              <div className="flex items-center gap-1 px-2 pb-2">
-                <label className="w-7 h-7 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] cursor-default" title="Add a reference image">
-                  <input type="file" accept="image/*" className="sr-only" aria-label="Add a reference image" onChange={(e) => { takeRef(e.target.files?.[0]); e.target.value = ''; }} /><Layers className="w-4 h-4" />
+                className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+              <div className="flex items-center gap-1 px-2.5 pb-2.5">
+                <label className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] cursor-default" data-tip="Add a reference image">
+                  <input type="file" accept="image/*" className="sr-only" aria-label="Add a reference image" onChange={(e) => { takeRef(e.target.files?.[0]); e.target.value = ''; }} /><Plus className="w-[18px] h-[18px]" />
                 </label>
-                {cur?.blob && <IconBtn label="Use the current image as the reference" onClick={useAsReference}><MoveDiagonal className="w-4 h-4" /></IconBtn>}
-                <span className="ml-1 text-[11px] text-[var(--color-text-muted)] tabular-nums">{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</span>
+                {cur?.blob && <RoundIcon label="Use the current image as the reference" onClick={useAsReference}><MoveDiagonal className="w-4 h-4" /></RoundIcon>}
+                <Popover up trigger={(o, t) => (
+                  <ModeButton on={loras.length > 0 || o} onClick={t} icon={<Sparkles className="w-4 h-4" />} label={loras.length ? `LoRA · ${loras.length}` : 'LoRA'} title="LoRAs (optional): small add-on models that steer style or subject" />
+                )} className="w-[300px] !p-3">
+                  {() => <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />}
+                </Popover>
                 <div className="flex-1" />
-                {g.busy ? <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={g.cancel}>Stop</Btn>
-                  : <Btn variant="primary" disabled={!prompt.trim() || !params.checkpoint || !comfyUp} onClick={go} icon={<ArrowUp className="w-3.5 h-3.5" />}>Generate</Btn>}
+                <Popover up align="right" className="w-[300px]" trigger={(o, t) => (
+                  <PickerButton open={o} onClick={t} title="Checkpoint (image model)" text={params.checkpoint || (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}
+                    chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
+                )}>
+                  {(close) => (<>
+                    {!checkpoints.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">{comfyUp ? 'No checkpoints found in ComfyUI’s models folder.' : 'Start ComfyUI to list checkpoints.'}</p>}
+                    {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate">{c}</span></MenuItem>)}
+                    <div className="my-1 border-t border-[var(--sep)]" />
+                    <MenuItem onClick={() => { close(); onOpenModels(); }}><Boxes className="w-3.5 h-3.5" />Get more models…</MenuItem>
+                  </>)}
+                </Popover>
+                {g.busy
+                  ? <SendButton stop onClick={g.cancel} label="Stop generating" />
+                  : <SendButton disabled={!prompt.trim() || !params.checkpoint || !comfyUp} onClick={go} label="Generate" tip="Generate (Enter)" />}
               </div>
-            </div>
+            </PromptShell>
           </div>
         </div>
       </div>

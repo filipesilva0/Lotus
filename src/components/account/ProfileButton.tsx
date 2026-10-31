@@ -1,25 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BarChart3, BookOpen, Boxes, LogIn, LogOut, Puzzle, Settings as SettingsIcon } from 'lucide-react';
+import { BarChart3, BookOpen, LogIn, LogOut, Puzzle } from 'lucide-react';
 import { Symbol } from '../common/Symbol';
 import { Avatar } from './Avatar';
 import { signOut, useAccount } from '../../services/account';
 import type { AccountView } from './AccountModal';
 
 interface Props {
-  collapsed: boolean;
   /** Shared row classes from the sidebar so the button lines up with the other items. */
   rowClass: string;
-  onOpenSettings: () => void;
-  onOpenModels: () => void;
   onOpenAccount: (view: AccountView) => void;
   onOpenLibrary: (tab: 'skills' | 'plugins') => void;
 }
 
 /**
  * Profile button at the foot of the sidebar. Clicking it raises a small menu upward:
- * signed out → Log in · Usage · Library · Plugins · Settings · Models; signed in → your profile (with usage) · Library · Plugins · Settings · Models · Log out.
+ * signed out → Log in · Usage · Library · Plugins; signed in → your profile (with usage) · Library · Plugins · Log out.
+ * Session 8: Settings and Models were removed here; they already have their own places (the Settings
+ * button above, and the Engines & Models page).
  */
-export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSettings, onOpenModels, onOpenAccount, onOpenLibrary }) => {
+export const ProfileButton: React.FC<Props> = ({ rowClass, onOpenAccount, onOpenLibrary }) => {
   const account = useAccount();
   const user = account.kind === 'signed-in' ? account.user : null;
   const [open, setOpen] = useState(false);
@@ -48,8 +47,6 @@ export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSett
     ...(user ? [] : [{ id: 'usage', aria: 'Your usage', label: 'Your usage', icon: <Symbol glyph={BarChart3} size={18} />, onSelect: pick(() => onOpenAccount('profile')) }]),
     { id: 'library', aria: 'Library: skills, memory and soul', label: 'Library', icon: <Symbol glyph={BookOpen} size={18} />, onSelect: pick(() => onOpenLibrary('skills')) },
     { id: 'plugins', aria: 'Plugins', label: 'Plugins', icon: <Symbol glyph={Puzzle} size={18} />, onSelect: pick(() => onOpenLibrary('plugins')) },
-    { id: 'settings', aria: 'Settings', label: 'Settings', icon: <Symbol glyph={SettingsIcon} size={18} />, onSelect: pick(onOpenSettings) },
-    { id: 'models', aria: 'Models', label: 'Models', icon: <Symbol glyph={Boxes} size={18} />, onSelect: pick(onOpenModels) },
     ...(user ? [{ id: 'logout', aria: 'Log out', label: 'Log out', icon: <Symbol glyph={LogOut} size={18} />, onSelect: pick(() => void signOut()), danger: true }] : []),
   ];
 
@@ -68,7 +65,7 @@ export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSett
           className="profile-menu material-frosted absolute bottom-full left-0 mb-2 w-[248px] p-1.5 rounded-[12px] z-50 flex flex-col gap-0.5">
           {entries.map((it, i) => (
             <React.Fragment key={it.id}>
-              {(it.id === 'library' || it.id === 'settings' || it.id === 'logout') && <div role="separator" className="profile-menu-item my-1 mx-2 h-px bg-[var(--sep)]" style={{ animationDelay: `${(entries.length - i) * 35}ms` }} />}
+              {(it.id === 'library' || it.id === 'logout') && <div role="separator" className="profile-menu-item my-1 mx-2 h-px bg-[var(--sep)]" style={{ animationDelay: `${(entries.length - i) * 35}ms` }} />}
               <button type="button" role="menuitem" aria-label={it.aria} onClick={it.onSelect}
                 // Items rise from the button one after another: the lowest first.
                 style={{ animationDelay: `${(entries.length - 1 - i) * 35}ms` }}
@@ -82,12 +79,9 @@ export const ProfileButton: React.FC<Props> = ({ collapsed, rowClass, onOpenSett
       )}
 
       <button ref={btn} type="button" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}
-        aria-label={user ? `Account: ${user.name}` : 'Account: not signed in'} title={collapsed ? (user ? user.name : 'Account') : undefined}
-        className={`${rowClass} ${collapsed ? 'justify-center px-0' : 'px-3'} ${open ? 'bg-[var(--pressed)] text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]'}`}>
+        aria-label={user ? `Account: ${user.name}` : 'Account: not signed in'} data-tip={open ? undefined : user ? user.name : 'Profile'} data-tip-side="right"
+        className={`${rowClass} ${open ? 'bg-[var(--pressed)] text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)]'}`}>
         <Avatar user={user} size={26} />
-        {!collapsed && (
-          <span className="flex-1 min-w-0 text-left truncate font-medium">{user ? user.name : 'Profile'}</span>
-        )}
       </button>
     </div>
   );

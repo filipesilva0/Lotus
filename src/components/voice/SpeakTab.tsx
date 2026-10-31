@@ -5,6 +5,7 @@ import {
 } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
 import { Btn, Card, Select, TextArea, TextInput, Label, Banner, Spinner, Empty, cx } from '../common/ui';
+import { PromptShell, SendButton, TrayNote } from '../common/PromptBox';
 import { AudioPlayer } from './AudioPlayer';
 import { EffectsChain } from './EffectsChain';
 import { VoiceData, avatarGradient } from './useVoiceData';
@@ -146,38 +147,31 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           <Btn variant="ghost" size="sm" className="h-9" icon={<Plus className="w-3.5 h-3.5" />} onClick={onCreateVoice}>New voice</Btn>
         </div>
 
-        <div>
-          <div className="flex flex-wrap items-center gap-1.5 mb-2" role="group" aria-label="Expression tags">
-            <span className="text-xs text-[var(--color-text-muted)] mr-1">Insert</span>
+        <PromptShell tray={<>
+          <span className="text-[12px] text-[var(--color-text-muted)] px-1" id="tags-label">Insert</span>
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-labelledby="tags-label" title="Tags are read by engines that support them (such as Chatterbox).">
             {['[laugh]', '[sigh]', '[gasp]', '[cough]', '[pause: 1.5s]'].map((t) => (
-              <button key={t} type="button" onClick={() => insertTag(t)} className="h-6 px-2 rounded-full text-[11px] font-mono bg-[var(--hover)] hover:bg-[var(--pressed)]">{t}</button>
+              <button key={t} type="button" onClick={() => insertTag(t)} className="h-6 px-2 rounded-full text-[11px] font-mono text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]">{t}</button>
             ))}
-            <span className="text-[11px] text-[var(--color-text-muted)] ml-1">Tags are read by engines that support them (such as Chatterbox).</span>
           </div>
-          <TextArea ref={taRef} aria-label="Text to speak" rows={9} value={text} maxLength={50000}
+          <div className="flex-1" />
+          <TrayNote>{text.length.toLocaleString()} / 50,000</TrayNote>
+        </>}>
+          <textarea ref={taRef} aria-label="Text to speak" rows={9} value={text} maxLength={50000}
             placeholder="Type or paste what this voice should say…"
             onChange={(e) => onText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void run(); } }}
-            className="!text-sm min-h-[220px]" />
-          <div className="flex items-center justify-between mt-1.5 text-xs text-[var(--color-text-muted)]">
-            <span>Ctrl + Enter to generate</span>
-            <span className="tabular-nums">{text.length.toLocaleString()} / 50,000</span>
+            className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed min-h-[220px] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
+          <div className="flex items-center gap-2 px-3 pb-2.5">
+            {busy
+              ? <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" role="status"><Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />Generating… <span className="tabular-nums">{elapsed.toFixed(1)}s</span></span>
+              : <span className="text-xs text-[var(--color-text-muted)]">Ctrl + Enter to generate</span>}
+            <div className="flex-1" />
+            {busy
+              ? <SendButton stop onClick={cancel} label="Cancel" tip="Cancel" />
+              : <SendButton disabled={!canRun} onClick={() => void run()} label="Generate speech" tip="Generate speech (Ctrl+Enter)" />}
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {busy ? (
-            <>
-              <Btn variant="secondary" icon={<Square className="w-3.5 h-3.5" fill="currentColor" />} onClick={cancel}>Cancel</Btn>
-              <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
-                <Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />
-                Generating… <span className="tabular-nums">{elapsed.toFixed(1)}s</span>
-              </span>
-            </>
-          ) : (
-            <Btn variant="primary" disabled={!canRun} icon={<Sparkles className="w-3.5 h-3.5" />} onClick={run}>Generate speech</Btn>
-          )}
-        </div>
+        </PromptShell>
 
         {err && (
           <Banner tone="error" action={modelHint ? <Btn size="sm" variant="secondary" onClick={onOpenModels}>Open models</Btn> : undefined}>

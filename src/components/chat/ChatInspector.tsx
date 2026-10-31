@@ -29,7 +29,7 @@ interface Props {
 const TABS: { id: InspectorTab; label: string; icon: React.ReactNode }[] = [
   { id: 'artifacts', label: 'Artifacts', icon: <Code2 className="w-3.5 h-3.5" /> },
   { id: 'context', label: 'Context', icon: <Layers className="w-3.5 h-3.5" /> },
-  { id: 'research', label: 'Research', icon: <FlaskConical className="w-3.5 h-3.5" /> },
+  { id: 'research', label: 'Sources', icon: <FlaskConical className="w-3.5 h-3.5" /> },
   { id: 'params', label: 'Parameters', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
 ];
 

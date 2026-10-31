@@ -1,4 +1,4 @@
-import { ColorPalette, FontFamily, FontSize } from '../types/lotus';
+import { ColorPalette, FontFamily, FontSize, ViewMode } from '../types/lotus';
 
 export interface ThemeColors {
   name: string;
@@ -43,6 +43,25 @@ export const PALETTES: Record<ColorPalette, ThemeColors> = {
     pastel: '#E9F2FE', pastelBorder: '#BCD7FA', badgeBg: '#D5E7FD', badgeText: '#0A4DAF',
     pastelDark: '#1A2840', pastelBorderDark: '#2B4268', badgeDarkBg: '#1F3355', badgeDarkText: '#9CC8FF',
   },
+  red: {
+    name: 'Red',
+    vibrant: '#C8203A', vibrantHover: '#A81A30', vibrantLight: '#EE5267',
+    pastel: '#FDECEE', pastelBorder: '#F7C4CB', badgeBg: '#FADADF', badgeText: '#9A162B',
+    pastelDark: '#3A1F24', pastelBorderDark: '#5E3239', badgeDarkBg: '#4A262C', badgeDarkText: '#FFB3BD',
+  },
+  yellow: {
+    name: 'Yellow',
+    // Deep gold so white labels on filled buttons keep >= 4.5:1; the bright petal yellow is the dark-mode accent.
+    vibrant: '#8F5F00', vibrantHover: '#764E00', vibrantLight: '#F5CF3A',
+    pastel: '#FFF7DB', pastelBorder: '#F2DE9A', badgeBg: '#FCEFC2', badgeText: '#6E4A00',
+    pastelDark: '#352D17', pastelBorderDark: '#57492A', badgeDarkBg: '#443A1D', badgeDarkText: '#F5D77A',
+  },
+  graphite: {
+    name: 'Graphite',
+    vibrant: '#55555D', vibrantHover: '#45454C', vibrantLight: '#AEAEB6',
+    pastel: '#F0F0F2', pastelBorder: '#D6D6DB', badgeBg: '#E6E6EA', badgeText: '#3C3C43',
+    pastelDark: '#2A2A2E', pastelBorderDark: '#45454B', badgeDarkBg: '#36363B', badgeDarkText: '#D1D1D6',
+  },
   pink: {
     name: 'Pink',
     vibrant: '#C42A76', vibrantHover: '#A5215F', vibrantLight: '#FF375F',
@@ -50,6 +69,16 @@ export const PALETTES: Record<ColorPalette, ThemeColors> = {
     pastelDark: '#35202B', pastelBorderDark: '#58354A', badgeDarkBg: '#452A38', badgeDarkText: '#F7B0CF',
   },
 };
+
+/**
+ * Each page owns one of the five petals of the logo (left to right: blue, red, orange, yellow, green)
+ * and uses that colour as its accent (session 8; this replaced the accent-colour setting).
+ * Engines & Models is not one of the five workspaces, so it gets the neutral graphite accent.
+ */
+export const PAGE_PALETTE: Record<ViewMode, ColorPalette> = {
+  chat: 'blue', images: 'red', voice: 'amber', builder: 'yellow', tasks: 'green', engines: 'graphite',
+};
+export const PETAL_ORDER: ViewMode[] = ['chat', 'images', 'voice', 'builder', 'tasks'];
 
 export const FONTS: Record<FontFamily, { name: string; family: string }> = {
   // 'jakarta' is the stored key for the default; it now means the system UI font

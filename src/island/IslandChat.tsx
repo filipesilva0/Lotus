@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { ArrowUp, Square, Mic, Paperclip, Copy, Check, Volume2, RotateCcw, ExternalLink, X, FileText } from 'lucide-react';
+import { ArrowUp, Square, Mic, Paperclip, Plus, Copy, Check, Volume2, RotateCcw, ExternalLink, X, FileText } from 'lucide-react';
 import { ollamaClient, ChatTurn, fileToBase64 } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { MicRecorder, micErrorMessage } from '../lib/audio';
@@ -197,9 +197,9 @@ export const IslandChat = forwardRef<IslandChatHandle, {
             ))}
           </div>
         )}
-        <div className={`flex items-end gap-1 rounded-[10px] bg-white/10 pl-2 pr-1.5 py-1.5 ring-1 transition-shadow ${dragOver ? 'ring-[var(--color-accent-vibrant)] ring-2' : 'ring-white/10 focus-within:ring-white/30'}`}>
+        <div className={`flex items-end gap-1 rounded-[20px] bg-white/10 pl-1.5 pr-1.5 py-1.5 ring-1 transition-shadow ${dragOver ? 'ring-[var(--color-accent-vibrant)] ring-2' : 'ring-white/10 focus-within:ring-white/30'}`}>
           <label className="w-8 h-8 shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 cursor-pointer" title="Attach a file" aria-label="Attach a file">
-            <Paperclip className="w-4 h-4" />
+            <Plus className="w-[18px] h-[18px]" />
             <input type="file" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
           </label>
           <textarea ref={input$} rows={1} value={input} aria-label="Message" placeholder={recording ? 'Listening…' : transcribing ? 'Transcribing…' : dragOver ? 'Drop to attach' : 'Message'}

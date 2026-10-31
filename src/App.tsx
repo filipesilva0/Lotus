@@ -3,18 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ViewMode, LotusSettings } from './types/lotus';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ViewMode, LotusSettings, Appearance } from './types/lotus';
 import { LeftRail, VIEW_TITLES } from './components/rail/LeftRail';
 import { TitleBar, MenuDef } from './components/common/TitleBar';
 import { ToolbarSlotContext } from './components/common/ToolbarSlot';
-import { applyWindowGlass } from './lib/glass';
+import { applyWindowGlass, onSystemAppearance, systemPrefersDark } from './lib/glass';
+import { DEFAULT_PANELS, PanelState, PanelsProvider } from './lib/panels';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
 import { EnginesWorkspace } from './components/workspaces/EnginesWorkspace';
 import { BuilderWorkspace } from './components/builder/BuilderWorkspace';
-import { ResearchWorkspace } from './components/research/ResearchWorkspace';
+import { useResearch } from './research/store';
 import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
 import { setLiveSettings } from './lib/liveSettings';
 import { startHardwareMonitor } from './hardware/monitor';
@@ -22,21 +23,20 @@ import { startScheduler } from './tasks/store';
 import { loadMemory } from './memory/store';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { AccountModal, AccountView } from './components/account/AccountModal';
-import { ModelsSheet } from './components/modals/ModelsSheet';
 import { LibrarySheet, LibraryTab } from './components/library/LibrarySheet';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
 import { useEngines } from './hooks/useEngines';
 import { useUpdates } from './hooks/useUpdates';
-import { applyThemeToDocument } from './styles/theme';
+import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
 import { invokeNative, onEvent } from './lib/bus';
 
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
 
 const DEFAULT_SETTINGS: LotusSettings = {
-  darkMode: false,
+  appearance: 'auto',
   lotusFolderPath: '',
   keepEnginesRunningOnQuit: false,
   selectedModel: '',
@@ -62,7 +62,6 @@ const DEFAULT_SETTINGS: LotusSettings = {
   autoReadResponses: false,
   whisperLanguage: 'English',
   density: 'comfortable',
-  palette: 'blue',
   fontFamily: 'jakarta',
   fontSize: 'md',
   llmBackend: 'ollama',
@@ -89,29 +88,56 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
-/** Modules from the specs: entering one collapses the app-switcher rail to icons. */
-const COLLAPSING: ViewMode[] = ['chat', 'images', 'voice', 'builder', 'tasks'];
+/** Saved settings from before session 8 carry `darkMode` / `palette`; drop them (appearance now defaults to Auto). */
+function loadSettings(): LotusSettings {
+  const { darkMode: _d, palette: _p, ...saved } = load<Partial<LotusSettings> & { darkMode?: boolean; palette?: string }>(SETTINGS_KEY, {});
+  return { ...DEFAULT_SETTINGS, ...saved };
+}
 
 export default function App() {
   const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('lotus.setup.dismissed'));
   const [currentView, setCurrentViewRaw] = useState<ViewMode>(firstRun.current ? 'engines' : 'chat');
   const [builderSeen, setBuilderSeen] = useState(false);
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
-  const [settings, setSettings] = useState<LotusSettings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<LotusSettings>>(SETTINGS_KEY, {}) }));
+  const [settings, setSettings] = useState<LotusSettings>(loadSettings);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
-  const [modelsOpen, setModelsOpen] = useState(false);
   const [library, setLibrary] = useState<LibraryTab | null>(null);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => load<boolean>('lotus.sidebar.v1', false));
-  useEffect(() => { localStorage.setItem('lotus.sidebar.v1', JSON.stringify(sidebarCollapsed)); }, [sidebarCollapsed]);
+
+  // Each page's left panel (its list) and right panel (its inspector), toggled from the title bar.
+  const [panelMap, setPanelMap] = useState<Partial<Record<ViewMode, PanelState>>>(() => load('lotus.panels.v1', {}));
+  useEffect(() => { try { localStorage.setItem('lotus.panels.v1', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
+  const panels = panelMap[currentView] ?? DEFAULT_PANELS;
+  const viewRefForPanels = useRef(currentView);
+  viewRefForPanels.current = currentView;
+  const setPanel = useCallback((side: keyof PanelState, on: boolean | ((was: boolean) => boolean)) => {
+    setPanelMap((m) => {
+      const cur = m[viewRefForPanels.current] ?? DEFAULT_PANELS;
+      const next = typeof on === 'function' ? on(cur[side]) : on;
+      return cur[side] === next ? m : { ...m, [viewRefForPanels.current]: { ...cur, [side]: next } };
+    });
+  }, []);
+  const panelsApi = useMemo(() => ({ ...panels, setLeft: (on: boolean) => setPanel('left', on), setRight: (on: boolean) => setPanel('right', on) }), [panels, setPanel]);
+  const toggleLeft = useCallback(() => setPanel('left', (v) => !v), [setPanel]);
+  const toggleRight = useCallback(() => setPanel('right', (v) => !v), [setPanel]);
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); setSidebarCollapsed((c) => !c); } };
+    const h = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k === 's') { e.preventDefault(); toggleLeft(); } else if (k === 'i') { e.preventDefault(); toggleRight(); }
+    };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, []);
+  }, [toggleLeft, toggleRight]);
+
+  // Appearance: Auto follows Windows' light/dark setting live.
+  const [systemDark, setSystemDark] = useState(systemPrefersDark);
+  useEffect(() => onSystemAppearance(setSystemDark), []);
+  const dark = settings.appearance === 'auto' ? systemDark : settings.appearance === 'dark';
+  const setAppearance = (a: Appearance) => setSettings((s) => ({ ...s, appearance: a }));
 
   const [checkpoints, setCheckpoints] = useState<string[]>([]);
 
@@ -122,7 +148,6 @@ export default function App() {
   const showView = useCallback((v: ViewMode) => {
     viewRef.current = v;
     setCurrentViewRaw(v);
-    if (COLLAPSING.includes(v)) setSidebarCollapsed(true);
   }, []);
   const setCurrentView = useCallback((v: ViewMode) => {
     const here = viewRef.current;
@@ -154,7 +179,6 @@ export default function App() {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [goBack, goForward]);
-  useEffect(() => { if (COLLAPSING.includes(currentView)) setSidebarCollapsed(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const eng = useEngines();
   const updates = useUpdates();
@@ -164,15 +188,18 @@ export default function App() {
   // Code outside React (agent pool, VRAM monitor, scheduler, learning) reads the current settings from here.
   setLiveSettings(settings);
   const chat = useChat(settings);
+  // Deep research lives in Chat, but its runs belong to the app so they keep going on other pages.
+  const research = useResearch({ model: settings.selectedModel });
   useEffect(() => { startHardwareMonitor(); void loadMemory(); startScheduler(); }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
 
+  // Each page wears its own petal colour as the accent (no accent setting since session 8).
   useEffect(() => {
-    applyThemeToDocument(settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode);
-    void applyWindowGlass(settings.darkMode);
-  }, [settings.palette, settings.fontFamily, settings.fontSize, settings.darkMode]);
+    applyThemeToDocument(PAGE_PALETTE[currentView], settings.fontFamily, settings.fontSize, dark);
+  }, [currentView, settings.fontFamily, settings.fontSize, dark]);
+  useEffect(() => { void applyWindowGlass(settings.appearance, dark); }, [settings.appearance, dark]);
 
   // The window starts hidden to avoid a white flash; show it once we have painted.
   useEffect(() => { requestAnimationFrame(() => void invokeNative('main_ready')); }, []);
@@ -193,7 +220,7 @@ export default function App() {
 
   useEffect(() => {
     const offs: (() => void)[] = [];
-    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'builder' || v === 'tasks' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
+    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'builder' || v === 'tasks' || v === 'engines') setCurrentView(v); else if (v === 'research') setCurrentView('chat'); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
@@ -233,16 +260,19 @@ export default function App() {
       { label: 'Select All', shortcut: 'Ctrl+A', onSelect: edit('selectAll') },
     ] },
     { label: 'View', items: [
-      { label: sidebarCollapsed ? 'Show Sidebar' : 'Hide Sidebar', shortcut: 'Ctrl+Alt+S', onSelect: () => setSidebarCollapsed((c) => !c) },
-      { label: 'Dark Appearance', checked: settings.darkMode, onSelect: () => setSettings((s) => ({ ...s, darkMode: !s.darkMode })) },
+      { label: panels.left ? 'Hide Left Panel' : 'Show Left Panel', shortcut: 'Ctrl+Alt+S', onSelect: toggleLeft },
+      { label: panels.right ? 'Hide Right Panel' : 'Show Right Panel', shortcut: 'Ctrl+Alt+I', onSelect: toggleRight },
+      'separator',
+      { label: 'Appearance: Auto', checked: settings.appearance === 'auto', onSelect: () => setAppearance('auto') },
+      { label: 'Appearance: Light', checked: settings.appearance === 'light', onSelect: () => setAppearance('light') },
+      { label: 'Appearance: Dark', checked: settings.appearance === 'dark', onSelect: () => setAppearance('dark') },
       'separator',
       { label: 'Chat', checked: currentView === 'chat', onSelect: go('chat') },
       { label: 'Images', checked: currentView === 'images', onSelect: go('images') },
       { label: 'Voice', checked: currentView === 'voice', onSelect: go('voice') },
-      { label: 'Research', checked: currentView === 'research', onSelect: go('research') },
       { label: 'App Builder', checked: currentView === 'builder', onSelect: go('builder') },
       { label: 'Tasks', checked: currentView === 'tasks', onSelect: go('tasks') },
-      { label: 'Engines', checked: currentView === 'engines', onSelect: go('engines') },
+      { label: 'Engines & Models', checked: currentView === 'engines', onSelect: go('engines') },
       'separator',
       { label: 'Library…', onSelect: () => setLibrary('skills') },
       { label: 'Plugins…', onSelect: () => setLibrary('plugins') },
@@ -252,7 +282,6 @@ export default function App() {
     ] },
     { label: 'Help', items: [
       { label: 'Check for Updates…', onSelect: () => { void updates.check(); setIsSettingsOpen(true); } },
-      { label: 'Models & Engines', onSelect: () => openEngines('models') },
     ] },
   ];
 
@@ -275,33 +304,31 @@ export default function App() {
         currentView={currentView}
         onSelectView={setCurrentView}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenModels={() => setModelsOpen(true)}
         onOpenAccount={setAccountView}
         onOpenLibrary={setLibrary}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
-        collapsed={sidebarCollapsed}
+        dark={dark}
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden mb-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
-        <header className="h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]" role="banner">
+        {/* Chat and Images have no toolbar row: their controls live in the prompt box (session 8). */}
+        <header className={currentView === 'chat' || currentView === 'images' ? 'hidden' : 'h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]'} role="banner">
           <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
         <ToolbarSlotContext.Provider value={toolbarSlot}>
+        <PanelsProvider value={panelsApi}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
           <ChatWorkspace chat={chat} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
-            onOpenModels={() => openEngines('models')} prefill={prefill} onOpenLibrary={setLibrary} />
+            onOpenModels={() => openEngines('models')} prefill={prefill} onOpenLibrary={setLibrary}
+            research={research} onOpenEngines={() => openEngines('models')} />
         )}
 
         {currentView === 'images' && <ImageWorkspace checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
         {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} />}
-
-        {currentView === 'research' && (
-          <ResearchWorkspace model={settings.selectedModel} models={models.map((m) => m.id)} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('models')} />
-        )}
 
 
         {/* The App Builder stays mounted once opened so dev servers, terminals and the agent keep going while you use other pages. */}
@@ -315,6 +342,7 @@ export default function App() {
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>
+        </PanelsProvider>
         </ToolbarSlotContext.Provider>
       </div>
     </main>
@@ -323,9 +351,8 @@ export default function App() {
   return (
     <div className="h-screen w-screen flex flex-col">
       <TitleBar canGoBack={past.length > 0} canGoForward={future.length > 0} onBack={goBack} onForward={goForward}
-        sidebarCollapsed={sidebarCollapsed} onToggleSidebar={() => setSidebarCollapsed((c) => !c)} menus={menus} />
+        leftPanel={panels.left} rightPanel={panels.right} onToggleLeft={toggleLeft} onToggleRight={toggleRight} menus={menus} />
       {panel}
-      <ModelsSheet open={modelsOpen} onClose={() => setModelsOpen(false)} engines={eng.engines} onOpenEngines={() => openEngines('engines')} />
       <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} />
       <LibrarySheet open={library !== null} tab={library ?? 'skills'} onTab={setLibrary} onClose={() => setLibrary(null)} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} folder={chat.active?.folder} />
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />

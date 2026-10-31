@@ -68,6 +68,9 @@
   --frost-blur: blur(30px) saturate(1.9) brightness(1.03);
   --frost-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
+  /* Chat bar: the tray the message box sits on (Choose folder, Library, Plugins, memory, incognito). */
+  --composer-tray: color-mix(in srgb, var(--color-text-main) 5%, var(--color-bg-panel));
+
   /* Custom title bar: the close button uses the Windows caption red, as the native one does. */
   --titlebar-close: #C42B1C;
   --titlebar-close-pressed: #C84031;
@@ -137,22 +140,42 @@ html.no-glass body { background: var(--color-bg-base); }
   -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
   box-shadow: inset 0 0.5px 0 0 var(--frost-edge), 0 0 0 0.5px var(--frost-rim), var(--shadow-float);
 }
-.material-titlebar {
-  background-color: var(--frost-tint-bar);
-  background-image: var(--frost-sheen), var(--frost-grain);
-  -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
-  box-shadow: inset 0 -0.5px 0 0 var(--sep);
-}
+/* Session 8: the title bar has no surface of its own. It shows the same window acrylic as the page
+   rail beneath it, so the frosted field runs seamlessly from the top edge down. It must NOT use
+   backdrop-filter: that turns it into a backdrop root, and the File/Edit/View/Help menus inside it
+   then had nothing behind them to blur (they looked flat instead of frosted). */
+.material-titlebar { background: transparent; }
+
 @supports not (backdrop-filter: blur(1px)) {
   .material-sidebar { background: var(--color-bg-sidebar); }
   .material-toolbar { background: var(--color-bg-panel); }
   .material-overlay, .material-frosted { background: var(--color-bg-card); }
-  .material-titlebar { background: var(--color-bg-sidebar); }
 }
 @media (prefers-reduced-transparency: reduce) {
   .material-overlay, .material-frosted { background: var(--color-bg-card); backdrop-filter: none; }
-  .material-titlebar { background: var(--color-bg-sidebar); backdrop-filter: none; }
 }
+
+/* ── Tips: short names for icon-only buttons (data-tip="…"; data-tip-side="right" | "below", default above).
+   Shown after a short hover delay, or at once on keyboard focus. The control keeps its aria-label. ── */
+.tip { position: relative; }
+.tip[data-tip]::after {
+  content: attr(data-tip); position: absolute; z-index: 60; pointer-events: none;
+  left: 50%; bottom: calc(100% + 6px); transform: translate(-50%, 2px);
+  white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis;
+  padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0;
+  color: var(--color-text-main); background-color: var(--frost-tint);
+  -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
+  box-shadow: inset 0 0.5px 0 0 var(--frost-edge), 0 0 0 0.5px var(--frost-rim), 0 4px 14px rgba(0,0,0,.16);
+  opacity: 0; visibility: hidden; transition: opacity .12s ease, transform .12s ease, visibility 0s linear .12s;
+}
+.tip[data-tip-side="right"]::after { left: calc(100% + 8px); bottom: auto; top: 50%; transform: translate(-2px, -50%); }
+.tip[data-tip-side="below"]::after { bottom: auto; top: calc(100% + 6px); transform: translate(-50%, -2px); }
+.tip[data-tip]:hover::after, .tip[data-tip]:focus-visible::after {
+  opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: .45s, .45s, .45s;
+}
+.tip[data-tip]:focus-visible::after { transition-delay: 0s; }
+.tip[data-tip-side="right"]:hover::after, .tip[data-tip-side="right"]:focus-visible::after { transform: translate(0, -50%); }
+.tip[data-tip]:disabled::after, .tip[aria-expanded="true"]::after { display: none; }
 
 /* ── Symbol effects (SF Symbols-style, see components/common/Symbol.tsx) ── */
 @keyframes sym-pulse   { 0%,100% { opacity: 1; } 50% { opacity: .35; } }

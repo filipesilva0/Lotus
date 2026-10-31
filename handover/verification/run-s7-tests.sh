@@ -14,6 +14,6 @@ echo "== 1/2 session 7 logic and flows"
 npx --yes esbuild handover/verification/s7-tests.ts --bundle --platform=node --format=esm --outfile="$OUT/s7.mjs" --log-level=error --jsx=automatic $STUB \
   && timeout 120 node "$OUT/s7.mjs" | grep -E "✗|passed" || fail=1
 echo "== 2/2 session 7 render smoke"
-npx --yes esbuild handover/verification/s7-render.tsx --bundle --platform=node --format=esm --outfile="$OUT/s7r.mjs" --jsx=automatic --define:import.meta.env={} --banner:js="$BANNER" --log-level=error $STUB \
+npx --yes esbuild handover/verification/s7-render.tsx --bundle --platform=node --format=esm --outfile="$OUT/s7r.mjs" --jsx=automatic --define:import.meta.env={} --banner:js="$BANNER" --log-level=error --loader:.png=dataurl $STUB \
   && timeout 60 node "$OUT/s7r.mjs" | grep -E "✗|passed" || fail=1
 exit $fail

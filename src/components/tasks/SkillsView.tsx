@@ -30,7 +30,7 @@ const Editor: React.FC<{ s: Skill }> = ({ s }) => {
     setView('read');
   };
   return (
-    <InspectorPane label="Skill" className="!w-auto flex-1 !border-l-0">
+    <InspectorPane label="Skill" className="!w-auto flex-1 !border-l-0" pinned>
       <PaneBar>
         <BookOpen className="w-4 h-4 text-[var(--color-accent-vibrant)]" aria-hidden="true" />
         <span className="text-[13px] font-semibold flex-1 truncate">{s.name}</span>

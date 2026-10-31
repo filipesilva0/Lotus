@@ -11,9 +11,9 @@ BANNER="import{createRequire}from'module';const require=createRequire(import.met
 STUB="--alias:@tauri-apps/plugin-http=./handover/verification/s5-tauri-stub.ts --external:@tauri-apps/*"
 fail=0
 echo "== 1/2 session 5 logic and flows"
-npx --yes esbuild handover/verification/s5-tests.ts --bundle --platform=node --format=esm --outfile="$OUT/s5.mjs" --log-level=error $STUB \
+npx --yes esbuild handover/verification/s5-tests.ts --bundle --platform=node --format=esm --outfile="$OUT/s5.mjs" --log-level=error --loader:.png=dataurl $STUB \
   && timeout 120 node "$OUT/s5.mjs" | grep -E "✗|passed" || fail=1
 echo "== 2/2 session 5 render smoke"
-npx --yes esbuild handover/verification/s5-render.tsx --bundle --platform=node --format=esm --outfile="$OUT/s5r.mjs" --jsx=automatic --banner:js="$BANNER" --log-level=error $STUB \
+npx --yes esbuild handover/verification/s5-render.tsx --bundle --platform=node --format=esm --outfile="$OUT/s5r.mjs" --jsx=automatic --banner:js="$BANNER" --log-level=error --loader:.png=dataurl $STUB \
   && timeout 60 node "$OUT/s5r.mjs" | grep -E "✗|passed" || fail=1
 exit $fail

@@ -45,7 +45,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
   const dirty = name !== r.name || prompt !== r.prompt || cron !== r.schedule;
 
   return (
-    <InspectorPane label="Routine" className="!w-auto flex-1 !border-l-0">
+    <InspectorPane label="Routine" className="!w-auto flex-1 !border-l-0" pinned>
       <PaneBar>
         <AlarmClock className="w-4 h-4 text-[var(--color-accent-vibrant)]" aria-hidden="true" />
         <span className="text-[13px] font-semibold flex-1 truncate">{r.name}</span>

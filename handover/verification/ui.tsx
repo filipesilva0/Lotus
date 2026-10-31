@@ -9,7 +9,9 @@ import { ScopingView } from '../../src/components/research/ScopingView';
 import { LiveView } from '../../src/components/research/LiveView';
 import { ReportMarkdown } from '../../src/components/research/ReportView';
 import { Repos, Depth, Filters, LiveSources, AgentGraph, Context, Inspector } from '../../src/components/research/Inspector';
-import { ResearchWorkspace } from '../../src/components/research/ResearchWorkspace';
+import { ResearchView } from '../../src/components/research/ResearchWorkspace';
+import { ChatSidebar } from '../../src/components/chat/ChatSidebar';
+import { useResearch } from '../../src/research/store';
 
 let fails = 0; const ok = (n: string, c: boolean, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'}  ${n} ${x}`); if (!c) fails++; };
 const noop = () => {}; const asyncNoop = async () => {};
@@ -50,9 +52,15 @@ h = html(<AgentGraph p={base} />); ok('empty graph state', /appears when researc
 h = html(<Inspector r={r} p={base} mode="A" />); ok('inspector shell: Mode A tabs', /Repos/.test(h) && /Depth/.test(h) && /Filters/.test(h));
 // Whole workspace from persisted data
 store.set('lotus.research.v1', JSON.stringify([running, done]));
-h = html(<ResearchWorkspace model="m" models={['m']} ollamaUp={true} onOpenEngines={noop} />);
-ok('workspace: interrupted run is restored as Stopped with partial data note', /Stopped/.test(h) && /Lotus was closed during this run/.test(h) || /Stopped/.test(h));
-ok('workspace: sidebar has New task, mode switch, project list + tag filter', /New deep research task/.test(h) && /Scoping/.test(h) && /Live/.test(h) && /#ML/.test(h));
-store.set('lotus.research.v1', '[]');
-h = html(<ResearchWorkspace model="m" models={['m']} ollamaUp={true} onOpenEngines={noop} />); ok('workspace: empty state invites a first task', /Investigate a topic in depth/.test(h));
+// Session 8: Research lives inside Chat. The task opens in the chat's centre; the list is in the chat sidebar.
+const InChat: React.FC = () => { const r = useResearch({ model: 'm' }); return r.active ? <ResearchView r={r} p={r.active} models={['m']} ollamaUp={true} onOpenEngines={noop} onClose={noop} /> : <p>none</p>; };
+h = html(<InChat />);
+ok('research in chat: interrupted run is restored as Stopped', /Stopped/.test(h));
+ok('research in chat: back to chat, Scoping / Live switch', /Back to the chat/.test(h) && /Scoping/.test(h) && /Live/.test(h));
+h = html(<ChatSidebar sessions={[]} activeId="" folders={[]} onFolders={noop} onSelect={noop} onNew={noop} onDelete={noop} onPatch={noop}
+  research={{ projects: [running, done], openId: 'p1', onOpen: noop, onNew: noop, onDelete: noop }} />);
+ok('chat sidebar: Deep research section lists tasks', /Deep research/.test(h) && /Sparse transformers/.test(h) && /New deep research task/.test(h));
+h = html(<ChatSidebar sessions={[]} activeId="" folders={[]} onFolders={noop} onSelect={noop} onNew={noop} onDelete={noop} onPatch={noop}
+  research={{ projects: [], openId: null, onOpen: noop, onNew: noop, onDelete: noop }} />);
+ok('chat sidebar: empty research section explains the Research toggle', /Turn on Research in the chat bar/.test(h));
 console.log(fails ? `\n${fails} FAILED` : '\nall passed'); process.exit(fails ? 1 : 0);

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Search, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, EyeOff, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, EyeOff, Check, X, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
+import type { Project } from '../../research/types';
+import { PhaseBadge } from '../research/bits';
+import { ago } from '../research/ResearchWorkspace';
 import { ChatFolder, ChatSession } from '../../types/lotus';
 import { Btn, IconBtn, TextInput, cx } from '../common/ui';
 import { MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
@@ -10,9 +13,11 @@ interface Props {
   onFolders: (f: ChatFolder[]) => void;
   onSelect: (id: string) => void; onNew: () => void; onDelete: (id: string) => void;
   onPatch: (id: string, fn: (s: ChatSession) => ChatSession) => void;
+  /** Deep research tasks (session 8: Research lives inside Chat). */
+  research?: { projects: Project[]; openId: string | null; onOpen: (id: string) => void; onNew: () => void; onDelete: (id: string) => void };
 }
 
-export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFolders, onSelect, onNew, onDelete, onPatch }) => {
+export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFolders, onSelect, onNew, onDelete, onPatch, research }) => {
   const [q, setQ] = useState('');
   const [folder, setFolder] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -20,6 +25,8 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
   const [addingFolder, setAddingFolder] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [foldersOpen, setFoldersOpen] = useState(true);
+  const [researchOpen, setResearchOpen] = useState(true);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
 
   const needle = q.trim().toLowerCase();
   const visible = sessions.filter((s) =>
@@ -34,8 +41,10 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
     setFolderName(''); setAddingFolder(false);
   };
 
+  const researchList = (research?.projects ?? []).filter((x) => !needle || x.title.toLowerCase().includes(needle) || x.question.toLowerCase().includes(needle));
+
   const row = (s: ChatSession) => {
-    const on = s.id === activeId;
+    const on = s.id === activeId && !research?.openId;
     return (
       <div key={s.id} onClick={() => onSelect(s.id)} role="button" tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' && renaming !== s.id) onSelect(s.id); }}
@@ -115,6 +124,38 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
             </div>
           )}
         </div>
+
+        {research && (
+          <div>
+            <div className="flex items-center justify-between px-1.5 mb-1">
+              <button type="button" onClick={() => setResearchOpen((o) => !o)} className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]" aria-expanded={researchOpen}>
+                {researchOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}Deep research
+              </button>
+              <IconBtn label="New deep research task" className="!w-6 !h-6" onClick={() => { setResearchOpen(true); research.onNew(); }}><FlaskConical className="w-3.5 h-3.5" /></IconBtn>
+            </div>
+            {researchOpen && (
+              <div className="space-y-0.5">
+                {researchList.map((x) => {
+                  const on = x.id === research.openId;
+                  return (
+                    <div key={x.id} onClick={() => research.onOpen(x.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') research.onOpen(x.id); }}
+                      aria-current={on ? 'true' : undefined}
+                      className={cx('group relative flex flex-col gap-1 px-2.5 py-1.5 rounded-[8px] cursor-default', on ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
+                      <span className={cx('text-[13px] truncate pr-6', on ? 'font-medium text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]')}>{x.question ? x.title : 'New research task'}</span>
+                      <span className="flex items-center gap-2"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-[11px] text-[var(--color-text-muted)]">{ago(x.updatedAt)}</span></span>
+                      <span className="absolute top-1 right-1 hidden group-hover:flex group-focus-within:flex" onClick={(e) => e.stopPropagation()}>
+                        {confirmDel === x.id
+                          ? <IconBtn label="Confirm delete" className="!w-6 !h-6 !text-[var(--c-red)]" onClick={() => { research.onDelete(x.id); setConfirmDel(null); }}><Check className="w-3.5 h-3.5" /></IconBtn>
+                          : <IconBtn label="Delete research task" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={() => setConfirmDel(x.id)} onBlur={() => setConfirmDel(null)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
+                      </span>
+                    </div>
+                  );
+                })}
+                {!researchList.length && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)]">{needle ? 'No research tasks match.' : 'Turn on Research in the chat bar to investigate a question in depth.'}</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {pinned.length > 0 && (
           <div><h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">Pinned</h3><div className="space-y-0.5">{pinned.map(row)}</div></div>

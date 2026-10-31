@@ -13,6 +13,13 @@ import { Composer } from '../../src/components/chat/Composer';
 import { ChatStream } from '../../src/components/chat/ChatStream';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from '../../src/components/modals/LocalAgentSettings';
 import { TasksWorkspace } from '../../src/components/workspaces/TasksWorkspace';
+import { AgentPanel } from '../../src/components/builder/AgentPanel';
+import { LotusMark } from '../../src/components/common/LotusMark';
+import { TitleBar } from '../../src/components/common/TitleBar';
+import { LeftRail } from '../../src/components/rail/LeftRail';
+import { SidebarPane, InspectorPane } from '../../src/components/common/Pane';
+import { PanelsProvider } from '../../src/lib/panels';
+import { PAGE_PALETTE, PETAL_ORDER } from '../../src/styles/theme';
 import { newTask, addLink, Task } from '../../src/tasks/kanban';
 import type { Routine } from '../../src/tasks/store';
 import type { ChatSession, LotusSettings } from '../../src/types/lotus';
@@ -24,6 +31,15 @@ function check(name: string, el: React.ReactElement, ...expect: string[]) {
     const html = norm(renderToString(el));
     const miss = expect.filter((e) => !html.includes(e));
     if (miss.length) throw new Error(`missing: ${miss.join(' | ')}`);
+    pass++; console.log(`  ✓ ${name}`);
+  } catch (e) { fail++; console.log(`  ✗ ${name}: ${(e as Error).message}`); }
+}
+
+function absent(name: string, el: React.ReactElement, ...never: string[]) {
+  try {
+    const html = norm(renderToString(el));
+    const hit = never.filter((e) => html.includes(e));
+    if (hit.length) throw new Error(`should not contain: ${hit.join(' | ')}`);
     pass++; console.log(`  ✓ ${name}`);
   } catch (e) { fail++; console.log(`  ✗ ${name}: ${(e as Error).message}`); }
 }
@@ -56,14 +72,38 @@ check('Routines: list + editor + run history', <RoutinesView list={[routine]} />
 check('Routines: empty state with examples', <RoutinesView list={[]} />, 'Scheduled routines', 'Morning briefing');
 check('Skills: empty state', <SkillsView settings={settings} onSettings={noop} />, 'No skills yet', 'Write and improve skills automatically');
 check('Scaling card (nothing measured yet)', <ScalingCard />, 'Auto-scaling to video memory', 'Context window', 'Background agents', 'could not be read');
-// Session 7: the source-search and Markdown-preview buttons were removed from the composer on request;
-// the model picker and the + (files / folder) menu were added.
-check('Composer: Think, Web, model picker, + menu', <Composer model="m" streaming={false} sendOnEnter models={[{ id: 'm', name: 'm', tag: '8B' }]} onModel={noop} onOpenModels={noop} onAttachFolder={async () => undefined} thinkingOn webOn={false} onToggleWeb={noop} onToggleThinking={noop} mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Think<', '>Web<', 'aria-pressed="true"', 'Add files or a folder', 'Model for this chat', 'Markdown supported');
+// Session 8: chat bar redesign. Memory and incognito are icon-only toggles in the tray under the box; the
+// context gauge is a bar along the box's top edge; + attaches files; Choose folder / Library / Plugins sit in the tray.
+check('Composer: Think, Web, model picker, tray, context bar', <Composer model="m" streaming={false} sendOnEnter models={[{ id: 'm', name: 'm', tag: '8B' }]} onModel={noop} onOpenModels={noop} onAttachFolder={async () => undefined} thinkingOn webOn={false} onToggleWeb={noop} onToggleThinking={noop}
+  memoryOn incognito={false} onToggleMemory={noop} onToggleIncognito={noop} contextUsed={0.4} contextTitle="Context: 1,000 of 4,096 tokens used" onOpenLibrary={noop} onResearch={noop}
+  mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Think<', '>Web<', 'aria-pressed="true"', 'Attach files', 'Model for this chat', 'Choose folder', '>Library<', '>Plugins<', 'aria-label="Memory on', 'aria-label="Incognito', 'role="meter"', 'aria-valuenow="40"');
+absent('Composer: no separate memory / incognito text buttons, no hint line', <Composer model="m" streaming={false} sendOnEnter models={[]} onModel={noop} onOpenModels={noop} onAttachFolder={async () => undefined} thinkingOn={false} webOn={false} onToggleWeb={noop} onToggleThinking={noop}
+  memoryOn incognito={false} onToggleMemory={noop} onToggleIncognito={noop} contextUsed={0} contextTitle="" onOpenLibrary={noop} onResearch={noop}
+  mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Memory<', '>Incognito<', 'Markdown supported');
 check('Chat stream: GFM reply, recall line, mode chips', <ChatStream session={session} isStreaming={false} autoScroll={false} reasoningMode="collapsed" onEdit={noop} onRegenerate={noop} onSwitch={noop} onMemory={noop} onOpenArtifact={noop} />, '<table', 'Thinking mode', 'Web search', 'Used 2 memories · 1 past chat · skill: Compare products · 1 project file', '<strong');
 check('Settings: engine & VRAM', <EngineScalingPanel settings={settings} onUpdateSettings={noop} />, 'Model server', 'Auto-scale to video memory', 'Keep free for other apps');
 check('Settings: web search', <WebSearchPanel settings={settings} onUpdateSettings={noop} />, 'SearXNG address', 'Pages to read');
 check('Settings: memory & skills', <MemorySkillsPanel settings={settings} onUpdateSettings={noop} />, 'Learn from conversations', 'Recall past conversations', 'Clear conversation search index');
 check('Tasks workspace (board tab)', <TasksWorkspace settings={settings} onSettings={noop} ollamaUp={false} />, 'Backlog', 'Ollama isn');
+
+// ── Session 8: petal mark, page accents, folded rail, title-bar panel toggles ──
+check('Lotus mark: the user\'s own five-petal art, unchanged', <LotusMark label="Lotus" />, '<img', 'alt="Lotus"');
+{
+  const ok5 = PETAL_ORDER.length === 5 && new Set(PETAL_ORDER.map((v) => PAGE_PALETTE[v])).size === 5 && !(PETAL_ORDER as string[]).includes('research');
+  if (ok5) { pass++; console.log('  ✓ Five pages, five petals, five distinct accents (Research lives in Chat)'); }
+  else { fail++; console.log('  ✗ Five pages, five petals, five distinct accents'); }
+}
+check('App Builder agent: same prompt box (Plan first, model picker, round send, New chat in the tray)', <AgentPanel items={[]} running={false} approval={null} mode="plan" onMode={noop} model="qwen2.5-coder:7b" ollamaUp hasProject
+  models={[{ id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' }]} onModel={noop} onSend={noop} onStop={noop} onApprovePlan={noop} onReset={noop} onOpenEngines={noop} />, '>Plan first<', 'Model the agent uses', 'aria-label="Send"', '>New chat<', 'rounded-[24px]');
+const eng = { ollama: { up: true }, comfyui: { up: false }, voicebox: { up: false } } as never;
+absent('Rail is always folded: no visible page names, no Research page, no Models/Settings in the profile menu', <LeftRail currentView="chat" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, '>Chat<', '>Images<', '>Settings<', '>Profile<', 'data-tip="Research"');
+check('Rail: tips name every page', <LeftRail currentView="images" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, 'data-tip="Chat"', 'data-tip="Images"', 'data-tip="App Builder"', 'data-tip="Engines & Models"', 'data-tip="Settings"');
+check('Title bar: left and right panel toggles', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel={false} onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'aria-label="Hide left panel"', 'aria-label="Show right panel"');
+absent('Title bar: no sidebar toggle any more', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'sidebar');
+const panes = <><SidebarPane label="L"><p>left-body</p></SidebarPane><InspectorPane label="R"><p>right-body</p></InspectorPane><InspectorPane label="M" pinned><p>main-body</p></InspectorPane></>;
+check('Panels shown by default', <PanelsProvider value={{ left: true, right: true, setLeft: noop, setRight: noop }}>{panes}</PanelsProvider>, 'left-body', 'right-body', 'main-body');
+absent('Panels hidden by the title-bar toggles (pinned main content stays)', <PanelsProvider value={{ left: false, right: false, setLeft: noop, setRight: noop }}>{panes}</PanelsProvider>, 'left-body', 'right-body');
+check('Pinned pane stays when the right panel is hidden', <PanelsProvider value={{ left: false, right: false, setLeft: noop, setRight: noop }}>{panes}</PanelsProvider>, 'main-body');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

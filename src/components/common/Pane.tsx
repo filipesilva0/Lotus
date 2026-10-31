@@ -1,18 +1,25 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { cx, Slider } from './ui';
+import { usePanels } from '../../lib/panels';
 
 /*
  * Three-pane building blocks shared by Chat, Images, Models and Voice.
  * Sidebar (library) | workspace | inspector, separated by hairlines inside the white content pane.
  */
 
-export const SidebarPane: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className }) => (
-  <aside aria-label={label} className={cx('w-[248px] shrink-0 flex flex-col min-h-0 border-r border-[var(--sep)]', className)}>{children}</aside>
-);
+/** The page's left panel. Hidden when the title bar's "Hide left panel" is on for this page. */
+export const SidebarPane: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className }) => {
+  const { left } = usePanels();
+  if (!left) return null;
+  return <aside aria-label={label} className={cx('w-[248px] shrink-0 flex flex-col min-h-0 border-r border-[var(--sep)]', className)}>{children}</aside>;
+};
 
-export const InspectorPane: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({ label, children, className }) => (
-  <aside aria-label={label} className={cx('w-[320px] shrink-0 flex flex-col min-h-0 border-l border-[var(--sep)]', className)}>{children}</aside>
-);
+/** The page's right panel (inspector). Hidden when the title bar's "Hide right panel" is on for this page. */
+export const InspectorPane: React.FC<{ label: string; children: React.ReactNode; className?: string; /** Main content styled as a pane: never hidden. */ pinned?: boolean }> = ({ label, children, className, pinned }) => {
+  const { right } = usePanels();
+  if (!right && !pinned) return null;
+  return <aside aria-label={label} className={cx('w-[320px] shrink-0 flex flex-col min-h-0 border-l border-[var(--sep)]', className)}>{children}</aside>;
+};
 
 /** A thin bar at the top of a pane (36 px) holding a title and trailing controls. */
 export const PaneBar: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
