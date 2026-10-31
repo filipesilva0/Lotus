@@ -22,17 +22,24 @@ npm run build                     # vite build → dist/ (two pages: index.html,
 npm run check:tauri               # Rust-crate vs npm-package minor alignment (also runs in CI)
 bash handover/verification/run-tests.sh   # 63 TS tests: research engine 25 · UI render 22 · service clients 16
 bash handover/verification/run-builder-tests.sh   # 34 TS tests (session 4): builder protocol/agent loop/templates, download links, LoRA graph
-cd src-tauri && cargo test --lib --locked # 2 Rust tests (hook installer, approve/deny server)
+bash handover/verification/run-s5-tests.sh        # 56 logic/flow + 13 render tests (session 5): VRAM scaler, GFM, cron, Kanban, memory/skills, Thinking, task agent
+cd src-tauri && cargo test --lib          # 9 Rust tests: hook installer, approve/deny server + session 5 (GPU parsers 2, context files 1, memory db 4). Not --locked until Cargo.lock includes rusqlite
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 2/2 Rust tests. **Session 4 Rust (`appbuilder.rs`, `downloads.rs`) has never been compiled**: expect fixes on the first `cargo check`.
+**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 13 session 5 tests; 9 Rust tests. **Session 5 Rust (`memory_db.rs` with rusqlite) has never been compiled against the real crate.** **Session 4 Rust (`appbuilder.rs`, `downloads.rs`) has never been compiled**: expect fixes on the first `cargo check`.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 5 map (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM)
+- Map and request flow: `ARCHITECTURE.md` §5c. All background model work goes through `agents/pool.ts` (never call the model in a loop outside it), and through `services/llm.ts` (so llama.cpp works too).
+- Memory must stay off when `session.incognito || session.memoryOff` (`memoryOnFor` in `useChat.ts`): no recall, no indexing, no learning. Keep it that way for anything new that reads or writes memory.
+- Markdown: `lib/gfm.ts` (parser, tested) + `lib/markdownLite.tsx` (renderer). Never render model output any other way.
+- `rusqlite` was added without registry access: the first CI build resolves it; commit the updated `Cargo.lock`.
 
 ## Session 4 map (App Builder, Models, LoRA)
 - Builder code: `src/builder/*` (logic, testable) and `src/components/builder/*` (UI); Rust in `src-tauri/src/appbuilder.rs`. The agent's tag protocol is in `builder/protocol.ts`, its prompt in `builder/agent.ts` (`systemPrompt`). Keep file/model access behind `AgentIO` so `builder-tests.cjs` can drive the loop.
@@ -49,7 +56,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - Copy tone: plain, specific, no jargon; no emoji in the product UI.
 
 ## Critical constraints
-1. **Light and local-first.** No Electron/Chromium, no CDN assets, no telemetry. The only external traffic is Deep Research queries to the four listed APIs and, on the user's click (or the opt-in launch check), the update check/download from the project's GitHub Releases (`src-tauri/src/updates.rs`).
+1. **Light and local-first.** No Electron/Chromium, no CDN assets, no telemetry. The only external traffic is Deep Research/source-search queries to the four listed APIs, **Web search when the user turns it on** (DuckDuckGo or their SearXNG, plus fetching the top result pages; session 5 widened the HTTP capability to `https://*/*` for this), and, on the user's click (or the opt-in launch check), the update check/download from the project's GitHub Releases (`src-tauri/src/updates.rs`). Memory, skills and tasks never leave the PC.
 2. **No fake UI.** Never ship a control, number or screen that is simulated or does nothing (B2 is the known violation; fix it, don't add to it).
 3. **Tauri alignment:** `tauri`/plugin **crates and `@tauri-apps/*` npm packages must share major.minor** (npm pinned exactly, crates `~`-pinned, `Cargo.lock` committed). Bump both sides together and run `npm run check:tauri`.
 4. **Licences:** do **not** pick a licence for the user (open decision B15). Do **not** use Coucou's name, "Mochi" mascot, icons or sounds (see `THIRD_PARTY_LICENSES.md`).

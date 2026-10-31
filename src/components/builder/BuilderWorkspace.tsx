@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FolderOpen, Hammer, PanelBottom, Plus, Save, X } from 'lucide-react';
+import { ChevronDown, FileText, FolderOpen, Hammer, PanelBottom, Plus, Save, X } from 'lucide-react';
+import { contextBlock, useProjectContext } from '../../context/discover';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Btn, Empty, IconBtn, Segmented, Select, Tabs, cx } from '../common/ui';
 import { InspectorPane, Popover, SidebarPane } from '../common/Pane';
@@ -52,8 +53,12 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
   const showServer = preview.showServer;
   const term = useTerminal(project, useCallback((url: string) => { showServer(url); setView((v) => (v === 'code' ? 'split' : v)); }, [showServer, setView]));
 
+  // Project context files (SOUL.md, AGENTS.md, .cursorrules…) are found whenever a project is opened.
+  const ctxFiles = useProjectContext(project?.path);
+  const projectContext = useMemo(() => contextBlock(ctxFiles.files, { includeMemory: true, budgetChars: Math.floor(numCtx * 4 * 0.15) }).text, [ctxFiles.files, numCtx]);
+
   const agent = useAgent({
-    project, template, model, numCtx, mode, term,
+    project, template, model, numCtx, mode, term, projectContext,
     showPreview: async (t) => {
       if (t.url) { preview.showServer(t.url); setView((v) => (v === 'code' ? 'split' : v)); return t.url; }
       const url = await preview.serveStatic(t.dir ?? '');
@@ -91,6 +96,11 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <Hammer className="w-4 h-4 text-[var(--color-accent-vibrant)] shrink-0" aria-hidden="true" />
             <span className="text-[13px] font-semibold truncate">App Builder</span>
+            {ctxFiles.files.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-[12px] text-[var(--color-text-muted)]" title={`Applied to the agent: ${ctxFiles.files.map((f) => f.rel).join(', ')}`}>
+                <FileText className="w-3.5 h-3.5" />{ctxFiles.files.length} context file{ctxFiles.files.length > 1 ? 's' : ''}
+              </span>
+            )}
             <span className="flex-1" />
             <Select aria-label="Model the agent uses" value={model} onChange={(e) => setChosen(e.target.value)} className="!w-[190px] !h-7" disabled={!models.length}>
               {!models.length && <option value="">No models installed</option>}

@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, Brain } from 'lucide-react';
+import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, FolderOpen, RefreshCw, Sparkles } from 'lucide-react';
+import type { ContextFile } from '../../context/discover';
+import { useMemoryStore } from '../../memory/store';
+import { useHardware } from '../../hardware/monitor';
 import { ChatMessage, ChatSession, ContextItem, LotusSettings, MemoryItem } from '../../types/lotus';
 import { artifactsFrom, contextTokens } from '../../chat/helpers';
 import { InspectorPane, KV, Section, SliderField } from '../common/Pane';
@@ -18,6 +21,9 @@ interface Props {
   raw: RawExchange | null;
   focusArtifact: { code: string; nonce: number } | null;
   searchOn: boolean; onToggleSearch: () => void;
+  project: { files: ContextFile[]; loading: boolean; error: string | null; refresh: () => void };
+  onFolder: (path: string | null) => void;
+  onToggleFile: (rel: string) => void;
 }
 
 const TABS: { id: InspectorTab; label: string; icon: React.ReactNode }[] = [
@@ -71,12 +77,56 @@ const ArtifactsTab: React.FC<{ messages: ChatMessage[]; focus: Props['focusArtif
 };
 
 // ── Context & memory ──────────────────────────────────────────────────────
-const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onContext' | 'onAddFiles' | 'settings'>> = ({ session, memory, onMemory, onContext, onAddFiles, settings }) => {
+const KIND_LABEL: Record<ContextFile['kind'], string> = { soul: 'Persona', rules: 'Rules', memory: 'Memory' };
+
+const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onContext' | 'onAddFiles' | 'settings' | 'project' | 'onFolder' | 'onToggleFile'>> = ({ session, memory, onMemory, onContext, onAddFiles, settings, project, onFolder, onToggleFile }) => {
   const items = session.context ?? [];
   const [open, setOpen] = useState<string | null>(null);
+  const [peek, setPeek] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const { status, error: memError } = useMemoryStore();
   const toks = contextTokens(items);
+  const memOn = !session.incognito && !session.memoryOff;
+  const shown = filter ? memory.filter((m) => m.text.toLowerCase().includes(filter.toLowerCase())) : memory;
+  const pickFolder = async () => {
+    const { isTauri } = await import('../../lib/http');
+    if (!isTauri) return;
+    const { open: pick } = await import('@tauri-apps/plugin-dialog');
+    const p = await pick({ title: 'Choose a workspace folder for this chat', directory: true, multiple: false });
+    if (typeof p === 'string') onFolder(p);
+  };
   return (
     <div className="overflow-y-auto flex-1">
+      <Section title="Workspace folder" hint="Lotus reads the folder's context files (SOUL.md, memory.md, AGENTS.md, CLAUDE.md, .hermes.md, .cursorrules, .cursor/rules, .lotus/…) and applies them to this chat. It never writes to them."
+        action={session.folder
+          ? <span className="flex items-center gap-1"><IconBtn label="Scan again" className="!w-6 !h-6" onClick={project.refresh}><RefreshCw className={cx('w-3.5 h-3.5', project.loading && 'animate-spin')} /></IconBtn><IconBtn label="Remove folder" className="!w-6 !h-6" onClick={() => onFolder(null)}><X className="w-3.5 h-3.5" /></IconBtn></span>
+          : <button type="button" className="text-[12px] font-medium text-[var(--color-accent-vibrant)]" onClick={() => void pickFolder()}>Choose…</button>}>
+        {!session.folder && <p className="text-[13px] text-[var(--color-text-muted)]">No folder. Choose one to give this chat a project's persona, rules and memory.</p>}
+        {session.folder && (<>
+          <button type="button" onClick={() => void pickFolder()} className="w-full flex items-center gap-1.5 text-left text-[12px] mb-2 hover:underline" title={session.folder}><FolderOpen className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{session.folder}</span></button>
+          {project.error && <Banner tone="error">{project.error}</Banner>}
+          {!project.loading && !project.error && !project.files.length && <p className="text-[13px] text-[var(--color-text-muted)]">No context files found in this folder.</p>}
+          <ul className="space-y-1">
+            {project.files.map((f) => {
+              const off = session.folderOff?.includes(f.rel) ?? false;
+              const memSkip = f.kind === 'memory' && !memOn;
+              return (
+                <li key={f.rel} className="rounded-[8px] bg-[var(--hover)]">
+                  <div className="flex items-center gap-2 px-2.5 h-8">
+                    <input type="checkbox" aria-label={`Apply ${f.rel}`} checked={!off} onChange={() => onToggleFile(f.rel)} />
+                    <button type="button" className={cx('flex-1 min-w-0 flex items-center gap-1.5 text-left text-[13px]', (off || memSkip) && 'opacity-50')} aria-expanded={peek === f.rel} onClick={() => setPeek(peek === f.rel ? null : f.rel)}>
+                      <span className="truncate">{f.rel}</span>
+                    </button>
+                    <span className="text-[11px] text-[var(--color-text-muted)]">{KIND_LABEL[f.kind]}</span>
+                  </div>
+                  {peek === f.rel && <pre className="mx-2.5 mb-2 p-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-[6px] bg-[var(--color-bg-card)] text-[11px] leading-snug font-mono">{f.content.slice(0, 2000)}{f.truncated ? '\n…(longer file: the first 24 KB is used)' : ''}</pre>}
+                  {memSkip && !off && <p className="px-2.5 pb-1.5 text-[11px] text-[var(--color-text-muted)]">Not applied while memory is off for this chat.</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </>)}
+      </Section>
       <Section title="Mounted files" hint="Only ticked chunks are sent with each message. Untick parts you don't want in the model's context."
         action={<label className="text-[12px] font-medium text-[var(--color-accent-vibrant)] cursor-default"><input type="file" multiple className="sr-only" aria-label="Mount files" onChange={(e) => { if (e.target.files) onAddFiles(Array.from(e.target.files)); e.target.value = ''; }} />+ Add</label>}>
         {!items.length && <p className="text-[13px] text-[var(--color-text-muted)]">No files mounted. Attach a text or code file in the composer, or add one here.</p>}
@@ -108,19 +158,30 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
           })}
         </div>
         {items.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">About {toks.toLocaleString()} tokens of the {settings.contextWindow.toLocaleString()}-token window.</p>}
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">Web pages can't be mounted: Lotus only talks to your engines and the research databases.</p>
+        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">For current information from the web, turn on Web search (globe) in the message box instead.</p>
       </Section>
-      <Section title="Memory & instructions" hint="Created when you say “remember …” or “from now on …”. Not created in incognito chats.">
-        {!memory.length && <p className="text-[13px] text-[var(--color-text-muted)]">Nothing stored.</p>}
+      <Section title="Memory & instructions" hint={memOn
+        ? 'Lotus saves what you ask it to (“remember …”, “from now on …”) and learns lasting facts and preferences as you talk. Learned items are marked; remove anything that is wrong.'
+        : session.incognito ? 'Incognito: this chat reads no memories and creates none.' : 'Memory is off for this chat (header button): nothing is recalled or learned until you turn it back on.'}>
+        {memError && <Banner tone="error">{memError}</Banner>}
+        {memory.length > 6 && <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter memories" aria-label="Filter memories" className="mb-2" />}
+        {!memory.length && <p className="text-[13px] text-[var(--color-text-muted)]">Nothing stored yet.</p>}
         <ul className="space-y-1">
-          {memory.map((m) => (
+          {shown.map((m) => (
             <li key={m.id} className="flex items-start gap-2 text-[13px]">
-              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[10px] font-semibold uppercase mt-0.5">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
-              <span className="flex-1">{m.text}</span>
+              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[10px] font-semibold uppercase mt-0.5 shrink-0">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
+              <span className="flex-1">{m.text}{m.source === 'auto' && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-[var(--color-text-muted)]" title="Learned from a conversation"><Sparkles className="w-3 h-3" />learned</span>}</span>
               <IconBtn label="Forget" className="!w-6 !h-6" onClick={() => onMemory(memory.filter((x) => x.id !== m.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
             </li>
           ))}
         </ul>
+        {status && (
+          <p className="mt-2 text-[11px] text-[var(--color-text-muted)] leading-snug">
+            {status.native
+              ? `${status.messages.toLocaleString()} messages searchable · ${status.skills} skills · ${status.fts5 ? 'SQLite full-text search (FTS5)' : 'SQLite (FTS5 unavailable: simple search)'} · stored only on this PC`
+              : 'Browser preview: memory is kept in this browser only.'}
+          </p>
+        )}
       </Section>
     </div>
   );
@@ -167,6 +228,7 @@ const CodeBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }
 };
 
 const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ settings: s, onSettings: set, raw }) => {
+  const hw = useHardware();
   const [stopDraft, setStopDraft] = useState('');
   const addStop = () => { const v = stopDraft.replace(/\\n/g, '\n'); if (v && !s.stopSequences.includes(v)) set({ stopSequences: [...s.stopSequences, v] }); setStopDraft(''); };
   return (
@@ -179,7 +241,14 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
         <SliderField label="Presence penalty" value={s.presencePenalty} min={0} max={2} step={0.05} onChange={(v) => set({ presencePenalty: v })} format={(v) => v.toFixed(2)} />
       </Section>
       <Section title="Limits">
-        <div className="flex items-center justify-between text-[12px] mb-2"><span>Context window</span><Stepper label="Context window" value={s.contextWindow} min={512} max={131072} step={512} onChange={(v) => set({ contextWindow: v })} unit="tokens" /></div>
+        {s.autoScale ? (
+          <div className="mb-2">
+            <div className="flex items-center justify-between text-[12px]"><span>Context window</span><span className="tabular-nums">Auto · {hw.plan.numCtx.toLocaleString()} tokens</span></div>
+            <p className="text-[11px] text-[var(--color-text-muted)] leading-snug mt-0.5">Sized to free video memory. <button type="button" className="text-[var(--color-accent-vibrant)] font-medium" onClick={() => set({ autoScale: false })}>Set it by hand</button></p>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-[12px] mb-2"><span>Context window</span><Stepper label="Context window" value={s.contextWindow} min={512} max={131072} step={512} onChange={(v) => set({ contextWindow: v })} unit="tokens" /></div>
+        )}
         <div className="flex items-center justify-between text-[12px] mb-2"><span>Max reply length</span><Stepper label="Max reply tokens, 0 for no limit" value={s.maxTokens} min={0} max={32768} step={64} onChange={(v) => set({ maxTokens: v })} unit="tokens" /></div>
         <div className="flex items-center justify-between text-[12px]">
           <span>Seed</span>

@@ -17,6 +17,11 @@ import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
 import { EnginesWorkspace } from './components/workspaces/EnginesWorkspace';
 import { BuilderWorkspace } from './components/builder/BuilderWorkspace';
 import { ResearchWorkspace } from './components/research/ResearchWorkspace';
+import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
+import { setLiveSettings } from './lib/liveSettings';
+import { startHardwareMonitor } from './hardware/monitor';
+import { startScheduler } from './tasks/store';
+import { loadMemory } from './memory/store';
 import { SettingsModal } from './components/modals/SettingsModal';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
@@ -59,6 +64,17 @@ const DEFAULT_SETTINGS: LotusSettings = {
   palette: 'blue',
   fontFamily: 'jakarta',
   fontSize: 'md',
+  llmBackend: 'ollama',
+  llamacppUrl: 'http://127.0.0.1:8080',
+  autoScale: true,
+  vramReserveMb: 1024,
+  maxSubagents: 4,
+  webSearchProvider: 'duckduckgo',
+  searxngUrl: 'http://127.0.0.1:8888',
+  webPagesToRead: 3,
+  autoMemory: true,
+  autoSkills: true,
+  sessionRecall: true,
 };
 
 function load<T>(key: string, fallback: T): T {
@@ -71,7 +87,7 @@ function load<T>(key: string, fallback: T): T {
 }
 
 /** Modules from the specs: entering one collapses the app-switcher rail to icons. */
-const COLLAPSING: ViewMode[] = ['chat', 'images', 'voice', 'builder'];
+const COLLAPSING: ViewMode[] = ['chat', 'images', 'voice', 'builder', 'tasks'];
 
 export default function App() {
   const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('lotus.setup.dismissed'));
@@ -104,7 +120,10 @@ export default function App() {
   const ollamaUp = eng.engines.ollama.up;
   const comfyUp = eng.engines.comfyui.up;
 
+  // Code outside React (agent pool, VRAM monitor, scheduler, learning) reads the current settings from here.
+  setLiveSettings(settings);
   const chat = useChat(settings);
+  useEffect(() => { startHardwareMonitor(); void loadMemory(); startScheduler(); }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
@@ -133,7 +152,7 @@ export default function App() {
 
   useEffect(() => {
     const offs: (() => void)[] = [];
-    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'builder' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
+    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'research' || v === 'builder' || v === 'tasks' || v === 'engines') setCurrentView(v); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
@@ -157,7 +176,7 @@ export default function App() {
           <IconBtn label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'} onClick={() => setSidebarCollapsed((c) => !c)}>
             <Symbol glyph={PanelLeft} weight="medium" />
           </IconBtn>
-          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
+          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
         <ToolbarSlotContext.Provider value={toolbarSlot}>
@@ -182,6 +201,8 @@ export default function App() {
             <BuilderWorkspace active={currentView === 'builder'} models={models} selectedModel={settings.selectedModel} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('engines')} />
           </div>
         )}
+
+        {currentView === 'tasks' && <TasksWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} ollamaUp={ollamaUp} />}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>

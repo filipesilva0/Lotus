@@ -43,7 +43,7 @@ const ok = (name: string, cond: boolean, extra = '') => { console.log(`${cond ? 
 {
   ok('comfy: checkpoints', (await comfy.checkpoints()).join() === 'a.safetensors,b.safetensors');
   const r = await comfy.txt2img({ prompt: 'a cat', checkpoint: 'a.safetensors', steps: 20, cfg: 7, width: 512, height: 512, seed: 42 });
-  ok('comfy: result image fetched', r.url.startsWith('blob:') && r.seed === 42 && r.promptId === 'p1');
+  ok('comfy: result image fetched', r.items.length > 0 && r.items[0].url.startsWith('blob:') && r.seed === 42 && r.promptId === 'p1');
   const sent = await (await fetch('http://127.0.0.1:18999/__lastPrompt')).json();
   ok('comfy: graph wired (ckpt→sampler→decode→save)', sent.prompt['3'].inputs.seed === 42 && sent.prompt['4'].inputs.ckpt_name === 'a.safetensors' && sent.prompt['6'].inputs.text === 'a cat' && sent.prompt['9'].class_type === 'SaveImage');
   ok('comfy: dimensions SDXL vs SD1.5', dimensionsFor('16:9', 'sdxl.safetensors').width === 1344 && dimensionsFor('1:1', 'v1-5-pruned.ckpt').width === 512);

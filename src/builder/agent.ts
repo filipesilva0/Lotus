@@ -48,6 +48,8 @@ export interface AgentCtx {
   onFilesChanged: () => void;
   /** Defaults to the real files and the local model. */
   io?: AgentIO;
+  /** Project context files found in the folder (SOUL.md, AGENTS.md, .cursorrules…), already formatted. */
+  projectContext?: string;
 }
 
 const DANGEROUS: RegExp[] = [
@@ -106,7 +108,7 @@ RULES
 ${planRule}
 FILES NOW:
 ${treeText(tree)}
-${ctx.chat.plan ? `\nAPPROVED PLAN:\n${ctx.chat.plan}\n` : ''}`;
+${ctx.chat.plan ? `\nAPPROVED PLAN:\n${ctx.chat.plan}\n` : ''}${ctx.projectContext ?? ''}`;
 }
 
 const CHARS_PER_TOKEN = 3.4;

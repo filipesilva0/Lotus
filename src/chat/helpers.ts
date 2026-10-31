@@ -5,7 +5,7 @@ export const estimateTokens = (s: string) => Math.ceil(s.length / 4);
 
 export const TEXT_EXT = /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|xml|html?|css|scss|js|jsx|ts|tsx|py|rs|go|java|c|h|cpp|hpp|cs|rb|php|sh|ps1|bat|sql|tex)$/i;
 
-/** Split text into ~1,500-character chunks on paragraph or line boundaries. */
+/** Split text into chunks on line boundaries. The size follows the VRAM auto-scaler (bigger context → bigger chunks). */
 export function chunkText(text: string, size = 1500): ContextChunk[] {
   const out: ContextChunk[] = [];
   let cur = '';
@@ -18,18 +18,27 @@ export function chunkText(text: string, size = 1500): ContextChunk[] {
   return out;
 }
 
-export function contextItemFromText(name: string, text: string): ContextItem {
-  return { id: uid('ctx'), name, kind: 'file', chunks: chunkText(text) };
+export function contextItemFromText(name: string, text: string, chunkSize = 1500): ContextItem {
+  return { id: uid('ctx'), name, kind: 'file', chunks: chunkText(text, chunkSize) };
 }
 
 /** Text that is sent with each request: enabled chunks only, plus any @mentioned files forced on. */
-export function contextPayload(items: ContextItem[] | undefined, force: string[] = []): string {
-  const parts = (items ?? []).map((it) => {
+export function contextPayload(items: ContextItem[] | undefined, force: string[] = [], budgetChars = Infinity): string {
+  // Forced (@mentioned) files go first so they survive the budget; chunks past the budget are left out.
+  const list = [...(items ?? [])].sort((a, b) => Number(force.includes(b.name)) - Number(force.includes(a.name)));
+  let left = budgetChars, cut = 0;
+  const parts = list.map((it) => {
     const forced = force.includes(it.name);
-    const t = it.chunks.filter((c) => c.on || forced).map((c) => c.text).join('\n…\n');
-    return t ? `### ${it.name}\n${t}` : '';
+    const kept: string[] = [];
+    for (const c of it.chunks.filter((x) => x.on || forced)) {
+      if (c.text.length > left) { cut++; continue; }
+      left -= c.text.length;
+      kept.push(c.text);
+    }
+    return kept.length ? `### ${it.name}\n${kept.join('\n…\n')}` : '';
   }).filter(Boolean);
-  return parts.length ? `\n\nThe user mounted these references. Use them when relevant:\n\n${parts.join('\n\n')}` : '';
+  const note = cut ? `\n(${cut} more chunk${cut > 1 ? 's were' : ' was'} left out to fit the context window.)` : '';
+  return parts.length ? `\n\nThe user mounted these references. Use them when relevant:\n\n${parts.join('\n\n')}${note}` : '';
 }
 
 export function contextTokens(items: ContextItem[] | undefined): number {

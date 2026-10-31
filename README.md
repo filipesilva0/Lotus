@@ -3,8 +3,10 @@
 A light Windows app that puts your local AI in one place: **chat** (Ollama), **images** (ComfyUI),
 **voice** (Voicebox), **deep research** (your local model + public academic databases), and an
 always-on-top **floating island** for quick chat, dictation and agent notifications.
-Everything runs on your PC. The one exception is Deep Research, which sends short search keywords
-to the academic databases you switch on (see *Deep Research* below). Nothing else is uploaded.
+Everything runs on your PC. The exceptions are things you switch on yourself: Deep Research and
+source search send short keywords to the academic databases you choose, and **Web search** (the globe
+button in chat, or a task/routine set to search the web) sends your question to DuckDuckGo or your
+own SearXNG and reads the top result pages. Nothing else is uploaded.
 
 Built with **Tauri 2** (Rust + the WebView2 that ships with Windows). There is no bundled Chromium,
 so the app itself is small; the engines you connect to bring their own weight.
@@ -13,11 +15,14 @@ so the app itself is small; the engines you connect to bring their own weight.
 
 | Area | What you get |
 |---|---|
-| **Chat** | Streaming Ollama chat, vision (attach an image), Stop, saved conversations, tokens/sec, local dictation |
+| **Chat** | Streaming chat with Ollama **or llama.cpp**, vision, Stop, saved conversations, local dictation, **GitHub Flavored Markdown** in replies and in the message box (with a preview), **Think** (several passes: analyse, draft, check) and **Web** (search the current web and read the top pages) buttons |
+| **Memory & skills** | Memory is on for every chat; the **Memory** button next to Incognito pauses it for one chat. Lotus recalls past conversations (SQLite full-text search), remembers what you ask it to, learns lasting facts as you talk, and writes **skills** (reusable procedures) after complex work, improving them when you correct it. Project files such as `SOUL.md`, `memory.md`, `AGENTS.md`, `.cursorrules` are found and applied automatically when you open a folder |
+| **Tasks** | A **Kanban board** shared by you and Lotus (assign a task to Lotus and its local agent plans the steps, works through them and puts the result in Review; tasks can block each other), **routines** on a cron schedule, and the **skills** library |
 | **Images** | ComfyUI text-to-image with your installed checkpoints, optional **LoRAs** (up to four, each with a strength), aspect ratios, seed, cancel |
 | **Voice** | Powered by [Voicebox](https://github.com/jamiepine/voicebox) (see below) |
 | **Research** | Scoping wizard, editable plan, expert personas, parallel search agents, live steering, cited report |
 | **App Builder** | Describe an app; a local-model agent writes the files and runs the commands while you watch it run in a built-in preview. Websites, web apps, installable phone web apps, Windows/macOS/Linux desktop apps and Android/iPhone apps (see *App Builder*) |
+| **Local engine & VRAM** | Lotus measures free video memory every few seconds and sizes the context window, file chunks, model choice and how many background agents may run at once, so nothing runs out of memory (Settings → Local Engine & VRAM, Models → Monitor) |
 | **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Lotus", **Models** (language, image, LoRA and voice models, download by name or link, Arena, hardware monitor), storage/portable info |
 | **Island** | Floating pill: peek, chat, dictate, read clipboard aloud, file/image drop, activity pills, Claude Code permission prompts |
 
@@ -108,6 +113,14 @@ its normal terminal prompt. Hooks use the `curl.exe` that ships with Windows and
 
 Not included from Coucou: phone companion, Spotify/GitHub/Stripe pills, weekly recap.
 
+### Memory, skills and tasks (session 5)
+- **Memory toggle**: in the chat header, next to Incognito. On by default. Off for a chat means nothing is recalled (no past chats, facts, skills or project memory files) and nothing is learned or indexed until you turn it back on. Incognito always means off.
+- **Where it lives**: `lotus.db` (SQLite with FTS5 full-text search) in the Lotus data folder; skills are also written as `skills/<name>/SKILL.md` there so you can read or edit them by hand. Nothing is synced anywhere.
+- **Learning**: every few messages a background agent proposes small changes to what Lotus knows about you (it never edits what you saved yourself, and refuses passwords, keys and account numbers). Learned items are marked "learned" in Chat → Context; delete anything wrong.
+- **Skills**: written after a long, structured answer, a Thinking-mode reply or a finished board task; used when a later request matches; rewritten when you say it didn't work. Manage them in Tasks → Skills (switch off, edit, delete, see the change history).
+- **Background agents** (task steps, routines, learning) never exceed the limit the VRAM auto-scaler allows; learning waits while a chat reply is streaming. For agents to really run side by side, start Ollama with `OLLAMA_NUM_PARALLEL` set to that number (otherwise they queue, which is safe).
+- **Routines** run only while Lotus is open (also when hidden in the tray). "Catch up if missed" runs a missed one once at start-up.
+
 ## Installing
 
 **MSI installer** (`Lotus_x64_en-US.msi`) asks you:
@@ -193,6 +206,8 @@ src-tauri/           Rust shell: windows, tray, shortcuts, engine launcher, hook
 ```
 
 ## Status
+
+**Session 5 (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM) is not built yet.** Checked in a sandbox without package-registry access: every new TypeScript file type-checks against stand-in type definitions and bundles; 56 logic/flow tests (VRAM maths, Markdown parser, cron, Kanban rules, memory and skill learning, Thinking mode and the task agent against a fake Ollama) and 13 render tests pass; the new screens were looked at in Chromium screenshots (light/dark, 980 px). The Rust GPU reader and context-file finder compile and pass their tests against stand-ins for serde/tauri; the SQLite statements were run against real SQLite FTS5. `rusqlite` itself has never been compiled here, and nothing has run against a real GPU, Ollama, llama.cpp, DuckDuckGo or SearXNG. See `CURRENT_STATE.md` §0c.
 
 Verified in a Linux sandbox:
 - The TypeScript front end type-checks and builds. The Ollama, ComfyUI and Voicebox clients pass tests against mock servers shaped from the real APIs.

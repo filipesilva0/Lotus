@@ -40,6 +40,14 @@ The App Builder's starter projects reference public packages that are installed 
 - Ollama: MIT
 - ComfyUI: GPL-3.0 (Lotus only calls its HTTP API)
 
+## Bundled libraries added in session 5
+- **rusqlite** (MIT) with **SQLite** (public domain; compiled in through rusqlite's `bundled` feature, FTS5 enabled). Used for the local memory database `lotus.db`.
+
+## Web search (session 5, only when the user turns it on; not bundled)
+- **DuckDuckGo** HTML results page (`https://html.duckduckgo.com/html/`), queried with the user's question.
+- **SearXNG** (AGPL-3.0, not bundled): any instance the user configures, via its JSON API.
+- The top result pages are fetched from their own websites to read their text. The desktop app's HTTP permission therefore allows any `https://` host; requests are only made by Web search, a task or a routine with "Search the web first" ticked.
+
 ## Bundled fonts (via Fontsource)
 
 Plus Jakarta Sans, Inter, Outfit, JetBrains Mono: SIL Open Font License 1.1.

@@ -1,8 +1,11 @@
 mod appbuilder;
+mod context_files;
 mod downloads;
 mod engines;
+mod hardware;
 mod hooks;
 mod island;
+mod memory_db;
 mod paths;
 mod updates;
 
@@ -69,6 +72,7 @@ pub fn run() {
         .manage(appbuilder::AppBuilder::default())
         .manage(downloads::Downloads::default())
         .manage(hooks::Pending::default())
+        .manage(memory_db::MemoryDb::default())
         .invoke_handler(tauri::generate_handler![
             app_paths,
             main_ready,
@@ -112,6 +116,21 @@ pub fn run() {
             appbuilder::adb_tap,
             appbuilder::adb_swipe,
             appbuilder::adb_key,
+            hardware::hw_snapshot,
+            context_files::ctx_discover,
+            memory_db::mem_status,
+            memory_db::mem_index,
+            memory_db::mem_forget_session,
+            memory_db::mem_wipe_history,
+            memory_db::mem_search,
+            memory_db::memories_list,
+            memory_db::memories_put,
+            memory_db::memories_delete,
+            memory_db::memories_search,
+            memory_db::skills_list,
+            memory_db::skills_put,
+            memory_db::skills_delete,
+            memory_db::skills_search,
             updates::update_check,
             updates::update_install,
         ])

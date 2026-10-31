@@ -8,6 +8,47 @@
 - ⚠️ New lotus line-art logo (`Logo.tsx`) and regenerated `src-tauri/icons/*`.
 - ⚠️ Engine connection: `http()` now sends `Origin` = the engine's own address (needs `unsafe-headers` on `tauri-plugin-http`, added in `Cargo.toml`); new Rust command `engine_ping` + `diagnose()` show *why* an engine looks offline on the Engines cards. Root cause of "Ollama won't connect" is **not confirmed**; the diagnostic message will say.
 
+## 0c. Session 5: memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM (⚠️ not built, not run on Windows)
+
+What was asked (user's words, condensed): (1) VRAM auto-scaling for the local execution layer (Ollama or llama.cpp): watch free VRAM and scale background-subagent concurrency, context chunking and model-size choice; (2) two chat buttons, **Thinking** (slower, better answers) and **Web search** (current web), and GitHub Flavored Markdown for chat input and output; (3) a **Memory** toggle next to Incognito, on by default, using FTS5 session search and a self-improving skill loop, suspending/resuming memory reads and writes for the chat instantly; (4) auto-discovery of project context files (memory.md, soul.md, …) when a folder is loaded; (5) a task suite: Kanban (create, assign, link, track multi-step states), a cron scheduler for background routines, and organic skills generated/refined/saved locally. "Some of Hermes' features: learning as we talk, adaptive memory, skill auto-creation and use."
+
+**Environment this session:** no npm or crates.io access (registry blocked), so `npm install`, `vite build`, real `tsc` and `cargo` against the real crates were impossible. Rust 1.97, TypeScript 6, esbuild, React 19.2 and Tailwind 4.3 were available locally and were used as below.
+
+**Verified here ✅**
+- `tsc` over the whole `src/` against hand-written stand-in types for React/lucide/Tauri: 0 errors in new or changed files, also with `strict` + `noUnusedLocals` (the only remaining strict findings are implicit-`any` DOM event parameters, an artefact of the stand-in JSX types). Pre-existing files show only stand-in-inference artefacts.
+- esbuild bundles `src/main.tsx` and `src/island/main.tsx` with no missing exports.
+- `run-s5-tests.sh` part 1: **56/56** (VRAM scaler maths incl. monotonicity and "fits in memory" checks, KV bytes from GGUF metadata, llama.cpp slots/flags; GFM parser; cron parse/next-run/descriptions; Kanban links/cycles/blocking/ordering/next-runnable; memory-op validation, sensitive-data filter, reflection cadence, skill drafts, complex-exchange detection; recall selection; DuckDuckGo HTML parsing and page reader; context-file block; context budget; agent pool limit/priorities/cancel; **Thinking mode end to end**, **memory reflection**, **skill creation + refinement of a near-duplicate**, **task agent plan→steps→Review** and **auto-start only once unblocked**, all against a fake Ollama).
+- `run-s5-tests.sh` part 2: **13/13** server-side renders of every new screen and settings panel.
+- Existing suites still pass where runnable: research engine (all), service clients (all, after updating one stale session-4 assertion to the `ComfyBatch` shape).
+- Screens reviewed in **Chromium** screenshots of a real styled build (Tailwind 4 + esbuild, seeded data): chat (light/dark, Think/Web on, recall line, GFM table/task list/code), Markdown preview in the composer, Tasks board + task inspector, routines, skills, agent popover, Settings → Local Engine & VRAM and Memory & Skills, 980 px window. Kept in `handover/screenshots/session5/`.
+- Rust: `hardware.rs` and `context_files.rs` compile with **no warnings and no clippy findings** and their **3 tests pass** (built against minimal serde/tauri stand-ins). `memory_db.rs` type-checks (borrows, closures, lifetimes) against a signature stand-in for rusqlite 0.32/tauri, clippy clean apart from stand-in artefacts. Every SQL statement in it was run against **real SQLite 3.53 with FTS5** (schema, MATCH with sanitised prefix queries, `snippet`, weighted `bm25`, diacritic folding, upserts, hostile input).
+
+**Written but never compiled for real or run ⚠️**
+- `rusqlite = { version = "0.32", features = ["bundled"] }` is in `Cargo.toml` but **not in `Cargo.lock`** (no registry): the first CI build resolves it; commit the new lock. Adds a C compile of SQLite (~1 MB to the binary).
+- Windows-only code: registry adapter size + PowerShell "GPU Adapter Memory" counter fallback, `GlobalMemoryStatusEx` FFI (`hardware.rs`).
+- Capability `http:default` now also allows `https://*/*` (needed for Web search to open result pages). Assumed valid URLPattern syntax for the Tauri HTTP scope; unverified.
+- No real GPU, Ollama (`think`, `/api/show` capabilities/model_info), llama-server (`/props`, SSE), DuckDuckGo or SearXNG has been contacted.
+
+**What changed for users**
+- Chat header: **Memory** button beside Incognito (default on; per chat; disabled in incognito). Composer: **Think** and **Web** buttons, Markdown preview, `/think`, `/web`, `/memory`. Replies render full GFM and show "Used N memories · past chats · skill: … · project files" and mode chips. Inspector → Context: workspace folder with discovered context files (toggle per file), memory list with "learned" marks, filter, storage line. Parameters: context window shows "Auto · N tokens".
+- New rail page **Tasks** (Board / Routines / Skills, plus a background-agents popover with live VRAM).
+- Settings: **Local Engine & VRAM** (Ollama or llama.cpp, auto-scale, reserve, agent cap, live scaling card), **Memory & Skills**, and web-search options under Chat & Formatting. Models → Monitor shows the scaling card.
+- App Builder: context files in the project folder are applied to the agent (count shown in the toolbar). Deep Research's parallel agents are capped by the VRAM plan.
+
+**New known limitations (B28–B37)**
+| ID | Issue |
+|---|---|
+| B28 | rusqlite not compiled/locked yet (see above). If FTS5 were missing the DB falls back to LIKE search automatically. |
+| B29 | VRAM reading: NVIDIA via `nvidia-smi`, AMD on Linux via sysfs, others on Windows via a PowerShell counter (slow, ~1 s, polled every 15 s); otherwise ComfyUI; otherwise "not measured" → manual context, 1 agent. Integrated GPUs report shared memory oddly. |
+| B30 | The scaler's KV maths assume an f16 KV cache; `OLLAMA_KV_CACHE_TYPE=q8_0/q4_0` or flash attention make real use smaller (plans are conservative). Ollama's own compute buffers are approximated as 400 MB. |
+| B31 | Parallel agents only run side by side if Ollama has `OLLAMA_NUM_PARALLEL` ≥ the limit (Lotus can't set it for an Ollama it didn't start); otherwise they queue. llama.cpp context/slots are read-only (flags are suggested). |
+| B32 | Web search: DuckDuckGo's HTML page can rate-limit or show a captcha (error says so; SearXNG is the robust option). Page reading is regex-based text extraction (no JS-rendered pages, no PDFs). |
+| B33 | Thinking mode makes 4 model calls; with a small model the "check" pass can be shallow. |
+| B34 | Learned memory/skills quality depends on the local model; validators reject secrets, duplicates and malformed output, but a 3B model may propose little. Max 80 learned items. |
+| B35 | Routines run only while Lotus runs; no OS-level scheduling. Task agents can only write (no tools, files or shell): they produce instructions/results, not actions. |
+| B36 | Memory items, skills and the chat index live in `lotus.db`; board, routines and settings stay in `localStorage` (B10 still applies to those). |
+| B37 | Context files are read from the folder root, `.lotus/`, `.hermes/`, `.cursor/rules/`, `.clinerules/`, `.github/copilot-instructions.md` only (no parent-folder walk), 24 KB per file, 24 files. Read-only. |
+
 ## 0b. Session 4 changes: App Builder, merged Models, LoRA (⚠️ not built, not run on Windows)
 
 What was asked: (1) an **App Builder** page in the spirit of an agent-first IDE, to build Windows/Mac/iOS/Android/web apps and see them running inside Lotus; (2) merge the new Models page into the old one's place (Engines → Models) and let the user **type any model name/link** to download (language, image, LoRA, voice); (3) a **LoRA** picker in Images, with LoRA downloads in Models.

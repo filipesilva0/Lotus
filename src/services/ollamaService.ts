@@ -30,6 +30,10 @@ export interface ChatOptions {
   onFinal?: (chunk: any) => void;
   /** Called with reasoning tokens from "thinking" models; hidden by default. */
   onThinking?: (token: string) => void;
+  /** Ask a thinking-capable model to reason first (Ollama `think`). Leave undefined for other models. */
+  think?: boolean | 'low' | 'medium' | 'high';
+  /** Ollama response format: 'json' or a JSON schema. */
+  format?: 'json' | Record<string, unknown>;
 }
 
 export interface ChatStats {
@@ -177,6 +181,8 @@ export class OllamaService {
       model: opts.model,
       messages,
       stream: true,
+      ...(opts.think !== undefined ? { think: opts.think } : {}),
+      ...(opts.format ? { format: opts.format } : {}),
       options: {
         temperature: opts.temperature,
         top_p: opts.topP,
@@ -225,6 +231,11 @@ export class OllamaService {
     }
   }
 
+  /** Model metadata: architecture numbers (for memory maths), capabilities (vision, thinking, tools). */
+  async show(name: string): Promise<{ model_info?: Record<string, unknown>; capabilities?: string[]; details?: OllamaModel['details'] }> {
+    return (await this.raw('/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name }) })).json();
+  }
+
   /** Loads a model into memory (empty prompt) and keeps it there until unloaded or idle for `keepAlive`. */
   async load(name: string, keepAlive: string | number = '30m') {
     await this.raw('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, keep_alive: keepAlive }) }, 10 * 60_000);
@@ -238,7 +249,7 @@ export class OllamaService {
   async chatOnce(
     messages: ChatTurn[],
     opts: ChatOptions & { json?: boolean },
-  ): Promise<{ content: string; promptTokens: number; evalTokens: number }> {
+  ): Promise<{ content: string; thinking: string; promptTokens: number; evalTokens: number }> {
     const res = await this.raw(
       '/api/chat',
       {
@@ -246,15 +257,16 @@ export class OllamaService {
         headers: { 'Content-Type': 'application/json' },
         signal: opts.signal,
         body: JSON.stringify({
-          model: opts.model, messages, stream: false, ...(opts.json ? { format: 'json' } : {}),
-          options: { temperature: opts.temperature, top_p: opts.topP, num_ctx: opts.numCtx },
+          model: opts.model, messages, stream: false, ...(opts.json ? { format: 'json' } : opts.format ? { format: opts.format } : {}),
+          ...(opts.think !== undefined ? { think: opts.think } : {}),
+          options: { temperature: opts.temperature, top_p: opts.topP, num_ctx: opts.numCtx, num_predict: opts.numPredict },
         }),
       },
       30 * 60_000,
     );
     const j = await res.json();
     if (j.error) throw new EngineError(String(j.error), ENGINE);
-    return { content: j.message?.content ?? '', promptTokens: j.prompt_eval_count ?? 0, evalTokens: j.eval_count ?? 0 };
+    return { content: j.message?.content ?? '', thinking: j.message?.thinking ?? '', promptTokens: j.prompt_eval_count ?? 0, evalTokens: j.eval_count ?? 0 };
   }
 
   /** One-shot, non-streaming helper (used by the island for short answers). */

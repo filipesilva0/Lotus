@@ -33,6 +33,7 @@ import { PillSlider } from '../common/PillSlider';
 import { THIRD_PARTY_LICENSES_TEXT } from '../../data/licenses';
 import { ollamaClient } from '../../services/ollamaService';
 import { UpdatesPanel } from './UpdatesPanel';
+import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAgentSettings';
 import type { Updates } from '../../hooks/useUpdates';
 
 interface SettingsModalProps {
@@ -45,6 +46,8 @@ interface SettingsModalProps {
 
 type SettingsTab =
   | 'inference'
+  | 'engine'
+  | 'memory'
   | 'chat'
   | 'voice'
   | 'island'
@@ -86,7 +89,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
     { id: 'inference', label: 'Model & Inference', icon: Sliders },
+    { id: 'engine', label: 'Local Engine & VRAM', icon: Server },
     { id: 'chat', label: 'Chat & Formatting', icon: MessageSquare },
+    { id: 'memory', label: 'Memory & Skills', icon: Sparkles },
     { id: 'voice', label: 'Voice', icon: Volume2 },
     { id: 'island', label: 'Island & Agents', icon: Cpu },
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -253,7 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         Context Window (Max Tokens)
                       </span>
                       <p className="text-xs text-[var(--color-text-muted)]">
-                        KV Cache size allocated in VRAM for conversation memory.
+                        {settings.autoScale ? `Auto-scaling is on (Local Engine & VRAM), so chat uses the size free video memory allows; this value is used when it is off.` : "KV cache size allocated in VRAM for conversation memory."}
                       </p>
                     </div>
                   </div>
@@ -388,8 +393,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(val) => onUpdateSettings({ codeCopyLanguage: val })}
                   />
                 </div>
+
+                <WebSearchPanel settings={settings} onUpdateSettings={onUpdateSettings} />
               </div>
             )}
+
+            {activeTab === 'engine' && <EngineScalingPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+
+            {activeTab === 'memory' && <MemorySkillsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
             {/* 4. Voice & Speech (Kokoro & Whisper) */}
             {activeTab === 'appearance' && (

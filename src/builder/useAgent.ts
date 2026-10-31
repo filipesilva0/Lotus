@@ -17,6 +17,8 @@ interface Opts {
   showPreview: (t: { url?: string; dir?: string }) => Promise<string>;
   refreshFiles: () => void;
   setAutoRun: (on: boolean) => void;
+  /** Formatted project context files (auto-discovered in the project folder). */
+  projectContext?: string;
 }
 
 export interface PendingApproval { command: string; why: 'ask' | 'danger'; answer: (a: 'once' | 'always' | 'deny') => void }
@@ -69,7 +71,7 @@ export function useAgent(o: Opts) {
     setRunning(true);
     reportActivity({ id: 'build-agent', kind: 'build', label: 'Building…' });
     const ctx: AgentCtx = {
-      project: c.project, template: c.template, model: c.model, numCtx: c.numCtx, temperature: 0.2, mode: c.mode, signal: ctrl.signal,
+      project: c.project, template: c.template, model: c.model, numCtx: c.numCtx, temperature: 0.2, mode: c.mode, signal: ctrl.signal, projectContext: c.projectContext,
       chat: chat.current, push, patch,
       approve: (command, why) => new Promise<boolean>((resolve) => {
         const onAbort = () => { setApproval(null); resolve(false); };

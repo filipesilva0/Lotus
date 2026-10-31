@@ -1,4 +1,4 @@
-export type ViewMode = 'chat' | 'images' | 'voice' | 'research' | 'builder' | 'engines';
+export type ViewMode = 'chat' | 'images' | 'voice' | 'research' | 'builder' | 'tasks' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
 export interface ChatToolCall { id: string; label: string; status: 'running' | 'done' | 'error'; detail?: string }
@@ -31,6 +31,10 @@ export interface ChatMessage {
   tokensPerSec?: number;
   durationMs?: number;
   isStreaming?: boolean;
+  /** What long-term memory contributed to this reply (shown under it so recall is never hidden). */
+  recall?: { memories: number; sessions: number; skills: string[]; skillIds?: string[]; projectFiles: number };
+  /** The reply came from Thinking mode (several passes) or used web results. */
+  mode?: { thinking?: boolean; web?: boolean };
 }
 
 export interface ChatSession {
@@ -54,12 +58,28 @@ export interface ChatSession {
   searchSources?: boolean;
   /** Real token count of the last request (prompt + reply), from Ollama. */
   usedTokens?: number;
+  /** Memory is on unless this is true: recall (reading) and learning (writing) are both suspended. */
+  memoryOff?: boolean;
+  /** Thinking mode: several passes (analyse, draft, check) before the final answer. */
+  thinking?: boolean;
+  /** Search the web before answering. */
+  webSearch?: boolean;
+  /** Workspace folder for this chat; its context files (SOUL.md, memory.md, AGENTS.md…) are applied. */
+  folder?: string;
+  /** Context files the user switched off for this chat (relative paths). */
+  folderOff?: string[];
 }
 
 export interface ContextChunk { id: string; text: string; on: boolean }
 export interface ContextItem { id: string; name: string; kind: 'file' | 'source'; url?: string; chunks: ContextChunk[] }
 export interface ChatFolder { id: string; name: string }
-export interface MemoryItem { id: string; text: string; kind: 'memory' | 'instruction'; ts: number }
+export interface MemoryItem {
+  id: string; text: string; kind: 'memory' | 'instruction'; ts: number;
+  /** 'user' = the user said "remember…"; 'auto' = Lotus learned it from a conversation. */
+  source?: 'user' | 'auto';
+  /** How many replies used it (recall), and when it last changed. */
+  uses?: number; updated?: number;
+}
 
 export type ColorPalette = 'blue' | 'amber' | 'purple' | 'green' | 'pink';
 export type FontFamily = 'jakarta' | 'inter' | 'outfit' | 'mono';
@@ -96,6 +116,28 @@ export interface LotusSettings {
   palette: ColorPalette;
   fontFamily: FontFamily;
   fontSize: FontSize;
+  // ── Local execution layer (session 5) ──
+  /** Which local server answers chat: Ollama, or a llama.cpp `llama-server`. */
+  llmBackend: 'ollama' | 'llamacpp';
+  llamacppUrl: string;
+  /** Scale context size, chunking and background-agent count to free video memory. */
+  autoScale: boolean;
+  /** Video memory kept free for the desktop, games and other apps (MB). */
+  vramReserveMb: number;
+  /** Upper bound for background agents, whatever the GPU allows. */
+  maxSubagents: number;
+  // ── Chat modes ──
+  webSearchProvider: 'duckduckgo' | 'searxng';
+  searxngUrl: string;
+  /** How many result pages Web search opens and reads. */
+  webPagesToRead: number;
+  // ── Memory & skills ──
+  /** Learn facts and preferences from conversations (memory toggle must also be on). */
+  autoMemory: boolean;
+  /** Write and refine skills after complex tasks. */
+  autoSkills: boolean;
+  /** Search past conversations for relevant context. */
+  sessionRecall: boolean;
 }
 
 export interface GeneratedImage {

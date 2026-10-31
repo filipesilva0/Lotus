@@ -83,3 +83,14 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T19 | Visual pass of Builder and Engines → Models at 980 px and 1280 px, light/dark; fix cramped layouts (consider a collapsible agent panel). | P1 | |
 | T20 | Builder improvements: syntax colouring (small tokenizer or CodeMirror loaded lazily), search in files, undo checkpoints / diff review of agent edits, stdin for the terminal, run-as-app log capture for Tauri projects, open an existing project's `package.json` scripts as run buttons, GitHub push helper. | P2/P3 | |
 | T21 | Models: delete downloaded checkpoint/LoRA files from the UI, show file sizes, resume interrupted downloads, optional checksum entry, HF repo browser. | P2 | |
+
+## Session 5 additions (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM)
+
+| ID | Task | Priority | Notes |
+|---|---|---|---|
+| T17 | **First real build of session 5**: `npm install`, real `npx tsc --noEmit`, `npm run build`, all four TS suites (`run-s5-tests.sh` new). Let CI resolve `rusqlite`, then commit `Cargo.lock`; run `cargo test --lib` (9 tests incl. 4 memory-db tests against real SQLite). | P0 (with T2/T14) | Only stand-in-checked so far. |
+| T18 | **VRAM smoke test on Windows**: Models → Monitor scaling card on an NVIDIA PC (nvidia-smi) and an AMD/Intel PC (PowerShell counter). Compare its "free" with Task Manager; load a model and confirm context/agents change; start Ollama with `OLLAMA_NUM_PARALLEL=3` and run 3 Lotus tasks to confirm no out-of-memory. | P1 | B29–B31 |
+| T19 | **Think / Web live pass**: qwen3 (native thinking) and llama3.1 (no thinking) in Thinking mode; Web with DuckDuckGo and with a local SearXNG; check citations and the "Reading …" tool rows. | P1 | B32–B33 |
+| T20 | **Memory loop live pass**: talk for ~10 turns about yourself, confirm learned items appear and are sensible; pause Memory and confirm nothing is recalled or added; incognito; delete a learned item; restart and check `lotus.db`. Skill: finish a multi-step task, check Tasks → Skills and `skills/<name>/SKILL.md`, then correct it and check version 2. | P1 | B34 |
+| T21 | Board polish: keyboard move between columns (today: Status select in the inspector), task templates, due-date reminders through the island. | P2 | |
+| T22 | Optional: let task agents use tools (read project files via `proj_*`, run approved commands) by reusing the App Builder's tag protocol and approval card. Needs a decision (safety). | P3 | B35 |

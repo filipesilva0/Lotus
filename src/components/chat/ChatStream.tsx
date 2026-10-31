@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bot, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, FileText, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Wrench, User, AlertCircle, PanelRight } from 'lucide-react';
+import { Bot, Brain, BrainCircuit, Globe, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, FileText, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Wrench, User, AlertCircle, PanelRight } from 'lucide-react';
 import { ChatMessage, ChatSession } from '../../types/lotus';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { openExternal } from '../../lib/open';
@@ -33,7 +33,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
               <span><span className="font-medium">{t.label}</span>{t.detail && <span className="text-[var(--color-text-muted)]"> · {t.detail}</span>}</span>
             </div>
           ))}
-          {m.thinking && <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-[var(--color-text-muted)] max-h-64 overflow-y-auto font-sans">{m.thinking}</pre>}
+          {m.thinking && <div className="text-[12px] leading-relaxed text-[var(--color-text-muted)] max-h-72 overflow-y-auto"><MarkdownLite text={m.thinking} onDark={false} /></div>}
         </div>
       )}
     </div>
@@ -82,7 +82,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                             <button type="button" onClick={() => void navigator.clipboard.writeText(code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px]">Copy</button>
                             <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Artifacts</button>
                           </>)} />
-                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.some((t) => t.status === 'running') ? 'Searching sources…' : m.thinking ? 'Thinking…' : 'Working…'}</span> : null}
+                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? 'Thinking…' : 'Working…')}</span> : null}
                     {m.interrupted && <p className="mt-1.5 text-[11px] opacity-70">Stopped here.</p>}
                   </div>
                 )}
@@ -106,6 +106,23 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                       <IconBtn label="Forget this" className="!w-6 !h-6" onClick={() => onMemory(m.id, 'forgotten')}><ThumbsDown className="w-3.5 h-3.5" /></IconBtn>
                     </>)}
                     {m.memoryEvent.status === 'confirmed' && <Check className="w-3.5 h-3.5 text-[var(--c-green)]" aria-label="Kept" />}
+                  </div>
+                )}
+
+                {!user && !m.isStreaming && (m.recall || m.mode) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--color-text-muted)]">
+                    {m.mode?.thinking && <span className="inline-flex items-center gap-1"><Brain className="w-3 h-3" />Thinking mode</span>}
+                    {m.mode?.web && <span className="inline-flex items-center gap-1"><Globe className="w-3 h-3" />Web search</span>}
+                    {m.recall && (() => {
+                      const r = m.recall;
+                      const parts = [
+                        r.memories ? `${r.memories} memor${r.memories === 1 ? 'y' : 'ies'}` : '',
+                        r.sessions ? `${r.sessions} past chat${r.sessions === 1 ? '' : 's'}` : '',
+                        r.skills.length ? `skill${r.skills.length > 1 ? 's' : ''}: ${r.skills.join(', ')}` : '',
+                        r.projectFiles ? `${r.projectFiles} project file${r.projectFiles === 1 ? '' : 's'}` : '',
+                      ].filter(Boolean);
+                      return parts.length ? <span className="inline-flex items-center gap-1" title="What long-term memory added to this reply"><BrainCircuit className="w-3 h-3" />Used {parts.join(' · ')}</span> : null;
+                    })()}
                   </div>
                 )}
 

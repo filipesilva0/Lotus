@@ -34,6 +34,8 @@ Status here is a pointer only; see `CURRENT_STATE.md` for evidence.
 | **Models** (Engines → Models) | Language / image / LoRA / voice models; download any Ollama name, Hugging Face GGUF, or checkpoint/LoRA link; Arena; Monitor. |
 | **Island** | Idle pill with engine-status dots + activity pills → hover "peek" (Chat, Dictate, Read aloud clipboard, Open Lotus) → chat (Ollama stream, file/image drop, dictation, read-aloud) → **Claude Code permission prompts** (Allow/Deny) and session activity. Shortcuts: Ctrl+Alt+Space / D / T. |
 | **Engines** | Per-engine Start/Stop (only for processes Lotus started), "Start with Lotus", editable address, locate executable; Models tab (Ollama pull/delete with progress, Voicebox model download/load/unload/delete, ComfyUI checkpoint list); Storage tab (data folder, portable vs installed). |
+| **Memory & skills (session 5)** | Memory on by default (header toggle per chat) → recall of facts, past chats (FTS5) and skills in each reply → background learning of facts and skills → manage in Chat → Context and Tasks → Skills. |
+| **Tasks (session 5)** | Board: create → assign to me or Lotus → link (blocks/relates) → Lotus plans steps, works through them (VRAM-limited agents) → Review → Done. Routines: cron schedule → result kept, posted as a card, or turned into a Lotus task. |
 | **Install / distribution** | **MSI** asks: Just-for-me (default, no admin) vs All users; install folder; optional features (Desktop shortcut, Start with Windows, "Portable data"). Separate **portable zip** (marker file `lotus.portable`). Built by GitHub Actions on `windows-latest`. |
 
 ## 3. Requirements

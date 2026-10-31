@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Mic, MicOff, Paperclip, Square, X, FileText, Search, Navigation, AtSign } from 'lucide-react';
+import { ArrowUp, Mic, MicOff, Paperclip, Square, X, FileText, Search, Navigation, AtSign, Brain, Globe, Eye, PenLine } from 'lucide-react';
+import { MarkdownLite } from '../../lib/markdownLite';
 import { Btn, IconBtn, cx } from '../common/ui';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { voicebox } from '../../services/voicebox';
@@ -10,6 +11,9 @@ export const SLASH: SlashCommand[] = [
   { name: 'clear', help: 'Clear this conversation' },
   { name: 'incognito', help: 'Toggle incognito for this chat' },
   { name: 'search', help: 'Toggle searching academic sources before answering' },
+  { name: 'think', help: 'Toggle Thinking mode (slower, more careful answers)' },
+  { name: 'web', help: 'Toggle searching the web before answering' },
+  { name: 'memory', help: 'Turn memory on or off for this chat' },
   { name: 'model', args: '<name>', help: 'Switch the model' },
   { name: 'temp', args: '<0–2>', help: 'Set temperature' },
   { name: 'seed', args: '<number|off>', help: 'Lock or unlock the seed' },
@@ -20,6 +24,8 @@ export const SLASH: SlashCommand[] = [
 interface Props {
   model: string; streaming: boolean; disabled?: boolean; sendOnEnter: boolean;
   searchOn: boolean; onToggleSearch: () => void;
+  thinkingOn: boolean; onToggleThinking: () => void;
+  webOn: boolean; onToggleWeb: () => void;
   mentions: { id: string; label: string; kind: 'model' | 'file' }[];
   prefill?: { text: string; nonce: number } | null;
   onSend: (text: string, files: File[]) => Promise<string[]> | string[];
@@ -27,8 +33,9 @@ interface Props {
   onStop: () => void;
 }
 
-export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, searchOn, onToggleSearch, mentions, prefill, onSend, onCommand, onStop }) => {
+export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, searchOn, onToggleSearch, thinkingOn, onToggleThinking, webOn, onToggleWeb, mentions, prefill, onSend, onCommand, onStop }) => {
   const [text, setText] = useState('');
+  const [preview, setPreview] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
@@ -75,7 +82,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     }
     const errs = await onSend(t, files);
     if (errs.length) setNotice(errs.join(' '));
-    setText(''); setFiles([]); setPreviews({});
+    setText(''); setFiles([]); setPreviews({}); setPreview(false);
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -150,7 +157,12 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               })}
             </div>
           )}
-          <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
+          {preview && (
+            <div className="px-3.5 pt-3 pb-1 min-h-[44px] max-h-[200px] overflow-y-auto text-[14px] leading-relaxed" aria-label="Message preview" aria-live="polite">
+              {text.trim() ? <MarkdownLite text={text} onDark={false} /> : <p className="text-[var(--color-text-muted)]">Nothing to preview.</p>}
+            </div>
+          )}
+          <textarea ref={ta} hidden={preview} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
             aria-label="Message" placeholder={streaming ? 'Type to steer the reply…' : `Message ${model || 'a model'} — / for commands, @ to mention`}
             className="w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
           <div className="flex items-center gap-1 px-2 pb-2">
@@ -159,6 +171,13 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               <Paperclip className="w-4 h-4" />
             </label>
             <IconBtn label={searchOn ? 'Source search on: sends keywords to arXiv, PubMed and OpenAlex' : 'Search academic sources before answering'} active={searchOn} onClick={onToggleSearch}><Search className="w-4 h-4" /></IconBtn>
+            <span className="w-px h-4 mx-1 bg-[var(--sep)]" aria-hidden="true" />
+            <Btn size="sm" variant={thinkingOn ? 'primary' : 'ghost'} aria-pressed={thinkingOn} icon={<Brain className="w-3.5 h-3.5" />} onClick={onToggleThinking}
+              title={thinkingOn ? 'Thinking on: the model analyses, drafts and checks before answering (slower)' : 'Thinking: analyse, draft and check before answering. Takes longer, answers better.'}>Think</Btn>
+            <Btn size="sm" variant={webOn ? 'primary' : 'ghost'} aria-pressed={webOn} icon={<Globe className="w-3.5 h-3.5" />} onClick={onToggleWeb}
+              title={webOn ? 'Web search on: your question is searched on the web and the top pages are read' : 'Web search: search the current web and read the top pages before answering'}>Web</Btn>
+            <span className="w-px h-4 mx-1 bg-[var(--sep)]" aria-hidden="true" />
+            <IconBtn label={preview ? 'Back to writing' : 'Preview Markdown'} active={preview} onClick={() => { setPreview((p) => !p); if (preview) setTimeout(() => ta.current?.focus(), 0); }}>{preview ? <PenLine className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</IconBtn>
             <IconBtn label={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate (local Whisper)'} active={rec} onClick={toggleMic} className={rec ? '!text-[var(--c-red)] animate-pulse' : ''}>{rec ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}</IconBtn>
             <div className="flex-1" />
             {streaming && !steer ? (
@@ -168,7 +187,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
             )}
           </div>
         </div>
-        <p className="mt-1.5 text-center text-[11px] text-[var(--color-text-muted)]">{streaming ? 'Sending now stops the reply here and continues from your new message.' : sendOnEnter ? 'Enter to send · Shift+Enter for a new line' : 'Ctrl+Enter to send · Enter for a new line'}</p>
+        <p className="mt-1.5 text-center text-[11px] text-[var(--color-text-muted)]">{streaming ? 'Sending now stops the reply here and continues from your new message.' : `${sendOnEnter ? 'Enter to send · Shift+Enter for a new line' : 'Ctrl+Enter to send · Enter for a new line'} · Markdown supported`}</p>
       </div>
     </div>
   );

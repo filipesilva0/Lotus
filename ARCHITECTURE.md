@@ -134,9 +134,32 @@ Preview: iframe sandbox (allow-scripts/forms/same-origin/popups/modals), CSP fra
 ```
 Agent conversation per project is stored in IndexedDB (`lotus.builder.chat.<projectId>`).
 
+## 5c. Session 5: local agent layer ⚠️ unbuilt
+```
+src/hardware/scaler.ts      pure VRAM maths: KV bytes/token from GGUF metadata, context steps, agents, model fit (tested)
+src/hardware/monitor.ts     polls Rust hw_snapshot (nvidia-smi → amdgpu sysfs → Windows counters) or ComfyUI; Ollama /api/show, /api/ps, /api/tags; keeps ScalePlan
+src/agents/pool.ts          background-agent semaphore; limit = plan.maxSubagents (re-read before every start); priorities 0/1/2; housekeeping waits while chat streams
+src/services/llm.ts         facade: Ollama or llama.cpp (llamacppService.ts, OpenAI-compatible SSE); extractJson
+src/chat/thinking.ts        Thinking mode passes (analyse → draft → check → final, native `think` when the model reports it)
+src/chat/webSearch.ts       DuckDuckGo HTML / SearXNG JSON, page reader, numbered context block
+src/lib/gfm.ts              GitHub Flavored Markdown parser → tree; lib/markdownLite.tsx renders it (no innerHTML)
+src/memory/store.ts         memory items, skills, chat index: Rust SQLite+FTS5 in the app, localStorage fallback in a browser
+src/memory/recall.ts        what memory adds to a request (memories, past-chat snippets, skills, project files)
+src/memory/learn.ts         reflect() (adaptive memory), considerSkill()/refineSkill() (skill loop), validators
+src/context/discover.ts     project context files (Rust ctx_discover) → system-prompt block; used by Chat (workspace folder) and App Builder (project)
+src/tasks/kanban.ts|cron.ts pure board rules (links, cycles, blocked, ordering) and cron parser/next-run (tested)
+src/tasks/runner.ts         task agent (plan → steps → write-up); tasks/store.ts board + routines + scheduler + auto-runner
+src/lib/liveSettings.ts     current settings for code outside React (set from App render, listeners notified after render)
+src-tauri/src/hardware.rs   hw_snapshot          src-tauri/src/context_files.rs  ctx_discover
+src-tauri/src/memory_db.rs  mem_status|index|forget_session|wipe_history|search, memories_list|put|delete|search, skills_list|put|delete|search
+```
+Request assembly in chat (`hooks/useChat.ts generate`): system prompt + date → recall block (≤ 50 % of the plan's context budget) → mounted files (trimmed to what is left) → academic/web sources → history. `num_ctx` = the plan's context when auto-scaling is on. After a reply (memory on only): index the exchange, `reflect()` every 3rd user turn or when the user talks about themselves, `considerSkill()` for complex exchanges; a correction after a skill-assisted reply runs `refineSkill()`.
+No new cross-window events. Tasks/routines report progress through the existing `activity` event (island pills).
+
 ## 6. Persistence map ✅ (all `localStorage`, shared by both windows)
 
 `lotus.settings.v1`, `lotus.sessions.v1` (≤ 60 chats; blob attachments stripped), `lotus.activeSession.v1`, `lotus.engineUrls.v1`, `lotus.engine.<id>.exe`, `lotus.engine.<id>.policy`, `lotus.setup.dismissed`, `lotus.voice.profile|tab|story`, `lotus.dictate.lang`, `lotus.image.checkpoint`, `lotus.island.v1`, `lotus.island.chat.v1`, `lotus.research.v1` (≤ 40 projects, debounced, quota failures swallowed), `lotus.research.limits.v1`.
+Session 5 keys: `lotus.tasks.v1`, `lotus.routines.v1`, `lotus.tasks.tab.v1`, `lotus.skills.meta.v1` (skill change notes), `lotus.memory.backfilled.v1`; in a plain browser only: `lotus.memory.v1` (also the legacy key, migrated into `lotus.db` and removed on first desktop run) and `lotus.skills.v1`. `lotus.settings.v1` gained `llmBackend, llamacppUrl, autoScale, vramReserveMb, maxSubagents, webSearchProvider, searxngUrl, webPagesToRead, autoMemory, autoSkills, sessionRecall`; chat sessions gained `memoryOff, thinking, webSearch, folder, folderOff`; messages gained `recall, mode`. On disk: `<data>/lotus.db` (SQLite, WAL) and `<data>/skills/<slug>/SKILL.md`.
 Session 4 keys: `lotus.comfy.modelsDir.v1` (ComfyUI models folder), `lotus.models.mode.v1`, `lotus.models.kind.v1`, `lotus.builder.projects.v1`, `lotus.builder.active.v1`, `lotus.builder.view.v1|term.v1|mode.v1|ctx.v1|model.v1`; `lotus.image.params.v1` gained optional `loras`.
 Generated images are **session-only** (blob URLs). Portable mode relocates the WebView2 profile (hence localStorage) to `<exe dir>\data\webview`.
 

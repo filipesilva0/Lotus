@@ -5,6 +5,8 @@ import { proposeQuestions, proposePlan, proposePersonas, uid, LlmCtx } from './l
 import { reportActivity } from '../lib/bus';
 import { EngineError } from '../lib/http';
 
+import { currentLimit } from '../agents/pool';
+
 const KEY = 'lotus.research.v1';
 const LIMITS_KEY = 'lotus.research.limits.v1';
 
@@ -115,7 +117,8 @@ export function useResearch(opts: { model: string }) {
     patch(id, (p) => ({ ...p, model: opts.model || p.model }));
     let last = 0;
     const api = {
-      get: () => get(id),
+      // Parallel research agents never exceed what the VRAM auto-scaler allows right now.
+      get: () => { const p = get(id); return { ...p, limits: { ...p.limits, parallelAgents: Math.min(p.limits.parallelAgents, currentLimit()) } }; },
       patch: (fn: (p: Project) => Project) => {
         patch(id, fn);
         if (Date.now() - last > 1500 || get(id).phase === 'done') { last = Date.now(); report(get(id)); }

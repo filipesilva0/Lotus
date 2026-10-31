@@ -37,6 +37,9 @@
         },
         {
           "url": "https://api.crossref.org/*"
+        },
+        {
+          "url": "https://*/*"
         }
       ]
     }

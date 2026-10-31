@@ -17,6 +17,7 @@ import { useFileDownloads } from '../models/useFileDownloads';
 import { findModelsDir, savedModelsDir, setSavedModelsDir } from '../../services/downloadService';
 import { InspectorPane, KV, Section, SidebarPane } from '../common/Pane';
 import { reportActivity } from '../../lib/bus';
+import { ScalingCard } from '../hardware/ScalingCard';
 
 type Mode = 'hub' | 'arena' | 'monitor';
 interface Props { engines: Record<EngineId, EngineState>; onOpenEngines: () => void }
@@ -269,6 +270,8 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{e.up ? `Online${e.version ? ` · v${e.version}` : ''}` : e.up === null ? 'Checking…' : 'Offline'}{e.supervised ? ' · started by Lotus' : ''}</p></Card>;
         })}
       </div>
+
+      <ScalingCard />
 
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">GPU video memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.vramTotalGb ? `${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} / ${stats.vramTotalGb.toFixed(1)} GB` : '—'}</span></div>

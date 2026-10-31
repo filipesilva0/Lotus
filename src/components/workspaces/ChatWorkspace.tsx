@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { ChevronDown, EyeOff, PanelRight, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BrainCircuit, ChevronDown, EyeOff, PanelRight, Sparkles } from 'lucide-react';
+import { useProjectContext } from '../../context/discover';
+import { hardware, useHardware } from '../../hardware/monitor';
 import { LotusSettings } from '../../types/lotus';
-import { useChat } from '../../hooks/useChat';
+import { useChat, memoryOnFor } from '../../hooks/useChat';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn } from '../common/ui';
 import { MenuItem, Popover } from '../common/Pane';
@@ -27,13 +29,19 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
   const [showInspector, setShowInspector] = usePersisted<boolean>('lotus.chat.inspector.v1', true);
   const [tab, setTab] = usePersisted<InspectorTab>('lotus.chat.tab.v1', 'artifacts');
   const [focus, setFocus] = useState<{ code: string; nonce: number } | null>(null);
+  const hw = useHardware();
+  const numCtx = settings.autoScale ? hw.plan.numCtx : settings.contextWindow;
+  const project = useProjectContext(session.folder);
+  useEffect(() => { chat.setProjectContext(session.id, project.files); }, [session.id, project.files]); // eslint-disable-line react-hooks/exhaustive-deps
+  const memOn = memoryOnFor(session);
+  const toggleMemory = () => chat.toggleMemory(session.id);
 
   const used = useMemo(() => {
     if (session.usedTokens && !chat.isStreaming) return { n: session.usedTokens, exact: true };
     const n = estimateTokens(settings.systemPrompt + session.messages.map((m) => m.content + (m.thinking ? '' : '')).join('')) + contextTokens(session.context);
     return { n, exact: false };
   }, [session, settings.systemPrompt, chat.isStreaming]);
-  const frac = used.n / Math.max(1, settings.contextWindow);
+  const frac = used.n / Math.max(1, numCtx);
 
   const mentions = [
     ...(session.context ?? []).map((c) => ({ id: c.id, label: c.name, kind: 'file' as const })),
@@ -55,6 +63,9 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
       case 'new': chat.newChat(); return;
       case 'clear': chat.clearChat(); return;
       case 'incognito': chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito })); return session.incognito ? 'Incognito off. This chat will be saved.' : 'Incognito on. This chat won’t be saved and creates no memories.';
+      case 'think': chat.patchSession(session.id, (s) => ({ ...s, thinking: !s.thinking })); return session.thinking ? 'Thinking off.' : 'Thinking on: replies take longer and are checked before you see them.';
+      case 'web': chat.patchSession(session.id, (s) => ({ ...s, webSearch: !s.webSearch })); return session.webSearch ? 'Web search off.' : `Web search on: your question goes to ${settings.webSearchProvider === 'searxng' ? 'your SearXNG' : 'DuckDuckGo'} and the top pages are read.`;
+      case 'memory': if (session.incognito) return 'Incognito chats never use memory.'; toggleMemory(); return memOn ? 'Memory off for this chat: nothing is recalled or learned.' : 'Memory on: Lotus recalls and learns again.';
       case 'search': chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources })); return session.searchSources ? 'Source search off.' : 'Source search on: keywords go to OpenAlex, arXiv and PubMed.';
       case 'model': { const m = models.find((x) => x.id.toLowerCase().includes(arg.toLowerCase())); if (!arg || !m) return `No installed model matches “${arg}”.`; onSettings({ selectedModel: m.id }); return `Model: ${m.id}`; }
       case 'temp': { const v = parseFloat(arg); if (!(v >= 0 && v <= 2)) return 'Use a number from 0 to 2.'; onSettings({ temperature: v }); return `Temperature ${v}`; }
@@ -65,7 +76,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
   };
 
   const mountFiles = async (files: File[]) => {
-    for (const f of files) if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') chat.addContext(contextItemFromText(f.name, await f.text()));
+    for (const f of files) if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') chat.addContext(contextItemFromText(f.name, await f.text(), hardware.get().plan.chunkChars));
   };
 
   const offline = ollamaUp === false;
@@ -84,11 +95,14 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
             </>)}
           </Popover>
 
-          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={`${used.exact ? 'Measured by Ollama' : 'Estimated'}: ${used.n.toLocaleString()} of ${settings.contextWindow.toLocaleString()} tokens`}>
+          <div className="flex items-center gap-2 min-w-[150px] max-w-[220px]" title={`${used.exact ? 'Measured by the model server' : 'Estimated'}: ${used.n.toLocaleString()} of ${numCtx.toLocaleString()} tokens${settings.autoScale ? ' (context sized to free video memory)' : ''}`}>
             <div className="flex-1"><Gauge value={frac} label="Context used" warnAt={0.75} critAt={0.92} /></div>
-            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{used.exact ? '' : '~'}{used.n.toLocaleString()} / {settings.contextWindow >= 1000 ? `${Math.round(settings.contextWindow / 1024)}k` : settings.contextWindow}</span>
+            <span className="text-[11px] tabular-nums text-[var(--color-text-muted)] whitespace-nowrap">{used.exact ? '' : '~'}{used.n.toLocaleString()} / {numCtx >= 1000 ? `${Math.round(numCtx / 1024)}k` : numCtx}</span>
           </div>
           <div className="flex-1" />
+          <Btn size="sm" variant={memOn ? 'primary' : 'ghost'} icon={<BrainCircuit className="w-3.5 h-3.5" />} aria-pressed={memOn} disabled={!!session.incognito}
+            onClick={toggleMemory}
+            title={session.incognito ? 'Incognito chats never read or write memory' : memOn ? 'Memory on: recalls past chats, facts and skills, and keeps learning. Click to pause it for this chat.' : 'Memory paused for this chat: nothing is recalled or learned. Click to resume.'}>Memory</Btn>
           <Btn size="sm" variant={session.incognito ? 'primary' : 'ghost'} icon={<EyeOff className="w-3.5 h-3.5" />} aria-pressed={!!session.incognito}
             onClick={() => chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito }))} title="Incognito chats aren't saved and create no memories">Incognito</Btn>
           <IconBtn label={showInspector ? 'Hide inspector' : 'Show inspector'} active={showInspector} onClick={() => setShowInspector((v) => !v)}><PanelRight className="w-4 h-4" /></IconBtn>
@@ -101,6 +115,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {offline && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenModels}>Models</Btn>}>Ollama isn't running at {engineUrl('ollama')}. Start it from Engines to chat.</Banner></div>}
         {session.incognito && <p className="px-6 pt-3 text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5"><EyeOff className="w-3.5 h-3.5" />Incognito: this conversation isn't saved and creates no memories.</p>}
+        {!session.incognito && session.memoryOff && <p className="px-6 pt-3 text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5"><BrainCircuit className="w-3.5 h-3.5" />Memory paused: this chat doesn't recall past conversations, facts or skills, and nothing new is learned.</p>}
         {session.messages.length === 0 ? (
           <div className="flex-1 flex"><Empty icon={<Sparkles className="w-5 h-5" />} title="What can I help with?" body={`Chatting with ${settings.selectedModel || 'a local model'} on this PC. Type / for commands or @ to mention a model or file.`} className="flex-1" /></div>
         ) : (
@@ -110,13 +125,17 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
         )}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
           searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))}
+          thinkingOn={!!session.thinking} onToggleThinking={() => chat.patchSession(session.id, (s) => ({ ...s, thinking: !s.thinking }))}
+          webOn={!!session.webSearch} onToggleWeb={() => chat.patchSession(session.id, (s) => ({ ...s, webSearch: !s.webSearch }))}
           mentions={mentions} prefill={prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />
       </div>
 
       {showInspector && (
         <ChatInspector tab={tab} onTab={setTab} session={session} settings={settings} onSettings={onSettings}
           memory={chat.memory} onMemory={chat.setMemory} onContext={chat.patchContext} onAddFiles={mountFiles} raw={chat.raw}
-          focusArtifact={focus} searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))} />
+          focusArtifact={focus} searchOn={!!session.searchSources} onToggleSearch={() => chat.patchSession(session.id, (s) => ({ ...s, searchSources: !s.searchSources }))}
+          project={project} onFolder={(folder) => chat.patchSession(session.id, (s) => ({ ...s, folder: folder ?? undefined, folderOff: [] }))}
+          onToggleFile={(rel) => chat.patchSession(session.id, (s) => ({ ...s, folderOff: s.folderOff?.includes(rel) ? s.folderOff.filter((r) => r !== rel) : [...(s.folderOff ?? []), rel] }))} />
       )}
     </div>
   );

@@ -116,3 +116,17 @@
 | S4-12 | Agent file/model access is injected (`AgentIO`) so the loop is testable without a PC. | Me | Enabled the 12 loop tests. |
 
 Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native tool-calling as the only protocol; embedding native Windows app windows in the page; screen-sharing/`scrcpy` for Android (extra binary); iOS simulator streaming (macOS only); suggesting specific model download links in the UI (could not be verified offline).
+
+## 7. Session 5 decisions (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM)
+- **SQLite + FTS5 via `rusqlite` (bundled)** for memory, skills and the chat index, because the user asked for FTS5 session search and it needs real full-text ranking. New crate justified under the "no new crates without a reason" rule; it adds a C build and ~1 MB. Falls back to LIKE search if FTS5 is missing. Board/routines stay in localStorage (small, no search needed).
+- **Skills are stored twice on purpose**: the DB (search) and `skills/<slug>/SKILL.md` (front matter + Markdown, the common agent-skill format) so the user can read/edit/back them up. The DB is the source of truth.
+- **Memory toggle semantics**: per chat, default on; off = no recall (facts, past chats, skills, project memory files) and no writes (index, explicit "remember", learning). Project *soul/rules* files still apply when memory is off because they are configuration of the folder, not memory. Incognito implies off.
+- **Learning only edits learned items**; what the user saved is never changed by a model. A deterministic filter rejects secrets/IDs regardless of what the model proposes.
+- **One agent pool** for every background model job, limited by the VRAM plan and re-read before each start; housekeeping (learning) yields to an active chat. Background agents use the chat model and the same `num_ctx` when it fits, because changing `num_ctx` or loading a second model is what causes reloads and out-of-memory.
+- **VRAM source order** nvidia-smi → amdgpu sysfs → Windows counters → ComfyUI → none (honest "not measured", manual settings). No new crates (no NVML/DXGI bindings).
+- **llama.cpp support** is chat/agents only through an OpenAI-compatible client; Images/Voice/Research/App Builder keep their engines. Its context/slots are read, never changed.
+- **Own GFM parser** instead of `react-markdown` + `remark-gfm`: no registry access to add them to the lockfile, and the app's light-weight rule; the parser is tested and never emits HTML. Remote images are shown as links (displaying a reply must not contact third parties).
+- **Web search providers**: DuckDuckGo HTML (no key) and SearXNG (self-hosted). Only on when the user turns it on. This widens the HTTP capability to any HTTPS host (page reading); documented in README and THIRD_PARTY_LICENSES.
+- **Thinking mode = multi-pass deliberation** (analyse, draft, check, final) plus native `think` where Ollama reports the capability, so it works with any model.
+- **Routines run in-app** (timer in the main window, which stays alive in the tray), not as OS scheduled tasks: simpler and honest about when they run. "Catch up if missed" is opt-in.
+- **Rejected**: storing memory in localStorage (no FTS, size limits); letting the model rewrite user-saved memories; automatic writes into the user's `memory.md` (Lotus never writes to project files).
