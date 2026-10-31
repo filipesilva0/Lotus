@@ -1,226 +1,283 @@
-# Lotus
+<a name="top"></a>
 
-A light Windows app that puts your local AI in one place: **chat** (Ollama), **images** (ComfyUI),
-**voice** (Voicebox), **deep research** (your local model + public academic databases), and an
-always-on-top **floating island** for quick chat, dictation and agent notifications.
-Everything runs on your PC. The exceptions are things you switch on yourself: Deep Research and
-source search send short keywords to the academic databases you choose, and **Web search** (the globe
-button in chat, or a task/routine set to search the web) sends your question to DuckDuckGo or your
-own SearXNG and reads the top result pages. Nothing else is uploaded.
+<div align="center">
 
-Built with **Tauri 2** (Rust + the WebView2 that ships with Windows). There is no bundled Chromium,
-so the app itself is small; the engines you connect to bring their own weight.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
+  <img alt="Lotus, local AI studio" src="docs/assets/hero-light.png" width="100%">
+</picture>
 
-## What's inside
+### Your local AI, in one calm window.
 
-| Area | What you get |
+Chat, images, voice, research and an app builder for Windows,<br>
+running entirely on models that live on your own PC.
+
+<br>
+
+[**Features**](#features) &nbsp;·&nbsp;
+[**How it works**](#how-it-works) &nbsp;·&nbsp;
+[**Get started**](#get-started) &nbsp;·&nbsp;
+[**Privacy**](#privacy) &nbsp;·&nbsp;
+[**Build from source**](#build-from-source)
+
+<br>
+
+![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0A84FF?style=flat-square&labelColor=1D1D1F)
+![Runs locally](https://img.shields.io/badge/runs-100%25%20local-30D158?style=flat-square&labelColor=1D1D1F)
+![Status](https://img.shields.io/badge/status-early%20preview-FF9F0A?style=flat-square&labelColor=1D1D1F)
+
+<br>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/showcase-dark.png">
+  <img alt="The Lotus window on the Images page: a project sidebar, an empty canvas waiting for a prompt, and a parameters panel with canvas size, LoRA and sampling controls." src="docs/assets/showcase-light.png" width="100%">
+</picture>
+
+</div>
+
+<br>
+
+Lotus is a small desktop app that brings everything you do with local AI into one place. It doesn't run models itself. It sits in front of three engines you already know, **Ollama**, **ComfyUI** and **Voicebox**, and gives them one consistent, quiet interface.
+
+No accounts. No cloud. No telemetry. Turn off your Wi-Fi and it keeps working.
+
+> [!NOTE]
+> **Lotus is an early preview.** Every feature below exists in the code, but the app hasn't shipped a Windows release yet. Expect rough edges, and watch the Releases page for the first build.
+
+<br>
+
+<a name="features"></a>
+
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Five petals, five pages
+
+Each petal of the logo is a page, and each page wears its petal's colour.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/petals-dark.png">
+  <img alt="Five cards: Chat in blue, Images in red, Voice in orange, App Builder in yellow, Tasks in green." src="docs/assets/petals-light.png" width="100%">
+</picture>
+
+### <img src="docs/assets/petal-chat.svg" width="16" height="16"> Chat
+
+Streaming conversations with any model in Ollama, with images, files and whole folders as context.
+
+- **Think** works through a problem in passes: analyse, draft, check.
+- **Web** searches the live web and reads the top pages, only when you turn it on.
+- **Deep Research** turns a question into an editable plan, sends parallel agents through public academic databases, and writes a report where every citation links to a source it actually read.
+- **Memory** recalls past chats and facts you've shared, and learns reusable **skills** from complex work. One click pauses it for a chat; Incognito switches it off entirely.
+- Replies render clean Markdown with tables, code and checklists. Code opens in a side panel where you can edit, copy or preview it.
+
+### <img src="docs/assets/petal-images.svg" width="16" height="16"> Images
+
+Text to image through ComfyUI, on your own GPU.
+
+- Pick a checkpoint, an aspect ratio and how many images per run.
+- Stack up to four **LoRAs**, each with its own strength.
+- Save prompt styles and recall them with `@`.
+- Download new checkpoints and LoRAs from a link, straight into the right folder.
+
+### <img src="docs/assets/petal-voice.svg" width="16" height="16"> Voice
+
+A full second front end for Voicebox, sharing its voices and history.
+
+- **Speak** in 23 languages with delivery instructions, seeds and an effects chain.
+- **Clone** a voice from a short recording, or describe one in words.
+- **Stories** puts several voices on a timeline you can trim, split, retime and export.
+- **Dictate** transcribes locally, then copies, speaks or sends the text to chat.
+
+### <img src="docs/assets/petal-builder.svg" width="16" height="16"> App Builder
+
+Describe an app and watch a local agent build it.
+
+- With **Plan first**, the agent proposes a checklist you edit and approve before it writes a line.
+- Every file change and command is shown as it happens. Commands ask before they run.
+- A built-in preview reloads as files change, with phone and tablet frames.
+- Start from a template: website, web app, installable phone app, desktop app or mobile app.
+
+### <img src="docs/assets/petal-tasks.svg" width="16" height="16"> Tasks
+
+A board you share with Lotus.
+
+- Assign a card to Lotus and its agent plans the steps, works through them and leaves the result in **Review**.
+- Cards can block each other, so work happens in the right order.
+- **Routines** run on a schedule while Lotus is open, and can catch up on runs they missed.
+- The **Skills** library shows everything Lotus has learned, with full history. Edit or delete anything.
+
+<br>
+
+### And around the edges
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Floating island**<br>
+<sub>An always-on-top pill for quick chat, dictation, reading the clipboard aloud and dropping in files. It also shows background activity and lets you approve or deny a coding agent's permission requests from your terminal.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+**Fits your GPU**<br>
+<sub>Lotus checks free video memory every few seconds and sizes the context window, file chunks, model choice and number of background agents to match, so nothing runs out of memory.</sub>
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+**One home for models**<br>
+<sub>Language, image, LoRA and voice models in one list. Pull any model by name, compare models in the Arena, and watch your hardware in the Monitor.</sub>
+
+</td>
+<td width="50%" valign="top">
+
+**Light, dark or automatic**<br>
+<sub>Follows your Windows theme, or set it yourself. Both side panels fold away from the title bar when you want the space.</sub>
+
+</td>
+</tr>
+</table>
+
+<div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
+
+<a name="how-it-works"></a>
+
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> How it works
+
+Lotus talks to each engine over your own machine's loopback address. Your prompts, images, voices and chats never leave that box.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/engines-dark.png">
+  <img alt="Diagram: inside a box labelled Your PC, Lotus connects to Ollama for language models at 127.0.0.1:11434, ComfyUI for images at 127.0.0.1:8188, and Voicebox for voice at 127.0.0.1:17493." src="docs/assets/engines-light.png" width="100%">
+</picture>
+
+Install only the engines you want. A page whose engine isn't running tells you so and offers to start it. Lotus never pretends.
+
+<div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
+
+<a name="get-started"></a>
+
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Get started
+
+**1. Install the engines you want.**<br>
+**Ollama** for chat, research, the App Builder and tasks. **ComfyUI** for images. **Voicebox** for voice.
+
+**2. Install Lotus.**<br>
+Once the first release is out, grab either file from the Releases page:
+
+| File | What it is |
 |---|---|
-| **Chat** | Streaming chat with Ollama **or llama.cpp**, vision, Stop, saved conversations, local dictation, **GitHub Flavored Markdown** in replies and in the message box (with a preview), **Think** (several passes: analyse, draft, check) and **Web** (search the current web and read the top pages) buttons |
-| **Memory & skills** | Memory is on for every chat; the **Memory** button next to Incognito pauses it for one chat. Lotus recalls past conversations (SQLite full-text search), remembers what you ask it to, learns lasting facts as you talk, and writes **skills** (reusable procedures) after complex work, improving them when you correct it. Project files such as `SOUL.md`, `memory.md`, `AGENTS.md`, `.cursorrules` are found and applied automatically when you open a folder |
-| **Tasks** | A **Kanban board** shared by you and Lotus (assign a task to Lotus and its local agent plans the steps, works through them and puts the result in Review; tasks can block each other), **routines** on a cron schedule, and the **skills** library |
-| **Images** | ComfyUI text-to-image with your installed checkpoints, optional **LoRAs** (up to four, each with a strength), aspect ratios, seed, cancel |
-| **Voice** | Powered by [Voicebox](https://github.com/jamiepine/voicebox) (see below) |
-| **Research** | Scoping wizard, editable plan, expert personas, parallel search agents, live steering, cited report |
-| **App Builder** | Describe an app; a local-model agent writes the files and runs the commands while you watch it run in a built-in preview. Websites, web apps, installable phone web apps, Windows/macOS/Linux desktop apps and Android/iPhone apps (see *App Builder*) |
-| **Local engine & VRAM** | Lotus measures free video memory every few seconds and sizes the context window, file chunks, model choice and how many background agents may run at once, so nothing runs out of memory (Settings → Local Engine & VRAM, Models → Monitor) |
-| **Engines** | Start/stop Ollama, ComfyUI and Voicebox, "Start with Lotus", **Models** (language, image, LoRA and voice models, download by name or link, Arena, hardware monitor), storage/portable info |
-| **Island** | Floating pill: peek, chat, dictate, read clipboard aloud, file/image drop, activity pills, Claude Code permission prompts |
+| **`Lotus_x64_en-US.msi`** | The installer. Choose *Just for me* (no admin rights) or *All users*, the install folder, and optional extras: a desktop shortcut, start with Windows, and portable data. |
+| **`Lotus-portable-x64.zip`** | Unzip anywhere, even a USB stick. Everything stays in a `data` folder next to the app. |
 
-### Voice (Voicebox)
+**3. Open Engines.**<br>
+Lotus finds Ollama by itself. Point it once at the file you use to launch ComfyUI and at Voicebox's server, then press *Start*. Turn on *Start with Lotus* and you won't think about it again.
 
-Lotus is a second front end for the Voicebox server, so your voices and history are shared with
-the Voicebox app.
+**4. Get a model.**<br>
+Open **Models**, type any model name, such as `qwen2.5:7b`, and download it. You're ready.
 
-- **Speak**: nine TTS engines, 23 languages, delivery instructions, seed, effects chain with presets, "speak in character"
-- **Voices**: clone from a recording or upload (with one-click local transcription of the reference text), built-in voices, or describe a voice in words; edit, import/export
-- **Stories**: multi-voice timeline with drag to retime, trim, split, duplicate, volume, mixed playback and WAV export
-- **Dictate**: local Whisper transcription with optional clean-up, copy / speak / send to chat
-- **Library**: searchable history with favourites, retry, export
-- Voice **models** are downloaded from Engines → Models → Voice models (by list, or by typing a model name).
-
-Not included (yet): Voicebox's audio-channel routing, its global push-to-talk hotkey, and its MCP
-"give agents voices" server. They keep working inside Voicebox itself.
-
-### Deep Research
-
-A three-panel workspace: project vault and mode switch on the left, an adaptive workspace in the
-middle, and an inspector on the right whose tabs change with the mode.
-
-- **Scoping (Mode A):** you state a question; your local model asks 3-5 narrowing questions, drafts a
-  plan of parallel sub-topics (edit objectives, add/remove sub-questions) and assembles 3-5 expert
-  personas (including a sceptical reviewer). Nothing is searched until you press *Approve & start*.
-  Inspector: which repositories to use, search depth / sources per agent / year cutoff, and
-  required keywords / excluded domains / language.
-- **Live (Mode B):** one agent per sub-topic loops *write queries, search, filter, read abstracts*.
-  You see active agents, sources read, tokens (real counts from Ollama), a live query terminal with
-  HTTP status and domain credibility, and can **pause, inject instructions, or exclude domains**
-  mid-run. Inspector: a live source feed where you can untick poor sources, an agent graph, and
-  context-window meters.
-- **Report:** a Markdown report with clickable `[n]` citations and an automatic reference list.
-  Citations that don't match a real fetched source are stripped, so the model can't cite papers it
-  never saw. Copy or save as `.md`.
-
-**Privacy:** Update checks (only when you ask, or at launch if you enable it) contact GitHub; see *Updating Lotus*.
-Deep Research contacts arXiv, PubMed (NCBI), OpenAlex and Crossref directly from your PC.
-Model file downloads (Engines → Models) connect to the https address you paste (usually huggingface.co or civitai.com) only when you press Download.
-Only the keyword queries the agents write are sent; each repository can be switched off (Crossref
-starts off). Requests are rate-limited per host (arXiv: one per 3 s) and agents share that budget,
-so a run takes a few minutes. The desktop app's network permission is limited to those four hosts
-plus `127.0.0.1`.
-
-**Limits:** agents read titles and abstracts only (no PDFs or full text), so the report is a map of
-the literature, not a replacement for reading the papers. Quality depends on the model; a 7B model or
-larger is recommended. Runs don't survive closing Lotus (partial results are kept and a report can be
-written from them).
-
-### Models (Engines → Models)
-
-One place for every model Lotus uses, with a **model type** list in its sidebar:
-
-- **Language models** (Ollama): catalogue, quantisation picker with a VRAM estimate, load/unload, delete. **Add model…** takes *any* Ollama name (`qwen2.5-coder:7b`) or a Hugging Face GGUF (`hf.co/user/repo:Q4_K_M`).
-- **Image checkpoints** and **LoRAs** (ComfyUI): lists what ComfyUI sees and **downloads new files** from a Hugging Face or Civitai link into ComfyUI's `models/checkpoints` or `models/loras` folder (Lotus finds the folder from the launcher you located, or you choose it once). Gated or login-only files take an access token, used for that download only and never saved. `.safetensors` is recommended; `.ckpt/.pt/.pth/.bin` files can contain code and the dialog says so.
-- **Voice models** (Voicebox): download, load, unload, delete, or download a model by name.
-- **Arena & Benchmark** and **Hardware & Runtime** (from the earlier Models page) are here too.
-
-In **Images**, the **LoRA** button (and the LoRA section of the inspector) lets you stack up to four LoRAs, each with its own strength. A LoRA has to match the checkpoint family (an SDXL LoRA needs an SDXL checkpoint).
-
-### App Builder
-
-A page for building real apps with your local model, in the spirit of an agent-first IDE:
-
-- **Projects** are folders on your PC (default: `<Lotus data folder>\projects`); start from a template (website, React web app, installable phone web app, Tauri desktop app, Capacitor Android/iPhone app, or empty) or open any folder.
-- **Agent** (right): you describe what you want; with *Plan first* it proposes an editable checklist you approve, then it writes files, edits them, runs commands and fixes errors until the app works. You see every action (files changed with +/- lines, command output) and can stop at any time. Commands ask for your approval unless you switch on "Run commands without asking" for that project; commands that look destructive always ask.
-- **Editor, files, terminal**: a plain code editor (no syntax colouring yet), a file tree, and a terminal that shows every command, yours or the agent's.
-- **Preview**: static sites are served by Lotus itself (no Node needed) and reload when you save; dev servers (Vite etc.) are detected and shown. Switch between full width, **phone** and **tablet** frames. **Android**: a connected phone or emulator is mirrored in the preview (screenshots about once a second; taps and swipes work).
-- **Building**: the *Build* tab lists what each project type can run (install, dev server, build) and checks which tools are installed (Node, Rust, Java, Android SDK…). Windows and Android builds run on your PC. **macOS, Linux and iPhone apps cannot be built on Windows**, so those templates include a GitHub Actions workflow (`.github/workflows/build.yml`): push the folder to GitHub and run it there.
-- Needs a model that can follow instructions and write code; a code-tuned model of 7B or more works best, with a context of at least 16K (the default for the Builder).
-
-**Privacy:** the Builder itself sends nothing anywhere. Commands you or the agent run (for example `npm install`) use the network the way they normally do.
-
-### Island
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
+<br>
 
 | Shortcut | Action |
 |---|---|
-| Ctrl + Alt + Space | Open the island chat |
-| Ctrl + Alt + D | Start / stop dictation |
-| Ctrl + Alt + T | Show / hide the island |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Space</kbd> | Open the island chat |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>D</kbd> | Start or stop dictation |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd> | Show or hide the island |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>S</kbd> | Show or hide the left panel |
+| <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>I</kbd> | Show or hide the right panel |
 
-**Claude Code**: Settings → Island & Agents → *Connect* adds hooks to `~/.claude/settings.json`
-(a backup is saved next to it). The island then shows when a session is working and lets you
-**Allow / Deny** permission prompts. If nobody answers within 5 minutes, Claude Code falls back to
-its normal terminal prompt. Hooks use the `curl.exe` that ships with Windows and talk only to
-`127.0.0.1:17495`.
+</details>
 
-Not included from Coucou: phone companion, Spotify/GitHub/Stripe pills, weekly recap.
+<details>
+<summary><b>System requirements</b></summary>
+<br>
 
-### Memory, skills and tasks (session 5)
-- **Memory toggle**: in the chat header, next to Incognito. On by default. Off for a chat means nothing is recalled (no past chats, facts, skills or project memory files) and nothing is learned or indexed until you turn it back on. Incognito always means off.
-- **Where it lives**: `lotus.db` (SQLite with FTS5 full-text search) in the Lotus data folder; skills are also written as `skills/<name>/SKILL.md` there so you can read or edit them by hand. Nothing is synced anywhere.
-- **Learning**: every few messages a background agent proposes small changes to what Lotus knows about you (it never edits what you saved yourself, and refuses passwords, keys and account numbers). Learned items are marked "learned" in Chat → Context; delete anything wrong.
-- **Skills**: written after a long, structured answer, a Thinking-mode reply or a finished board task; used when a later request matches; rewritten when you say it didn't work. Manage them in Tasks → Skills (switch off, edit, delete, see the change history).
-- **Background agents** (task steps, routines, learning) never exceed the limit the VRAM auto-scaler allows; learning waits while a chat reply is streaming. For agents to really run side by side, start Ollama with `OLLAMA_NUM_PARALLEL` set to that number (otherwise they queue, which is safe).
-- **Routines** run only while Lotus is open (also when hidden in the tray). "Catch up if missed" runs a missed one once at start-up.
+- Windows 10 (version 1803 or later) or Windows 11, 64-bit.
+- A GPU is strongly recommended. For chat, a 7B model or larger works best. The App Builder wants a code-tuned model with at least a 16K context.
+- Lotus itself is small. The models you download are not, so leave room for them.
 
-## Installing
+</details>
 
-**MSI installer** (`Lotus_x64_en-US.msi`) asks you:
-- **Just for me** (no admin rights) or **All users**
-- Install folder
-- Optional features: *Desktop shortcut*, *Start with Windows*, *Portable data*
-  (keeps chats, voices and settings inside the install folder instead of your user profile)
+<div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
-**Portable zip** (`Lotus-portable-x64.zip`): unzip anywhere (a USB stick works). The `lotus.portable`
-file next to `Lotus.exe` makes Lotus keep everything in `data\` beside it.
+<a name="privacy"></a>
 
-An MSI cannot be "portable" in the strict sense, which is why portable is a separate zip.
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Privacy
 
-Requires Windows 10 (1803+) or 11 with the WebView2 Runtime (already present on Windows 11 and
-current Windows 10; the installer fetches it if missing).
+Lotus is local-first by design. Nothing leaves your PC unless you switch it on.
 
-## Updating Lotus
+| What | When it goes online | What is sent |
+|---|---|---|
+| Chat, images, voice, memory, tasks | Never | Nothing. All of it stays on your PC. |
+| **Web** in chat | Only when you turn it on | Your question to the search service you pick, then a request to each top result page |
+| **Deep Research** | Only during a research run | Short keyword queries to the academic databases you tick |
+| **Model downloads** | Only when you press *Download* | A request to the link you pasted |
+| **Update check** | When you press the button, or at launch if you opt in | A request to this repository's Releases |
 
-**Settings → About & Updates** has a *Check for updates* button. When a newer version exists it shows
-the release notes and a *Download and restart* button; Lotus downloads the installer, verifies its
-signature, installs it and reopens. A dot appears on the Settings icon once an update has been found.
-Checking contacts GitHub (it sees your IP address and the request, nothing else) and happens only when
-you press the button, or at launch if you switch on *Check when Lotus starts* (off by default).
-Portable copies can check, but you replace the folder yourself: the installer would add a second copy.
+No telemetry, no analytics, no remote fonts. Memory lives in a single file in your Lotus data folder, and skills are plain files you can open and edit. The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
 
-### Publishing an update (maintainer)
+<div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
-One-time setup:
-1. `npx tauri signer generate -w lotus-updater.key` and choose a password. Keep the `.key` file private and
-   backed up: installed copies only accept updates signed by it, so losing it means a reinstall for everyone.
-2. In the GitHub repo: *Settings → Secrets and variables → Actions*, add `TAURI_SIGNING_PRIVATE_KEY` (the
-   `.key` file's contents), `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and `TAURI_UPDATER_PUBKEY` (the `.pub` file's contents).
-3. The repository must be **public**: installed copies fetch `latest.json` anonymously.
+<a name="build-from-source"></a>
 
-Each release: `git tag v0.2.0 && git push origin v0.2.0`. The workflow takes the version from the tag,
-builds and signs the MSI, and publishes a GitHub Release with the MSI, its signature, the portable zip and
-`latest.json`. Without the three secrets, a tag build still works but makes no updater files. The first
-version that contains the updater has to be installed by hand once.
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Build from source
 
-## Connecting the engines
-
-Install the engines you want, then open **Engines**. Lotus finds Ollama automatically; for
-Voicebox, point it once at `voicebox-server.exe`; for ComfyUI, point it at the `.bat`/`.exe` you
-use to launch it. Addresses default to `127.0.0.1:11434` (Ollama), `:8188` (ComfyUI), `:17493`
-(Voicebox) and can be changed per engine.
-
-## Building from source
-
-Prerequisites: Node 22+, Rust (stable, MSVC toolchain), and on Windows the WebView2 runtime.
+You'll need **Node 22+** and **Rust** (stable, MSVC toolchain) on Windows.
 
 ```powershell
 npm install
-npm run tauri dev       # run with hot reload
-npm run tauri build     # produces the MSI in src-tauri\target\release\bundle\msi
-./scripts/package-portable.ps1   # then builds dist-portable\Lotus-portable-x64.zip
+npm run tauri:dev                  # run with hot reload
+npm run tauri:build                # build the MSI
+./scripts/package-portable.ps1     # then build the portable zip
 ```
 
-No Windows machine? The workflow in `.github/workflows/build-windows.yml` builds both artifacts
-on a GitHub runner (run it manually or push a `v*` tag).
+No Windows machine? The workflow in `.github/workflows/build-windows.yml` builds both files on a hosted runner. Run it by hand or push a `v*` tag.
 
-`npm run dev` serves the UI in a normal browser for design work; engine calls then use the browser's
-`fetch`, so ComfyUI may need `--enable-cors-header`, and desktop-only features (island window,
-starting engines, Claude Code hooks) are disabled.
-
-## Upgrading Tauri
-
-The Rust crates (pinned by `src-tauri/Cargo.lock`) and the npm packages (pinned exactly in
-`package.json`) must be on the same major.minor release, or `tauri build` refuses to run.
-`npm run check:tauri` verifies this (it reads the resolved crate versions from `cargo metadata`, and falls
-back to `Cargo.lock` when `cargo` is missing) and CI runs it first. To upgrade, bump both sides together
-(`cargo update -p tauri` in `src-tauri`, then `npm install --save-exact @tauri-apps/api@<same minor>`
-and the plugins/CLI likewise).
-
-## Project layout
+<details>
+<summary><b>Project layout</b></summary>
+<br>
 
 ```
-src/                 React UI (studio window)
-  components/voice/  Speak, Voices, Stories, Dictate, Library
-  island/            Floating island (second window, island.html)
-  services/          Typed clients: Ollama, ComfyUI, Voicebox
-src-tauri/           Rust shell: windows, tray, shortcuts, engine launcher, hook server, portable mode
-  wix/main.wxs       Customised MSI template (install scope + optional features)
+src/                 The interface
+  components/        Pages, panels and shared controls
+  island/            The floating island (its own window)
+  services/          Clients for Ollama, ComfyUI and Voicebox
+src-tauri/           The native shell: windows, tray, shortcuts, engine launcher
+  wix/               Installer template
+handover/            Test harnesses and screenshot scripts
 ```
 
-## Status
+</details>
 
-**Session 7 (options cards, usage charts, Library, plugins + plugin creator, background tasks model, in-chat model picker, folder attach, island redesign, frosted glass)** type-checks and builds with the real dependencies; all earlier test suites pass, plus 27 new logic tests and 11 render tests; screens were checked in Chromium (light and dark). It has not run on Windows or against a live Ollama yet. This session also fixed a CSS ordering bug that had removed the blur from every glass surface in the built app. See `CURRENT_STATE.md` §0e.
+<details>
+<summary><b>Checks to run before a change</b></summary>
+<br>
 
-**Session 5 (memory, skills, tasks, VRAM auto-scaling, Think/Web, GFM) is not built yet.** Checked in a sandbox without package-registry access: every new TypeScript file type-checks against stand-in type definitions and bundles; 56 logic/flow tests (VRAM maths, Markdown parser, cron, Kanban rules, memory and skill learning, Thinking mode and the task agent against a fake Ollama) and 13 render tests pass; the new screens were looked at in Chromium screenshots (light/dark, 980 px). The Rust GPU reader and context-file finder compile and pass their tests against stand-ins for serde/tauri; the SQLite statements were run against real SQLite FTS5. `rusqlite` itself has never been compiled here, and nothing has run against a real GPU, Ollama, llama.cpp, DuckDuckGo or SearXNG. See `CURRENT_STATE.md` §0c.
+```bash
+npx tsc --noEmit                          # type-check
+npm run build                             # build the interface
+npm run check:tauri                       # native and web package versions match
+bash handover/verification/run-tests.sh   # test suite
+```
 
-Verified in a Linux sandbox:
-- The TypeScript front end type-checks and builds. The Ollama, ComfyUI and Voicebox clients pass tests against mock servers shaped from the real APIs.
-- Deep Research: the arXiv / PubMed / OpenAlex parsers, filtering, de-duplication, pause / resume / stop, steering, citation cleaning, junk-JSON fallbacks, the per-host rate limiter and a full multi-agent run pass tests against fake Ollama and fake repositories; all research views render across every lifecycle state.
-- `tauri.conf.json` validates against Tauri's official schema, and the capability file is accepted by the Tauri build step.
-- The Rust shell passes `cargo check` with no warnings, and two Rust tests pass: the Claude Code hook installer (keeps your existing `settings.json`, idempotent, backs up, removes only Lotus's hooks) and the approve/deny server (holds the request open until you answer, rejects posts without the `X-Lotus-Hook` header, returns the allow/deny JSON).
-- The MSI template renders to valid XML with every component and directory reference resolving.
+Maintainer notes, project history and known issues live in `CURRENT_STATE.md`, `TASKS.md`, `ARCHITECTURE.md` and `DECISIONS.md`.
 
-**Not yet verified** (needs a Windows machine or the CI workflow): the two `#[cfg(windows)]` blocks (registry portable flag, hidden engine console), the actual WiX build and its install-scope dialogs, and the real WebView2 window. The screens were reviewed in screenshots from a headless WebKit browser (same HTML/CSS, different engine than WebView2), including the Tauri-sized layout, dark mode and the island's four states. Also unconfirmed against live services: the real arXiv / PubMed / OpenAlex / Crossref responses (parsers are written from their documented formats), Voicebox's start-up arguments and where its Windows installer puts `voicebox-server.exe`, and Claude Code's exact permission-hook response format.
+</details>
 
-## Licenses
+<div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
-See `THIRD_PARTY_LICENSES.md`. Choose a license for Lotus itself and put it in `LICENSE` and
-`src-tauri/wix/license.rtf` (the installer's license page is a placeholder).
+<a name="license"></a>
+
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> License
+
+A license for Lotus hasn't been chosen yet. Until one is added in `LICENSE`, all rights are reserved. Engines and bundled fonts keep their own licenses; see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+
+<br>
+
+<div align="center">
+<img src="src/assets/lotus-petals.png" width="44" alt="">
+<br>
+<sub>Made for people who'd rather keep their AI at home.</sub>
+</div>

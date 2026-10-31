@@ -169,6 +169,8 @@ fn from_windows_counters() -> Option<Vec<Gpu>> {
 }
 
 /// Parses `/proc/meminfo` into (total MB, available MB).
+/// Only the non-Windows `system_ram` (and the unit test) use it; Windows asks the OS directly.
+#[cfg(any(not(windows), test))]
 pub fn parse_meminfo(s: &str) -> (u64, u64) {
     let field = |key: &str| {
         s.lines()
