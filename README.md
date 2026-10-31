@@ -41,9 +41,6 @@ Lotus is a small desktop app that brings everything you do with local AI into on
 
 No accounts. No cloud. No telemetry. Turn off your Wi-Fi and it keeps working.
 
-> [!NOTE]
-> **Lotus is an early preview.** Every feature below exists in the code, but the app hasn't shipped a Windows release yet. Expect rough edges, and watch the Releases page for the first build.
-
 <br>
 
 <a name="features"></a>
