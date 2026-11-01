@@ -4,6 +4,7 @@ import { Banner, Btn, Card, Empty } from '../common/ui';
 import { openExternal, revealPath } from '../../lib/open';
 import { browseModelsDir, folderPath, ModelFolder } from '../../services/downloadService';
 import { isTauri } from '../../lib/http';
+import { engineUrl, isRemote } from '../../services/engineConfig';
 
 const COPY: Record<ModelFolder, { title: string; blurb: string; empty: string; find: [string, string][] }> = {
   checkpoints: {
@@ -36,6 +37,7 @@ export const ImageModelsHub: React.FC<{
         <Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={onAdd}>Download…</Btn>
       </div>
       {comfyUp === false && <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>ComfyUI isn't running, so the list below can't be read. Downloads still work once a models folder is set.</Banner>}
+      {isRemote('comfyui') && <Banner tone="info">ComfyUI runs on another computer ({engineUrl('comfyui').replace(/^https?:\/\//, '')}). The list below is read from it, but downloads here are saved on this computer: point the folder below at that computer's shared ComfyUI models folder, or add files there directly.</Banner>}
       {err && <Banner tone="error">{err}</Banner>}
 
       <Card className="p-3 flex items-center gap-2">

@@ -18,6 +18,8 @@ import { buildRecall } from '../memory/recall';
 import { considerSkill, correction, isComplexExchange, positiveFeedback, recordUse, recordWin, reflect, refineSkill, shouldReflect } from '../memory/learn';
 import type { ContextFile } from '../context/discover';
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
+import { installInstructions, type InstallTarget } from '../chat/install';
+import { installTarget } from '../setup/jobs';
 import { shouldRename, suggestTitle } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
 
@@ -205,6 +207,7 @@ export function useChat(settings: LotusSettings) {
       usedSkillIds = recall.usedSkills.map((k) => k.id);
       let system = `${s.systemPrompt}\n\nToday's date is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Format replies with GitHub Flavored Markdown when it helps (tables, task lists, code blocks).`;
       system += CHOICES_INSTRUCTIONS;
+      system += installInstructions();
       system += pluginSystemBlock(o.query ?? '');
       system += recall.system;
       system += contextPayload(session0.context, o.force, Math.max(2000, budget - system.length - sourceText.length));
@@ -380,6 +383,15 @@ export function useChat(settings: LotusSettings) {
     return send(text);
   }, [activeId, patchMsg, send]);
 
+  /** Allow or Deny on an install the model proposed. Nothing is downloaded unless the user allows it. */
+  const decideInstall = useCallback(async (msgId: string, target: InstallTarget, allow: boolean) => {
+    const sid = ref.current.find((x) => x.messages.some((m) => m.id === msgId))?.id ?? activeId;
+    if (!allow) { patchMsg(sid, msgId, { install: { status: 'denied' } }); return; }
+    patchMsg(sid, msgId, { install: { status: 'allowed' } });
+    try { await installTarget(target); }
+    catch (e) { patchMsg(sid, msgId, { install: { status: 'failed', error: (e as Error).message } }); }
+  }, [activeId, patchMsg]);
+
   const switchTo = useCallback((msgId: string, dir: -1 | 1) => {
     if (abort.current) abort.current.abort();
     patchSession(activeId, (x) => { const i = x.messages.findIndex((m) => m.id === msgId); return i < 0 ? x : { ...x, messages: switchBranch(x.messages, i, dir) }; });
@@ -436,7 +448,7 @@ export function useChat(settings: LotusSettings) {
 
   return {
     sessions, active, activeId: active?.id ?? '', setActiveId, folders, setFolders, memory, setMemory, isStreaming, raw,
-    send, answerPoll, stop, regenerate, editMessage, switchTo, rateMemory, newChat, deleteChat, clearChat, importMessages,
+    send, answerPoll, decideInstall, stop, regenerate, editMessage, switchTo, rateMemory, newChat, deleteChat, clearChat, importMessages,
     patchSession, addContext, patchContext, estimateTokens, toggleMemory, setProjectContext,
   };
 }

@@ -11,6 +11,8 @@ export interface SetupState {
   outcome?: 'finished' | 'skipped';
   studioDir?: string;
   engines?: Partial<Record<EngineId, boolean>>;
+  /** Engines the user connected to on another computer instead of installing (session 11). */
+  remote?: Partial<Record<EngineId, boolean>>;
   at?: number;
 }
 
@@ -41,9 +43,21 @@ export function visibleSteps(needsInstall: boolean, modelEngines: EngineId[] = [
   return STEPS.filter((s) => (s === 'install' ? needsInstall : s === 'chat' || s === 'images' || s === 'voice' ? models.has(s) : true));
 }
 
-/** Engines to install: switched on and not already found on this computer. */
-export function enginesToInstall(want: Partial<Record<EngineId, boolean>>, found: Partial<Record<EngineId, string | null>>): EngineId[] {
-  return (['ollama', 'comfyui', 'voicebox'] as EngineId[]).filter((id) => want[id] && !found[id]);
+/** Engines to install: switched on, not already found on this computer, and not used from another computer. */
+export function enginesToInstall(
+  want: Partial<Record<EngineId, boolean>>, found: Partial<Record<EngineId, string | null>>, remote: Partial<Record<EngineId, boolean>> = {},
+): EngineId[] {
+  return (['ollama', 'comfyui', 'voicebox'] as EngineId[]).filter((id) => want[id] && !found[id] && !remote[id]);
+}
+
+/**
+ * Engines that get a model screen: switched on and available. ComfyUI on another computer is left out,
+ * because its model files have to be put on that computer (Lotus downloads into a folder here).
+ */
+export function modelScreenEngines(
+  want: Partial<Record<EngineId, boolean>>, available: (id: EngineId) => boolean, remote: Partial<Record<EngineId, boolean>> = {},
+): EngineId[] {
+  return (['ollama', 'comfyui', 'voicebox'] as EngineId[]).filter((id) => want[id] && available(id) && !(id === 'comfyui' && remote.comfyui));
 }
 
 /** Starting toggles: what the MSI asked for, else on for engines already found plus Ollama. */

@@ -13,15 +13,24 @@ export interface IslandSettings {
   autoCollapse: boolean;
   /** Show Claude Code activity and permission prompts. */
   agents: boolean;
+  /** Settings format. 2 (session 11) = the one-time "start switched off" reset has been applied. */
+  schema?: number;
 }
 
 const KEY = 'lotus.island.v1';
-/** The island starts switched off on every OS (session 10); turn it on in Settings or with Ctrl+Alt+T. */
-const DEFAULTS: IslandSettings = { enabled: false, model: '', voiceProfileId: '', autoCollapse: true, agents: true };
+const SCHEMA = 2;
+/** The island starts switched off on every OS; turn it on in Settings or with Ctrl+Alt+T. */
+const DEFAULTS: IslandSettings = { enabled: false, model: '', voiceProfileId: '', autoCollapse: true, agents: true, schema: SCHEMA };
 
 export function loadIsland(): IslandSettings {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || '{}') };
+    const saved = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<IslandSettings>;
+    if (saved.schema === SCHEMA) return { ...DEFAULTS, ...saved };
+    // Session 11: settings saved by older builds (where the island was on by default) are switched
+    // off once, so every install starts with the main window and no island. The user's later choice sticks.
+    const next = { ...DEFAULTS, ...saved, enabled: false, schema: SCHEMA };
+    if (Object.keys(saved).length) localStorage.setItem(KEY, JSON.stringify(next));
+    return next;
   } catch {
     return DEFAULTS;
   }

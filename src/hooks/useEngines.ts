@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EngineId } from '../services/engineConfig';
+import { EngineId, isRemote } from '../services/engineConfig';
 import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { comfy } from '../services/comfyService';
@@ -117,7 +117,7 @@ export function useEngines() {
     if (autoStarted.current || IDS.some((id) => state[id].up === null)) return;
     autoStarted.current = true;
     IDS.forEach((id) => {
-      if (state[id].policy === 'on_launch' && !state[id].up && (savedExe(id) || id !== 'comfyui')) void start(id);
+      if (state[id].policy === 'on_launch' && !state[id].up && !isRemote(id) && (savedExe(id) || id !== 'comfyui')) void start(id);
     });
   }, [state, start]);
 

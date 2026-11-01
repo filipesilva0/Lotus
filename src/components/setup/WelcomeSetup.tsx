@@ -7,8 +7,8 @@ import { invokeNative, onEvent } from '../../lib/bus';
 import { http, isTauri, timeoutSignal } from '../../lib/http';
 import { openExternal } from '../../lib/open';
 import { desktopOs } from '../../lib/glass';
-import { EngineId, engineUrl, setEngineUrl, DEFAULT_URLS } from '../../services/engineConfig';
-import { setSavedExe } from '../../services/engineControl';
+import { EngineId, engineUrl, setEngineUrl, setEngineToken, engineToken, isRemote, DEFAULT_URLS, LISTEN_HINT, normalizeEngineUrl } from '../../services/engineConfig';
+import { setSavedExe, testEngine, EngineTest } from '../../services/engineControl';
 import { browseModelsDir, findModelsDir } from '../../services/downloadService';
 import type { useEngines } from '../../hooks/useEngines';
 import type { ColorPalette } from '../../types/lotus';
@@ -17,7 +17,7 @@ import {
   VOICEBOX_MANIFEST, VOICE_PICKS, afterOpenHint, fitFor, installerFor, isComfyDesktopPath, selectionGb, suggestedTier,
   ChatPick, ImagePick, VoicePick,
 } from '../../setup/catalog';
-import { SetupState, StepId, enginesToInstall, initialEngines, saveSetup, visibleSteps } from '../../setup/state';
+import { SetupState, StepId, enginesToInstall, initialEngines, modelScreenEngines, saveSetup, visibleSteps } from '../../setup/state';
 import { Job, fetchImages, fetchVoices, pullChat, useSetupJobs } from '../../setup/jobs';
 
 /*
@@ -76,6 +76,11 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
   const [dictation, setDictation] = useState(true);
   const [modelsDir, setModelsDir] = useState('');
   const [busy, setBusy] = useState(false);
+  /** Engines used from another computer: open = the address form is showing; connected = a test passed and it is saved. */
+  const [remote, setRemote] = useState<Record<EngineId, RemoteForm>>(() => ({
+    ollama: remoteFormFor('ollama'), comfyui: remoteFormFor('comfyui'), voicebox: remoteFormFor('voicebox'),
+  }));
+  const remoteOn: Partial<Record<EngineId, boolean>> = { ollama: remote.ollama.connected, comfyui: remote.comfyui.connected, voicebox: remote.voicebox.connected };
   const os = normOs(info?.os ?? desktopOs());
   const arch = normArch(info?.arch ?? 'x86_64');
   const machine = os === 'macos' ? 'Mac' : 'computer';
@@ -90,7 +95,9 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
       if (!alive) return;
       setInfo(got);
       setStudioDir(got.studioDir);
-      setWant(initialEngines(got.installer, got.found));
+      const w = initialEngines(got.installer, got.found);
+      ENGINE_ORDER.forEach((id) => { if (isRemote(id)) w[id] = true; });
+      setWant(w);
     })();
     void (async () => {
       const s = await invokeNative<{ gpus: { name: string; totalMb: number }[]; ramTotalMb: number }>('hw_snapshot').catch(() => undefined);
@@ -115,8 +122,8 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   const found = info?.found ?? {};
   const haveEngine = (id: EngineId) => !!found[id] || phase[id].kind === 'ready' || eng.engines[id].up === true;
-  const toInstall = enginesToInstall(want, found);
-  const modelEngines = ENGINE_ORDER.filter((id) => want[id] && haveEngine(id));
+  const toInstall = enginesToInstall(want, found, remoteOn);
+  const modelEngines = modelScreenEngines(want, (id) => haveEngine(id) || !!remoteOn[id], remoteOn);
   const steps = visibleSteps(toInstall.length > 0 || ENGINE_ORDER.some((id) => phase[id].kind !== 'idle'), modelEngines);
   const idx = Math.max(0, steps.indexOf(stepId));
   useEffect(() => { onAccent(STEP_PALETTE[stepId]); }, [stepId, onAccent]);
@@ -195,7 +202,8 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
     const chats = chosen.filter((p): p is ChatPick => p.kind === 'chat');
     const imgs = chosen.filter((p): p is ImagePick => p.kind === 'image');
     const voices = chosen.filter((p): p is VoicePick => p.kind === 'voice');
-    const ensure = async (id: EngineId) => { if (!eng.engines[id].up) await eng.start(id); };
+    // An engine on another computer is never started from here; its downloads go through its own API.
+    const ensure = async (id: EngineId) => { if (!eng.engines[id].up && !isRemote(id)) await eng.start(id); };
     if (chats.length) void ensure('ollama').then(async () => { for (const c of chats) await pullChat(c); });
     if (imgs.length && modelsDir) void fetchImages(imgs, modelsDir);
     if (voices.length) void ensure('voicebox').then(() => fetchVoices(voices));
@@ -203,7 +211,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   // ── Navigation ─────────────────────────────────────────────────────────
   const finish = (outcome: 'finished' | 'skipped') => {
-    const s: SetupState = { done: true, outcome, studioDir, engines: want, at: Date.now() };
+    const s: SetupState = { done: true, outcome, studioDir, engines: want, remote: remoteOn, at: Date.now() };
     saveSetup(s);
     onClose(s);
   };
@@ -266,18 +274,29 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
           )}
 
           {stepId === 'engines' && (
-            <Screen title="Which engines do you want?" body="Lotus is the studio; these free engines do the work. You can change this later.">
+            <Screen title="Which engines do you want?" body="Lotus is the studio; these free engines do the work. Install them here, or use ones already running on another computer. You can change this later.">
               <div className="setup-list">
                 {ENGINE_ORDER.map((id) => {
                   const e = ENGINES[id];
-                  const status = found[id] ? `Installed on this ${machine}` : e.note[os] ?? `${e.licence} licence`;
+                  const r = remote[id];
+                  const status = r.connected ? `On another computer · ${r.url.replace(/^https?:\/\//, '')}` : found[id] ? `Installed on this ${machine}` : e.note[os] ?? `${e.licence} licence`;
                   return (
-                    <div key={id} className="setup-row">
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[14px] font-semibold">{e.name} <span className="font-normal text-[var(--color-text-muted)]">· {e.role}</span></span>
-                        <span className="block mt-0.5 text-[12px] text-[var(--color-text-muted)]">{status}</span>
-                      </span>
-                      <Toggle checked={want[id]} onChange={(v) => setWant((w) => ({ ...w, [id]: v }))} ariaLabel={`Use ${e.name}`} />
+                    <div key={id} className="setup-row !block">
+                      <div className="flex items-center gap-[14px]">
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-[14px] font-semibold">{e.name} <span className="font-normal text-[var(--color-text-muted)]">· {e.role}</span></span>
+                          <span className={cx('block mt-0.5 text-[12px]', r.connected ? 'text-[var(--c-green)]' : 'text-[var(--color-text-muted)]')}>{status}</span>
+                        </span>
+                        <Toggle checked={want[id]} onChange={(v) => setWant((w) => ({ ...w, [id]: v }))} ariaLabel={`Use ${e.name}`} />
+                      </div>
+                      {want[id] && !r.open && (
+                        <LinkBtn className="mt-1.5 !text-[12px] underline underline-offset-2" onClick={() => setRemote((m) => ({ ...m, [id]: { ...m[id], open: true } }))}>
+                          {r.connected ? 'Change address' : 'Use one on another computer'}
+                        </LinkBtn>
+                      )}
+                      {want[id] && r.open && (
+                        <RemoteFormView id={id} form={r} onChange={(f) => setRemote((m) => ({ ...m, [id]: f }))} onConnected={() => void eng.refresh()} />
+                      )}
                     </div>
                   );
                 })}
@@ -353,6 +372,53 @@ function phaseText(p: InstallPhase): string {
     case 'error': return p.message;
   }
 }
+
+// ── Engines on another computer (session 11) ──────────────────────────────────
+
+interface RemoteForm { open: boolean; connected: boolean; url: string; token: string; testing: boolean; result: EngineTest | null }
+
+/** Starts from what is saved, so reopening the guide shows an engine that is already used remotely. */
+function remoteFormFor(id: EngineId): RemoteForm {
+  const on = isRemote(id);
+  return { open: false, connected: on, url: on ? engineUrl(id) : '', token: on ? engineToken(id) : '', testing: false, result: null };
+}
+
+const RemoteFormView: React.FC<{ id: EngineId; form: RemoteForm; onChange: (f: RemoteForm) => void; onConnected: () => void }> = ({ id, form, onChange, onConnected }) => {
+  const name = ENGINES[id].name;
+  const port = new URL(DEFAULT_URLS[id]).port;
+  const valid = form.url.trim() !== '' && normalizeEngineUrl(id, form.url) !== null;
+  const connect = async () => {
+    onChange({ ...form, testing: true, result: null });
+    const result = await testEngine(id, form.url, form.token);
+    if (result.ok) {
+      setEngineUrl(id, form.url);
+      setEngineToken(id, form.token);
+      onConnected();
+    }
+    onChange({ ...form, testing: false, result, connected: result.ok, open: !result.ok, url: result.ok ? engineUrl(id) : form.url });
+  };
+  const useHere = () => {
+    setEngineUrl(id, DEFAULT_URLS[id]);
+    setEngineToken(id, '');
+    onConnected();
+    onChange({ open: false, connected: false, url: '', token: '', testing: false, result: null });
+  };
+  return (
+    <div className="mt-3 space-y-2.5">
+      <input value={form.url} onChange={(e) => onChange({ ...form, url: e.target.value, result: null })} placeholder={`Address, for example 192.168.1.20:${port}`}
+        aria-label={`${name} address on the other computer`} spellCheck={false} autoCapitalize="off" className="setup-input" />
+      <input type="password" value={form.token} onChange={(e) => onChange({ ...form, token: e.target.value, result: null })} placeholder="Access key, only if it asks for one"
+        aria-label={`${name} access key (optional)`} autoComplete="off" className="setup-input" />
+      <p className="text-[12px] leading-relaxed text-[var(--color-text-muted)]">{LISTEN_HINT[id]}{id === 'comfyui' ? ' Image models then go on that computer, so this guide skips the image model step.' : ''}</p>
+      {form.result && <p role="status" className={cx('text-[12px] leading-snug', form.result.ok ? 'text-[var(--c-green)]' : 'text-[var(--c-red)]')}>{form.result.message}</p>}
+      <div className="flex items-center gap-4">
+        <Btn variant="secondary" loading={form.testing} disabled={!valid} onClick={() => void connect()}>Connect</Btn>
+        <LinkBtn onClick={form.connected ? () => onChange({ ...form, open: false, url: engineUrl(id), result: null }) : useHere}>{form.connected ? 'Cancel' : 'Install here instead'}</LinkBtn>
+        {form.connected && <LinkBtn onClick={useHere}>Use this computer instead</LinkBtn>}
+      </div>
+    </div>
+  );
+};
 
 // ── Building blocks ─────────────────────────────────────────────────────────
 

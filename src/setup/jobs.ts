@@ -5,8 +5,9 @@ import { useSyncExternalStore } from 'react';
 import { reportActivity } from '../lib/bus';
 import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
-import { downloadModel, folderPath, listModelFiles } from '../services/downloadService';
-import type { EngineId } from '../services/engineConfig';
+import { downloadModel, findModelsDir, folderPath, listModelFiles } from '../services/downloadService';
+import { isRemote, type EngineId } from '../services/engineConfig';
+import type { InstallTarget } from '../chat/install';
 import { ChatPick, ImagePick, VoicePick, imageFilesFor, matchVoiceModel } from './catalog';
 
 export interface Job {
@@ -39,15 +40,19 @@ export const useSetupJobs = () => useSyncExternalStore(setupJobs.subscribe, setu
 const running = (id: string) => jobs.some((j) => j.id === id && j.status === 'running');
 
 /** `ollama pull` for a chat pick. */
-export async function pullChat(p: ChatPick): Promise<void> {
+export async function pullChat(p: Pick<ChatPick, 'tag' | 'title'>): Promise<void> {
   const id = `chat-${p.tag}`;
   if (running(id)) return;
   put({ id, engine: 'ollama', label: p.title, status: 'running', detail: 'Starting…' });
   try {
+    let last = '';
     for await (const ev of ollamaClient.pull(p.tag)) {
       const progress = ev.total ? (ev.completed ?? 0) / ev.total : undefined;
+      last = ev.status ?? last;
       patch(id, { progress, detail: ev.status });
     }
+    // Ollama ends a finished pull with "success"; a stream that just stops was cut off.
+    if (last !== 'success') { patch(id, { status: 'error', detail: 'The download stopped before it finished. Try again.' }); return; }
     patch(id, { status: 'done', progress: 1, detail: 'Ready in Chat' });
   } catch (e) {
     patch(id, { status: 'error', detail: (e as Error).message });
@@ -106,4 +111,38 @@ async function watchVoice(id: string, name: string) {
       patch(id, { progress: t?.progress != null ? t.progress / 100 : undefined });
     } catch { /* Voicebox busy; keep waiting */ }
   }
+}
+
+// ── Installs approved from Chat (session 11) ─────────────────────────────────
+
+/** The job ids an approved install creates, so its card can show their progress. */
+export function jobIdsFor(t: InstallTarget): string[] {
+  if (t.engine === 'ollama') return [`chat-${t.id}`];
+  if (t.engine === 'voicebox') return [`voice-${t.id}`];
+  const pick = t.pick as ImagePick | undefined;
+  return pick ? imageFilesFor([pick]).map((f) => `img-${f.folder}-${f.fileName}`) : [];
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Runs an install the user allowed on a chat card. Throws (with a message that says what to do) when
+ * it cannot start; once started, progress and errors are reported through the jobs list.
+ */
+export async function installTarget(t: InstallTarget): Promise<void> {
+  if (t.engine === 'ollama') { await pullChat({ tag: t.id, title: t.title }); return; }
+  if (t.engine === 'comfyui') {
+    const pick = t.pick as ImagePick | undefined;
+    if (!pick) throw new Error('Lotus does not know how to set up this image model.');
+    if (isRemote('comfyui')) throw new Error('ComfyUI runs on another computer, so its model files have to be added there. Lotus downloads into a folder on this computer.');
+    const dir = await findModelsDir();
+    if (!dir) throw new Error("Lotus doesn't know ComfyUI's models folder yet. Choose it in Engines → Models, then allow the install again.");
+    await fetchImages([pick], dir);
+    return;
+  }
+  const pick: VoicePick = (t.pick as VoicePick | undefined) ?? {
+    kind: 'voice', id: t.id, tier: 'balanced', title: t.title, maker: '', licence: '', blurb: '', vramGb: 0, diskGb: 0, clones: false,
+    match: new RegExp(`^${escapeRe(t.id)}$`, 'i'),
+  };
+  await fetchVoices([pick]);
 }

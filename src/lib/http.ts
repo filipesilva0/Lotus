@@ -1,4 +1,5 @@
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { authHeaderFor, engineForUrl } from '../services/engineConfig';
 
 /** True inside the Tauri desktop shell, false in a plain browser (vite dev preview). */
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -8,11 +9,14 @@ export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in
  * never need CORS headers. In a browser it is the normal fetch.
  */
 const rawHttp: typeof fetch = (input, init) => {
-  if (!isTauri) return fetch(input, init);
-  // Windows WebView2 pages live at http://tauri.localhost, which Ollama (OLLAMA_ORIGINS) and ComfyUI
-  // reject with 403. Present the request as coming from the engine's own address instead.
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const headers = new Headers(init?.headers);
+  // An engine on another computer may sit behind a proxy that wants a key (session 11).
+  const auth = authHeaderFor(url);
+  if (auth && !headers.has('Authorization')) headers.set('Authorization', auth);
+  if (!isTauri) return fetch(input, { ...init, headers });
+  // Windows WebView2 pages live at http://tauri.localhost, which Ollama (OLLAMA_ORIGINS) and ComfyUI
+  // reject with 403. Present the request as coming from the engine's own address instead.
   if (!headers.has('Origin')) {
     try { headers.set('Origin', new URL(url).origin); } catch { /* not an absolute URL */ }
   }
@@ -34,7 +38,7 @@ export const http: typeof fetch = async (input, init) => {
   const method = (init?.method ?? 'GET').toUpperCase();
   const t0 = performance.now();
   const note = (status: number | 'error') => {
-    if (!/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url) || /\/(api\/ps|system_stats|api\/tags|api\/version|health)\b/.test(url) && status === 200) return;
+    if (!(/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url) || engineForUrl(url)) || /\/(api\/ps|system_stats|api\/tags|api\/version|health)\b/.test(url) && status === 200) return;
     logBuf.push({ t: Date.now(), method, url: url.replace(/^https?:\/\//, '').slice(0, 120), status, ms: Math.round(performance.now() - t0) });
     if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
     logSubs.forEach((f) => f());

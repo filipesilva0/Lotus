@@ -33,6 +33,7 @@ import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
 import { invokeNative, onEvent } from './lib/bus';
 import { WelcomeSetup } from './components/setup/WelcomeSetup';
 import { loadSetup } from './setup/state';
+import { useSetupJobs } from './setup/jobs';
 import { installMacMenu, menuSignature } from './lib/nativeMenu';
 import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
@@ -209,17 +210,27 @@ export default function App() {
   useEffect(() => { void applyWindowGlass(settings.appearance, dark); }, [settings.appearance, dark]);
 
   // The window starts hidden to avoid a white flash; show it once we have painted.
-  useEffect(() => { requestAnimationFrame(() => void invokeNative('main_ready')); }, []);
+  // A hidden WebKit page (macOS, Linux) may never run animation frames, so a timer backs it up;
+  // Rust only acts on the first call and also has its own fallback.
+  useEffect(() => {
+    const ready = () => void invokeNative('main_ready').catch(() => undefined);
+    const raf = requestAnimationFrame(ready);
+    const t = setTimeout(ready, 50);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, []);
 
   // ── Models & checkpoints follow engine availability ────────────────────────
+  // A chat model finishing its download (from the guide or a chat install card) refreshes the list too.
+  const chatModelsDone = useSetupJobs().filter((j) => j.engine === 'ollama' && j.status === 'done').length;
+  const imageFilesDone = useSetupJobs().filter((j) => j.engine === 'comfyui' && j.status === 'done').length;
   useEffect(() => {
     if (!ollamaUp) return;
     ollamaClient.listModels().then((list) => {
       setModels(list.map((m) => ({ id: m.name, name: m.name, tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
       setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
     }).catch(() => undefined);
-  }, [ollamaUp]);
-  useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp]);
+  }, [ollamaUp, chatModelsDone]);
+  useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp, imageFilesDone]);
 
   // ── Messages from other windows ───────────────────────────────────────────
   useEffect(() => { if (currentView === 'builder') setBuilderSeen(true); }, [currentView]);

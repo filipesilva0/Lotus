@@ -32,6 +32,9 @@
           "url": "http://localhost:*/*"
         },
         {
+          "url": "http://*:*/*"
+        },
+        {
           "url": "https://export.arxiv.org/*"
         },
         {

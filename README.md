@@ -216,6 +216,7 @@ The setup guide downloads only what you pick, and only from each project's own s
 | What | When it goes online | What is sent |
 |---|---|---|
 | Chat, images, voice, memory, tasks | Never | Nothing. All of it stays on your PC. |
+| **Engines on another computer** | Only if you set an engine's address to another computer (Engines → Change, or the setup guide) | Your chats (including any memory Lotus adds to a prompt), image prompts and voice requests go to *that* engine, on the computer you named. An access key you enter is sent only to that engine. |
 | **Web** in chat | Only when you turn it on | Your question to the search service you pick, then a request to each top result page |
 | **Deep Research** | Only during a research run | Short keyword queries to the academic databases you tick |
 | **Model downloads** | Only when you press *Download* | A request to the link you pasted |

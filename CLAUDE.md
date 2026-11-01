@@ -25,21 +25,29 @@ bash handover/verification/run-builder-tests.sh   # 34 TS tests (session 4): bui
 bash handover/verification/run-s5-tests.sh        # 56 logic/flow + 24 render tests (session 5; session 8 added 11): VRAM scaler, GFM, cron, Kanban, memory/skills, Thinking, task agent
 bash handover/verification/run-s7-tests.sh        # 27 logic/flow + 11 render tests (session 7): choices, plugins, creator, background model, rename, usage, folder attach, Library
 bash handover/verification/run-s10-tests.sh       # 22 tests (session 10): engine installers, recommended models, ComfyUI recipes, guide flow, macOS menu, island default
+bash handover/verification/run-s11-tests.sh       # 12 tests (session 11): remote engine addresses, access keys, connection test, guide with remote engines, island reset, chat install proposals
 node handover/verification/wix-render-check.mjs   # renders main.wxs with sample data; checks refs + per-user rules (npm i --no-save handlebars fast-xml-parser)
 node handover/screenshots/shoot-s7.mjs            # Chromium screenshots (serve dist on :8123 first, same command); PNGs in /tmp/shots
 node handover/screenshots/shoot-s8.mjs            # session 8: page accents, panels, chat bar, Auto appearance
 node handover/screenshots/shoot-s10.mjs           # session 10: every first-run guide step, Windows + macOS layouts, light + dark
+node handover/screenshots/shoot-s11.mjs           # session 11: remote engines in the guide and Engines → Change (browser mode, faked engines)
+node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install card (ask, running, done) with a fake Ollama
 cd src-tauri && cargo test --lib          # 14 Rust tests: hook installer, approve/deny server, GPU parsers 2, context files 1, memory db 4, folder reader 1, session 10 setup 3 + installer allow-list 1
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 14 Rust tests; `cargo check --locked` clean (session 10, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
+**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 14 Rust tests; `cargo check --locked` clean (session 10, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 11 map (launch on macOS/Linux, island off, remote engines)
+- The main window is revealed by `main_ready` (timer + rAF in App) and by a one-shot Rust fallback in `lib.rs` (`reveal_main_once`). Never rely on `requestAnimationFrame` alone in a hidden window.
+- Chat installs: the model proposes with a ```install block (`chat/install.ts`), the user must press Allow on `InstallCard`; never install anything from chat without that click, and keep image installs limited to the catalog.
+- Engine addresses may be on another computer: check `isRemote(id)` before anything that starts, stops, installs or reads local files for an engine. Access keys live in `lotus.engineAuth.v1` and are added by `http()` only for that engine's own address.
 
 ## Session 10 map (installer, Lotus Studio folder, first-run guide, per-OS chrome)
 - Map: `ARCHITECTURE.md` §5e. The MSI is per-user into Documents\Lotus Studio; every component needs an HKCU key path (never a file key path) or ICE38 fails.
@@ -84,7 +92,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - Copy tone: plain, specific, no jargon; no emoji in the product UI.
 
 ## Critical constraints
-1. **Light and local-first.** No Electron/Chromium, no CDN assets, no telemetry. The only external traffic is Deep Research/source-search queries to the four listed APIs, **Web search when the user turns it on** (DuckDuckGo or their SearXNG, plus fetching the top result pages; session 5 widened the HTTP capability to `https://*/*` for this), and, on the user's click (or the opt-in launch check), the update check/download from the project's GitHub Releases (`src-tauri/src/updates.rs`). Memory, skills and tasks never leave the PC.
+1. **Light and local-first.** No Electron/Chromium, no CDN assets, no telemetry. The only external traffic is Deep Research/source-search queries to the four listed APIs, **Web search when the user turns it on** (DuckDuckGo or their SearXNG, plus fetching the top result pages; session 5 widened the HTTP capability to `https://*/*` for this), and, on the user's click (or the opt-in launch check), the update check/download from the project's GitHub Releases (`src-tauri/src/updates.rs`). Since session 11, engine requests also go to **another computer when the user sets an engine's address to one** (D34). Memory, skills and tasks never leave the PC.
 2. **No fake UI.** Never ship a control, number or screen that is simulated or does nothing (B2 is the known violation; fix it, don't add to it).
 3. **Tauri alignment:** `tauri`/plugin **crates and `@tauri-apps/*` npm packages must share major.minor** (npm pinned exactly, crates `~`-pinned, `Cargo.lock` committed). Bump both sides together and run `npm run check:tauri`.
 4. **Licences:** do **not** pick a licence for the user (open decision B15). Do **not** use Coucou's name, "Mochi" mascot, icons or sounds (see `THIRD_PARTY_LICENSES.md`).
@@ -99,4 +107,5 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - A failing test must be explained as either a real bug or a stale expectation, with evidence.
 
 ## When you finish a session
+- **Auto commit (user's choice):** when a session's changes pass the testing requirements, commit them straight to `main` and push to `origin` (github.com/filipesilva0/Lotus). End the message with the session's attribution lines. If the push is refused, say so and give the user the commands to push from their own folder.
 Update `CURRENT_STATE.md` (statuses, bug table, CI history), `TASKS.md`, and `DECISIONS.md` for any new decision/assumption; keep the README "Status" section consistent; rebuild the zip excluding `node_modules/ dist/ src-tauri/target/ src-tauri/gen/`.

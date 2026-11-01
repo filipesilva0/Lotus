@@ -63,6 +63,14 @@ Give the user a short manual checklist and collect results:
 - Voicebox: audio channels, push-to-talk hotkey, MCP agent voices. Coucou parity items listed as out of scope in `PROJECT_BRIEF.md`.
 - Research: full-text/PDF reading, resumable runs, evidence-matrix export, auto-tags.
 
+## Session 11 additions (main window on macOS/Linux, island off, remote engines)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T27 | **macOS and Linux launch check**: a fresh install opens the main window with the setup guide and no island; an install that had the island on also starts without it; closing the window to the tray and waiting does not reopen it (the 1.5 s fallback fires only once). | P0 | D32, D33. |
+| T28 | **Remote engines for real**: Ollama on another PC (`OLLAMA_HOST=0.0.0.0`), ComfyUI `--listen`, Voicebox `--host 0.0.0.0`; connect from the guide and from Engines → Change; chat, image and voice generation, model pulls on the remote Ollama, Voicebox audio playback. Also once behind an https reverse proxy with an access key. | P1 | D34, A14. |
+| T30 | **Chat installs for real**: ask Qwen 3.5 4B / Gemma 4 12B to "install a better chat model", "get me an image model", "add a voice model"; check they emit the ```install block, Allow pulls the model, Deny does nothing, the new model appears in the model menu. If small models ignore the block, add a fallback (e.g. detect "install <tag>" in the user's own message). | P1 | D35. |
+| T29 | Remote ComfyUI: the Images model downloads still save to a folder on this computer. Consider a "download on that computer" path (e.g. ComfyUI-Manager's API) or hide Download for remote ComfyUI. | P2 | |
+
 ## Dependency sketch
 ```
 T1 ──► T2 ──► T3 ──┬─► T4

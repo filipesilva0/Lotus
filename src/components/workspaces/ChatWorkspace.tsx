@@ -143,7 +143,8 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
           <ChatStream session={session} isStreaming={chat.isStreaming} autoScroll={settings.autoScroll} reasoningMode={settings.reasoningBlockMode}
             onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory}
             onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }}
-            onAnswer={(id, text) => void chat.answerPoll(id, text)} />
+            onAnswer={(id, text) => void chat.answerPoll(id, text)}
+            onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)} />
         )}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
           models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels}

@@ -17,6 +17,8 @@ export interface ChatMessage {
   /** Base64 images for vision models. Held in memory only (never persisted). */
   images?: string[];
   files?: ChatFileRef[];
+  /** The user's answer to an install the model proposed (session 11). */
+  install?: { status: 'allowed' | 'denied' | 'failed'; error?: string };
   /** The reply was cut short because the user steered or pressed Stop. */
   interrupted?: boolean;
   /** Set on the first message of a tail that has alternatives: `< 1 / 3 >`. Each list entry is a full tail. */

@@ -6,6 +6,8 @@ import { openExternal } from '../../lib/open';
 import { Btn, IconBtn, TextArea, cx } from '../common/ui';
 import { parseChoices } from '../../chat/choices';
 import { ChoiceCard } from './ChoiceCard';
+import { parseInstall, type InstallTarget } from '../../chat/install';
+import { InstallCard } from './InstallCard';
 
 interface Props {
   session: ChatSession; isStreaming: boolean; autoScroll: boolean; reasoningMode: 'collapsed' | 'expanded' | 'hidden';
@@ -13,6 +15,8 @@ interface Props {
   onMemory: (id: string, v: 'confirmed' | 'forgotten') => void; onOpenArtifact: (lang: string, code: string) => void;
   /** The user clicked an option on a reply's choices card. */
   onAnswer?: (msgId: string, text: string) => void;
+  /** Allow / Deny on a model install the reply proposed. */
+  onInstall?: (msgId: string, target: InstallTarget, allow: boolean) => void;
 }
 
 const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
@@ -44,7 +48,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
   );
 };
 
-export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer }) => {
+export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall }) => {
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -59,7 +63,8 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
         {session.messages.map((m, mi) => {
           const user = m.role === 'user';
           const b = m.branch;
-          const parsed = user ? null : parseChoices(m.content);
+          const inst = user ? null : parseInstall(m.content);
+          const parsed = user || !inst ? null : parseChoices(inst.text);
           const body = parsed ? parsed.text : m.content;
           const next = session.messages[mi + 1];
           const isLast = mi === session.messages.length - 1;
@@ -91,6 +96,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                             <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Artifacts</button>
                           </>)} />
                       : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? 'Thinking…' : 'Working…')}</span> : null}
+                    {inst?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing an install request…</p>}
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
                     {m.interrupted && <p className="mt-1.5 text-[11px] opacity-70">Stopped here.</p>}
                   </div>
@@ -100,6 +106,12 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                   <ChoiceCard poll={parsed.poll} enabled={!!onAnswer && isLast && !isStreaming}
                     answered={m.pollAnswer ?? (next?.role === 'user' ? next.content : undefined)}
                     onAnswer={(text) => onAnswer?.(m.id, text)} />
+                )}
+
+                {inst && (inst.target || inst.problem) && !m.isStreaming && (
+                  <InstallCard target={inst.target} problem={inst.problem} decision={m.install}
+                    enabled={!!onInstall && isLast && !isStreaming}
+                    onDecide={(allow) => inst.target && onInstall?.(m.id, inst.target, allow)} />
                 )}
 
                 {m.sources && m.sources.length > 0 && (

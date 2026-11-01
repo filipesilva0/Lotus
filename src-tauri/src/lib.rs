@@ -15,6 +15,9 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, ShortcutState};
 
+/// Set once the main window has been shown at startup (by the web layer, or by the fallback below).
+static MAIN_SHOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn started_minimized() -> bool {
     std::env::args().any(|a| a == "--minimized")
 }
@@ -35,11 +38,19 @@ fn app_paths(app: AppHandle) -> paths::AppPaths {
 }
 
 /// The main window starts hidden to avoid a white flash; the web layer calls this once it has painted.
+/// Only the first call (or the startup fallback) shows it, so a late call never re-opens a window the
+/// user has already closed to the tray.
 #[tauri::command]
 fn main_ready(app: AppHandle) {
-    if !started_minimized() {
-        show_main(&app);
+    reveal_main_once(&app);
+}
+
+fn reveal_main_once(app: &AppHandle) {
+    use std::sync::atomic::Ordering;
+    if started_minimized() || MAIN_SHOWN.swap(true, Ordering::SeqCst) {
+        return;
     }
+    show_main(app);
 }
 
 /// Bring the studio forward, optionally on a specific view (chat, image, voice, engines).
@@ -204,6 +215,16 @@ pub fn run() {
             }
 
             hooks::start(app.handle().clone());
+
+            // Safety net: macOS (WKWebView) and Linux (WebKitGTK) can pause a hidden page, so the web
+            // layer's main_ready may never arrive and only the island would be visible. Show the main
+            // window anyway after a short wait.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                let h = handle.clone();
+                let _ = handle.run_on_main_thread(move || reveal_main_once(&h));
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
