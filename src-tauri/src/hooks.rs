@@ -145,8 +145,10 @@ fn settings_path() -> Result<PathBuf, String> {
 }
 
 fn command_line() -> String {
+    // curl ships with Windows 10/11 (as curl.exe), macOS and practically every Linux desktop.
+    let curl = if cfg!(windows) { "curl.exe" } else { "curl" };
     format!(
-        "curl.exe -s -m 310 -X POST -H \"Content-Type: application/json\" -H \"X-Lotus-Hook: 1\" --data-binary @- http://127.0.0.1:{PORT}/hook/claude"
+        "{curl} -s -m 310 -X POST -H \"Content-Type: application/json\" -H \"X-Lotus-Hook: 1\" --data-binary @- http://127.0.0.1:{PORT}/hook/claude"
     )
 }
 

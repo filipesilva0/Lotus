@@ -16,7 +16,7 @@ tauri-build = { version = "~2.6.3", features = [] }
 # Pinned to the same minor releases as the npm packages in ../package.json. `tauri build` refuses to
 # run when a crate and its npm twin differ in major.minor, so bump both sides together
 # (see "Upgrading Tauri" in the README and `npm run check:tauri`).
-tauri = { version = "~2.11.6", features = ["tray-icon"] }
+tauri = { version = "~2.11.6", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-http = { version = "~2.7.0", features = ["unsafe-headers"] }
 tauri-plugin-dialog = "~2.7.3"
 tauri-plugin-opener = "~2.5.5"

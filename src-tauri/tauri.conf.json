@@ -24,7 +24,17 @@
         "decorations": false,
         "shadow": true,
         "transparent": true,
-        "windowEffects": { "effects": ["acrylic"], "color": [245, 245, 247, 120] },
+        "windowEffects": {
+          "effects": [
+            "acrylic"
+          ],
+          "color": [
+            245,
+            245,
+            247,
+            120
+          ]
+        },
         "visible": false
       },
       {
@@ -45,7 +55,8 @@
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:*; frame-src http://127.0.0.1:* http://localhost:*; script-src 'self'"
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,
@@ -57,6 +68,9 @@
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "windows": {
@@ -70,13 +84,14 @@
         "upgradeCode": "6f4a7c52-3b1e-4f0a-9d8c-2a5e7b91c4d3"
       }
     },
-    "licenseFile": "wix/license.rtf"
+    "licenseFile": "wix/license.rtf",
+    "category": "Productivity"
   },
   "plugins": {
     "updater": {
-      "pubkey": "SET-BY-CI-RELEASE-BUILD",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEEzRjZGNUVDREQ5MjEyNEEKUldSS0VwTGQ3UFgybzJHVTJaYS9QcFNCMUZENmRxTEszMlg5K0RmSDd5NzNQZ0NidU1ueWErRy8K",
       "endpoints": [
-        "https://github.com/OWNER/REPO/releases/latest/download/latest.json"
+        "https://github.com/filipesilva0/Lotus/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

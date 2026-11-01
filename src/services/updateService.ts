@@ -24,7 +24,7 @@ export async function checkForUpdate(): Promise<UpdateInfo | null> {
   }
 }
 
-/** Downloads, verifies, installs and restarts. On Windows a success never returns: the app exits. */
+/** Downloads, verifies, installs and restarts. A success never returns: the app exits and reopens. */
 export async function installUpdate(): Promise<void> {
   try {
     await invokeNative('update_install');
@@ -47,7 +47,7 @@ export async function currentVersion(): Promise<string | null> {
 
 function friendly(e: unknown): string {
   const raw = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-  if (/not built from a tagged release/i.test(raw)) return raw;
+  if (/not built from a tagged release|\.deb or \.rpm/i.test(raw)) return raw;
   if (/valid release JSON|404|not found|status code/i.test(raw) && !/error sending request|dns|timed? ?out|connect/i.test(raw)) {
     return `No update has been published yet: the update server answered, but there is no release file (latest.json) to read. This is normal until a signed release has been made. (${raw})`;
   }

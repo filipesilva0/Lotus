@@ -2,7 +2,8 @@ import { isTauri } from './http';
 import type { Appearance } from '../types/lotus';
 
 /**
- * Real window translucency. The main window is transparent and Windows draws acrylic behind it,
+ * Real window translucency. The main window is transparent and the OS draws its material behind it
+ * (acrylic on Windows, vibrancy on macOS),
  * so the page rail and title bar show the user's own wallpaper. Nothing is painted to imitate it.
  * The tint follows the effective appearance. In 'auto' the window theme is left to the OS (null),
  * so WebView2's prefers-color-scheme tracks Windows' light/dark setting live.
@@ -13,10 +14,21 @@ export async function applyWindowGlass(appearance: Appearance, dark: boolean): P
   const root = document.documentElement;
   if (!isTauri) { root.classList.add('no-glass'); return; }
   try {
-    const { getCurrentWindow, Effect } = await import('@tauri-apps/api/window');
+    const { getCurrentWindow, Effect, EffectState } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
     await win.setTheme(appearance === 'auto' ? null : appearance);
-    await win.setEffects({ effects: [Effect.Acrylic], color: dark ? [28, 28, 30, 150] : [245, 245, 247, 120] });
+    const os = desktopOs();
+    if (os === 'windows') {
+      await win.setEffects({ effects: [Effect.Acrylic], color: dark ? [28, 28, 30, 150] : [245, 245, 247, 120] });
+    } else if (os === 'macos') {
+      // macOS vibrancy: the same real see-through-to-the-desktop material Finder's sidebar uses.
+      await win.setEffects({ effects: [Effect.Sidebar], state: EffectState.FollowsWindowActiveState });
+    } else {
+      // Linux (WebKitGTK) has no window materials, and the studio window is opaque there
+      // (tauri.linux.conf.json), so the page paints its own background.
+      root.classList.add('no-glass');
+      return;
+    }
     root.classList.remove('no-glass');
   } catch {
     root.classList.add('no-glass');
@@ -44,4 +56,12 @@ export function onSystemAppearance(cb: (dark: boolean) => void): () => void {
     }).catch(() => undefined);
   }
   return () => { alive = false; mq?.removeEventListener?.('change', h); off?.(); };
+}
+
+/** Which desktop OS the window runs on, from the WebView's user agent (WebView2, WKWebView, WebKitGTK). */
+export function desktopOs(): 'windows' | 'macos' | 'linux' {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  if (/Windows/i.test(ua)) return 'windows';
+  if (/Macintosh|Mac OS X/i.test(ua)) return 'macos';
+  return 'linux';
 }

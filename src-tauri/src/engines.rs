@@ -143,14 +143,33 @@ fn find_blocking(name: String, data_dir: Option<String>) -> Option<String> {
     let mut candidates: Vec<Option<PathBuf>> = Vec::new();
     match name.as_str() {
         "ollama" => {
-            candidates.push(env_path("LOCALAPPDATA", r"Programs\Ollama\ollama.exe"));
-            candidates.push(on_path("ollama.exe"));
+            #[cfg(windows)]
+            {
+                candidates.push(env_path("LOCALAPPDATA", r"Programs\Ollama\ollama.exe"));
+                candidates.push(on_path("ollama.exe"));
+            }
+            #[cfg(not(windows))]
+            {
+                candidates.push(on_path("ollama"));
+                #[cfg(target_os = "macos")]
+                candidates.push(Some(PathBuf::from("/Applications/Ollama.app/Contents/Resources/ollama")));
+                for dir in ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"] {
+                    candidates.push(Some(PathBuf::from(dir).join("ollama")));
+                }
+                candidates.push(env_path("HOME", ".local/bin/ollama"));
+            }
         }
         "voicebox" => {
-            if let Some(d) = data_dir {
-                candidates.push(Some(PathBuf::from(&d).join(r"engines\voicebox\voicebox-server.exe")));
+            if let Some(d) = data_dir.as_ref().filter(|_| cfg!(windows)) {
+                candidates.push(Some(PathBuf::from(d).join(r"engines\voicebox\voicebox-server.exe")));
+            }
+            if let Some(d) = data_dir.as_ref().filter(|_| !cfg!(windows)) {
+                candidates.push(Some(PathBuf::from(d).join("engines/voicebox/voicebox-server")));
             }
             candidates.push(on_path("voicebox-server.exe"));
+            candidates.push(on_path("voicebox-server"));
+            #[cfg(target_os = "macos")]
+            candidates.push(Some(PathBuf::from("/Applications/Voicebox.app/Contents/MacOS/voicebox-server")));
             candidates.push(env_path("LOCALAPPDATA", r"Voicebox\voicebox-server.exe"));
             candidates.push(env_path("LOCALAPPDATA", r"Programs\Voicebox\voicebox-server.exe"));
             candidates.push(env_path("ProgramFiles", r"Voicebox\voicebox-server.exe"));

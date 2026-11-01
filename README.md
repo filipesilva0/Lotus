@@ -9,7 +9,7 @@
 
 ### Your local AI, in one calm window.
 
-Chat, images, voice, research and an app builder for Windows,<br>
+Chat, images, voice, research and an app builder for Windows, macOS and Linux,<br>
 running entirely on models that live on your own PC.
 
 <br>
@@ -22,7 +22,7 @@ running entirely on models that live on your own PC.
 
 <br>
 
-![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0A84FF?style=flat-square&labelColor=1D1D1F)
+![Windows, macOS, Linux](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-0A84FF?style=flat-square&labelColor=1D1D1F)
 ![Runs locally](https://img.shields.io/badge/runs-100%25%20local-30D158?style=flat-square&labelColor=1D1D1F)
 ![Status](https://img.shields.io/badge/status-early%20preview-FF9F0A?style=flat-square&labelColor=1D1D1F)
 
@@ -42,7 +42,7 @@ Lotus is a small desktop app that brings everything you do with local AI into on
 No accounts. No cloud. No telemetry. Turn off your Wi-Fi and it keeps working.
 
 > [!NOTE]
-> **Lotus is an early preview.** Every feature below exists in the code, but the app hasn't shipped a Windows release yet. Expect rough edges, and watch the Releases page for the first build.
+> **Lotus is an early preview.** Every feature below exists in the code, and builds are published for Windows, macOS and Linux. Expect rough edges.
 
 <br>
 
@@ -132,7 +132,7 @@ A board you share with Lotus.
 <td width="50%" valign="top">
 
 **Light, dark or automatic**<br>
-<sub>Follows your Windows theme, or set it yourself. Both side panels fold away from the title bar when you want the space.</sub>
+<sub>Follows your system's light or dark setting, or set it yourself. Both side panels fold away from the title bar when you want the space.</sub>
 
 </td>
 </tr>
@@ -163,12 +163,17 @@ Install only the engines you want. A page whose engine isn't running tells you s
 **Ollama** for chat, research, the App Builder and tasks. **ComfyUI** for images. **Voicebox** for voice.
 
 **2. Install Lotus.**<br>
-Once the first release is out, grab either file from the Releases page:
+Grab the file for your system from the [latest release](https://github.com/filipesilva0/Lotus/releases/latest):
 
 | File | What it is |
 |---|---|
-| **`Lotus_x64_en-US.msi`** | The installer. Choose *Just for me* (no admin rights) or *All users*, the install folder, and optional extras: a desktop shortcut, start with Windows, and portable data. |
-| **`Lotus-portable-x64.zip`** | Unzip anywhere, even a USB stick. Everything stays in a `data` folder next to the app. |
+| **`Lotus-windows-x64.msi`** | Windows installer. Choose *Just for me* (no admin rights) or *All users*, the install folder, and optional extras: a desktop shortcut, start with Windows, and portable data. |
+| **`Lotus-windows-x64-portable.zip`** | Windows, portable. Unzip anywhere, even a USB stick. Everything stays in a `data` folder next to the app. |
+| **`Lotus-macos-universal.dmg`** | macOS 11 or later, Apple silicon and Intel. Not notarized yet: the first time, right-click Lotus → *Open*. |
+| **`Lotus-linux-x86_64.AppImage`** | Linux, any distribution with WebKitGTK 4.1. `chmod +x` it and run. |
+| **`Lotus-linux-amd64.deb`** / **`Lotus-linux-x86_64.rpm`** | Linux packages for Debian/Ubuntu and Fedora/openSUSE. |
+
+Installed copies update themselves from **Settings → Updates** (the portable zip and the .deb/.rpm are replaced by downloading the new file).
 
 **3. Open Engines.**<br>
 Lotus finds Ollama by itself. Point it once at the file you use to launch ComfyUI and at Voicebox's server, then press *Start*. Turn on *Start with Lotus* and you won't think about it again.
@@ -194,7 +199,8 @@ Open **Models**, type any model name, such as `qwen2.5:7b`, and download it. You
 <summary><b>System requirements</b></summary>
 <br>
 
-- Windows 10 (version 1803 or later) or Windows 11, 64-bit.
+- Windows 10 (version 1803 or later) or Windows 11, 64-bit; macOS 11 Big Sur or later; or a 64-bit Linux desktop with WebKitGTK 4.1 (Ubuntu 22.04, Fedora 36, Debian 12 or newer).
+- On macOS the shortcuts use <kbd>Control</kbd> <kbd>Option</kbd> instead of <kbd>Ctrl</kbd> <kbd>Alt</kbd>.
 - A GPU is strongly recommended. For chat, a 7B model or larger works best. The App Builder wants a code-tuned model with at least a 16K context.
 - Lotus itself is small. The models you download are not, so leave room for them.
 
@@ -224,16 +230,16 @@ No telemetry, no analytics, no remote fonts. Memory lives in a single file in yo
 
 ## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Build from source
 
-You'll need **Node 22+** and **Rust** (stable, MSVC toolchain) on Windows.
+You'll need **Node 22+** and **Rust** (stable). On Windows use the MSVC toolchain; on Linux first install `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`; on macOS the Xcode command line tools.
 
 ```powershell
 npm install
 npm run tauri:dev                  # run with hot reload
-npm run tauri:build                # build the MSI
-./scripts/package-portable.ps1     # then build the portable zip
+npm run tauri:build                # MSI on Windows, .app/.dmg on macOS, AppImage/.deb/.rpm on Linux
+./scripts/package-portable.ps1     # Windows only: then build the portable zip
 ```
 
-No Windows machine? The workflow in `.github/workflows/build-windows.yml` builds both files on a hosted runner. Run it by hand or push a `v*` tag.
+**Releases.** `.github/workflows/build-windows.yml` builds all three systems on hosted runners. In the Actions tab choose *Build and release* → *Run workflow* and type a version (such as `0.2.0`) to publish a signed release with `latest.json`, which installed copies update from; leave the version empty for a test build. Pushing a `v*` tag does the same. Publishing needs the repository secret `TAURI_SIGNING_PRIVATE_KEY` (the private half of the public key in `src-tauri/tauri.conf.json`).
 
 <details>
 <summary><b>Project layout</b></summary>

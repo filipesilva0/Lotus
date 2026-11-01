@@ -1,6 +1,6 @@
 # CLAUDE.md: Lotus
 
-Lotus is a **lightweight Windows desktop app (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: feature-complete prototype that has never been built on Windows; the CI build is currently failing (B1).**
+Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: feature-complete prototype that has never been built on Windows; the CI build is currently failing (B1).**
 
 ## Read first (in this order)
 1. `CURRENT_STATE.md` — what is verified, known bugs (B1…B17), CI history. **Start here.**

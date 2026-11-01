@@ -1,16 +1,98 @@
-name: Build Windows installer
+name: Build and release (Windows, macOS, Linux)
+
+# Two ways to run this:
+#  1. Actions tab → "Build and release" → Run workflow. Type a version (e.g. 0.2.0) to publish a
+#     release; leave it empty for a test build whose files appear only under the run's Artifacts.
+#  2. Push a tag such as v0.2.0.
+#
+# A release publishes, under stable file names, everything the website's download buttons and the
+# in-app updater need:
+#   Lotus-windows-x64.msi            Lotus-windows-x64-portable.zip
+#   Lotus-macos-universal.dmg        Lotus-macos-universal.app.tar.gz   (+ .sig, used by the updater)
+#   Lotus-linux-x86_64.AppImage      Lotus-linux-amd64.deb               Lotus-linux-x86_64.rpm
+#   latest.json                      (the update manifest every installed copy reads)
+#
+# Needs the repository secret TAURI_SIGNING_PRIVATE_KEY (and TAURI_SIGNING_PRIVATE_KEY_PASSWORD if
+# the key has one). Its public half is committed in src-tauri/tauri.conf.json → plugins.updater.
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 0.2.0 (leave empty for a test build without a release)'
+        required: false
+        default: ''
   push:
     tags: ['v*']
 
 permissions:
-  contents: write   # publishing a GitHub Release needs this
+  contents: write   # creating the tag and the GitHub Release needs this
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.v.outputs.release }}
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        shell: bash
+        env:
+          INPUT: ${{ inputs.version }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          ver=""
+          if [[ "$REF" == refs/tags/v* ]]; then ver="${REF_NAME#v}"; fi
+          if [[ -n "$INPUT" ]]; then ver="${INPUT#v}"; fi
+          if [[ -z "$ver" ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "version=0.0.0-test" >> "$GITHUB_OUTPUT"
+            echo "Test build: nothing will be published."
+            exit 0
+          fi
+          if ! [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$ver' is not a version like 1.2.3"; exit 1
+          fi
+          if [[ "$HAS_KEY" != "true" ]]; then
+            echo "::error title=Missing secret::Add the repository secret TAURI_SIGNING_PRIVATE_KEY (Settings → Secrets and variables → Actions). Without it the updates cannot be signed."
+            exit 1
+          fi
+          echo "release=true" >> "$GITHUB_OUTPUT"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=v$ver" >> "$GITHUB_OUTPUT"
+          echo "Release build for v$ver"
+
   build:
-    runs-on: windows-latest
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            args: ''
+            bundle: src-tauri/target/release/bundle
+          - name: macos
+            os: macos-latest
+            args: '--target universal-apple-darwin'
+            bundle: src-tauri/target/universal-apple-darwin/release/bundle
+          - name: linux
+            # Oldest supported runner: an AppImage built on an older glibc runs on more distributions.
+            os: ubuntu-22.04
+            args: ''
+            bundle: src-tauri/target/release/bundle
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE: ${{ needs.prepare.outputs.release }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v5
 
@@ -20,137 +102,154 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.name }}
+
+      - name: Linux build libraries
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev libssl-dev
 
       - run: npm ci
 
       # Rust crates and npm packages must be on the same Tauri minor release
       - run: npm run check:tauri
 
-      # Release builds (a pushed v* tag) also produce the signed updater files, but only when the
-      # signing secrets exist. Without them this is the same plain build as before.
-      - name: Prepare release config
-        id: rel
-        shell: pwsh
-        env:
-          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          PUB: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+      # Version from the release, plus the signed updater files when releasing.
+      - name: Release config
+        shell: bash
         run: |
-          $isTag = '${{ github.ref }}' -like 'refs/tags/v*'
-          $upd = @{ endpoints = @('https://github.com/${{ github.repository }}/releases/latest/download/latest.json') }
-          $conf = @{ plugins = @{ updater = $upd } }
-          if ($env:KEY -and $env:PUB -and $isTag) {
-            $conf.version = '${{ github.ref_name }}'.TrimStart('v')
-            $conf.bundle  = @{ createUpdaterArtifacts = $true }
-            $upd.pubkey   = $env:PUB
-            'release=true' >> $env:GITHUB_OUTPUT
-            Write-Host "Release build for $($conf.version)"
-          } else {
-            'release=false' >> $env:GITHUB_OUTPUT
-            Write-Host 'Plain build: updater files are made only for a v* tag with TAURI_SIGNING_PRIVATE_KEY and TAURI_UPDATER_PUBKEY set.'
-          }
-          # Always point the build at this repository's releases (never the OWNER/REPO placeholder).
-          $conf | ConvertTo-Json -Depth 8 | Set-Content ci-release.conf.json
+          if [[ "$RELEASE" == "true" ]]; then
+            echo "{\"version\":\"$VERSION\",\"bundle\":{\"createUpdaterArtifacts\":true}}" > ci-release.conf.json
+          else
+            echo "{}" > ci-release.conf.json
+          fi
+          cat ci-release.conf.json
 
-      # Produces the .msi (WiX) in src-tauri/target/release/bundle/msi
       - name: Build
-        shell: pwsh
+        shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ needs.prepare.outputs.release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          npm run tauri build -- --verbose --config ci-release.conf.json
+        run: npm run tauri build -- --verbose --config ci-release.conf.json ${{ matrix.args }}
 
-      # Only runs when the build fails: tauri hides light.exe's own error text, so run the linker
-      # again by hand and print everything it says, and keep the rendered WiX files for inspection.
+      # Windows only, and only when the build fails: tauri hides light.exe's own error text, so run
+      # the linker again by hand and print everything it says.
       - name: WiX diagnostics (on failure)
-        if: failure()
+        if: failure() && matrix.name == 'windows'
         continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
           $obj = Get-ChildItem src-tauri/target/release/wix -Recurse -Filter main.wixobj -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $obj) {
-            Write-Host 'main.wixobj not found. Listing src-tauri/target/release:'
-            Get-ChildItem src-tauri/target/release -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 80 | ForEach-Object { $_.FullName }
-            exit 0
-          }
+          if (-not $obj) { Write-Host 'main.wixobj not found.'; exit 0 }
           $dir = $obj.DirectoryName
-          Write-Host "WiX work dir: $dir"
-          Get-ChildItem $dir | ForEach-Object { Write-Host "  $($_.Name)  $($_.Length)" }
           $wxl = Get-ChildItem $dir -Filter *.wxl | Select-Object -First 1
           Push-Location $dir
-          Write-Host '=== light.exe output ==='
           $out = & "$env:LOCALAPPDATA\tauri\WixTools314\light.exe" -v -ext WixUIExtension -ext WixUtilExtension "-cultures:en-us" -loc $wxl.FullName -out "$dir\diag.msi" $obj.FullName 2>&1 | ForEach-Object { "$_" }
           $code = $LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }
-          Write-Host "=== light.exe exit code: $code ==="
-          # Second run with ICE validation skipped: tells us whether validation is what fails,
-          # and leaves an UNVALIDATED msi in the artifact so the app itself can still be tried.
-          Write-Host '=== light.exe -sval (ICE validation skipped) ==='
-          $out2 = & "$env:LOCALAPPDATA\tauri\WixTools314\light.exe" -sval -ext WixUIExtension -ext WixUtilExtension "-cultures:en-us" -loc $wxl.FullName -out "$dir\unvalidated.msi" $obj.FullName 2>&1 | ForEach-Object { "$_" }
-          $code2 = $LASTEXITCODE
-          $out2 | ForEach-Object { Write-Host $_ }
-          Write-Host "=== light.exe -sval exit code: $code2 ==="
           Pop-Location
-          "light.exe normal exit $code ; with -sval exit $code2" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          Write-Host "::warning title=light.exe::normal run exit $code, -sval run exit $code2"
-          # Keep the text next to the uploaded files, and surface it on the run page itself.
-          $out | Set-Content -Path "$dir\light-output.txt"
           $hits = @($out | Where-Object { $_ -match 'error|ICE\d+|LGHT\d+|warning' } | Select-Object -First 25)
           foreach ($h in $hits) { Write-Host "::error title=light.exe::$h" }
-          "### light.exe (exit $code)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          ($hits -join "`n") | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-
-      - name: Upload WiX files (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wix-debug
-          path: src-tauri/target/release/wix
-          if-no-files-found: ignore
+          "### light.exe (exit $code)`n``````n$($hits -join "`n")`n``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
       - name: Package portable zip
+        if: matrix.name == 'windows'
         shell: pwsh
         run: ./scripts/package-portable.ps1
 
-      # Publishes the GitHub Release that installed copies update from. It is created as a draft,
-      # latest.json is attached, and only then is it published, so clients never see a release
-      # without its update manifest.
-      - name: Publish release
-        if: steps.rel.outputs.release == 'true'
-        shell: pwsh
+      # Copy the finished files to stable names, so "latest/download/<name>" links never change.
+      - name: Collect files
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          B: ${{ matrix.bundle }}
         run: |
-          $tag = '${{ github.ref_name }}'
-          $ver = $tag.TrimStart('v')
-          $msi = Get-ChildItem src-tauri/target/release/bundle/msi -Filter *.msi | Select-Object -First 1
-          $sig = "$($msi.FullName).sig"
-          if (-not (Test-Path $sig)) { throw "Missing $sig: the updater files were not produced." }
-          gh release create $tag $msi.FullName $sig dist-portable/Lotus-portable-x64.zip --draft --title "Lotus $ver" --generate-notes
-          $notes = (gh release view $tag --json body | ConvertFrom-Json).body
-          $manifest = @{
-            version  = $ver
-            notes    = $notes
-            pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-            platforms = @{ 'windows-x86_64' = @{
-              signature = (Get-Content $sig -Raw).Trim()
-              url       = "https://github.com/${{ github.repository }}/releases/download/$tag/$([uri]::EscapeDataString($msi.Name))"
-            } }
-          }
-          $manifest | ConvertTo-Json -Depth 8 | Set-Content latest.json
-          gh release upload $tag latest.json
-          gh release edit $tag --draft=false
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p out
+          one() { local f=( $1 ); [[ ${#f[@]} -ge 1 ]] || { echo "::error::No file matches $1"; exit 1; }; cp "${f[0]}" "out/$2"; [[ -f "${f[0]}.sig" ]] && cp "${f[0]}.sig" "out/$2.sig" || true; }
+          case "${{ matrix.name }}" in
+            windows)
+              one "$B/msi/*.msi" Lotus-windows-x64.msi
+              cp dist-portable/Lotus-portable-x64.zip out/Lotus-windows-x64-portable.zip ;;
+            macos)
+              one "$B/dmg/*.dmg" Lotus-macos-universal.dmg
+              if [[ "$RELEASE" == "true" ]]; then one "$B/macos/*.app.tar.gz" Lotus-macos-universal.app.tar.gz; fi ;;
+            linux)
+              one "$B/appimage/*.AppImage" Lotus-linux-x86_64.AppImage
+              one "$B/deb/*.deb" Lotus-linux-amd64.deb
+              one "$B/rpm/*.rpm" Lotus-linux-x86_64.rpm ;;
+          esac
+          if [[ "$RELEASE" == "true" ]]; then
+            for f in out/*; do
+              case "$f" in *.sig|*.dmg|*.zip|*.deb|*.rpm) continue ;; esac
+              [[ -f "$f.sig" ]] || { echo "::error::$f has no updater signature"; exit 1; }
+            done
+          fi
+          ls -la out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Lotus-windows
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            dist-portable/Lotus-portable-x64.zip
+          name: Lotus-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+
+  # Creates the tag (for a manual run) and the GitHub Release as a draft, attaches every file and
+  # latest.json, and only then publishes it, so installed copies never see a release without its
+  # update manifest.
+  publish:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.prepare.outputs.tag }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Write latest.json
+        shell: python
+        run: |
+          import json, os, datetime
+          tag, ver, repo = os.environ["TAG"], os.environ["VERSION"], os.environ["GH_REPO"]
+          base = f"https://github.com/{repo}/releases/download/{tag}/"
+          def entry(name):
+              sig = open(f"out/{name}.sig").read().strip()
+              return {"signature": sig, "url": base + name}
+          win = entry("Lotus-windows-x64.msi")
+          mac = entry("Lotus-macos-universal.app.tar.gz")
+          lin = entry("Lotus-linux-x86_64.AppImage")
+          manifest = {
+              "version": ver,
+              "notes": f"Lotus {ver}. See the release page for what changed.",
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": {
+                  "windows-x86_64": win, "windows-x86_64-msi": win,
+                  "darwin-aarch64": mac, "darwin-x86_64": mac,
+                  "darwin-aarch64-app": mac, "darwin-x86_64-app": mac,
+                  "linux-x86_64": lin, "linux-x86_64-appimage": lin,
+              },
+          }
+          json.dump(manifest, open("out/latest.json", "w"), indent=2)
+          print(json.dumps(manifest, indent=2))
+
+      - name: Publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la out
+          gh release create "$TAG" out/* --target "${{ github.sha }}" --draft --title "Lotus $VERSION" --generate-notes
+          gh release edit "$TAG" --draft=false --latest
+          echo "Published https://github.com/$GH_REPO/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
