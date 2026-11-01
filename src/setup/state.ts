@@ -1,0 +1,57 @@
+// First-run guide state (session 10). `lotus.setup.v1` in localStorage.
+
+import type { EngineId } from '../services/engineConfig';
+
+export const SETUP_KEY = 'lotus.setup.v1';
+
+export interface SetupState {
+  /** Finished or skipped. The guide can be reopened from Help → Setup Guide. */
+  done: boolean;
+  /** How it ended (for the docs and support, never sent anywhere). */
+  outcome?: 'finished' | 'skipped';
+  studioDir?: string;
+  engines?: Partial<Record<EngineId, boolean>>;
+  at?: number;
+}
+
+export function loadSetup(): SetupState {
+  try {
+    const raw = localStorage.getItem(SETUP_KEY);
+    if (raw) return { done: false, ...(JSON.parse(raw) as Partial<SetupState>) };
+  } catch { /* fall through */ }
+  // Installs from before session 10 that already have chats skip the guide (it stays in Help).
+  const legacy = !!localStorage.getItem('lotus.sessions.v1') || localStorage.getItem('lotus.setup.dismissed') === '1';
+  return { done: legacy, outcome: legacy ? 'skipped' : undefined };
+}
+
+export function saveSetup(s: SetupState) {
+  try { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); } catch { /* storage full or blocked: the guide shows again next time */ }
+}
+
+export const STEPS = ['welcome', 'folder', 'engines', 'install', 'chat', 'images', 'voice', 'done'] as const;
+export type StepId = (typeof STEPS)[number];
+export const MODEL_STEP: Record<EngineId, StepId> = { ollama: 'chat', comfyui: 'images', voicebox: 'voice' };
+
+/**
+ * Steps the user actually sees, one idea per screen: Install only when something needs installing,
+ * and one model screen per engine that is switched on and present.
+ */
+export function visibleSteps(needsInstall: boolean, modelEngines: EngineId[] = []): StepId[] {
+  const models = new Set(modelEngines.map((e) => MODEL_STEP[e]));
+  return STEPS.filter((s) => (s === 'install' ? needsInstall : s === 'chat' || s === 'images' || s === 'voice' ? models.has(s) : true));
+}
+
+/** Engines to install: switched on and not already found on this computer. */
+export function enginesToInstall(want: Partial<Record<EngineId, boolean>>, found: Partial<Record<EngineId, string | null>>): EngineId[] {
+  return (['ollama', 'comfyui', 'voicebox'] as EngineId[]).filter((id) => want[id] && !found[id]);
+}
+
+/** Starting toggles: what the MSI asked for, else on for engines already found plus Ollama. */
+export function initialEngines(installer: Partial<Record<EngineId, boolean>> | null | undefined, found: Partial<Record<EngineId, string | null>>): Record<EngineId, boolean> {
+  const base = installer ?? { ollama: true };
+  return {
+    ollama: !!(base.ollama || found.ollama),
+    comfyui: !!(base.comfyui || found.comfyui),
+    voicebox: !!(base.voicebox || found.voicebox),
+  };
+}

@@ -176,7 +176,7 @@ pub fn skill_markdown(s: &SkillRow) -> String {
 
 fn data_dir(app: &AppHandle) -> PathBuf {
     let installed = app.path().app_data_dir().unwrap_or_default();
-    PathBuf::from(crate::paths::describe(installed).data_dir)
+    PathBuf::from(crate::paths::describe(installed, PathBuf::new()).data_dir)
 }
 
 fn create_schema(conn: &Connection) -> Result<bool, String> {

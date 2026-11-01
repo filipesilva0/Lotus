@@ -10,7 +10,7 @@
         "minWidth": 980,
         "minHeight": 640,
         "center": true,
-        "decorations": false,
+        "decorations": true,
         "shadow": true,
         "transparent": true,
         "windowEffects": {
@@ -19,7 +19,13 @@
           ],
           "state": "followsWindowActiveState"
         },
-        "visible": false
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 13
+        }
       },
       {
         "label": "island",
@@ -45,7 +51,22 @@
     ],
     "macOS": {
       "minimumSystemVersion": "11.0",
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "dmg": {
+        "background": "dmg/background.png",
+        "windowSize": {
+          "width": 660,
+          "height": 420
+        },
+        "appPosition": {
+          "x": 180,
+          "y": 210
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 210
+        }
+      }
     }
   }
 }

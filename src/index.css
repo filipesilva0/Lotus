@@ -274,3 +274,21 @@ html.no-glass body { background: var(--color-bg-base); }
 @keyframes mac-indeterminate { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 .mac-indeterminate { animation: mac-indeterminate 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .mac-indeterminate { animation: none; width: 100%; opacity: .5; } }
+
+/* ── First-run guide (session 10). A blank Lotus: no surface of its own, so the window material
+   (acrylic / vibrancy) runs edge to edge under the transparent title bar. Content is one column of
+   plain rows separated by hairlines; the only colour is the step's petal on the button and ticks. */
+.setup-body { animation: setup-in .28s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes setup-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.setup-list > * + * { border-top: 0.5px solid var(--sep); }
+.setup-row { display: flex; align-items: center; gap: 14px; padding: 14px 2px; }
+.setup-list > .setup-row:first-child { padding-top: 4px; }
+.setup-choice { border-radius: 0; transition: opacity .12s; }
+.setup-choice:not(.is-on):hover .setup-radio { box-shadow: inset 0 0 0 1.5px var(--color-text-muted); }
+.setup-choice:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+.setup-radio { width: 16px; height: 16px; border-radius: 999px; flex-shrink: 0; box-shadow: inset 0 0 0 1.5px var(--sep); transition: box-shadow .12s; }
+.setup-choice.is-on .setup-radio { box-shadow: inset 0 0 0 5px var(--color-accent-fill); }
+.setup-tick { width: 14px; height: 3px; border-radius: 2px; background: var(--sep); transition: background-color .2s, width .2s; }
+.setup-tick.is-past { background: color-mix(in srgb, var(--color-text-main) 35%, transparent); }
+.setup-tick.is-now { width: 22px; background: var(--color-accent-fill); }
+@media (prefers-reduced-motion: reduce) { .setup-body { animation: none; } }

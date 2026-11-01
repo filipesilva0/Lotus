@@ -139,7 +139,7 @@ pub async fn engine_find(name: String, data_dir: Option<String>) -> Option<Strin
     tauri::async_runtime::spawn_blocking(move || find_blocking(name, data_dir)).await.ok().flatten()
 }
 
-fn find_blocking(name: String, data_dir: Option<String>) -> Option<String> {
+pub(crate) fn find_blocking(name: String, data_dir: Option<String>) -> Option<String> {
     let mut candidates: Vec<Option<PathBuf>> = Vec::new();
     match name.as_str() {
         "ollama" => {

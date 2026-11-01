@@ -24,19 +24,29 @@ bash handover/verification/run-tests.sh   # 63 TS tests: research engine 25 · U
 bash handover/verification/run-builder-tests.sh   # 34 TS tests (session 4): builder protocol/agent loop/templates, download links, LoRA graph
 bash handover/verification/run-s5-tests.sh        # 56 logic/flow + 24 render tests (session 5; session 8 added 11): VRAM scaler, GFM, cron, Kanban, memory/skills, Thinking, task agent
 bash handover/verification/run-s7-tests.sh        # 27 logic/flow + 11 render tests (session 7): choices, plugins, creator, background model, rename, usage, folder attach, Library
+bash handover/verification/run-s10-tests.sh       # 22 tests (session 10): engine installers, recommended models, ComfyUI recipes, guide flow, macOS menu, island default
+node handover/verification/wix-render-check.mjs   # renders main.wxs with sample data; checks refs + per-user rules (npm i --no-save handlebars fast-xml-parser)
 node handover/screenshots/shoot-s7.mjs            # Chromium screenshots (serve dist on :8123 first, same command); PNGs in /tmp/shots
 node handover/screenshots/shoot-s8.mjs            # session 8: page accents, panels, chat bar, Auto appearance
-cd src-tauri && cargo test --lib          # 10 Rust tests: hook installer, approve/deny server + session 5 (GPU parsers 2, context files 1, memory db 4) + session 7 (folder reader 1). Not --locked until Cargo.lock includes rusqlite
+node handover/screenshots/shoot-s10.mjs           # session 10: every first-run guide step, Windows + macOS layouts, light + dark
+cd src-tauri && cargo test --lib          # 14 Rust tests: hook installer, approve/deny server, GPU parsers 2, context files 1, memory db 4, folder reader 1, session 10 setup 3 + installer allow-list 1
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 10 Rust tests (session 7 added a folder-reader test). **Session 5 Rust (`memory_db.rs` with rusqlite) has never been compiled against the real crate.** **Session 4 Rust (`appbuilder.rs`, `downloads.rs`) has never been compiled**: expect fixes on the first `cargo check`.
+**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 14 Rust tests; `cargo check --locked` clean (session 10, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 10 map (installer, Lotus Studio folder, first-run guide, per-OS chrome)
+- Map: `ARCHITECTURE.md` §5e. The MSI is per-user into Documents\Lotus Studio; every component needs an HKCU key path (never a file key path) or ICE38 fails.
+- Engines are only ever installed by their own installers after the user opts in (DECISIONS D27). Add new installer hosts to `INSTALLER_HOSTS` in `downloads.rs` and to the README privacy section.
+- Recommended models live in `setup/catalog.ts`; image picks need a recipe that matches ComfyUI's official template exactly.
+- The guide's look is deliberately plain (D31): no cards, gradients or badges; one question per screen.
+- macOS: no in-window menus or caption buttons; add new menu items to App's `menus` and they reach the menu bar. Island starts off everywhere.
 
 ## Session 8 map (petals, panels, chat bar, appearance)
 - Five pages = the five petals of the user's icon (Chat blue, Images red, Voice orange, App Builder yellow, Tasks green): `styles/theme.ts PAGE_PALETTE / PETAL_ORDER`. **Never redraw the logo** (`assets/lotus-petals.png`, `src-tauri/icons/*`). A new feature goes inside an existing page, not a sixth page.

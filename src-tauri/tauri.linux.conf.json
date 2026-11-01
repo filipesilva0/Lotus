@@ -10,7 +10,7 @@
         "minWidth": 980,
         "minHeight": 640,
         "center": true,
-        "decorations": false,
+        "decorations": true,
         "shadow": true,
         "transparent": false,
         "visible": false

@@ -105,3 +105,10 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T26 | Plugins: sync through the account server (`user_state`), mirror to `<data>/plugins/*.json`, and an optional "share" export with a checksum. | P2 | B40 |
 | T27 | Store the model per assistant message so usage and the Models chart attribute `@model` overrides correctly. | P3 | B39 |
 
+## Session 10 additions (installer, guide, models, per-OS chrome)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T23 | **First MSI build of the new template**: watch for ICE errors (most likely ICE38/ICE64/ICE91 around the per-user folder, or `WixUIValidatePath`/`InvalidDirDlg` refs). Install: folder defaults to Documents\Lotus Studio, Engines page shows "already on this PC" for installed engines, Options toggles work, `HKCU\Software\Lotus\Lotus\SetupEngines` is written, uninstall leaves Engines/Projects/Exports. Upgrade from an older (per-machine) MSI: check both copies don't coexist. | P0 | Template rendered and checked here only. |
+| T24 | **Guide on Windows**: real Ollama/ComfyUI/Voicebox installer downloads, the opened installers, detection while waiting, ComfyUI Desktop port 8000, Gemma pull, Z-Image files into ComfyUI's models folder, Voicebox model names match. | P0 | A12, A13. |
+| T25 | **Mac pass**: traffic lights centred in the 38 px bar (tune `trafficLightPosition`), menu bar items work (⌘N, ⌘,, ⌘⌥S), Edit copy/paste in fields, Dock reopen, DMG window layout, vibrancy behind the guide. | P1 | |
+| T26 | Generate images once with each recommended model in Images (Klein, Z-Image, Qwen-Image) and confirm the graphs run. | P1 | |

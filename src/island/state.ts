@@ -16,7 +16,8 @@ export interface IslandSettings {
 }
 
 const KEY = 'lotus.island.v1';
-const DEFAULTS: IslandSettings = { enabled: true, model: '', voiceProfileId: '', autoCollapse: true, agents: true };
+/** The island starts switched off on every OS (session 10); turn it on in Settings or with Ctrl+Alt+T. */
+const DEFAULTS: IslandSettings = { enabled: false, model: '', voiceProfileId: '', autoCollapse: true, agents: true };
 
 export function loadIsland(): IslandSettings {
   try {

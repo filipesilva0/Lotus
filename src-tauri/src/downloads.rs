@@ -186,6 +186,97 @@ pub async fn download_start(
     }
 }
 
+/// Hosts an engine installer may come from (the projects' own release servers). Redirects from these
+/// (for example GitHub to its asset CDN) are followed by the HTTP client.
+const INSTALLER_HOSTS: [&str; 5] = ["github.com", "ollama.com", "download.comfy.org", "dl.todesktop.com", "comfy.org"];
+const INSTALLER_EXT: [&str; 9] = [".exe", ".msi", ".dmg", ".appimage", ".deb", ".rpm", ".tar.zst", ".tgz", ".zip"];
+
+/// Checks an installer link and file name. Pure, so it is unit-tested.
+pub fn check_installer(url: &str, file_name: &str) -> Result<(), String> {
+    let rest = url.strip_prefix("https://").ok_or("Only https:// links can be downloaded.")?;
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("").to_ascii_lowercase();
+    if !INSTALLER_HOSTS.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+        return Err(format!("Lotus only downloads engine installers from the engines' own sites, not from {host}."));
+    }
+    let lower = file_name.to_ascii_lowercase();
+    if file_name.is_empty() || file_name.len() > 200 || file_name.contains(['/', '\\', ':']) || file_name.contains("..") {
+        return Err("The installer needs a plain file name.".to_string());
+    }
+    if !INSTALLER_EXT.iter().any(|e| lower.ends_with(e)) {
+        return Err(format!("{file_name} does not look like an installer."));
+    }
+    Ok(())
+}
+
+/// Downloads an engine's official installer into `<Lotus Studio>/Engines/Installers`. A file that is
+/// already there (a finished earlier download) is reused. Resolves with the saved path.
+#[tauri::command]
+pub async fn installer_download(
+    app: AppHandle,
+    state: State<'_, Downloads>,
+    id: String,
+    url: String,
+    file_name: String,
+) -> Result<String, String> {
+    let fail = |app: &AppHandle, id: &str, msg: String| -> String {
+        emit(app, Progress { id: id.to_string(), received: 0, total: None, done: true, error: Some(msg.clone()), path: None });
+        msg
+    };
+    if let Err(m) = check_installer(&url, &file_name) {
+        return Err(fail(&app, &id, m));
+    }
+    let dir = crate::setup::studio_dir(&app).join("Engines").join("Installers");
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return Err(fail(&app, &id, format!("Could not create {}: {e}", dir.display())));
+    }
+    let target = dir.join(&file_name);
+    if target.is_file() {
+        let path = target.to_string_lossy().into_owned();
+        let len = std::fs::metadata(&target).map(|m| m.len()).unwrap_or(0);
+        emit(&app, Progress { id, received: len, total: Some(len), done: true, error: None, path: Some(path.clone()) });
+        return Ok(path);
+    }
+    let part = dir.join(format!("{file_name}.lotus-part"));
+    let cancel = Arc::new(AtomicBool::new(false));
+    state.0.lock().unwrap().insert(id.clone(), cancel.clone());
+    let result = stream_to_file(&app, &id, &url, None, &part, &cancel).await;
+    state.0.lock().unwrap().remove(&id);
+    match result.and_then(|n| std::fs::rename(&part, &target).map(|_| n).map_err(|e| format!("Could not finish the file: {e}"))) {
+        Ok(received) => {
+            let path = target.to_string_lossy().into_owned();
+            emit(&app, Progress { id, received, total: Some(received), done: true, error: None, path: Some(path.clone()) });
+            Ok(path)
+        }
+        Err(msg) => {
+            let _ = std::fs::remove_file(&part);
+            Err(fail(&app, &id, msg))
+        }
+    }
+}
+
+/// Usual places for ComfyUI's models folder when the user has not pointed Lotus at it yet:
+/// ComfyUI Desktop's shared folder, a ComfyUI folder in Documents, and the home folder.
+#[tauri::command]
+pub async fn comfy_models_guess(app: AppHandle) -> Option<String> {
+    use tauri::Manager;
+    let docs = app.path().document_dir().ok();
+    let home = app.path().home_dir().ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut c: Vec<PathBuf> = Vec::new();
+        if let Some(l) = std::env::var_os("LOCALAPPDATA") {
+            c.push(PathBuf::from(&l).join("Comfy-Desktop").join("ComfyUI-Shared").join("models"));
+        }
+        for base in [docs, home].into_iter().flatten() {
+            c.push(base.join("ComfyUI").join("models"));
+            c.push(base.join("ComfyUI").join("ComfyUI").join("models"));
+        }
+        c.into_iter().find(|p| p.join("checkpoints").is_dir() || p.join("diffusion_models").is_dir()).map(|p| p.to_string_lossy().into_owned())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 #[tauri::command]
 pub fn download_cancel(state: State<'_, Downloads>, id: String) {
     if let Some(flag) = state.0.lock().unwrap().get(&id) {
@@ -234,4 +325,22 @@ pub async fn list_model_files(dir: String) -> Vec<String> {
     })
     .await
     .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn installer_links_are_limited_to_engine_sites() {
+        assert!(check_installer("https://github.com/ollama/ollama/releases/latest/download/OllamaSetup.exe", "OllamaSetup.exe").is_ok());
+        assert!(check_installer("https://download.comfy.org/windows/nsis/x64", "ComfyUI-Setup.exe").is_ok());
+        assert!(check_installer("https://github.com/jamiepine/voicebox/releases/download/v0.5.0/Voicebox_0.5.0_aarch64.dmg", "Voicebox_0.5.0_aarch64.dmg").is_ok());
+        assert!(check_installer("http://github.com/x.exe", "x.exe").is_err());
+        assert!(check_installer("https://evil.example/OllamaSetup.exe", "OllamaSetup.exe").is_err());
+        assert!(check_installer("https://github.com.evil.example/x.exe", "x.exe").is_err());
+        assert!(check_installer("https://github.com/x", "../x.exe").is_err());
+        assert!(check_installer("https://github.com/x", "notes.txt").is_err());
+        assert!(check_installer("https://github.com/x", "ollama-linux-amd64.tar.zst").is_ok());
+    }
 }

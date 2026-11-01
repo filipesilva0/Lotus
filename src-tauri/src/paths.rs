@@ -15,9 +15,11 @@ pub struct AppPaths {
     pub portable: bool,
     pub data_dir: String,
     pub exe_dir: String,
+    /// Documents/Lotus Studio (or the folder chosen in the installer); see setup.rs.
+    pub studio_dir: String,
 }
 
-fn exe_dir() -> PathBuf {
+pub fn exe_dir() -> PathBuf {
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -59,7 +61,7 @@ pub fn apply_portable_env() {
     }
 }
 
-pub fn describe(installed_data_dir: PathBuf) -> AppPaths {
+pub fn describe(installed_data_dir: PathBuf, studio_dir: PathBuf) -> AppPaths {
     let portable = is_portable();
     AppPaths {
         portable,
@@ -67,5 +69,6 @@ pub fn describe(installed_data_dir: PathBuf) -> AppPaths {
             .to_string_lossy()
             .into_owned(),
         exe_dir: exe_dir().to_string_lossy().into_owned(),
+        studio_dir: studio_dir.to_string_lossy().into_owned(),
     }
 }

@@ -31,6 +31,11 @@ import { useEngines } from './hooks/useEngines';
 import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
 import { invokeNative, onEvent } from './lib/bus';
+import { WelcomeSetup } from './components/setup/WelcomeSetup';
+import { loadSetup } from './setup/state';
+import { installMacMenu, menuSignature } from './lib/nativeMenu';
+import { chromeOs } from './components/common/TitleBar';
+import type { ColorPalette } from './types/lotus';
 
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
@@ -95,8 +100,10 @@ function loadSettings(): LotusSettings {
 }
 
 export default function App() {
-  const firstRun = useRef(!localStorage.getItem(SESSIONS_KEY) && !localStorage.getItem('lotus.setup.dismissed'));
-  const [currentView, setCurrentViewRaw] = useState<ViewMode>(firstRun.current ? 'engines' : 'chat');
+  // First run: the Welcome guide fills the window until it is finished or skipped (session 10).
+  const [setupOpen, setSetupOpen] = useState(() => !loadSetup().done);
+  const [setupAccent, setSetupAccent] = useState<ColorPalette>('blue');
+  const [currentView, setCurrentViewRaw] = useState<ViewMode>('chat');
   const [builderSeen, setBuilderSeen] = useState(false);
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
   const [settings, setSettings] = useState<LotusSettings>(loadSettings);
@@ -197,8 +204,8 @@ export default function App() {
 
   // Each page wears its own petal colour as the accent (no accent setting since session 8).
   useEffect(() => {
-    applyThemeToDocument(PAGE_PALETTE[currentView], settings.fontFamily, settings.fontSize, dark);
-  }, [currentView, settings.fontFamily, settings.fontSize, dark]);
+    applyThemeToDocument(setupOpen ? setupAccent : PAGE_PALETTE[currentView], settings.fontFamily, settings.fontSize, dark);
+  }, [currentView, settings.fontFamily, settings.fontSize, dark, setupOpen, setupAccent]);
   useEffect(() => { void applyWindowGlass(settings.appearance, dark); }, [settings.appearance, dark]);
 
   // The window starts hidden to avoid a white flash; show it once we have painted.
@@ -212,7 +219,7 @@ export default function App() {
       setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
     }).catch(() => undefined);
   }, [ollamaUp]);
-  useEffect(() => { if (comfyUp) comfy.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp]);
+  useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp]);
 
   // ── Messages from other windows ───────────────────────────────────────────
   useEffect(() => { if (currentView === 'builder') setBuilderSeen(true); }, [currentView]);
@@ -281,9 +288,20 @@ export default function App() {
       { label: 'Forward', shortcut: 'Alt+Right', onSelect: goForward, disabled: !future.length },
     ] },
     { label: 'Help', items: [
+      { label: 'Setup Guide…', onSelect: () => setSetupOpen(true) },
+      'separator',
       { label: 'Check for Updates…', onSelect: () => { void updates.check(); setIsSettingsOpen(true); } },
     ] },
   ];
+
+  // macOS: these menus go to the system menu bar instead of the window (rebuilt only when they change).
+  const menusRef = useRef(menus);
+  menusRef.current = menus;
+  const menuSig = menuSignature(menus);
+  useEffect(() => {
+    if (chromeOs() !== 'macos') return;
+    void installMacMenu(menusRef.current, () => menusRef.current).catch(() => undefined);
+  }, [menuSig]);
 
   // Ctrl+N and Ctrl+, are listed in the menus, so they must work from the keyboard too.
   useEffect(() => {
@@ -347,6 +365,18 @@ export default function App() {
       </div>
     </main>
   );
+
+  if (setupOpen) {
+    return (
+      <div className="h-screen w-screen relative overflow-hidden">
+        <WelcomeSetup eng={eng} onAccent={setSetupAccent} onClose={() => { setSetupOpen(false); void eng.refresh(); }} />
+        <div className="absolute inset-x-0 top-0">
+          <TitleBar bare canGoBack={false} canGoForward={false} onBack={goBack} onForward={goForward}
+            leftPanel={false} rightPanel={false} onToggleLeft={toggleLeft} onToggleRight={toggleRight} menus={menus} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col">

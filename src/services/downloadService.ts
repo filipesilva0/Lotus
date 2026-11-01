@@ -8,6 +8,8 @@ import { uid } from '../lib/persist';
 import { savedExe } from './engineControl';
 
 export type ModelFolder = 'checkpoints' | 'loras';
+/** Every models/ subfolder Lotus writes to (split image models use the last three; session 10). */
+export type ComfySubfolder = ModelFolder | 'diffusion_models' | 'text_encoders' | 'vae';
 
 export interface DownloadProgress {
   id: string;
@@ -25,15 +27,16 @@ export const savedModelsDir = () => localStorage.getItem(DIR_KEY) || '';
 export const setSavedModelsDir = (p: string) => localStorage.setItem(DIR_KEY, p);
 
 const sep = (dir: string) => (dir.includes('\\') ? '\\' : '/');
-export const folderPath = (modelsDir: string, kind: ModelFolder) => `${modelsDir.replace(/[\\/]+$/, '')}${sep(modelsDir)}${kind}`;
+export const folderPath = (modelsDir: string, kind: ComfySubfolder) => `${modelsDir.replace(/[\\/]+$/, '')}${sep(modelsDir)}${kind}`;
 
 /** The folder ComfyUI loads models from: the one the user chose, else found from the launcher they located. */
 export async function findModelsDir(): Promise<string> {
   const saved = savedModelsDir();
   if (saved) return saved;
+  if (!isTauri) return '';
   const launcher = savedExe('comfyui');
-  if (!launcher || !isTauri) return '';
-  const found = await invokeNative<string | null>('comfy_models_dir', { launcher });
+  const found = (launcher ? await invokeNative<string | null>('comfy_models_dir', { launcher }) : null)
+    ?? await invokeNative<string | null>('comfy_models_guess');
   if (found) setSavedModelsDir(found);
   return found ?? '';
 }

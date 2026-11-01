@@ -1,16 +1,32 @@
 <?if $(sys.BUILDARCH)="x86"?>
     <?define Win64 = "no" ?>
-    <?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
 <?elseif $(sys.BUILDARCH)="x64"?>
     <?define Win64 = "yes" ?>
-    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
 <?elseif $(sys.BUILDARCH)="arm64"?>
     <?define Win64 = "yes" ?>
-    <?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
 <?else?>
     <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
 <?endif?>
 
+<!--
+  Lotus installer (session 10). Based on Tauri's stock WiX 3 template.
+
+  - Installs for the current user only (no administrator prompt) into Documents\Lotus Studio by
+    default; the folder page can change it. The app's working folders (Engines, Models, Projects,
+    Exports) are created there by the app itself, so uninstalling never deletes the user's work.
+  - Pages: Welcome, licence, folder, Engines, Options, ready, progress, finish.
+  - Engines page: AppSearch looks for Ollama, ComfyUI Desktop and Voicebox. Found engines show
+    "already on this PC" instead of a tick box. The ticks are written to
+    HKCU\Software\Lotus\Lotus\SetupEngines ("ollama=1;comfyui=;voicebox=1"); Lotus's first-run guide
+    reads them, downloads each engine's official installer and opens it, so the user accepts each
+    engine's own terms. The MSI itself never downloads or runs an engine.
+  - Every component in a per-user folder has an HKCU registry key path (ICE38/ICE43/ICE64).
+    That includes the main program: its file is not the key path. If resources or sidecar
+    binaries are ever added to tauri.conf.json, Tauri generates file key paths for them, which
+    ICE38 rejects in a per-user folder; give those an HKCU key path too (see CURRENT_STATE).
+  - In this template a doubled backslash before a Handlebars placeholder is an escape; everywhere else write a
+    single backslash (a doubled one broke the Run key in session 2: LGHT0204/ICE03).
+-->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
     <Product
             Id="*"
@@ -26,19 +42,11 @@
                  Languages="0"
                  Compressed="yes"
                  InstallScope="perUser"
+                 InstallPrivileges="limited"
                  SummaryCodepage="!(loc.TauriCodepage)"/>
 
-        <!-- https://docs.microsoft.com/en-us/windows/win32/msi/reinstallmode -->
         <!-- reinstall all files; rewrite all registry entries; reinstall all shortcuts -->
         <Property Id="REINSTALLMODE" Value="amus" />
-
-        <!-- Install scope: "Just for me" (no admin) is the default; WixUI_Advanced lets the user pick "All users". -->
-        <Property Id="ALLUSERS" Value="2" />
-        <Property Id="MSIINSTALLPERUSER" Value="1" />
-        <Property Id="ApplicationFolderName" Value="{{product_name}}" />
-        <Property Id="WixAppFolder" Value="WixPerUserFolder" />
-        <WixVariable Id="WixUISupportPerUser" Value="1" />
-        <WixVariable Id="WixUISupportPerMachine" Value="1" />
 
         <!-- Auto launch app after installation, useful for passive mode which usually used in updates -->
         <Property Id="AUTOLAUNCHAPP" Secure="yes" />
@@ -69,7 +77,7 @@
 
         <Icon Id="ProductIcon" SourceFile="{{icon_path}}"/>
         <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
-        <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" />      <!-- Remove repair -->
+        <Property Id="ARPNOREPAIR" Value="yes" Secure="yes" />
         <SetProperty Id="ARPNOMODIFY" Value="1" After="InstallValidate" Sequence="execute"/>
 
         {{#if homepage}}
@@ -78,31 +86,194 @@
         <Property Id="ARPURLUPDATEINFO" Value="{{homepage}}"/>
         {{/if}}
 
-        
-        <!-- launch app checkbox -->
+        <!-- ── Engine detection (AppSearch). A found engine's path ends up in the property. ── -->
+        <Property Id="OLLAMA_FOUND">
+            <DirectorySearch Id="OllamaUserDir" Path="[LocalAppDataFolder]Programs\Ollama" Depth="0">
+                <FileSearch Id="OllamaUserExe" Name="ollama.exe" />
+            </DirectorySearch>
+        </Property>
+        <Property Id="COMFYUI_FOUND">
+            <DirectorySearch Id="ComfyElectronDir" Path="[LocalAppDataFolder]Programs\@comfyorgcomfyui-electron" Depth="0">
+                <FileSearch Id="ComfyElectronExe" Name="ComfyUI.exe" />
+            </DirectorySearch>
+            <DirectorySearch Id="ComfyProgramsDir" Path="[LocalAppDataFolder]Programs\ComfyUI" Depth="0">
+                <FileSearch Id="ComfyProgramsExe" Name="ComfyUI.exe" />
+            </DirectorySearch>
+        </Property>
+        <Property Id="VOICEBOX_FOUND">
+            <DirectorySearch Id="VoiceboxUserDir" Path="[LocalAppDataFolder]Voicebox" Depth="0">
+                <FileSearch Id="VoiceboxUserExe" Name="voicebox.exe" />
+            </DirectorySearch>
+            <DirectorySearch Id="VoiceboxMachineDir" Path="[ProgramFiles64Folder]Voicebox" Depth="0">
+                <FileSearch Id="VoiceboxMachineExe" Name="voicebox.exe" />
+            </DirectorySearch>
+        </Property>
+
+        <!-- Page choices. Tick boxes set "1" when ticked and clear the property when not. -->
+        <Property Id="INSTALL_OLLAMA" Value="1" Secure="yes" />
+        <Property Id="INSTALL_COMFYUI" Secure="yes" />
+        <Property Id="INSTALL_VOICEBOX" Secure="yes" />
+        <Property Id="DESKTOP_SHORTCUT" Value="1" Secure="yes" />
+        <Property Id="START_WITH_WINDOWS" Secure="yes" />
+        <Property Id="PORTABLE_DATA" Secure="yes" />
+
+        <!-- Finish page -->
         <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.LaunchApp)" />
         <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
+        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="The first time Lotus opens, a short guide sets up the engines you chose and suggests models for your computer." />
         <CustomAction Id="LaunchApplication" Impersonate="yes" FileKey="Path" ExeCommand="[LAUNCHAPPARGS]" Return="asyncNoWait" />
 
-        <UI>
-            <!-- launch app checkbox -->
+        <Property Id="WIXUI_INSTALLDIR" Value="APPLICATIONFOLDER" />
+
+        <UI Id="LotusUI">
+            <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+            <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI Semibold" Size="13" />
+            <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI Semibold" Size="9" />
+            <TextStyle Id="Lotus_Font_Muted" FaceName="Segoe UI" Size="8" Red="96" Green="96" Blue="102" />
+            <TextStyle Id="Lotus_Font_Found" FaceName="Segoe UI Semibold" Size="9" Red="36" Green="128" Blue="58" />
+            <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+            <Property Id="WixUI_Mode" Value="InstallDir" />
+
+            <DialogRef Id="BrowseDlg" />
+            <DialogRef Id="DiskCostDlg" />
+            <DialogRef Id="ErrorDlg" />
+            <DialogRef Id="FatalError" />
+            <DialogRef Id="FilesInUse" />
+            <DialogRef Id="InvalidDirDlg" />
+            <DialogRef Id="MsiRMFilesInUse" />
+            <DialogRef Id="PrepareDlg" />
+            <DialogRef Id="ProgressDlg" />
+            <DialogRef Id="ResumeDlg" />
+            <DialogRef Id="UserExit" />
+
+            <Publish Dialog="BrowseDlg" Control="OK" Event="DoAction" Value="WixUIValidatePath" Order="3">1</Publish>
+            <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="4"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
+
+            <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
             <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+
+            <!-- Welcome → Licence → Folder → Engines → Options → Ready -->
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">NOT Installed</Publish>
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>
+
+            <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+            <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
+
+            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+            <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
+            <Publish Dialog="InstallDirDlg" Control="Next" Event="DoAction" Value="WixUIValidatePath" Order="2">NOT WIXUI_DONTVALIDATEPATH</Publish>
+            <Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg" Order="3"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
+            <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="LotusEnginesDlg" Order="4">WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"</Publish>
+            <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
+            <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2">1</Publish>
+
+            <Publish Dialog="LotusEnginesDlg" Control="Back" Event="NewDialog" Value="InstallDirDlg">1</Publish>
+            <Publish Dialog="LotusEnginesDlg" Control="Next" Event="NewDialog" Value="LotusOptionsDlg">1</Publish>
+
+            <Publish Dialog="LotusOptionsDlg" Control="Back" Event="NewDialog" Value="LotusEnginesDlg">1</Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="AddLocal" Value="DesktopShortcutFeature" Order="1">DESKTOP_SHORTCUT = "1"</Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="Remove" Value="DesktopShortcutFeature" Order="2"><![CDATA[DESKTOP_SHORTCUT <> "1"]]></Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="AddLocal" Value="AutostartFeature" Order="3">START_WITH_WINDOWS = "1"</Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="Remove" Value="AutostartFeature" Order="4"><![CDATA[START_WITH_WINDOWS <> "1"]]></Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="AddLocal" Value="PortableDataFeature" Order="5">PORTABLE_DATA = "1"</Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="Remove" Value="PortableDataFeature" Order="6"><![CDATA[PORTABLE_DATA <> "1"]]></Publish>
+            <Publish Dialog="LotusOptionsDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="10">1</Publish>
+
+            <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="LotusOptionsDlg" Order="1">NOT Installed</Publish>
+            <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2">Installed AND NOT PATCH</Publish>
+            <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">Installed AND PATCH</Publish>
+
+            <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+            <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+            <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+            <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+
+            <!-- ── Engines page ── -->
+            <Dialog Id="LotusEnginesDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
+                <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+                <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+                <Control Id="Title" Type="Text" X="15" Y="7" Width="220" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Engines" />
+                <Control Id="Description" Type="Text" X="25" Y="23" Width="240" Height="15" Transparent="yes" NoPrefix="yes" Text="Pick what Lotus sets up the first time it opens." />
+
+                <Control Id="Intro" Type="Text" X="20" Y="56" Width="330" Height="28" NoPrefix="yes" Text="These free engines do the work behind Lotus. For each one you tick, Lotus downloads the official installer from the engine's own site and opens it, so you can read its terms." />
+
+                <Control Id="OllamaBox" Type="CheckBox" X="20" Y="94" Width="320" Height="14" Property="INSTALL_OLLAMA" CheckBoxValue="1" Text="Ollama, for chat, research and the App Builder">
+                    <Condition Action="hide">OLLAMA_FOUND</Condition>
+                    <Condition Action="show">NOT OLLAMA_FOUND</Condition>
+                </Control>
+                <Control Id="OllamaFound" Type="Text" X="20" Y="95" Width="320" Height="13" NoPrefix="yes" Text="{\Lotus_Font_Found}Ollama is already on this PC">
+                    <Condition Action="hide">NOT OLLAMA_FOUND</Condition>
+                    <Condition Action="show">OLLAMA_FOUND</Condition>
+                </Control>
+                <Control Id="OllamaNote" Type="Text" X="33" Y="109" Width="317" Height="12" NoPrefix="yes" Text="{\Lotus_Font_Muted}MIT licence. About 1 GB. Models are picked in Lotus." />
+
+                <Control Id="ComfyBox" Type="CheckBox" X="20" Y="132" Width="320" Height="14" Property="INSTALL_COMFYUI" CheckBoxValue="1" Text="ComfyUI, for images">
+                    <Condition Action="hide">COMFYUI_FOUND</Condition>
+                    <Condition Action="show">NOT COMFYUI_FOUND</Condition>
+                </Control>
+                <Control Id="ComfyFound" Type="Text" X="20" Y="133" Width="320" Height="13" NoPrefix="yes" Text="{\Lotus_Font_Found}ComfyUI is already on this PC">
+                    <Condition Action="hide">NOT COMFYUI_FOUND</Condition>
+                    <Condition Action="show">COMFYUI_FOUND</Condition>
+                </Control>
+                <Control Id="ComfyNote" Type="Text" X="33" Y="147" Width="317" Height="12" NoPrefix="yes" Text="{\Lotus_Font_Muted}GPL-3.0. Comfy Desktop. Works best with an NVIDIA graphics card." />
+
+                <Control Id="VoiceboxBox" Type="CheckBox" X="20" Y="170" Width="320" Height="14" Property="INSTALL_VOICEBOX" CheckBoxValue="1" Text="Voicebox, for speech, voice cloning and dictation">
+                    <Condition Action="hide">VOICEBOX_FOUND</Condition>
+                    <Condition Action="show">NOT VOICEBOX_FOUND</Condition>
+                </Control>
+                <Control Id="VoiceboxFound" Type="Text" X="20" Y="171" Width="320" Height="13" NoPrefix="yes" Text="{\Lotus_Font_Found}Voicebox is already on this PC">
+                    <Condition Action="hide">NOT VOICEBOX_FOUND</Condition>
+                    <Condition Action="show">VOICEBOX_FOUND</Condition>
+                </Control>
+                <Control Id="VoiceboxNote" Type="Text" X="33" Y="185" Width="317" Height="12" NoPrefix="yes" Text="{\Lotus_Font_Muted}MIT licence." />
+
+                <Control Id="Later" Type="Text" X="20" Y="210" Width="330" Height="14" NoPrefix="yes" Text="{\Lotus_Font_Muted}You can change this in Lotus at any time. Nothing is downloaded during this install." />
+
+                <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+                <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+                <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+                <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+                    <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+                </Control>
+            </Dialog>
+
+            <!-- ── Options page ── -->
+            <Dialog Id="LotusOptionsDlg" Width="370" Height="270" Title="!(loc.InstallDirDlg_Title)">
+                <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.InstallDirDlgBannerBitmap)" />
+                <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+                <Control Id="Title" Type="Text" X="15" Y="7" Width="220" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Options" />
+                <Control Id="Description" Type="Text" X="25" Y="23" Width="240" Height="15" Transparent="yes" NoPrefix="yes" Text="A few small choices. All of them can be changed later." />
+
+                <Control Id="ShortcutBox" Type="CheckBox" X="20" Y="62" Width="320" Height="14" Property="DESKTOP_SHORTCUT" CheckBoxValue="1" Text="Add a shortcut to the desktop" />
+
+                <Control Id="AutostartBox" Type="CheckBox" X="20" Y="92" Width="320" Height="14" Property="START_WITH_WINDOWS" CheckBoxValue="1" Text="Start Lotus when I sign in to Windows" />
+                <Control Id="AutostartNote" Type="Text" X="33" Y="107" Width="317" Height="12" NoPrefix="yes" Text="{\Lotus_Font_Muted}Lotus starts quietly in the tray, ready for the island and its shortcuts." />
+
+                <Control Id="PortableBox" Type="CheckBox" X="20" Y="132" Width="320" Height="14" Property="PORTABLE_DATA" CheckBoxValue="1" Text="Keep settings and chats in the install folder" />
+                <Control Id="PortableNote" Type="Text" X="33" Y="147" Width="317" Height="24" NoPrefix="yes" Text="{\Lotus_Font_Muted}Instead of your user profile. Useful if you back up or move the Lotus Studio folder as a whole." />
+
+                <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+                <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
+                <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)" />
+                <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+                    <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+                </Control>
+            </Dialog>
         </UI>
 
-        <UIRef Id="WixUI_Advanced" />
+        <UIRef Id="WixUI_Common" />
+        <UIRef Id="WixUI_ErrorProgressText" />
 
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="DesktopFolder" Name="Desktop">
-                <!-- Shortcut components sit in per-user folders (Desktop, Start Menu), so their KeyPath must be HKCU
-                     (WiX ICE38/ICE64 reject HKMU there). Components that live in the install folder keep HKMU. -->
                 <Component Id="ApplicationShortcutDesktop" Guid="*">
                     <Shortcut Id="ApplicationDesktopShortcut" Name="{{product_name}}" Description="Runs {{product_name}}" Target="[!Path]" WorkingDirectory="APPLICATIONFOLDER" />
-                    <RemoveFolder Id="DesktopFolder" On="uninstall" />
                     <RegistryValue Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="Desktop Shortcut" Type="integer" Value="1" KeyPath="yes" />
                 </Component>
             </Directory>
-            <Directory Id="$(var.PlatformProgramFilesFolder)" Name="PFiles">
-                <Directory Id="APPLICATIONFOLDER" Name="{{product_name}}"/>
+            <!-- Documents\Lotus Studio. PersonalFolder follows a Documents folder moved to OneDrive or another drive. -->
+            <Directory Id="PersonalFolder">
+                <Directory Id="APPLICATIONFOLDER" Name="Lotus Studio"/>
             </Directory>
             <Directory Id="ProgramMenuFolder">
                 <Directory Id="ApplicationProgramsFolder" Name="{{product_name}}"/>
@@ -111,12 +282,13 @@
 
         <DirectoryRef Id="APPLICATIONFOLDER">
             <Component Id="RegistryEntries" Guid="*">
-                <RegistryKey Root="HKMU" Key="Software\\{{manufacturer}}\\{{product_name}}">
+                <RegistryKey Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}">
                     <RegistryValue Name="InstallDir" Type="string" Value="[APPLICATIONFOLDER]" KeyPath="yes" />
+                    <!-- Read by the app (src-tauri/src/setup.rs) as the Lotus Studio folder. -->
+                    <RegistryValue Name="StudioDir" Type="string" Value="[APPLICATIONFOLDER]" />
                 </RegistryKey>
-                <!-- Change the Root to HKCU for perUser installations -->
                 {{#each deep_link_protocols as |protocol| ~}}
-                <RegistryKey Root="HKLM" Key="Software\Classes\\{{protocol}}">
+                <RegistryKey Root="HKCU" Key="Software\Classes\\{{protocol}}">
                     <RegistryValue Type="string" Name="URL Protocol" Value=""/>
                     <RegistryValue Type="string" Value="URL:{{bundle_id}} protocol"/>
                     <RegistryKey Key="DefaultIcon">
@@ -128,17 +300,14 @@
                 </RegistryKey>
                 {{/each~}}
             </Component>
+            <!-- What the Engines page asked for. Lotus's first-run guide reads it once. -->
+            <Component Id="SetupChoices" Guid="*">
+                <RegistryValue Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="SetupEngines" Type="string"
+                               Value="ollama=[INSTALL_OLLAMA];comfyui=[INSTALL_COMFYUI];voicebox=[INSTALL_VOICEBOX]" KeyPath="yes" />
+            </Component>
             <Component Id="Path" Guid="{{path_component_guid}}" Win64="$(var.Win64)">
-                <File Id="Path" Source="{{main_binary_path}}" KeyPath="yes" Checksum="yes"/>
-                {{#each file_associations as |association| ~}}
-                {{#each association.ext as |ext| ~}}
-                <ProgId Id="{{../../product_name}}.{{ext}}" Advertise="yes" Description="{{association.description}}">
-                    <Extension Id="{{ext}}" Advertise="yes">
-                        <Verb Id="open" Command="Open with {{../../product_name}}" Argument="&quot;%1&quot;" />
-                    </Extension>
-                </ProgId>
-                {{/each~}}
-                {{/each~}}
+                <File Id="Path" Source="{{main_binary_path}}" KeyPath="no" Checksum="yes"/>
+                <RegistryValue Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="Program" Type="string" Value="[#Path]" KeyPath="yes" />
             </Component>
             {{#each binaries as |bin| ~}}
             <Component Id="{{ bin.id }}" Guid="{{bin.guid}}" Win64="$(var.Win64)">
@@ -158,31 +327,25 @@
             {{/if}}
             {{resources}}
             <Component Id="CMP_UninstallShortcut" Guid="*">
-
                 <Shortcut Id="UninstallShortcut"
-						  Name="Uninstall {{product_name}}"
-						  Description="Uninstalls {{product_name}}"
-						  Target="[System64Folder]msiexec.exe"
-						  Arguments="/x [ProductCode]" />
-
-				<RemoveFolder Id="APPLICATIONFOLDER"
-							  On="uninstall" />
-
-				<RegistryValue Root="HKCU"
-							   Key="Software\\{{manufacturer}}\\{{product_name}}"
-							   Name="Uninstaller Shortcut"
-							   Type="integer"
-							   Value="1"
-							   KeyPath="yes" />
+                          Name="Uninstall {{product_name}}"
+                          Description="Uninstalls {{product_name}}. Your Lotus Studio files stay where they are."
+                          Target="[System64Folder]msiexec.exe"
+                          Arguments="/x [ProductCode]" />
+                <!-- Removed only if empty: the user's Engines, Projects and Exports keep it alive. -->
+                <RemoveFolder Id="APPLICATIONFOLDER" On="uninstall" />
+                <RegistryValue Root="HKCU"
+                               Key="Software\\{{manufacturer}}\\{{product_name}}"
+                               Name="Uninstaller Shortcut"
+                               Type="integer"
+                               Value="1"
+                               KeyPath="yes" />
             </Component>
-        </DirectoryRef>
-
-        <DirectoryRef Id="APPLICATIONFOLDER">
             <Component Id="AutostartEntry" Guid="*">
-                <RegistryValue Root="HKMU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="{{product_name}}" Type="string" Value="&quot;[!Path]&quot; --minimized" KeyPath="yes" />
+                <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="{{product_name}}" Type="string" Value="&quot;[!Path]&quot; --minimized" KeyPath="yes" />
             </Component>
             <Component Id="PortableDataEntry" Guid="*">
-                <RegistryValue Root="HKMU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="PortableData" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="PortableData" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </DirectoryRef>
 
@@ -222,6 +385,7 @@
                 Absent="disallow">
 
             <ComponentRef Id="RegistryEntries"/>
+            <ComponentRef Id="SetupChoices"/>
             <ComponentRef Id="Path"/>
             <ComponentRef Id="CMP_UninstallShortcut" />
             <ComponentRef Id="ApplicationShortcut" />
@@ -237,18 +401,14 @@
                 <ComponentRef Id="UpdateTaskUninstaller" />
             {{/if}}
 
-            <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut"
-                     Description="Add a Lotus shortcut to the desktop." Level="1" AllowAdvertise="no">
+            <!-- Set from the Options page (AddLocal/Remove); silent installs and updates use these levels. -->
+            <Feature Id="DesktopShortcutFeature" Title="Desktop shortcut" Level="1" AllowAdvertise="no" Display="hidden">
                 <ComponentRef Id="ApplicationShortcutDesktop"/>
             </Feature>
-
-            <Feature Id="AutostartFeature" Title="Start with Windows"
-                     Description="Launch Lotus when you sign in, so the island is always there. Off by default." Level="2" AllowAdvertise="no">
+            <Feature Id="AutostartFeature" Title="Start with Windows" Level="2" AllowAdvertise="no" Display="hidden">
                 <ComponentRef Id="AutostartEntry"/>
             </Feature>
-
-            <Feature Id="PortableDataFeature" Title="Portable data"
-                     Description="Keep chats, voices and settings in a data folder inside the install folder instead of your user profile. Best with 'Just for me' and a folder you can write to. Off by default." Level="2" AllowAdvertise="no">
+            <Feature Id="PortableDataFeature" Title="Portable data" Level="2" AllowAdvertise="no" Display="hidden">
                 <ComponentRef Id="PortableDataEntry"/>
             </Feature>
         </Feature>
@@ -319,8 +479,6 @@
             <RegistrySearch Id="EdgeUpdateLocalMachine32" Root="HKLM" Key="SOFTWARE\Microsoft\EdgeUpdate" Name="path" Type="raw"/>
             <RegistrySearch Id="EdgeUpdateCurrentUser" Root="HKCU" Key="SOFTWARE\Microsoft\EdgeUpdate" Name="path" Type="raw"/>
         </Property>
-        <!-- Chromium updater docs: https://source.chromium.org/chromium/chromium/src/+/main:docs/updater/user_manual.md -->
-        <!-- Modified from "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView\ModifyPath" -->
         <CustomAction Id="UpdateWebView2ViaEdgeUpdate" Execute="deferred" Property="EDGEUPDATE_PATH" Return="check" Impersonate="no" ExeCommand="/install appguid={F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}&amp;needsadmin=true" />
         <InstallExecuteSequence>
             <Custom Action='UpdateWebView2ViaEdgeUpdate' Before='InstallFinalize'>
@@ -336,7 +494,6 @@
         {{/if}}
 
         {{#if enable_elevated_update_task}}
-        <!-- Install an elevated update task within Windows Task Scheduler -->
         <CustomAction
             Id="CreateUpdateTask"
             Return="check"
@@ -349,7 +506,6 @@
                 NOT(REMOVE)
             </Custom>
         </InstallExecuteSequence>
-        <!-- Remove elevated update task during uninstall -->
         <CustomAction
             Id="DeleteUpdateTask"
             Return="check"

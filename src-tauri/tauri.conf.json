@@ -81,7 +81,9 @@
       "wix": {
         "template": "wix/main.wxs",
         "language": "en-US",
-        "upgradeCode": "6f4a7c52-3b1e-4f0a-9d8c-2a5e7b91c4d3"
+        "upgradeCode": "6f4a7c52-3b1e-4f0a-9d8c-2a5e7b91c4d3",
+        "bannerPath": "wix/banner.bmp",
+        "dialogImagePath": "wix/dialog.bmp"
       }
     },
     "licenseFile": "wix/license.rtf",

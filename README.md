@@ -159,15 +159,12 @@ Install only the engines you want. A page whose engine isn't running tells you s
 
 ## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Get started
 
-**1. Install the engines you want.**<br>
-**Ollama** for chat, research, the App Builder and tasks. **ComfyUI** for images. **Voicebox** for voice.
-
-**2. Install Lotus.**<br>
+**1. Install Lotus.**<br>
 Grab the file for your system from the [latest release](https://github.com/filipesilva0/Lotus/releases/latest):
 
 | File | What it is |
 |---|---|
-| **`Lotus-windows-x64.msi`** | Windows installer. Choose *Just for me* (no admin rights) or *All users*, the install folder, and optional extras: a desktop shortcut, start with Windows, and portable data. |
+| **`Lotus-windows-x64.msi`** | Windows installer, no admin rights needed. Installs to **Documents\Lotus Studio** (you can change it), asks which engines you want, and offers a desktop shortcut, start with Windows and portable data. |
 | **`Lotus-windows-x64-portable.zip`** | Windows, portable. Unzip anywhere, even a USB stick. Everything stays in a `data` folder next to the app. |
 | **`Lotus-macos-universal.dmg`** | macOS 11 or later, Apple silicon and Intel. Not notarized yet: the first time, right-click Lotus → *Open*. |
 | **`Lotus-linux-x86_64.AppImage`** | Linux, any distribution with WebKitGTK 4.1. `chmod +x` it and run. |
@@ -175,11 +172,11 @@ Grab the file for your system from the [latest release](https://github.com/filip
 
 Installed copies update themselves from **Settings → Updates** (the portable zip and the .deb/.rpm are replaced by downloading the new file).
 
-**3. Open Engines.**<br>
-Lotus finds Ollama by itself. Point it once at the file you use to launch ComfyUI and at Voicebox's server, then press *Start*. Turn on *Start with Lotus* and you won't think about it again.
+**2. Follow the setup guide.**<br>
+The first time Lotus opens, a short guide picks your **Lotus Studio** folder (in Documents), finds the engines you already have and installs the ones you want (**Ollama** for chat, research, the App Builder and tasks, **ComfyUI** for images, **Voicebox** for voice). Each engine's own installer opens, so you read its terms yourself. Then it suggests a quick, a balanced and a best model for each engine, picked for your graphics card. Reopen it any time from **Help → Setup Guide**.
 
-**4. Get a model.**<br>
-Open **Models**, type any model name, such as `qwen2.5:7b`, and download it. You're ready.
+**3. Start.**<br>
+Models download in the background. Everything else lives in **Engines & Models**.
 
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
@@ -213,6 +210,8 @@ Open **Models**, type any model name, such as `qwen2.5:7b`, and download it. You
 ## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Privacy
 
 Lotus is local-first by design. Nothing leaves your PC unless you switch it on.
+
+The setup guide downloads only what you pick, and only from each project's own site: engine installers from github.com (Ollama, Voicebox), download.comfy.org (ComfyUI), and models from ollama.com, huggingface.co (Comfy-Org repositories) and Voicebox's own sources.
 
 | What | When it goes online | What is sent |
 |---|---|---|

@@ -14,6 +14,7 @@ import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../c
 import { ImageSidebar } from '../images/ImageSidebar';
 import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
+import { recipeFor } from '../../setup/catalog';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
@@ -322,6 +323,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />
               </Section>
               <Section title="Sampling">
+                {recipeFor(params.checkpoint) && <p className="mb-2 text-[12px] text-[var(--color-text-muted)] leading-snug">This model uses fixed settings ({recipeFor(params.checkpoint)!.steps} steps, guidance {recipeFor(params.checkpoint)!.cfg}). Steps, guidance, sampler and scheduler below apply to other models.</p>}
                 <SliderField label="Guidance scale (CFG)" value={params.cfg} min={1} max={20} step={0.5} onChange={(v) => set({ cfg: v })} format={(v) => v.toFixed(1)} hint="How closely the image follows the prompt. FLUX models usually want 1–4." />
                 <SliderField label="Steps" value={params.steps} min={4} max={80} step={1} onChange={(v) => set({ steps: v })} />
                 <SliderField label="Reference strength" value={params.denoise} min={0.1} max={1} step={0.05} onChange={(v) => set({ denoise: v })} format={(v) => `${Math.round(v * 100)}%`} hint="With a reference image: higher changes more of it." />

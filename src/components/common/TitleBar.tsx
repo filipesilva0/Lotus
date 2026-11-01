@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, PanelLeft, PanelRight } from 'lucide-react';
 import { Symbol } from './Symbol';
 import { isTauri } from '../../lib/http';
+import { desktopOs } from '../../lib/glass';
 
 /**
  * Custom window title bar. The native Windows caption is turned off (`decorations: false` in
@@ -12,7 +13,18 @@ import { isTauri } from '../../lib/http';
  * Left: back / forward through pages, left / right panel toggles, and a real menu bar (File, Edit, View, Help).
  * Right: minimise, maximise/restore, close. Empty space drags the window; double-click maximises.
  * Window controls only render inside Tauri, where they work.
+ *
+ * Session 10, per OS:
+ * - Windows: as above (custom caption, Windows-style minimise / maximise / close on the right).
+ * - macOS: the window keeps the system's own traffic lights (top left, `titleBarStyle: Overlay` in
+ *   tauri.macos.conf.json); the bar leaves room for them and shows no menus, because File / Edit /
+ *   View / Help live in the macOS menu bar (lib/nativeMenu.ts).
+ * - Linux: the desktop's own title bar draws the window buttons (decorations on in
+ *   tauri.linux.conf.json); this bar keeps navigation and the menus.
  */
+export type ChromeOs = 'windows' | 'macos' | 'linux';
+/** Which chrome to draw. In a browser preview the Windows layout is shown. */
+export const chromeOs = (): ChromeOs => (isTauri ? desktopOs() : 'windows');
 
 export interface MenuItem {
   label: string;
@@ -36,6 +48,10 @@ interface TitleBarProps {
   onToggleLeft: () => void;
   onToggleRight: () => void;
   menus: MenuDef[];
+  /** Override for tests and screenshots. */
+  os?: ChromeOs;
+  /** Only the window controls and a drag area (the first-run guide). */
+  bare?: boolean;
 }
 
 type Win = { minimize(): Promise<void>; toggleMaximize(): Promise<void>; close(): Promise<void>; isMaximized(): Promise<boolean>; onResized(cb: () => void): Promise<() => void> };
@@ -58,7 +74,10 @@ const navBtn =
   'hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)] ' +
   'disabled:opacity-35 disabled:pointer-events-none focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]';
 
-export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onBack, onForward, leftPanel, rightPanel, onToggleLeft, onToggleRight, menus }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onBack, onForward, leftPanel, rightPanel, onToggleLeft, onToggleRight, menus, os: osProp, bare }) => {
+  const os = osProp ?? chromeOs();
+  const mac = os === 'macos';
+  const tipKeys = (pc: string, macKeys: string) => (mac ? macKeys : pc);
   const [win, setWin] = useState<Win | null>(null);
   const [maximized, setMaximized] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
@@ -96,25 +115,26 @@ export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onB
   const select = useCallback((item: MenuItem) => { setOpen(null); if (!item.disabled) item.onSelect(); }, []);
 
   return (
-    <div ref={barRef} data-tauri-drag-region className="material-titlebar relative z-40 h-10 shrink-0 flex items-center pl-2 select-none text-[var(--color-text-main)]" role="banner">
-      <div className="flex items-center gap-0.5">
-        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" data-tip="Back (Alt+Left)" data-tip-side="below">
+    <div ref={barRef} data-tauri-drag-region data-os={os}
+      className={`material-titlebar relative z-40 shrink-0 flex items-center select-none text-[var(--color-text-main)] ${mac ? 'h-[38px] pl-[84px]' : 'h-10 pl-2'}`} role="banner">
+      {!bare && <div className="flex items-center gap-0.5">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" data-tip={`Back (${tipKeys('Alt+Left', '⌥←')})`} data-tip-side="below">
           <Symbol glyph={ArrowLeft} size={16} />
         </button>
-        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" data-tip="Forward (Alt+Right)" data-tip-side="below">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" data-tip={`Forward (${tipKeys('Alt+Right', '⌥→')})`} data-tip-side="below">
           <Symbol glyph={ArrowRight} size={16} />
         </button>
         <button type="button" className={`tip ${navBtn} ml-1`} onMouseDown={keepFocus} onClick={onToggleLeft} aria-pressed={leftPanel}
-          aria-label={leftPanel ? 'Hide left panel' : 'Show left panel'} data-tip={`${leftPanel ? 'Hide' : 'Show'} left panel (Ctrl+Alt+S)`} data-tip-side="below">
+          aria-label={leftPanel ? 'Hide left panel' : 'Show left panel'} data-tip={`${leftPanel ? 'Hide' : 'Show'} left panel (${tipKeys('Ctrl+Alt+S', '⌘⌥S')})`} data-tip-side="below">
           <Symbol glyph={PanelLeft} size={16} />
         </button>
         <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onToggleRight} aria-pressed={rightPanel}
-          aria-label={rightPanel ? 'Hide right panel' : 'Show right panel'} data-tip={`${rightPanel ? 'Hide' : 'Show'} right panel (Ctrl+Alt+I)`} data-tip-side="below">
+          aria-label={rightPanel ? 'Hide right panel' : 'Show right panel'} data-tip={`${rightPanel ? 'Hide' : 'Show'} right panel (${tipKeys('Ctrl+Alt+I', '⌘⌥I')})`} data-tip-side="below">
           <Symbol glyph={PanelRight} size={16} />
         </button>
-      </div>
+      </div>}
 
-      <nav className="flex items-center ml-4" role="menubar" aria-label="Application menu">
+      {!mac && !bare && <nav className="flex items-center ml-4" role="menubar" aria-label="Application menu">
         {menus.map((m, i) => (
           <div key={m.label} className="relative">
             <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open === i}
@@ -127,12 +147,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onB
             {open === i && <Dropdown items={m.items} onSelect={select} />}
           </div>
         ))}
-      </nav>
+      </nav>}
 
       {/* Flexible empty space: this is what you grab to move the window. */}
       <div data-tauri-drag-region className="flex-1 self-stretch" />
 
-      {win && (
+      {win && os === 'windows' && (
         <div className="flex self-stretch" role="group" aria-label="Window controls">
           <WinBtn label="Minimise" onClick={() => void win.minimize()}>
             <path d="M0.5 5.5h10" />

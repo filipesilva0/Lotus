@@ -61,3 +61,17 @@ sublicense, and/or sell copies of the Software, and to permit persons to whom th
 furnished to do so, subject to the following conditions: The above copyright notice and this
 permission notice shall be included in all copies or substantial portions of the Software.
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+## Engines and models offered by the setup guide (not bundled)
+
+Lotus never ships an engine or a model. When the user opts in, it downloads the official installer
+from the project's own release host and opens it, so the user accepts that project's terms there.
+
+- Ollama: MIT, https://github.com/ollama/ollama (installers from its GitHub Releases)
+- ComfyUI: GPL-3.0, https://github.com/comfyanonymous/ComfyUI; Comfy Desktop from https://www.comfy.org/download (Comfy's terms: https://www.comfy.org/terms-of-service)
+- Voicebox: MIT, https://github.com/jamiepine/voicebox (installers from its GitHub Releases)
+
+Recommended models, each under its own licence: Qwen 3.5 (Apache-2.0), Gemma 4 (Gemma Terms of Use),
+FLUX.2 Klein 4B (Apache-2.0), Z-Image Turbo (Apache-2.0), Qwen-Image (Apache-2.0), Kokoro (Apache-2.0),
+Chatterbox Turbo (MIT), Qwen3-TTS (Apache-2.0), Whisper (MIT). Image model files come from the
+Comfy-Org repositories on Hugging Face.

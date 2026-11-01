@@ -7,6 +7,7 @@ mod hooks;
 mod island;
 mod memory_db;
 mod paths;
+mod setup;
 mod updates;
 
 use tauri::menu::{Menu, MenuItem};
@@ -29,7 +30,8 @@ fn show_main(app: &AppHandle) {
 #[tauri::command]
 fn app_paths(app: AppHandle) -> paths::AppPaths {
     let installed = app.path().app_data_dir().unwrap_or_default();
-    paths::describe(installed)
+    let studio = setup::studio_dir(&app);
+    paths::describe(installed, studio)
 }
 
 /// The main window starts hidden to avoid a white flash; the web layer calls this once it has painted.
@@ -96,6 +98,12 @@ pub fn run() {
             downloads::download_cancel,
             downloads::comfy_models_dir,
             downloads::list_model_files,
+            downloads::installer_download,
+            downloads::comfy_models_guess,
+            setup::setup_info,
+            setup::setup_prepare,
+            setup::engine_detect,
+            setup::installer_open,
             appbuilder::proj_create,
             appbuilder::proj_tree,
             appbuilder::proj_read,
@@ -201,10 +209,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building Lotus");
 
-    app.run(|handle, event| {
-        if let RunEvent::Exit = event {
+    app.run(|handle, event| match event {
+        RunEvent::Exit => {
             engines::kill_all(&handle.state::<engines::Engines>());
             appbuilder::kill_all(&handle.state::<appbuilder::AppBuilder>());
         }
+        // macOS: clicking the Dock icon after closing the window (Lotus keeps running) brings it back.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => show_main(handle),
+        _ => {}
     });
 }
