@@ -71,6 +71,11 @@ Give the user a short manual checklist and collect results:
 | T30 | **Chat installs for real**: ask Qwen 3.5 4B / Gemma 4 12B to "install a better chat model", "get me an image model", "add a voice model"; check they emit the ```install block, Allow pulls the model, Deny does nothing, the new model appears in the model menu. If small models ignore the block, add a fallback (e.g. detect "install <tag>" in the user's own message). | P1 | D35. |
 | T29 | Remote ComfyUI: the Images model downloads still save to a folder on this computer. Consider a "download on that computer" path (e.g. ComfyUI-Manager's API) or hide Download for remote ComfyUI. | P2 | |
 
+## Session 12 additions (guide, traffic lights, full-screen images)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T31 | **Mac check of session 12**: traffic lights level with Back / Forward after launch, resize, switching apps, light/dark change and leaving full screen; a Mac that ran 0.3.0 now shows the guide (if no chat has messages); full-screen viewer enters and leaves macOS full screen cleanly. If the lights still sit at the top, log the button frames from `mac_chrome.rs` (macOS 26 may lay the title bar out differently). | P0 | D36. |
+
 ## Dependency sketch
 ```
 T1 ──► T2 ──► T3 ──┬─► T4

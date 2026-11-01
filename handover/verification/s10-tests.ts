@@ -174,7 +174,8 @@ async function main() {
   await test('setup state: fresh install shows the guide; older installs with chats do not', () => {
     localStorage.clear();
     eq(loadSetup().done, false);
-    localStorage.setItem('lotus.sessions.v1', '[]');
+    // Session 12: only chats with messages count as "used before" (an empty New chat is saved on first load).
+    localStorage.setItem('lotus.sessions.v1', JSON.stringify([{ id: 'c1', title: 'Hi', messages: [{ id: 'm', role: 'user', content: 'hi' }] }]));
     eq(loadSetup().done, true);
     localStorage.clear();
     saveSetup({ done: true, outcome: 'skipped' });

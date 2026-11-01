@@ -21,9 +21,25 @@ export function loadSetup(): SetupState {
     const raw = localStorage.getItem(SETUP_KEY);
     if (raw) return { done: false, ...(JSON.parse(raw) as Partial<SetupState>) };
   } catch { /* fall through */ }
-  // Installs from before session 10 that already have chats skip the guide (it stays in Help).
-  const legacy = !!localStorage.getItem('lotus.sessions.v1') || localStorage.getItem('lotus.setup.dismissed') === '1';
+  // Installs from before session 10 that were really used skip the guide (it stays in Help).
+  const legacy = hasRealChats(localStorage.getItem('lotus.sessions.v1')) || localStorage.getItem('lotus.setup.dismissed') === '1';
   return { done: legacy, outcome: legacy ? 'skipped' : undefined };
+}
+
+/**
+ * True when saved chats hold at least one message. The Chat page saves an empty "New chat" the
+ * moment it first loads, even behind the guide, so the key alone does not mean Lotus was used
+ * (session 12: on macOS the guide never appeared because an earlier launch, where only the island
+ * showed, had already saved that empty chat).
+ */
+export function hasRealChats(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const list = JSON.parse(raw) as unknown;
+    return Array.isArray(list) && list.some((s) => Array.isArray((s as { messages?: unknown[] } | null)?.messages) && (s as { messages: unknown[] }).messages.length > 0);
+  } catch {
+    return false;
+  }
 }
 
 export function saveSetup(s: SetupState) {

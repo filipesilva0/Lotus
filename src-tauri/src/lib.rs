@@ -5,6 +5,7 @@ mod engines;
 mod hardware;
 mod hooks;
 mod island;
+mod mac_chrome;
 mod memory_db;
 mod paths;
 mod setup;
@@ -28,6 +29,7 @@ fn show_main(app: &AppHandle) {
         let _ = w.unminimize();
         let _ = w.set_focus();
     }
+    mac_chrome::place_traffic_lights(app);
 }
 
 #[tauri::command]
@@ -157,9 +159,16 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Closing the studio keeps Lotus (and the island) running in the tray.
             if window.label() == "main" {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let _ = window.hide();
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    // macOS lays the traffic lights out again on these; put them back in our bar.
+                    WindowEvent::Resized(_) | WindowEvent::Focused(_) | WindowEvent::ThemeChanged(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                        mac_chrome::place_traffic_lights(window.app_handle());
+                    }
+                    _ => {}
                 }
             }
         })
@@ -215,6 +224,7 @@ pub fn run() {
             }
 
             hooks::start(app.handle().clone());
+            mac_chrome::place_traffic_lights(app.handle());
 
             // Safety net: macOS (WKWebView) and Linux (WebKitGTK) can pause a hidden page, so the web
             // layer's main_ready may never arrive and only the island would be visible. Show the main

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal } from 'lucide-react';
+import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal, Maximize2 } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
 import { DEFAULT_PARAMS, ImageParams, useGallery } from '../../hooks/useGallery';
@@ -14,6 +14,7 @@ import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../c
 import { ImageSidebar } from '../images/ImageSidebar';
 import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
+import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
@@ -45,6 +46,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
+  const [viewing, setViewing] = useState(false);
   const [sel, setSel] = useState(0);
   const [styleName, setStyleName] = useState('');
   const [stats, setStats] = useState<ComfyStats | null>(null);
@@ -157,7 +159,8 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
           {!cur && !g.busy && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body="Describe an image below and press Generate. ComfyUI makes it on your own GPU." className="flex-1" />}
           {(cur || g.busy) && (
             <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
-              {cur && <img src={cur.url} alt={cur.prompt} className={cx('max-w-full max-h-full object-contain rounded-[12px] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', g.busy && 'opacity-40 blur-[1px]')} />}
+              {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!g.busy) setViewing(true); }}
+                className={cx('max-w-full max-h-full object-contain rounded-[12px] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', g.busy ? 'opacity-40 blur-[1px]' : 'cursor-zoom-in')} />}
               {!cur && <div className="rounded-[12px] bg-[var(--hover)] shadow-[inset_0_0_0_0.5px_var(--sep)]" style={{ aspectRatio: `${dims.width}/${dims.height}`, height: '60%', maxWidth: '100%' }} />}
 
               {g.busy && (
@@ -176,6 +179,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
 
               {cur && !g.busy && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-[10px] bg-black/65 backdrop-blur-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" role="toolbar" aria-label="Image actions">
+                  <button type="button" className={actionBtn} onClick={() => setViewing(true)}><Maximize2 className="w-3.5 h-3.5" />Full screen</button>
                   <button type="button" className={actionBtn} onClick={download}><Download className="w-3.5 h-3.5" />Download</button>
                   <Popover up={false} trigger={(_o, t) => <button type="button" className={actionBtn} onClick={t} disabled={!cur.blob}><ZoomIn className="w-3.5 h-3.5" />Upscale</button>}>
                     {(close) => (<><MenuItem onClick={() => { close(); void g.upscale(cur, 2); }}>×2 (Lanczos)</MenuItem><MenuItem onClick={() => { close(); void g.upscale(cur, 4); }}>×4 (Lanczos)</MenuItem></>)}
@@ -377,6 +381,11 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
       )}
 
       {cur && <MaskEditor open={maskOpen} src={cur.url} onClose={() => setMaskOpen(false)} onDone={(png) => { setMaskOpen(false); void g.inpaint(cur, png, prompt.trim() || cur.prompt, params); }} />}
+      {viewing && cur && (
+        <ImageViewer
+          images={g.active.versions.map((v) => ({ id: v.id, url: v.url, alt: v.prompt, name: `lotus-${v.seed}-${v.id}.png` }))}
+          index={g.active.index} onIndex={g.selectVersion} onClose={() => setViewing(false)} />
+      )}
     </div>
   );
 };

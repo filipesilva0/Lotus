@@ -39,6 +39,12 @@ tauri-plugin-single-instance = "~2.4.5"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
 
+# macOS: place the traffic lights in Lotus's title bar (src/mac_chrome.rs). Already in the build
+# through tao; same versions, only the AppKit classes we call are switched on.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSResponder", "NSView", "NSWindow", "NSControl", "NSButton"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSGeometry"] }
+
 # Small and fast: no Chromium is bundled (the app uses the system's WebView2),
 # and the release profile is tuned for size.
 [profile.release]
