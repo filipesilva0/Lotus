@@ -146,7 +146,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
       {/* Header */}
       <div className="flex items-center gap-1.5 pl-14 pr-3 pt-2.5 pb-1.5">
         <select aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)}
-          className="max-w-[170px] bg-white/10 hover:bg-white/15 text-white/90 text-[11px] font-semibold rounded-[6px] px-2.5 h-6 outline-none appearance-none cursor-pointer truncate">
+          className="max-w-[170px] bg-white/10 hover:bg-white/15 text-white/90 text-[11px] font-semibold rounded-[6px] px-2.5 h-6 outline-none appearance-none truncate">
           {[...new Set([model, ...models])].map((m) => <option key={m} value={m} className="text-black">{m}</option>)}
         </select>
         <div className="flex-1" />
@@ -164,7 +164,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
         {msgs.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-white/50 text-xs px-6">
             <p className="font-semibold text-white/80 text-[13px]">Ask anything</p>
-            <p className="mt-1">Runs on {model}, on this PC. Drop a file or image here to include it.</p>
+            <p className="mt-1">Runs on {model}, on this computer. Drop a file or image here to include it.</p>
           </div>
         )}
         {msgs.map((m, i) => (
@@ -198,7 +198,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
           </div>
         )}
         <div className={`flex items-end gap-1 rounded-[20px] bg-white/10 pl-1.5 pr-1.5 py-1.5 ring-1 transition-shadow ${dragOver ? 'ring-[var(--color-accent-vibrant)] ring-2' : 'ring-white/10 focus-within:ring-white/30'}`}>
-          <label className="w-8 h-8 shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60 cursor-pointer" title="Attach a file" aria-label="Attach a file">
+          <label className="w-8 h-8 shrink-0 rounded-full hover:bg-white/10 flex items-center justify-center text-white/60" title="Attach a file" aria-label="Attach a file">
             <Plus className="w-[18px] h-[18px]" />
             <input type="file" multiple hidden onChange={(e) => { if (e.target.files) void addFiles(e.target.files); e.target.value = ''; }} />
           </label>

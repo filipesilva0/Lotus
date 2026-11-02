@@ -53,7 +53,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
   );
 };
 
-/** Settings → Chat & Formatting: web search. */
+/** Settings → Chat: web search. */
 export const WebSearchPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => (
   <div className="space-y-4">
     <Row title="Web search provider" hint="Used when Web is on in the message box, and by tasks and routines that search the web. DuckDuckGo needs no account; SearXNG is a search engine you can run yourself.">
@@ -69,11 +69,11 @@ export const WebSearchPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set
     <Row title="Pages to read" hint="How many of the top results Lotus opens and reads. More pages: better answers, slower, more context used.">
       <Stepper label="Pages to read" value={s.webPagesToRead} min={0} max={5} step={1} onChange={(v) => set({ webPagesToRead: v })} />
     </Row>
-    <p className="text-xs text-[var(--color-text-muted)] leading-snug px-1">Privacy: with Web on, your question goes to the search provider and the result pages are fetched from their websites. With it off, nothing leaves this PC except Deep Research and source-search queries you turn on.</p>
+    <p className="text-xs text-[var(--color-text-muted)] leading-snug px-1">Privacy: with Web on, your question goes to the search provider and the result pages are fetched from their websites. With it off, nothing leaves this computer except Deep Research and source-search queries you turn on.</p>
   </div>
 );
 
-/** Settings → Memory & Skills. */
+/** Settings → Memory. */
 export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => {
   const { status, memories, skills } = useMemoryStore();
   const [wiped, setWiped] = useState(false);
@@ -83,14 +83,14 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
       <Row title="Learn from conversations" hint="Every few messages, a background agent notes lasting facts and preferences you mention, and corrects ones that changed. Learned items are marked in the chat inspector, where you can delete them.">
         <Toggle checked={s.autoMemory} onChange={(v) => set({ autoMemory: v })} ariaLabel="Learn from conversations" />
       </Row>
-      <Row title="Recall past conversations" hint="Searches earlier chats (full-text search on this PC) for parts relevant to your message and gives them to the model.">
+      <Row title="Recall past conversations" hint="Searches earlier chats (full-text search on this computer) for parts relevant to your message and gives them to the model.">
         <Toggle checked={s.sessionRecall} onChange={(v) => set({ sessionRecall: v })} ariaLabel="Recall past conversations" />
       </Row>
       <Row title="Write and improve skills" hint="After a complex chat or a finished task, Lotus writes the procedure as a skill; it uses matching skills later and rewrites one when you correct it. Manage them in Tasks → Skills.">
         <Toggle checked={s.autoSkills} onChange={(v) => set({ autoSkills: v })} ariaLabel="Write and improve skills" />
       </Row>
       <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
-        <span className="text-xs font-semibold">Stored on this PC</span>
+        <span className="text-xs font-semibold">Stored on this computer</span>
         <p className="text-xs text-[var(--color-text-muted)]">
           {memories.length} memories · {skills.length} skills{status ? ` · ${status.messages.toLocaleString()} searchable messages` : ''}
           {status?.native ? ` · ${status.path}` : ''}

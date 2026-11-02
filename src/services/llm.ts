@@ -1,4 +1,4 @@
-// One door to the local language model, whichever server the user runs (Settings → Model & Inference):
+// One door to the local language model, whichever server the user runs (Settings → Models):
 // Ollama (default) or llama.cpp's llama-server. Chat, Thinking mode, background agents, memory
 // learning, skills, tasks and routines all call through here.
 

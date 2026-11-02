@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, EyeOff, Check, X, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
+import { Plus, Search, SquarePen, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, EyeOff, Check, X, ChevronDown, ChevronRight, FlaskConical } from 'lucide-react';
 import type { Project } from '../../research/types';
 import { PhaseBadge } from '../research/bits';
 import { ago } from '../research/ResearchWorkspace';
@@ -81,7 +81,7 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
   return (
     <SidebarPane label="Conversations">
       <div className="p-3 space-y-2">
-        <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew}>New chat</Btn>
+        <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew}>New Chat</Btn>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
           <input type="search" aria-label="Search conversations" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)}
@@ -92,7 +92,7 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-3 space-y-3">
         <div>
           <div className="flex items-center justify-between px-1.5 mb-1">
-            <button type="button" onClick={() => setFoldersOpen((o) => !o)} className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]" aria-expanded={foldersOpen}>
+            <button type="button" onClick={() => setFoldersOpen((o) => !o)} className="flex items-center gap-1 text-[12px] font-semibold text-[var(--color-text-muted)]" aria-expanded={foldersOpen}>
               {foldersOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}Projects
             </button>
             <IconBtn label="New project" className="!w-6 !h-6" onClick={() => { setFoldersOpen(true); setAddingFolder(true); }}><FolderPlus className="w-3.5 h-3.5" /></IconBtn>
@@ -112,7 +112,7 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
                   onClick={() => setFolder(folder === f.id ? null : f.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setFolder(folder === f.id ? null : f.id); }} aria-pressed={folder === f.id}>
                   <Folder className="w-3.5 h-3.5 shrink-0" />
                   <span className="flex-1 truncate">{f.name}</span>
-                  <span className="text-[11px] tabular-nums">{sessions.filter((s) => s.folderId === f.id).length}</span>
+                  <span className="text-[12px] tabular-nums">{sessions.filter((s) => s.folderId === f.id).length}</span>
                   <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex" onClick={(e) => {
                     e.stopPropagation(); onFolders(folders.filter((x) => x.id !== f.id));
                     sessions.filter((s) => s.folderId === f.id).forEach((s) => onPatch(s.id, (x) => ({ ...x, folderId: undefined })));
@@ -128,8 +128,8 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
         {research && (
           <div>
             <div className="flex items-center justify-between px-1.5 mb-1">
-              <button type="button" onClick={() => setResearchOpen((o) => !o)} className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]" aria-expanded={researchOpen}>
-                {researchOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}Deep research
+              <button type="button" onClick={() => setResearchOpen((o) => !o)} className="flex items-center gap-1 text-[12px] font-semibold text-[var(--color-text-muted)]" aria-expanded={researchOpen}>
+                {researchOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}Deep Research
               </button>
               <IconBtn label="New deep research task" className="!w-6 !h-6" onClick={() => { setResearchOpen(true); research.onNew(); }}><FlaskConical className="w-3.5 h-3.5" /></IconBtn>
             </div>
@@ -142,7 +142,7 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
                       aria-current={on ? 'true' : undefined}
                       className={cx('group relative flex flex-col gap-1 px-2.5 py-1.5 rounded-[8px] cursor-default', on ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
                       <span className={cx('text-[13px] truncate pr-6', on ? 'font-medium text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]')}>{x.question ? x.title : 'New research task'}</span>
-                      <span className="flex items-center gap-2"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-[11px] text-[var(--color-text-muted)]">{ago(x.updatedAt)}</span></span>
+                      <span className="flex items-center gap-2"><PhaseBadge phase={x.phase} paused={x.paused} /><span className="text-[12px] text-[var(--color-text-muted)]">{ago(x.updatedAt)}</span></span>
                       <span className="absolute top-1 right-1 hidden group-hover:flex group-focus-within:flex" onClick={(e) => e.stopPropagation()}>
                         {confirmDel === x.id
                           ? <IconBtn label="Confirm delete" className="!w-6 !h-6 !text-[var(--c-red)]" onClick={() => { research.onDelete(x.id); setConfirmDel(null); }}><Check className="w-3.5 h-3.5" /></IconBtn>
@@ -158,10 +158,10 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
         )}
 
         {pinned.length > 0 && (
-          <div><h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">Pinned</h3><div className="space-y-0.5">{pinned.map(row)}</div></div>
+          <div><h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Pinned</h3><div className="space-y-0.5">{pinned.map(row)}</div></div>
         )}
         {groups.map((g) => (
-          <div key={g.label}><h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">{g.label}</h3><div className="space-y-0.5">{g.items.map(row)}</div></div>
+          <div key={g.label}><h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{g.label}</h3><div className="space-y-0.5">{g.items.map(row)}</div></div>
         ))}
         {!visible.length && <p className="px-2.5 py-3 text-[13px] text-[var(--color-text-muted)]">{needle ? `No conversations match “${q.trim()}”.` : 'No conversations here yet.'}</p>}
       </div>

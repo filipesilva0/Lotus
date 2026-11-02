@@ -50,7 +50,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
         <AlarmClock className="w-4 h-4 text-[var(--color-accent-vibrant)]" aria-hidden="true" />
         <span className="text-[13px] font-semibold flex-1 truncate">{r.name}</span>
         <Toggle size="sm" checked={r.enabled} onChange={(v) => store.update(r.id, { enabled: v })} ariaLabel={r.enabled ? 'Routine on' : 'Routine off'} />
-        <Btn size="sm" icon={r.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} disabled={r.running} onClick={() => store.run(r.id)}>Run now</Btn>
+        <Btn size="sm" icon={r.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} disabled={r.running} onClick={() => store.run(r.id)}>Run Now</Btn>
         <IconBtn label="Delete routine" onClick={() => store.remove(r.id)}><Trash2 className="w-4 h-4" /></IconBtn>
       </PaneBar>
       <div className="flex-1 overflow-y-auto">
@@ -72,7 +72,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
             </div>
           </div>
         </Section>
-        <Section title="When" hint="Routines run while Lotus is open, including when it is hidden in the tray. Times are this PC’s local time.">
+        <Section title="When" hint="Routines run while Lotus is open, including when it is hidden in the tray. Times are this computer’s local time.">
           <Segmented<Preset> label="Schedule" value={preset} onChange={(p) => applyPreset(p)} className="flex-wrap"
             options={[{ id: 'hourly', label: 'Hourly' }, { id: 'daily', label: 'Daily' }, { id: 'weekdays', label: 'Weekdays' }, { id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, { id: 'custom', label: 'Cron' }]} />
           {preset !== 'custom' && (
@@ -87,7 +87,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
             : <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Next: {upcoming.map((d) => fmt(d.getTime())).join(' · ') || 'never'}</p>}
         </Section>
         {err && <div className="px-4 pt-3"><Banner tone="error">{err}</Banner></div>}
-        <div className="px-4 py-3 flex justify-end"><Btn variant="primary" disabled={!dirty || !!cronErr || !prompt.trim()} onClick={save}>Save changes</Btn></div>
+        <div className="px-4 py-3 flex justify-end"><Btn variant="primary" disabled={!dirty || !!cronErr || !prompt.trim()} onClick={save}>Save Changes</Btn></div>
         <Section title={`Runs${r.runs.length ? ` · ${r.runs.length}` : ''}`}>
           {!r.runs.length && <p className="text-[13px] text-[var(--color-text-muted)]">No runs yet. Next run: {fmt(r.enabled ? r.nextRun : undefined)}.</p>}
           <ul className="space-y-1.5">
@@ -128,7 +128,7 @@ export const RoutinesView: React.FC<{ list: Routine[] }> = ({ list }) => {
                 <span className="text-[13px] font-medium truncate flex-1">{r.name}</span>
                 {r.running && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--color-accent-vibrant)]" aria-label="Running" />}
               </span>
-              <span className="block pl-3 text-[11px] text-[var(--color-text-muted)] truncate">{r.enabled ? describeCron(r.schedule) : 'Off'}</span>
+              <span className="block pl-3 text-[12px] text-[var(--color-text-muted)] truncate">{r.enabled ? describeCron(r.schedule) : 'Off'}</span>
             </button>
           ))}
           {!list.length && <p className="px-2 py-3 text-[12px] text-[var(--color-text-muted)]">No routines yet.</p>}
@@ -138,7 +138,7 @@ export const RoutinesView: React.FC<{ list: Routine[] }> = ({ list }) => {
         <div className="flex-1 flex">
           <Empty icon={<AlarmClock className="w-5 h-5" />} className="flex-1" title="Scheduled routines"
             body="Lotus can run instructions on a schedule with your local model: a morning briefing, a weekly checklist, a task it then works through. They run while Lotus is open."
-            action={<div className="flex gap-2 flex-wrap justify-center"><Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => add()}>New routine</Btn>{EXAMPLES.map((e) => <Btn key={e.name} onClick={() => add(e)}>{e.name}</Btn>)}</div>} />
+            action={<div className="flex gap-2 flex-wrap justify-center"><Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => add()}>New Routine</Btn>{EXAMPLES.map((e) => <Btn key={e.name} onClick={() => add(e)}>{e.name}</Btn>)}</div>} />
         </div>
       )}
     </div>

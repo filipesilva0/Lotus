@@ -29,7 +29,7 @@ export const PaneBar: React.FC<{ children: React.ReactNode; className?: string }
 export const Section: React.FC<{ title: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, hint, action, children, className }) => (
   <section className={cx('px-4 py-3 border-b border-[var(--sep)] last:border-b-0', className)}>
     <div className="flex items-center justify-between mb-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">{title}</h3>
+      <h3 className="text-[12px] font-semibold text-[var(--color-text-muted)]">{title}</h3>
       {action}
     </div>
     {hint && <p className="text-[12px] text-[var(--color-text-muted)] mb-2 leading-snug">{hint}</p>}
@@ -46,14 +46,14 @@ export const SliderField: React.FC<{
       <span className="tabular-nums text-[var(--color-text-muted)]">{format ? format(value) : value}</span>
     </div>
     <Slider value={value} min={min} max={max} step={step} onChange={onChange} label={label} disabled={disabled} />
-    {hint && <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>}
+    {hint && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>}
   </div>
 );
 
 export const KV: React.FC<{ k: string; v: React.ReactNode; mono?: boolean }> = ({ k, v, mono }) => (
   <div className="flex items-baseline justify-between gap-3 py-1 text-[12px]">
     <span className="text-[var(--color-text-muted)] shrink-0">{k}</span>
-    <span className={cx('text-right min-w-0 break-words tabular-nums', mono && 'font-mono text-[11px]')}>{v}</span>
+    <span className={cx('text-right min-w-0 break-words tabular-nums', mono && 'font-mono text-[12px]')}>{v}</span>
   </div>
 );
 

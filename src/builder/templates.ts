@@ -246,9 +246,9 @@ const DESKTOP: Template = {
   actions: [
     { id: 'install', label: 'Install packages', command: 'npm install', needs: ['node', 'npm'] },
     { id: 'dev', label: 'Run as app (opens a window)', command: 'npm run tauri dev', server: false, needs: ['node', 'npm', 'cargo', 'rustc'], note: 'The first run compiles Rust and takes several minutes.' },
-    { id: 'build', label: 'Build installer (this PC)', command: 'npm run tauri build', needs: ['node', 'npm', 'cargo', 'rustc'], note: 'On Windows this makes an .exe and .msi under src-tauri/target/release/bundle. A Mac app can only be built on a Mac or on GitHub.' },
+    { id: 'build', label: 'Build installer (this computer)', command: 'npm run tauri build', needs: ['node', 'npm', 'cargo', 'rustc'], note: 'On Windows this makes an .exe and .msi under src-tauri/target/release/bundle. A Mac app can only be built on a Mac or on GitHub.' },
   ],
-  agentNotes: 'Tauri 2 desktop app. The interface is plain HTML/CSS/JS in www/ (no bundler), shown in the preview; the Rust shell is in src-tauri/ and rarely needs changes. To call Rust from the page, add a #[tauri::command] in src-tauri/src/main.rs, register it in generate_handler!, and set "withGlobalTauri": true under "app" in src-tauri/tauri.conf.json so the page can use window.__TAURI__.core.invoke. Windows builds happen on this PC; macOS and Linux builds happen through .github/workflows/build.yml on GitHub.',
+  agentNotes: 'Tauri 2 desktop app. The interface is plain HTML/CSS/JS in www/ (no bundler), shown in the preview; the Rust shell is in src-tauri/ and rarely needs changes. To call Rust from the page, add a #[tauri::command] in src-tauri/src/main.rs, register it in generate_handler!, and set "withGlobalTauri": true under "app" in src-tauri/tauri.conf.json so the page can use window.__TAURI__.core.invoke. Windows builds happen on this computer; macOS and Linux builds happen through .github/workflows/build.yml on GitHub.',
   files: [
     { path: 'package.json', content: `{
   "name": "__SLUG__",
@@ -376,14 +376,14 @@ jobs:
 
 const MOBILE: Template = {
   id: 'mobile', title: 'Phone app (Android & iOS)', platforms: ['Android', 'iOS'], previewDir: 'www', phone: true,
-  blurb: 'A web interface packaged as a real Android and iPhone app with Capacitor. Preview it here in a phone frame; build the Android app on this PC; the iPhone app builds on GitHub\u2019s Macs (Apple does not allow it on Windows).',
+  blurb: 'A web interface packaged as a real Android and iPhone app with Capacitor. Preview it here in a phone frame; build the Android app on this computer; the iPhone app builds on GitHub\u2019s Macs (Apple does not allow it on Windows).',
   actions: [
     { id: 'install', label: 'Install packages', command: 'npm install', needs: ['node', 'npm'] },
     { id: 'add-android', label: 'Add Android project', command: 'npx cap add android', needs: ['node', 'npm'], note: 'Once. Creates the android folder.' },
     { id: 'apk', label: 'Build Android app (debug APK)', command: 'npx cap sync android && cd android && gradlew.bat assembleDebug', needs: ['node', 'npm', 'java'], note: 'Needs the Android SDK (Android Studio). APK: android/app/build/outputs/apk/debug/app-debug.apk' },
     { id: 'install-apk', label: 'Install on connected phone or emulator', command: 'adb install -r android/app/build/outputs/apk/debug/app-debug.apk', needs: ['adb'] },
   ],
-  agentNotes: 'Capacitor project: the app\u2019s interface is plain HTML/CSS/JS in www/ (no bundler) and is previewed in a phone-shaped frame. Design for a phone screen first (single column, touch targets of 44px or more, safe areas). Capacitor plugins are added with npm install @capacitor/<name> and then npx cap sync. Android builds happen on this PC (needs the Android SDK and Java); the iPhone app can only be built on a Mac, so .github/workflows/build.yml builds it on GitHub.',
+  agentNotes: 'Capacitor project: the app\u2019s interface is plain HTML/CSS/JS in www/ (no bundler) and is previewed in a phone-shaped frame. Design for a phone screen first (single column, touch targets of 44px or more, safe areas). Capacitor plugins are added with npm install @capacitor/<name> and then npx cap sync. Android builds happen on this computer (needs the Android SDK and Java); the iPhone app can only be built on a Mac, so .github/workflows/build.yml builds it on GitHub.',
   files: [
     { path: 'package.json', content: `{
   "name": "__SLUG__",

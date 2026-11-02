@@ -107,7 +107,7 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
     }
     if (tab === 'memory') {
       return [
-        { id: 'memory', group: 'Long-term memory', title: 'memory.md', subtitle: mem.status ? `${mem.status.memories} items · ${mem.status.messages.toLocaleString()} indexed messages` : 'Loading…', text: memoryFile(mem.memories), readOnly: 'A view of the memory database. Add with “remember …”, edit in the chat inspector → Context.', icon: <Brain className="w-3.5 h-3.5" /> },
+        { id: 'memory', group: 'Long-term memory', title: 'memory.md', subtitle: mem.status ? `${mem.status.memories} items · ${mem.status.messages.toLocaleString()} indexed messages` : 'Reading the memory database…', text: memoryFile(mem.memories), readOnly: 'A view of the memory database. Add with “remember …”, edit in the chat inspector → Context.', icon: <Brain className="w-3.5 h-3.5" /> },
         ...projFiles('memory'),
         ...projFiles('rules'),
       ];
@@ -127,18 +127,18 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
 
   return (<>
     <nav aria-label={`${tab} files`} className="w-[290px] shrink-0 border-r border-[var(--sep)] overflow-y-auto p-2">
-      {tab === 'memory' && mem.status && <p className="px-2 pb-2 text-[11px] text-[var(--color-text-muted)] break-all" title={mem.status.path}>Stored in {mem.status.native ? mem.status.path : 'this browser (preview)'}</p>}
-      {!folder && tab !== 'skills' && <p className="px-2 pb-2 text-[11px] text-[var(--color-text-muted)]">Choose a workspace folder for the chat (inspector → Context) to see its SOUL.md and memory.md here.</p>}
+      {tab === 'memory' && mem.status && <p className="px-2 pb-2 text-[12px] text-[var(--color-text-muted)] break-all" title={mem.status.path}>Stored in {mem.status.native ? mem.status.path : 'this browser (preview)'}</p>}
+      {!folder && tab !== 'skills' && <p className="px-2 pb-2 text-[12px] text-[var(--color-text-muted)]">Choose a workspace folder for the chat (inspector → Context) to see its SOUL.md and memory.md here.</p>}
       {project.loading && <p className="px-2 py-1 text-[12px] text-[var(--color-text-muted)] flex items-center gap-2"><Spinner />Reading the workspace folder…</p>}
       {groups.map((g) => (
         <div key={g} className="mb-2">
-          <p className="px-2 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--color-text-muted)]">{g}</p>
+          <p className="px-2 pt-2 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{g}</p>
           {docs.filter((d) => d.group === g).map((d) => (
             <button key={d.id} type="button" onClick={() => setSel(d.id)} aria-current={d.id === doc?.id ? 'true' : undefined}
               className={cx('w-full flex items-start gap-2 px-2 py-1.5 rounded-[8px] text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]', d.id === doc?.id ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
               <span className="mt-0.5 text-[var(--color-text-muted)] shrink-0">{d.icon}</span>
               <span className="flex-1 min-w-0">
-                <span className="flex items-center gap-1.5"><span className="text-[13px] font-medium truncate">{d.title}</span>{d.badge && <span className="ml-auto shrink-0 px-1.5 rounded-[4px] bg-[var(--hover)] text-[10px] font-semibold text-[var(--color-text-muted)]">{d.badge}</span>}</span>
+                <span className="flex items-center gap-1.5"><span className="text-[13px] font-medium truncate">{d.title}</span>{d.badge && <span className="ml-auto shrink-0 px-1.5 rounded-[4px] bg-[var(--hover)] text-[12px] font-semibold text-[var(--color-text-muted)]">{d.badge}</span>}</span>
                 {d.subtitle && <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{d.subtitle}</span>}
               </span>
             </button>
@@ -211,7 +211,7 @@ const PluginsPane: React.FC = () => {
         className={cx('w-full flex items-center gap-2 px-2 h-9 rounded-[8px] text-left text-[13px] font-medium focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]', sel === 'new' ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
         <span className="w-6 h-6 rounded-[6px] inline-flex items-center justify-center bg-[var(--color-accent-fill)] text-white"><Plus className="w-3.5 h-3.5" /></span>Create a plugin
       </button>
-      <p className="px-2 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--color-text-muted)]">Installed</p>
+      <p className="px-2 pt-3 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Installed</p>
       {!list.length && <p className="px-2 py-1 text-[12px] text-[var(--color-text-muted)]">No plugins yet. Describe one and Lotus drafts it, or import a .lotus-plugin.json file.</p>}
       {list.map((p) => (
         <div key={p.id} className={cx('flex items-center gap-2 px-2 py-1.5 rounded-[8px]', p.id === sel ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
@@ -225,7 +225,7 @@ const PluginsPane: React.FC = () => {
       <div className="flex-1" />
       <input ref={file} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f); }} />
       {importMsg && <Banner tone={importMsg.tone} className="mx-1 mb-2">{importMsg.text}</Banner>}
-      <Btn variant="ghost" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => file.current?.click()} className="justify-start">Import plugin file…</Btn>
+      <Btn variant="ghost" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => file.current?.click()} className="justify-start">Import Plugin File…</Btn>
     </nav>
     <section className="flex-1 min-w-0 flex flex-col overflow-y-auto" aria-label={cur ? cur.name : 'Create a plugin'}>
       {cur ? <PluginDetail key={cur.id} p={cur} /> : <PluginCreator onInstalled={(id) => setSel(id)} />}
@@ -297,7 +297,7 @@ const PluginDetail: React.FC<{ p: LotusPlugin }> = ({ p }) => {
         <div className="flex flex-col gap-2">
           {errs.length > 0 && <Banner tone="error">{errs.join(' ')}</Banner>}
           <TextArea aria-label="Plugin JSON" value={json} onChange={(e) => setJson(e.target.value)} rows={18} className="font-mono text-[12px]" spellCheck={false} />
-          <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={() => { setEditing(false); setErrs([]); }}>Cancel</Btn><Btn variant="primary" onClick={save}>Save changes</Btn></div>
+          <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={() => { setEditing(false); setErrs([]); }}>Cancel</Btn><Btn variant="primary" onClick={save}>Save Changes</Btn></div>
         </div>
       ) : <PluginSummary p={p} />}
       {!editing && (
@@ -365,7 +365,7 @@ const PluginCreator: React.FC<{ onInstalled: (id: string) => void }> = ({ onInst
           <Btn variant="primary" icon={<Wand2 className="w-3.5 h-3.5" />} loading={busy && !feedback} disabled={!idea.trim() || busy} onClick={() => void run()}>{draft ? 'Draft again' : 'Draft with Lotus'}</Btn>
           {busy && <Btn variant="ghost" onClick={() => ctrl.current?.abort()}>Cancel</Btn>}
           <div className="flex-1" />
-          <Btn variant="ghost" onClick={() => { setJson(JSON.stringify(BLANK, null, 2)); setDraft(null); }}>Start from a blank template</Btn>
+          <Btn variant="ghost" onClick={() => { setJson(JSON.stringify(BLANK, null, 2)); setDraft(null); }}>Start from a Blank Template</Btn>
         </div>
       </div>
       {error && <Banner tone="error">{error}</Banner>}

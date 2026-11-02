@@ -185,6 +185,16 @@ Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native
 | D35 | **Chat can install models, only after the user allows it.** The system prompt asks the model to add a fenced ```install block (one model per reply) when the user asks to install or download a model; Lotus shows an Allow / Deny card and runs nothing until Allow. Scope: any Ollama tag (Ollama pulls from its own library); image models only from the catalog Lotus knows how to wire (`IMAGE_PICKS`); voice models from the catalog or a name Voicebox offers. Downloads reuse the setup guide's jobs (`installTarget` in `setup/jobs.ts`), so progress also reaches the island. Remote ComfyUI is refused with a reason (files would land on this computer). Rejected: letting the model install without asking, and arbitrary download URLs from chat. | User (asked) + Me (scope) | Parser, scope and the Ollama path unit-tested (s11); card screenshotted with a fake Ollama. ⚠️ Not tried with a real model; small models may not emit the block. |
 | A14 | Ollama and ComfyUI accept Lotus's requests from another computer because Lotus sets `Origin` to the engine's own address (same-origin shortcut in Ollama's CORS check and ComfyUI's origin check). Behind a proxy that rewrites `Host`, the user may need `OLLAMA_ORIGINS=*`; the error text says so. | — | ⚠️ |
 
+## Session 13: Apple HIG pass
+| # | Decision | Who | Evidence |
+|---|---|---|---|
+| D39 | **Deletes that can be taken back use Undo, not a question**; deletes that can't (model weights, voice models) ask with an in-app alert whose default button is the verb. | User (chose HIG items) + Me | s13 tests; screenshots. |
+| D40 | **Menus follow the HIG on every OS**: per-page New items, Find, Go menu (Back/Forward + pages), Show/Hide Sidebar / Inspector, Help › Lotus Help. Mac gets Mac key equivalents (⌃⌘S, ⌥⌘I, ⌘[ ⌘], ⌘?); Windows/Linux keep their own (Ctrl+Alt+S/I, Alt+←/→, F1, F11). Appearance left the View menu. | User + Me | s13 tests. ⚠️ Native Mac menu not seen. |
+| D41 | **Engine offline = one quiet line with a Start button** next to what it blocks, no coloured banner and no raw address. | User + Me | s13 render tests. |
+| D42 | **Settings uses a pane toolbar, the pane name as its title, no Done button, and reopens on the last pane.** It stays an in-window sheet rather than a separate window: a second window would need settings, models and updates synced over the bus. Revisit if needed. | Me | Screenshots. |
+| D43 | **Every page keeps its full-width New button** in the sidebar (New Chat, New Image, Voice's New …). The HIG would prefer a toolbar compose button, but the user asked to keep the buttons. | User | Screenshots. |
+| D44 | **Not done by choice:** HIG items 4 (single labelled sidebar instead of rail + list) and 5 (system accent instead of petal accents). | User | — |
+
 ## Session 12: guide, traffic lights, full-screen images
 | # | Decision | Who | Evidence |
 |---|---|---|---|

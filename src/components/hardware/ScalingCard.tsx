@@ -28,7 +28,7 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
       <div className="flex items-center gap-2 mb-2">
         <Cpu className="w-4 h-4 text-[var(--color-accent-vibrant)]" aria-hidden="true" />
         <span className="text-[13px] font-semibold flex-1">Auto-scaling to video memory</span>
-        <span className={cx('text-[11px] font-medium', p.pressure === 'critical' ? 'text-[var(--c-red)]' : p.pressure === 'tight' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>
+        <span className={cx('text-[12px] font-medium', p.pressure === 'critical' ? 'text-[var(--c-red)]' : p.pressure === 'tight' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>
           {p.pressure === 'critical' ? 'Almost full' : p.pressure === 'tight' ? 'Tight' : p.pressure === 'ok' ? 'Plenty free' : ''}
         </span>
         <IconBtn label="Measure again" className="!w-6 !h-6" onClick={() => void hardware.refresh()}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>
@@ -36,7 +36,7 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
       {g ? (
         <>
           <Gauge value={g.usedMb / Math.max(1, g.totalMb)} label="Video memory in use" />
-          <p className="mt-1 text-[11px] text-[var(--color-text-muted)] tabular-nums">{gb(g.freeMb)} free of {gb(g.totalMb)} · {g.name} · {SOURCE[h.hw!.source]}</p>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)] tabular-nums">{gb(g.freeMb)} free of {gb(g.totalMb)} · {g.name} · {SOURCE[h.hw!.source]}</p>
         </>
       ) : <p className="text-[12px] text-[var(--color-text-muted)]">Video memory could not be read (no NVIDIA/AMD driver reader answered and ComfyUI isn't running).</p>}
       <div className="mt-2.5 grid grid-cols-3 gap-2">
@@ -53,7 +53,7 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
             {h.model && <KV k="Selected model" v={`${h.model.name} · ${gb(h.model.weightsMb)}${h.model.loadedVramMb ? ' · loaded' : ''}`} mono />}
             {p.llamacppFlags && <KV k="Suggested llama-server flags" v={p.llamacppFlags} mono />}
           </div>
-          <ul className="mt-2 space-y-0.5 text-[11px] text-[var(--color-text-muted)] leading-snug list-disc pl-4">
+          <ul className="mt-2 space-y-0.5 text-[12px] text-[var(--color-text-muted)] leading-snug list-disc pl-4">
             {p.notes.map((n) => <li key={n}>{n}</li>)}
           </ul>
         </>
@@ -64,8 +64,8 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
 
 const Stat: React.FC<{ label: string; value: string; unit: string }> = ({ label, value, unit }) => (
   <div className="rounded-[8px] bg-[var(--hover)] px-2.5 py-2 min-w-0">
-    <p className="text-[11px] text-[var(--color-text-muted)] truncate">{label}</p>
+    <p className="text-[12px] text-[var(--color-text-muted)] truncate">{label}</p>
     <p className="text-[15px] font-semibold tabular-nums truncate">{value}</p>
-    <p className="text-[11px] text-[var(--color-text-muted)] truncate">{unit}</p>
+    <p className="text-[12px] text-[var(--color-text-muted)] truncate">{unit}</p>
   </div>
 );

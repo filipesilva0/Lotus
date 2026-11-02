@@ -45,7 +45,7 @@ export const LoraPicker: React.FC<{
         <Btn size="sm" icon={<Plus className="w-3 h-3" />} disabled={!unused.length || value.length >= MAX} onClick={() => onChange([...value, { name: unused[0], strength: 0.8 }])}>Add LoRA</Btn>
         <button type="button" className="text-[12px] font-medium text-[var(--color-accent-vibrant)] hover:underline" onClick={onGetMore}>Get more LoRAs…</button>
       </div>
-      {value.length >= MAX && <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">Up to {MAX} LoRAs at once.</p>}
+      {value.length >= MAX && <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Up to {MAX} LoRAs at once.</p>}
     </div>
   );
 };

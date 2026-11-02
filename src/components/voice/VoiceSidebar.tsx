@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { AudioLines, Film, Library, Mic, Mic2, Plus, Search } from 'lucide-react';
+import { AudioLines, Film, Library, Mic, Mic2, Plus, Search , SquarePen } from 'lucide-react';
 import { voicebox, Capture, Generation, Story, VoiceProfile } from '../../services/voicebox';
 import { VoiceData } from './useVoiceData';
-import { Btn, cx } from '../common/ui';
+import { IconBtn, Btn, cx } from '../common/ui';
 import { SidebarPane, groupByDate } from '../common/Pane';
 
 export type VoiceMode = 'voices' | 'speak' | 'dictate' | 'stories' | 'library';
 
 export const MODES: { id: VoiceMode; label: string; icon: React.ReactNode; newLabel: string }[] = [
-  { id: 'voices', label: 'Voice profiles', icon: <Mic2 className="w-4 h-4" />, newLabel: 'Clone voice' },
-  { id: 'speak', label: 'Speech generator', icon: <AudioLines className="w-4 h-4" />, newLabel: 'New speech script' },
-  { id: 'dictate', label: 'Captures', icon: <Mic className="w-4 h-4" />, newLabel: 'New dictation' },
-  { id: 'stories', label: 'Multi-track stories', icon: <Film className="w-4 h-4" />, newLabel: 'New story' },
-  { id: 'library', label: 'History', icon: <Library className="w-4 h-4" />, newLabel: 'New speech script' },
+  { id: 'voices', label: 'Voice Profiles', icon: <Mic2 className="w-4 h-4" />, newLabel: 'Clone Voice' },
+  { id: 'speak', label: 'Speech Generator', icon: <AudioLines className="w-4 h-4" />, newLabel: 'New Speech Script' },
+  { id: 'dictate', label: 'Captures', icon: <Mic className="w-4 h-4" />, newLabel: 'New Dictation' },
+  { id: 'stories', label: 'Multi-Track Stories', icon: <Film className="w-4 h-4" />, newLabel: 'New Story' },
+  { id: 'library', label: 'History', icon: <Library className="w-4 h-4" />, newLabel: 'New Speech Script' },
 ];
 
 interface Props {
@@ -47,13 +47,13 @@ export const VoiceSidebar: React.FC<Props> = ({ mode, onMode, data, online, prof
 
   const item = (key: string, title: string, sub: string, active: boolean, onClick?: () => void) => (
     <button key={key} type="button" onClick={onClick} disabled={!onClick} className={cx('w-full text-left px-2.5 py-1.5 rounded-[8px]', active ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)] disabled:hover:bg-transparent')}>
-      <span className={cx('block text-[13px] truncate', active && 'font-medium')}>{title}</span><span className="block text-[11px] text-[var(--color-text-muted)] truncate">{sub}</span>
+      <span className={cx('block text-[13px] truncate', active && 'font-medium')}>{title}</span><span className="block text-[12px] text-[var(--color-text-muted)] truncate">{sub}</span>
     </button>
   );
 
   const grouped = <T extends { created_at: string }>(list: T[], render: (x: T) => React.ReactNode) =>
     groupByDate<T & { ts: number }>(list.map((x) => ({ ...x, ts: ts(x.created_at) }))).map((g) => (
-      <div key={g.label} className="mb-3"><h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">{g.label}</h3>{g.items.map(render)}</div>
+      <div key={g.label} className="mb-3"><h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{g.label}</h3>{g.items.map(render)}</div>
     ));
 
   return (

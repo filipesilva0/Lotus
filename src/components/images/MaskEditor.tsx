@@ -47,7 +47,7 @@ export const MaskEditor: React.FC<{ open: boolean; src: string; onClose: () => v
       footer={<>
         <Btn variant="ghost" onClick={() => { const c = mask.current; c?.getContext('2d')?.clearRect(0, 0, c.width, c.height); setDirty(false); }}>Clear</Btn>
         <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="primary" disabled={!dirty} onClick={() => void finish()}>Repaint area</Btn>
+        <Btn variant="primary" disabled={!dirty} onClick={() => void finish()}>Repaint Area</Btn>
       </>}>
       <div className="flex items-center gap-3 mb-3 text-[12px]">
         <span>Brush</span><div className="w-40"><Slider value={brush} min={8} max={160} step={1} onChange={setBrush} label="Brush size" /></div>

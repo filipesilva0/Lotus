@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { offerUndo, flushUndo } from '../common/Alerts';
+import { EngineNotice } from '../common/EngineNotice';
 import { BrainCircuit, EyeOff, Sparkles } from 'lucide-react';
 import { useProjectContext } from '../../context/discover';
 import { hardware, useHardware } from '../../hardware/monitor';
@@ -31,7 +33,16 @@ interface Props {
   research: ResearchApi; onOpenEngines: () => void;
 }
 
+/** Starter prompts for an empty chat (HIG Generative AI: show what works). A click fills the box; nothing is sent. */
+const STARTERS = [
+  { label: 'Summarize Text', text: 'Summarize this text in five short bullet points:\n\n' },
+  { label: 'Draft an Email', text: 'Help me write a short, friendly email that ' },
+  { label: 'Explain Simply', text: 'Explain, in simple terms and with one example, how ' },
+  { label: 'Plan Something', text: 'Make a step-by-step plan for ' },
+];
+
 export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary, research, onOpenEngines }) => {
+  const [starter, setStarter] = useState<{ text: string; nonce: number } | null>(null);
   const installedPlugins = usePlugins();
   const pluginCmds = useMemo(() => pluginCommands(installedPlugins), [installedPlugins]);
   const { active: session } = chat;
@@ -123,10 +134,25 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
     return folderSummary(r);
   };
 
+  // Deleting a conversation hides it at once and offers Undo; it is removed (and forgotten by
+  // memory) only when the Undo note closes.
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
+  const [hiddenChats, setHiddenChats] = useState<Set<string>>(() => new Set());
+  const unhideChat = (id: string) => setHiddenChats((h) => { const n = new Set(h); n.delete(id); return n; });
+  const deleteChat = (id: string) => {
+    const s = chat.sessions.find((x) => x.id === id);
+    if (!s?.messages.length) { chat.deleteChat(id); return; }
+    setHiddenChats((h) => new Set(h).add(id));
+    if (chat.activeId === id) { const next = chat.sessions.find((x) => x.id !== id && !hiddenChats.has(x.id)); if (next) selectChat(next.id); else chat.newChat(); }
+    offerUndo('Conversation deleted', () => { unhideChat(id); setOpenResearch(null); chatRef.current.setActiveId(id); }, () => { chatRef.current.deleteChat(id); unhideChat(id); });
+  };
+  useEffect(() => () => flushUndo(), []);
+
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
-      <ChatSidebar sessions={chat.sessions} activeId={chat.activeId} folders={chat.folders} onFolders={chat.setFolders}
-        onSelect={selectChat} onNew={() => { setOpenResearch(null); chat.newChat(); }} onDelete={chat.deleteChat} onPatch={chat.patchSession}
+      <ChatSidebar sessions={chat.sessions.filter((x) => !hiddenChats.has(x.id))} activeId={chat.activeId} folders={chat.folders} onFolders={chat.setFolders}
+        onSelect={selectChat} onNew={() => { setOpenResearch(null); chat.newChat(); }} onDelete={deleteChat} onPatch={chat.patchSession}
         research={{ projects: research.projects, openId: rp?.id ?? null, onOpen: (id) => { research.setActiveId(id); setOpenResearch(id); }, onNew: () => startResearch(), onDelete: research.remove }} />
 
       {rp ? (
@@ -134,18 +160,20 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
       ) : (<>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        {offline && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenModels}>Models</Btn>}>Ollama isn't running at {engineUrl('ollama')}. Start it from Engines to chat.</Banner></div>}
         {session.incognito && <p className="px-6 pt-3 text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5"><EyeOff className="w-3.5 h-3.5" />Incognito: this conversation isn't saved and creates no memories.</p>}
         {!session.incognito && session.memoryOff && <p className="px-6 pt-3 text-[12px] text-[var(--color-text-muted)] flex items-center gap-1.5"><BrainCircuit className="w-3.5 h-3.5" />Memory paused: this chat doesn't recall past conversations, facts or skills, and nothing new is learned.</p>}
         {session.messages.length === 0 ? (
-          <div className="flex-1 flex"><Empty icon={<Sparkles className="w-5 h-5" />} title="What can I help with?" body={`Chatting with ${settings.selectedModel || 'a local model'} on this PC. Type / for commands or @ to mention a model or file.`} className="flex-1" /></div>
+          <div className="flex-1 flex"><Empty icon={<Sparkles className="w-5 h-5" />} title="What can I help with?" className="flex-1"
+            body={`Chatting with ${settings.selectedModel || 'a local model'} on this computer. Local models can make mistakes, so check important facts. Type / for commands or @ to mention a model or file.`}
+            action={<div className="flex flex-wrap justify-center gap-2 max-w-[520px]">{STARTERS.map((p) => <Btn key={p.label} onClick={() => setStarter({ text: p.text, nonce: Date.now() })}>{p.label}</Btn>)}</div>} /></div>
         ) : (
           <ChatStream session={session} isStreaming={chat.isStreaming} autoScroll={settings.autoScroll} reasoningMode={settings.reasoningBlockMode}
-            onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory}
+            onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory} onFeedback={chat.rateReply}
             onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }}
             onAnswer={(id, text) => void chat.answerPoll(id, text)}
             onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)} />
         )}
+        {offline && <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
           models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels}
           onAttachFolder={attachFolder} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}
@@ -155,7 +183,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
           onToggleIncognito={() => chat.patchSession(session.id, (s) => ({ ...s, incognito: !s.incognito }))}
           contextUsed={frac} contextTitle={`Context: ${used.exact ? '' : 'about '}${used.n.toLocaleString()} of ${numCtx.toLocaleString()} tokens used${used.exact ? ' (measured by the model server)' : ' (estimated)'}${settings.autoScale ? '. Context is sized to free video memory.' : ''}`}
           onOpenLibrary={onOpenLibrary} onResearch={(q) => startResearch(q)}
-          mentions={mentions} prefill={prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />
+          mentions={mentions} prefill={starter && (!prefill || starter.nonce > prefill.nonce) ? starter : prefill} onSend={onSend} onCommand={onCommand} onStop={chat.stop} />
       </div>
 
       {showInspector && (

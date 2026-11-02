@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCommand } from '../../lib/commands';
 import { ChevronDown, FileText, FolderOpen, Hammer, PanelBottom, Plus, Save, X } from 'lucide-react';
 import { contextBlock, useProjectContext } from '../../context/discover';
 import { ToolbarContent } from '../common/ToolbarSlot';
@@ -45,6 +46,7 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
   const [numCtx, setNumCtx] = usePersisted<number>('lotus.builder.ctx.v1', 16384);
   const [chosen, setChosen] = usePersisted<string>('lotus.builder.model.v1', '');
   const [newOpen, setNewOpen] = useState(false);
+  useCommand('new-project', () => setNewOpen(true));
 
   const model = models.some((m) => m.id === chosen) ? chosen : (models.some((m) => m.id === selectedModel) ? selectedModel : models[0]?.id ?? '');
 
@@ -118,7 +120,7 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
               <div role="menu" aria-label="Projects">
                 {projects.projects.map((p) => (
                   <button key={p.id} type="button" role="menuitem" onClick={() => { projects.setActiveId(p.id); close(); }} className={cx('w-full px-2.5 h-8 flex items-center gap-2 rounded-[6px] text-[13px] text-left hover:bg-[var(--hover)]', p.id === project?.id && 'font-semibold')}>
-                    <span className="truncate flex-1">{p.name}</span><span className="text-[11px] text-[var(--color-text-muted)] shrink-0">{templateFor(p.target).platforms[0]}</span>
+                    <span className="truncate flex-1">{p.name}</span><span className="text-[12px] text-[var(--color-text-muted)] shrink-0">{templateFor(p.target).platforms[0]}</span>
                   </button>
                 ))}
                 {!projects.projects.length && <p className="px-2.5 py-2 text-[12px] text-[var(--color-text-muted)]">No projects yet.</p>}
@@ -133,15 +135,15 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
           ? <FileTree key={project.id} entries={files.entries} truncated={files.truncated} activePath={files.activePath} dirty={files.dirty}
               onOpen={(p) => { void files.open(p); if (view === 'preview') setView('split'); }} onRefresh={() => void files.refresh()}
               onCreateFile={(p) => void files.createFile(p)} onCreateFolder={(p) => void files.createFolder(p)} onRename={(a, b) => void files.rename(a, b)} onDelete={(p) => void files.remove(p)} />
-          : <p className="p-3 text-[12px] text-[var(--color-text-muted)]">Projects live in folders on this PC. Create one to begin.</p>}
+          : <p className="p-3 text-[12px] text-[var(--color-text-muted)]">Projects live in folders on this computer. Create one to begin.</p>}
       </SidebarPane>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {!project ? (
           <div className="flex-1 flex items-center justify-center p-6">
             <Empty icon={<Hammer className="w-6 h-6" />} title="Build an app with your local model"
-              body={isTauri ? 'Pick what you want to make (a website, a web app, a phone app, a desktop app), describe it, and watch it appear in the preview. Everything runs on this PC.' : 'The App Builder works with files and programs on your PC, so it needs the Lotus desktop app.'}
-              action={isTauri ? <div className="flex gap-2 justify-center"><Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setNewOpen(true)}>New project</Btn><Btn onClick={() => void openFolder()}>Open a folder</Btn></div> : undefined} />
+              body={isTauri ? 'Pick what you want to make (a website, a web app, a phone app, a desktop app), describe it, and watch it appear in the preview. Everything runs on this computer.' : 'The App Builder works with files and programs on your computer, so it needs the Lotus desktop app.'}
+              action={isTauri ? <div className="flex gap-2 justify-center"><Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setNewOpen(true)}>New Project</Btn><Btn onClick={() => void openFolder()}>Open a Folder</Btn></div> : undefined} />
           </div>
         ) : (
           <>
@@ -177,7 +179,7 @@ export const BuilderWorkspace: React.FC<Props> = ({ active, models, selectedMode
       <InspectorPane label="Agent and build" className="!w-[360px]">
         <div className="h-10 shrink-0 flex items-center px-3 border-b border-[var(--sep)]">
           <Tabs<Side> label="Panel" value={side} onChange={setSide} options={[{ id: 'agent', label: 'Agent' }, { id: 'build', label: 'Build' }]} />
-          {term.anyRunning && <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]"><span className="w-1.5 h-1.5 rounded-full bg-[var(--c-green)] animate-pulse" />Running</span>}
+          {term.anyRunning && <span className="ml-auto inline-flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)]"><span className="w-1.5 h-1.5 rounded-full bg-[var(--c-green)] animate-pulse" />Running</span>}
         </div>
         {side === 'agent'
           ? <AgentPanel items={agent.items} running={agent.running} approval={agent.approval} mode={mode} onMode={setMode} model={model} ollamaUp={ollamaUp} hasProject={!!project}

@@ -21,7 +21,7 @@ import { setLiveSettings } from './lib/liveSettings';
 import { startHardwareMonitor } from './hardware/monitor';
 import { startScheduler } from './tasks/store';
 import { loadMemory } from './memory/store';
-import { SettingsModal } from './components/modals/SettingsModal';
+import { SettingsModal, type SettingsTab } from './components/modals/SettingsModal';
 import { AccountModal, AccountView } from './components/account/AccountModal';
 import { LibrarySheet, LibraryTab } from './components/library/LibrarySheet';
 import { ollamaClient } from './services/ollamaService';
@@ -34,12 +34,19 @@ import { invokeNative, onEvent } from './lib/bus';
 import { WelcomeSetup } from './components/setup/WelcomeSetup';
 import { loadSetup } from './setup/state';
 import { useSetupJobs } from './setup/jobs';
-import { installMacMenu, menuSignature } from './lib/nativeMenu';
+import { installMacMenu, matchesShortcut, menuSignature } from './lib/nativeMenu';
+import { focusPageSearch, runCommand, type PageCommand } from './lib/commands';
+import { AlertHost, flushUndo, takeUndoIfIdle } from './components/common/Alerts';
+import { EnginesContext } from './components/common/EngineNotice';
+import { openExternal } from './lib/open';
+import { isTauri } from './lib/http';
 import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
 
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
+/** Help › Lotus Help opens the user guide (the project README) in the browser. */
+const HELP_URL = 'https://github.com/filipesilva0/Lotus#readme';
 
 const DEFAULT_SETTINGS: LotusSettings = {
   appearance: 'auto',
@@ -55,7 +62,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
   stopSequences: [],
   seed: null,
   maxTokens: 0,
-  systemPrompt: 'You are Lotus, a helpful AI assistant running locally on the user\'s PC. Answer concisely and accurately.',
+  systemPrompt: 'You are Lotus, a helpful AI assistant running locally on the user\'s computer. Answer concisely and accurately.',
   streamingEnabled: true,
   reasoningBlockMode: 'collapsed',
   sendOnEnter: true,
@@ -111,6 +118,23 @@ export default function App() {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // Window full screen, for View › Enter/Exit Full Screen on Windows and Linux.
+  const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    const sync = async () => {
+      try { const { getCurrentWindow } = await import('@tauri-apps/api/window'); setFullScreen(await getCurrentWindow().isFullscreen()); }
+      catch { setFullScreen(!!document.fullscreenElement); }
+    };
+    void sync();
+    const h = () => void sync();
+    window.addEventListener('resize', h);
+    off = () => window.removeEventListener('resize', h);
+    return () => off?.();
+  }, []);
+  const [settingsPane, setSettingsPane] = useState<SettingsTab | null>(null);
+  const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
+  const openSettings = useCallback((pane: SettingsTab | null = null) => { setSettingsPane(pane); setIsSettingsOpen(true); }, []);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
   const [library, setLibrary] = useState<LibraryTab | null>(null);
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
@@ -131,15 +155,6 @@ export default function App() {
   const panelsApi = useMemo(() => ({ ...panels, setLeft: (on: boolean) => setPanel('left', on), setRight: (on: boolean) => setPanel('right', on) }), [panels, setPanel]);
   const toggleLeft = useCallback(() => setPanel('left', (v) => !v), [setPanel]);
   const toggleRight = useCallback(() => setPanel('right', (v) => !v), [setPanel]);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || !e.altKey || e.shiftKey) return;
-      const k = e.key.toLowerCase();
-      if (k === 's') { e.preventDefault(); toggleLeft(); } else if (k === 'i') { e.preventDefault(); toggleRight(); }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [toggleLeft, toggleRight]);
 
   // Appearance: Auto follows Windows' light/dark setting live.
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
@@ -178,15 +193,6 @@ export default function App() {
     setFuture(future.slice(1));
     showView(future[0]);
   }, [future, showView]);
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); goForward(); }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [goBack, goForward]);
 
   const eng = useEngines();
   const updates = useUpdates();
@@ -235,6 +241,7 @@ export default function App() {
   // ── Messages from other windows ───────────────────────────────────────────
   useEffect(() => { if (currentView === 'builder') setBuilderSeen(true); }, [currentView]);
   const openEngines = useCallback((tab: 'engines' | 'models' = 'engines') => { setEnginesTab(tab); setCurrentView('engines'); }, []);
+  const enginesCtx = useMemo(() => ({ eng, openEngines: () => openEngines('engines') }), [eng, openEngines]);
 
   useEffect(() => {
     const offs: (() => void)[] = [];
@@ -257,18 +264,31 @@ export default function App() {
   const closeWindow = async () => {
     try { const { getCurrentWindow } = await import('@tauri-apps/api/window'); await getCurrentWindow().close(); } catch { /* browser preview */ }
   };
+  const toggleFullScreen = async () => {
+    try { const { getCurrentWindow } = await import('@tauri-apps/api/window'); const w = getCurrentWindow(); await w.setFullscreen(!(await w.isFullscreen())); }
+    catch { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen?.().catch(() => undefined); }
+  };
   const go = (v: ViewMode) => () => setCurrentView(v);
+  const newChat = () => { chat.newChat(); setCurrentView('chat'); };
+  const newOn = (v: ViewMode, c: PageCommand) => () => { setCurrentView(v); runCommand(c); };
+  // Edit › Find: the page's search field (opening its sidebar first when the field lives there).
+  const findable = currentView === 'chat' || currentView === 'images' || currentView === 'voice' || currentView === 'engines';
+  const find = () => { if (focusPageSearch()) return; setPanel('left', true); setTimeout(() => focusPageSearch(), 60); };
+  const openHelp = () => void openExternal(HELP_URL);
   const menus: MenuDef[] = [
     { label: 'File', items: [
-      { label: 'New Chat', shortcut: 'Ctrl+N', onSelect: () => { chat.newChat(); setCurrentView('chat'); } },
+      { label: 'New Chat', shortcut: 'Ctrl+N', onSelect: newChat },
+      { label: 'New Image', onSelect: newOn('images', 'new-image') },
+      { label: 'New Project…', onSelect: newOn('builder', 'new-project') },
+      { label: 'New Task', onSelect: newOn('tasks', 'new-task') },
       'separator',
-      { label: 'Settings…', shortcut: 'Ctrl+,', onSelect: () => setIsSettingsOpen(true) },
+      { label: 'Settings…', shortcut: 'Ctrl+,', onSelect: () => openSettings() },
       'separator',
       { label: 'Close Window', onSelect: () => void closeWindow() },
-      { label: 'Quit Lotus', onSelect: () => void invokeNative('quit_app') },
+      { label: 'Quit Lotus', onSelect: () => { flushUndo(); void invokeNative('quit_app'); } },
     ] },
     { label: 'Edit', items: [
-      { label: 'Undo', shortcut: 'Ctrl+Z', onSelect: edit('undo') },
+      { label: 'Undo', shortcut: 'Ctrl+Z', onSelect: () => { if (!takeUndoIfIdle()) document.execCommand('undo'); } },
       { label: 'Redo', shortcut: 'Ctrl+Y', onSelect: edit('redo') },
       'separator',
       { label: 'Cut', shortcut: 'Ctrl+X', onSelect: edit('cut') },
@@ -276,32 +296,34 @@ export default function App() {
       { label: 'Paste', shortcut: 'Ctrl+V', onSelect: () => void paste() },
       'separator',
       { label: 'Select All', shortcut: 'Ctrl+A', onSelect: edit('selectAll') },
+      'separator',
+      { label: 'Find…', shortcut: 'Ctrl+F', onSelect: find, disabled: !findable },
     ] },
     { label: 'View', items: [
-      { label: panels.left ? 'Hide Left Panel' : 'Show Left Panel', shortcut: 'Ctrl+Alt+S', onSelect: toggleLeft },
-      { label: panels.right ? 'Hide Right Panel' : 'Show Right Panel', shortcut: 'Ctrl+Alt+I', onSelect: toggleRight },
-      'separator',
-      { label: 'Appearance: Auto', checked: settings.appearance === 'auto', onSelect: () => setAppearance('auto') },
-      { label: 'Appearance: Light', checked: settings.appearance === 'light', onSelect: () => setAppearance('light') },
-      { label: 'Appearance: Dark', checked: settings.appearance === 'dark', onSelect: () => setAppearance('dark') },
-      'separator',
-      { label: 'Chat', checked: currentView === 'chat', onSelect: go('chat') },
-      { label: 'Images', checked: currentView === 'images', onSelect: go('images') },
-      { label: 'Voice', checked: currentView === 'voice', onSelect: go('voice') },
-      { label: 'App Builder', checked: currentView === 'builder', onSelect: go('builder') },
-      { label: 'Tasks', checked: currentView === 'tasks', onSelect: go('tasks') },
-      { label: 'Engines & Models', checked: currentView === 'engines', onSelect: go('engines') },
+      { label: panels.left ? 'Hide Sidebar' : 'Show Sidebar', shortcut: 'Ctrl+Alt+S', mac: 'Ctrl+Cmd+S', onSelect: toggleLeft },
+      { label: panels.right ? 'Hide Inspector' : 'Show Inspector', shortcut: 'Ctrl+Alt+I', mac: 'Alt+Cmd+I', onSelect: toggleRight },
       'separator',
       { label: 'Library…', onSelect: () => setLibrary('skills') },
       { label: 'Plugins…', onSelect: () => setLibrary('plugins') },
+      // macOS adds its own Enter Full Screen (lib/nativeMenu.ts); Windows and Linux get the same command here.
+      ...(chromeOs() === 'macos' ? [] : ['separator' as const, { label: fullScreen ? 'Exit Full Screen' : 'Enter Full Screen', shortcut: 'F11', onSelect: () => void toggleFullScreen() }]),
+    ] },
+    { label: 'Go', items: [
+      { label: 'Back', shortcut: 'Alt+Left', mac: 'Cmd+[', onSelect: goBack, disabled: !past.length },
+      { label: 'Forward', shortcut: 'Alt+Right', mac: 'Cmd+]', onSelect: goForward, disabled: !future.length },
       'separator',
-      { label: 'Back', shortcut: 'Alt+Left', onSelect: goBack, disabled: !past.length },
-      { label: 'Forward', shortcut: 'Alt+Right', onSelect: goForward, disabled: !future.length },
+      { label: 'Chat', shortcut: 'Ctrl+1', checked: currentView === 'chat', onSelect: go('chat') },
+      { label: 'Images', shortcut: 'Ctrl+2', checked: currentView === 'images', onSelect: go('images') },
+      { label: 'Voice', shortcut: 'Ctrl+3', checked: currentView === 'voice', onSelect: go('voice') },
+      { label: 'App Builder', shortcut: 'Ctrl+4', checked: currentView === 'builder', onSelect: go('builder') },
+      { label: 'Tasks', shortcut: 'Ctrl+5', checked: currentView === 'tasks', onSelect: go('tasks') },
+      { label: 'Engines & Models', shortcut: 'Ctrl+6', checked: currentView === 'engines', onSelect: go('engines') },
     ] },
     { label: 'Help', items: [
+      { label: 'Lotus Help', shortcut: 'F1', mac: 'Cmd+Shift+/', onSelect: openHelp },
       { label: 'Setup Guide…', onSelect: () => setSetupOpen(true) },
       'separator',
-      { label: 'Check for Updates…', onSelect: () => { void updates.check(); setIsSettingsOpen(true); } },
+      { label: 'Check for Updates…', onSelect: () => { void updates.check(); openSettings('updates'); } },
     ] },
   ];
 
@@ -314,16 +336,25 @@ export default function App() {
     void installMacMenu(menusRef.current, () => menusRef.current).catch(() => undefined);
   }, [menuSig]);
 
-  // Ctrl+N and Ctrl+, are listed in the menus, so they must work from the keyboard too.
+  // Windows / Linux: every shortcut listed in the menus works from the keyboard (Edit's are left to the
+  // text field itself). On the Mac the menu bar's key equivalents do this, so nothing runs twice.
   useEffect(() => {
+    if (chromeOs() === 'macos' && isTauri) return;
     const h = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.altKey || e.shiftKey || e.metaKey) return;
-      if (e.key.toLowerCase() === 'n') { e.preventDefault(); chat.newChat(); setCurrentView('chat'); }
-      else if (e.key === ',') { e.preventDefault(); setIsSettingsOpen(true); }
+      if (e.defaultPrevented || e.repeat) return;
+      for (const m of menusRef.current) {
+        for (const it of m.items) {
+          if (it === 'separator' || !it.shortcut || !matchesShortcut(e, it.shortcut)) continue;
+          if (m.label === 'Edit' && it.label !== 'Find…') continue;
+          e.preventDefault();
+          if (!it.disabled) it.onSelect();
+          return;
+        }
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [chat.newChat, setCurrentView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Layout ────────────────────────────────────────────────────────────────
   // Split view: translucent sidebar | content pane with a unified toolbar on top.
@@ -332,7 +363,7 @@ export default function App() {
       <LeftRail
         currentView={currentView}
         onSelectView={setCurrentView}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={() => openSettings()}
         onOpenAccount={setAccountView}
         onOpenLibrary={setLibrary}
         engines={eng.engines}
@@ -346,6 +377,7 @@ export default function App() {
           <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
+        <EnginesContext.Provider value={enginesCtx}>
         <ToolbarSlotContext.Provider value={toolbarSlot}>
         <PanelsProvider value={panelsApi}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -373,6 +405,7 @@ export default function App() {
         </div>
         </PanelsProvider>
         </ToolbarSlotContext.Provider>
+        </EnginesContext.Provider>
       </div>
     </main>
   );
@@ -396,7 +429,8 @@ export default function App() {
       {panel}
       <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} />
       <LibrarySheet open={library !== null} tab={library ?? 'skills'} onTab={setLibrary} onClose={() => setLibrary(null)} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} folder={chat.active?.folder} />
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
+      <AlertHost />
+      <SettingsModal isOpen={isSettingsOpen} pane={settingsPane} onClose={closeSettings} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );
 }

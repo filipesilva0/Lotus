@@ -28,8 +28,10 @@ export const chromeOs = (): ChromeOs => (isTauri ? desktopOs() : 'windows');
 
 export interface MenuItem {
   label: string;
-  /** Shown right-aligned, for discoverability only (the shortcut itself is handled elsewhere). */
+  /** Windows/Linux shortcut ("Ctrl+Alt+S"): shown right-aligned in the in-window menu and matched by App's key handler. */
   shortcut?: string;
+  /** macOS key equivalent in Tauri accelerator form ("Ctrl+Cmd+S", "Cmd+["). Defaults to `shortcut` with Ctrl → Cmd. */
+  mac?: string;
   onSelect: () => void;
   disabled?: boolean;
   checked?: boolean;
@@ -118,18 +120,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({ canGoBack, canGoForward, onB
     <div ref={barRef} data-tauri-drag-region data-os={os}
       className={`material-titlebar relative z-40 shrink-0 flex items-center select-none text-[var(--color-text-main)] ${mac ? 'h-[38px] pl-[84px]' : 'h-10 pl-2'}`} role="banner">
       {!bare && <div className="flex items-center gap-0.5">
-        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" data-tip={`Back (${tipKeys('Alt+Left', '⌥←')})`} data-tip-side="below">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onBack} disabled={!canGoBack} aria-label="Back" data-tip={`Back (${tipKeys('Alt+Left', '⌘[')})`} data-tip-side="below">
           <Symbol glyph={ArrowLeft} size={16} />
         </button>
-        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" data-tip={`Forward (${tipKeys('Alt+Right', '⌥→')})`} data-tip-side="below">
+        <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onForward} disabled={!canGoForward} aria-label="Forward" data-tip={`Forward (${tipKeys('Alt+Right', '⌘]')})`} data-tip-side="below">
           <Symbol glyph={ArrowRight} size={16} />
         </button>
         <button type="button" className={`tip ${navBtn} ml-1`} onMouseDown={keepFocus} onClick={onToggleLeft} aria-pressed={leftPanel}
-          aria-label={leftPanel ? 'Hide left panel' : 'Show left panel'} data-tip={`${leftPanel ? 'Hide' : 'Show'} left panel (${tipKeys('Ctrl+Alt+S', '⌘⌥S')})`} data-tip-side="below">
+          aria-label={leftPanel ? 'Hide sidebar' : 'Show sidebar'} data-tip={`${leftPanel ? 'Hide' : 'Show'} sidebar (${tipKeys('Ctrl+Alt+S', '⌃⌘S')})`} data-tip-side="below">
           <Symbol glyph={PanelLeft} size={16} />
         </button>
         <button type="button" className={`tip ${navBtn}`} onMouseDown={keepFocus} onClick={onToggleRight} aria-pressed={rightPanel}
-          aria-label={rightPanel ? 'Hide right panel' : 'Show right panel'} data-tip={`${rightPanel ? 'Hide' : 'Show'} right panel (${tipKeys('Ctrl+Alt+I', '⌘⌥I')})`} data-tip-side="below">
+          aria-label={rightPanel ? 'Hide inspector' : 'Show inspector'} data-tip={`${rightPanel ? 'Hide' : 'Show'} inspector (${tipKeys('Ctrl+Alt+I', '⌥⌘I')})`} data-tip-side="below">
           <Symbol glyph={PanelRight} size={16} />
         </button>
       </div>}

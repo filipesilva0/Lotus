@@ -1,3 +1,4 @@
+import { confirmAlert } from '../common/Alerts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Copy, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { voicebox, Generation, ModelStatus, ProfileSample, STT_MODELS, TTS_ENGINES, VoiceProfile } from '../../services/voicebox';
@@ -61,13 +62,13 @@ const Persona: React.FC<{ p: VoiceProfile; onSaved: () => void }> = ({ p, onSave
     <div className="overflow-y-auto flex-1">
       <Section title="Voice persona" hint="Describe how this character talks (up to 2,000 characters). Used when “speak in character” is on.">
         <TextArea rows={7} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} aria-label="Voice persona" placeholder="Warm, dry humour. Short sentences. Never uses slang." />
-        <p className="mt-1 text-[11px] text-[var(--color-text-muted)] tabular-nums text-right">{text.length} / 2000</p>
+        <p className="mt-1 text-[12px] text-[var(--color-text-muted)] tabular-nums text-right">{text.length} / 2000</p>
         <div className="mt-2 flex gap-2">
           <Btn size="sm" variant="primary" loading={busy === 'save'} disabled={text === (p.personality ?? '')} onClick={save}>Save</Btn>
           <Btn size="sm" icon={<Sparkles className="w-3 h-3" />} loading={busy === 'compose'} disabled={!p.personality} onClick={compose} title={p.personality ? 'Improvise a line in character and play it' : 'Save a persona first'}>Compose</Btn>
         </div>
         {msg && <p role="status" className={cx('mt-2 text-[12px]', msg.tone === 'err' ? 'text-[var(--c-red)]' : 'text-[var(--c-green)]')}>{msg.t}</p>}
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">Compose asks Voicebox's local language model to write a line in character, then speaks it. It needs that model to be downloaded.</p>
+        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Compose asks Voicebox's local language model to write a line in character, then speaks it. It needs that model to be downloaded.</p>
       </Section>
     </div>
   );
@@ -90,7 +91,7 @@ const Engines: React.FC<{ p: VoiceProfile }> = ({ p }) => {
               <td className="py-1.5">{e.label}</td><td className="text-center"><Dot on={cloned(e.id)} label="Cloning" /></td><td className="text-center"><Dot on={preset(e.id)} label="Built-in voices" /></td><td className="text-center"><Dot on={designed(e.id)} label="Described voices" /></td><td className="text-center"><Dot on={tags(e.id)} label="Expression tags" /></td>
             </tr>))}</tbody>
         </table>
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)] leading-snug">Based on how Voicebox's engines are documented; Lotus can't query this from the server, so a newer Voicebox may differ.</p>
+        <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-snug">Based on how Voicebox's engines are documented; Lotus can't query this from the server, so a newer Voicebox may differ.</p>
       </Section>
     </div>
   );
@@ -107,9 +108,9 @@ const Raw: React.FC<{ online: boolean }> = ({ online }) => {
         {g ? (<>
           <KV k="Engine" v={g.engine ?? '—'} /><KV k="Audio length" v={g.duration ? `${g.duration.toFixed(1)} s` : '—'} /><KV k="Seed" v={g.seed ?? '—'} /><KV k="Status" v={g.status} />
           <div className="flex items-center justify-between mt-3 mb-1"><span className="text-[12px] font-medium">Record (JSON)</span><IconBtn label="Copy JSON" className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(text)}><Copy className="w-3.5 h-3.5" /></IconBtn></div>
-          <pre className="max-h-72 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[11px] font-mono whitespace-pre-wrap break-all">{text}</pre>
+          <pre className="max-h-72 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[12px] font-mono whitespace-pre-wrap break-all">{text}</pre>
         </>) : <p className="text-[13px] text-[var(--color-text-muted)]">Nothing generated yet.</p>}
-        <p className="mt-3 text-[11px] text-[var(--color-text-muted)] leading-snug">Engine, delivery, effects, speed and seed controls sit in the card beside the script. Playback speed is in the player.</p>
+        <p className="mt-3 text-[12px] text-[var(--color-text-muted)] leading-snug">Engine, delivery, effects, speed and seed controls sit in the card beside the script. Playback speed is in the player.</p>
       </Section>
     </div>
   );
@@ -136,14 +137,14 @@ const Stt: React.FC<{ online: boolean }> = ({ online }) => {
         {!models.length && <p className="text-[13px] text-[var(--color-text-muted)]">No Whisper models reported by Voicebox.</p>}
         <ul className="space-y-2 mt-2">{models.map((m) => (
           <li key={m.model_name} className="p-2.5 rounded-[8px] bg-[var(--hover)]">
-            <div className="flex items-center justify-between text-[13px]"><span className="font-medium">{m.display_name}</span><span className="text-[11px] text-[var(--color-text-muted)] tabular-nums">{m.size_mb ? `${Math.round(m.size_mb)} MB` : ''}</span></div>
+            <div className="flex items-center justify-between text-[13px]"><span className="font-medium">{m.display_name}</span><span className="text-[12px] text-[var(--color-text-muted)] tabular-nums">{m.size_mb ? `${Math.round(m.size_mb)} MB` : ''}</span></div>
             {m.model_name in tasks && <div className="mt-1.5"><Progress value={tasks[m.model_name]} label={`Downloading ${m.display_name}`} /></div>}
             <div className="mt-1.5 flex gap-1.5">
               {!m.downloaded ? <Btn size="sm" loading={busy === m.model_name || m.downloading} onClick={() => act(m.model_name, () => voicebox.downloadModel(m.model_name))}>Download</Btn>
                 : m.loaded ? <Btn size="sm" loading={busy === m.model_name} onClick={() => act(m.model_name, () => voicebox.unloadModel(m.model_name))}>Unload</Btn>
                 : <Btn size="sm" variant="primary" loading={busy === m.model_name} onClick={() => act(m.model_name, () => voicebox.loadModel(m.model_name))}>Load</Btn>}
-              {m.downloaded && !m.loaded && <IconBtn label={`Delete ${m.display_name}`} className="!w-7 !h-7" onClick={() => { if (window.confirm(`Delete ${m.display_name}?`)) void act(m.model_name, () => voicebox.deleteModel(m.model_name)); }}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
-              {m.loaded && <span className="text-[11px] text-[var(--c-green)] font-medium self-center">In memory</span>}
+              {m.downloaded && !m.loaded && <IconBtn label={`Delete ${m.display_name}`} className="!w-7 !h-7" onClick={() => void confirmAlert({ title: `Delete “${m.display_name}”?`, message: 'This removes the voice model from this computer. You can download it again later.', confirm: 'Delete' }).then((ok) => { if (ok) void act(m.model_name, () => voicebox.deleteModel(m.model_name)); })}><Trash2 className="w-3.5 h-3.5" /></IconBtn>}
+              {m.loaded && <span className="text-[12px] text-[var(--c-green)] font-medium self-center">In memory</span>}
             </div>
           </li>))}</ul>
       </Section>
@@ -159,8 +160,8 @@ const Api: React.FC<{ data: VoiceData }> = ({ data }) => {
       <Section title="Voicebox server">
         <KV k="Address" v={url} mono /><KV k="Status" v={data.status === 'online' ? 'Online' : 'Offline'} /><KV k="Voices" v={data.profiles.length} />
         <div className="flex items-center justify-between mt-3 mb-1"><span className="text-[12px] font-medium">Speak from any script</span><IconBtn label="Copy example" className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(sample)}><Copy className="w-3.5 h-3.5" /></IconBtn></div>
-        <pre className="p-2 rounded-[8px] bg-[var(--hover)] text-[11px] font-mono whitespace-pre-wrap break-all">{sample}</pre>
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)] leading-snug">Per-agent voice bindings and the global dictation hotkey belong to Voicebox's own app and are not part of Lotus. Change the address in Engines.</p>
+        <pre className="p-2 rounded-[8px] bg-[var(--hover)] text-[12px] font-mono whitespace-pre-wrap break-all">{sample}</pre>
+        <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-snug">Per-agent voice bindings and the global dictation hotkey belong to Voicebox's own app and are not part of Lotus. Change the address in Engines.</p>
       </Section>
     </div>
   );

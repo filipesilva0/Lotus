@@ -46,7 +46,7 @@ export class LlamaCppService {
     try {
       res = await http(`${this.baseUrl}${path}`, { ...init, signal: init.signal ?? timeoutSignal(timeoutMs) });
     } catch (e) {
-      throw new EngineError(`Can't reach llama-server at ${this.baseUrl}. Start it (for example \`llama-server -m model.gguf --port 8080\`) or change the address in Settings → Model & Inference. (${(e as Error).message})`, ENGINE, undefined, true);
+      throw new EngineError(`Can't reach llama-server at ${this.baseUrl}. Start it (for example \`llama-server -m model.gguf --port 8080\`) or change the address in Settings → Models. (${(e as Error).message})`, ENGINE, undefined, true);
     }
     if (!res.ok) throw new EngineError(await errorText(res), ENGINE, res.status);
     return res;

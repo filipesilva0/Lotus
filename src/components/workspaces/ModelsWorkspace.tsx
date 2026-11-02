@@ -1,3 +1,5 @@
+import { confirmAlert } from '../common/Alerts';
+import { EngineNotice } from '../common/EngineNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Boxes, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
 import { ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
@@ -61,7 +63,7 @@ const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel
 
   return (
     <div className="space-y-6">
-      {ollamaUp === false && <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>Ollama isn't running. You can browse, but downloads and loading need it.</Banner>}
+      {ollamaUp === false && <EngineNotice id="ollama" purpose="" note="You can browse, but downloading and loading models need it." />}
       {err && <Banner tone="error">{err}</Banner>}
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
         {(['Installed', 'Coding', 'Reasoning', 'Vision', 'Small'] as const).map((t) => (
@@ -78,11 +80,11 @@ const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel
             return (
               <Card key={m.name} className={cx('p-3.5 cursor-default', selected === m.name && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')} onClick={() => onSelect(m.name)}>
                 <div className="flex items-start gap-2"><div className="flex-1 min-w-0"><p className="text-[14px] font-semibold truncate">{m.name}</p><p className="text-[12px] text-[var(--color-text-muted)]">{[m.details?.parameter_size, m.details?.quantization_level, fmtGB(m.size)].filter(Boolean).join(' · ')}</p></div>
-                  {run && <span className="px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--c-green)]/15 text-[var(--c-green)] text-[11px] font-semibold">Loaded</span>}</div>
+                  {run && <span className="px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--c-green)]/15 text-[var(--c-green)] text-[12px] font-semibold">Loaded</span>}</div>
                 <div className="mt-3 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
                   {run ? <Btn size="sm" loading={busy === m.name} icon={<PowerOff className="w-3 h-3" />} onClick={() => void act(m.name, () => ollamaClient.unload(m.name))}>Unload</Btn>
-                    : <Btn size="sm" variant="primary" loading={busy === m.name} icon={<Power className="w-3 h-3" />} disabled={!ollamaUp} onClick={() => void act(m.name, () => ollamaClient.load(m.name))}>Load model</Btn>}
-                  <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => { if (window.confirm(`Delete the weights for ${m.name}? This frees ${fmtGB(m.size)}.`)) void act(m.name, () => ollamaClient.deleteModel(m.name)); }}>Delete weights</Btn>
+                    : <Btn size="sm" variant="primary" loading={busy === m.name} icon={<Power className="w-3 h-3" />} disabled={!ollamaUp} onClick={() => void act(m.name, () => ollamaClient.load(m.name))}>Load Model</Btn>}
+                  <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => void confirmAlert({ title: `Delete “${m.name}”?`, message: `This removes the model from this computer and frees ${fmtGB(m.size)}. You can download it again later.`, confirm: 'Delete' }).then((ok) => { if (ok) void act(m.name, () => ollamaClient.deleteModel(m.name)); })}>Delete Weights</Btn>
                 </div>
               </Card>
             );
@@ -110,14 +112,14 @@ const CatalogCard: React.FC<{ m: CatalogModel; installed: OllamaModel[]; pull: R
   return (
     <Card className="p-3.5">
       <div className="flex items-start justify-between gap-2"><div><p className="text-[14px] font-semibold">{m.title}</p><p className="text-[12px] text-[var(--color-text-muted)]">{m.maker}</p></div>
-        <div className="flex gap-1 flex-wrap justify-end">{m.tags.map((t) => <span key={t} className="px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--hover)] text-[11px] font-medium">{t}</span>)}</div></div>
+        <div className="flex gap-1 flex-wrap justify-end">{m.tags.map((t) => <span key={t} className="px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--hover)] text-[12px] font-medium">{t}</span>)}</div></div>
       <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug">{m.blurb}</p>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <label className="text-[11px] text-[var(--color-text-muted)]">Size<select aria-label={`${m.title} size`} value={size} onChange={(e) => setSize(parseFloat(e.target.value))} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px] text-[var(--color-text-main)]">{m.sizes.map((s) => <option key={s} value={s}>{s}B</option>)}</select></label>
-        <label className="text-[11px] text-[var(--color-text-muted)]">Quantisation<select aria-label={`${m.title} quantisation`} value={quant} onChange={(e) => setQuant(e.target.value as Quant)} disabled={!m.quantTag} title={m.quantTag ? undefined : 'This model is only listed in its default build. Use Import / Download with a Hugging Face path for others.'} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px] text-[var(--color-text-main)] disabled:opacity-50">{QUANTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
+        <label className="text-[12px] text-[var(--color-text-muted)]">Size<select aria-label={`${m.title} size`} value={size} onChange={(e) => setSize(parseFloat(e.target.value))} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px] text-[var(--color-text-main)]">{m.sizes.map((s) => <option key={s} value={s}>{s}B</option>)}</select></label>
+        <label className="text-[12px] text-[var(--color-text-muted)]">Quantisation<select aria-label={`${m.title} quantisation`} value={quant} onChange={(e) => setQuant(e.target.value as Quant)} disabled={!m.quantTag} title={m.quantTag ? undefined : 'This model is only listed in its default build. Use Import / Download with a Hugging Face path for others.'} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px] text-[var(--color-text-main)] disabled:opacity-50">{QUANTS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select></label>
       </div>
       <p className="mt-2 text-[12px] tabular-nums">≈ {need} GB video memory{fit && <span className={cx('ml-2 font-medium', fit === 'fits' ? 'text-[var(--c-green)]' : fit === 'partial' ? 'text-[var(--c-orange)]' : 'text-[var(--c-red)]')}>{fit === 'fits' ? 'fits your GPU' : fit === 'partial' ? 'will spill into RAM' : 'too large for your GPU'}</span>}</p>
-      <p className="text-[11px] text-[var(--color-text-muted)] font-mono truncate">{tag}</p>
+      <p className="text-[12px] text-[var(--color-text-muted)] font-mono truncate">{tag}</p>
       <div className="mt-2.5">{have ? <span className="inline-flex items-center gap-1 text-[12px] text-[var(--c-green)] font-medium"><Check className="w-3.5 h-3.5" />Installed</span>
         : <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} disabled={!!pull.name} onClick={() => void pull.start(tag)}>Download</Btn>}</div>
     </Card>
@@ -190,7 +192,7 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
               : <Btn variant="primary" icon={<Play className="w-3 h-3" />} disabled={!prompt.trim() || valid.length < 2 || !ollamaUp} onClick={() => void run()}>Run</Btn>}
           </div>
         </div>
-        <p className="text-[11px] text-[var(--color-text-muted)]">Requests go out together. If the models don't all fit in video memory at once, Ollama loads them in turn and the first-token time includes that load.</p>
+        <p className="text-[12px] text-[var(--color-text-muted)]">Requests go out together. If the models don't all fit in video memory at once, Ollama loads them in turn and the first-token time includes that load.</p>
       </div>
       {!cols.length ? <Empty icon={<Swords className="w-5 h-5" />} title="Compare models side by side" body="Pick two or three installed models, enter a prompt and press Run." className="flex-1" /> : (
         <div className="flex-1 min-h-0 grid gap-px bg-[var(--sep)]" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
@@ -198,10 +200,10 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
             const hide = blind && !voted;
             return (
               <div key={c.model} className="bg-[var(--color-bg-panel)] min-w-0 flex flex-col min-h-0">
-                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : c.model}</span>{c.state === 'running' && <span className="text-[11px] text-[var(--color-text-muted)] animate-pulse">Generating…</span>}</div>
+                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : c.model}</span>{c.state === 'running' && <span className="text-[12px] text-[var(--color-text-muted)] animate-pulse">Generating…</span>}</div>
                 <div className="grid grid-cols-3 gap-2 px-3 py-2 text-center border-b border-[var(--sep)]">
                   {[['First token', c.ttft !== null ? `${c.ttft} ms` : '—'], ['Speed', c.tps !== null ? `${c.tps} tok/s` : c.state === 'running' && c.tokens ? '…' : '—'], ['Total', c.total !== null ? `${(c.total / 1000).toFixed(1)} s` : '—']].map(([k, v]) => (
-                    <div key={k}><p className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)]">{k}</p><p className="text-[13px] font-semibold tabular-nums">{v}</p></div>
+                    <div key={k}><p className="text-[12px] text-[var(--color-text-muted)]">{k}</p><p className="text-[13px] font-semibold tabular-nums">{v}</p></div>
                   ))}
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">{c.error ? <span className="text-[var(--c-red)]">{c.error}</span> : c.text || <span className="text-[var(--color-text-muted)]">Waiting…</span>}</div>
@@ -262,13 +264,13 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
-      {/* Engine on/off status lives on the Engines tab and the auto-scaling card in Settings → Local Engine & VRAM;
+      {/* Engine on/off status lives on the Engines tab and the auto-scaling card in Settings → Engines;
           they are not repeated here (session 8). This page is live memory use and the request log. */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">GPU video memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.vramTotalGb ? `${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} / ${stats.vramTotalGb.toFixed(1)} GB` : '—'}</span></div>
-          {stats && stats.vramTotalGb ? <><Gauge value={(stats.vramTotalGb - stats.vramFreeGb) / stats.vramTotalGb} label="Video memory" className="mb-2" /><Spark values={samples.map((s) => s.vram)} max={stats.vramTotalGb} label="Video memory over the last two minutes" /><p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">{stats.device} · whole-GPU figure reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">GPU memory is read from ComfyUI. Start it to see this.</p>}</Card>
+          {stats && stats.vramTotalGb ? <><Gauge value={(stats.vramTotalGb - stats.vramFreeGb) / stats.vramTotalGb} label="Video memory" className="mb-2" /><Spark values={samples.map((s) => s.vram)} max={stats.vramTotalGb} label="Video memory over the last two minutes" /><p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">{stats.device} · whole-GPU figure reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">GPU memory is read from ComfyUI. Start it to see this.</p>}</Card>
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">System memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.ramTotalGb ? `${(stats.ramTotalGb - stats.ramFreeGb).toFixed(1)} / ${stats.ramTotalGb.toFixed(1)} GB` : '—'}</span></div>
-          {stats && stats.ramTotalGb ? <><Gauge value={(stats.ramTotalGb - stats.ramFreeGb) / stats.ramTotalGb} label="System memory" className="mb-2" /><Spark values={samples.map((s) => s.ram)} max={stats.ramTotalGb} label="System memory over the last two minutes" color="var(--c-green)" /><p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">Reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">System memory is read from ComfyUI. Start it to see this.</p>}</Card>
+          {stats && stats.ramTotalGb ? <><Gauge value={(stats.ramTotalGb - stats.ramFreeGb) / stats.ramTotalGb} label="System memory" className="mb-2" /><Spark values={samples.map((s) => s.ram)} max={stats.ramTotalGb} label="System memory over the last two minutes" color="var(--c-green)" /><p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">System memory is read from ComfyUI. Start it to see this.</p>}</Card>
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">Ollama models in memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{ps.length ? `${ollamaVram.toFixed(1)} GB on GPU` : 'none loaded'}</span></div>
           <Spark values={samples.map((s) => s.ollama)} max={Math.max(1, ...samples.map((s) => s.ollama))} label="Ollama video memory over time" color="var(--c-orange)" />
           <ul className="mt-2 space-y-0.5 text-[12px]">{ps.map((m) => <li key={m.name} className="flex justify-between"><span className="truncate">{m.name}</span><span className="tabular-nums text-[var(--color-text-muted)]">{fmtGB(m.size)} ({Math.round((m.size_vram / Math.max(1, m.size)) * 100)}% on GPU)</span></li>)}</ul></Card>
@@ -282,11 +284,11 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
       <section>
         <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] font-semibold">Request log</h2>
           <div className="flex items-center gap-3"><label className="inline-flex items-center gap-1.5 text-[12px]"><input type="checkbox" checked={onlyErr} onChange={(e) => setOnlyErr(e.target.checked)} />Errors only</label><Btn size="sm" variant="ghost" onClick={() => { requestLog.entries().length = 0; setLog([]); }}>Clear</Btn></div></div>
-        <div className="rounded-[10px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] max-h-72 overflow-y-auto font-mono text-[11px]" role="log" aria-label="Requests Lotus made to the engines">
+        <div className="rounded-[10px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] max-h-72 overflow-y-auto font-mono text-[12px]" role="log" aria-label="Requests Lotus made to the engines">
           {!shown.length && <p className="p-3 font-sans text-[12px] text-[var(--color-text-muted)]">Nothing yet. Calls Lotus makes to Ollama, ComfyUI and Voicebox appear here (routine status checks are hidden).</p>}
           {shown.map((l, i) => <div key={i} className="flex gap-3 px-3 py-1 border-b border-[var(--sep)] last:border-b-0"><span className="text-[var(--color-text-muted)] tabular-nums">{new Date(l.t).toLocaleTimeString()}</span><span className="w-12">{l.method}</span><span className="flex-1 truncate">{l.url}</span><span className={cx('w-10 text-right', l.status === 'error' || (typeof l.status === 'number' && l.status >= 400) ? 'text-[var(--c-red)]' : 'text-[var(--c-green)]')}>{l.status}</span><span className="w-14 text-right tabular-nums text-[var(--color-text-muted)]">{l.ms} ms</span></div>)}
         </div>
-        <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">Output from the engine programs themselves isn't captured: engines Lotus starts have their console output discarded.</p>
+        <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Output from the engine programs themselves isn't captured: engines Lotus starts have their console output discarded.</p>
       </section>
     </div>
   );
@@ -356,7 +358,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Models">
         <div className="p-3 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setAddOpen(true)}>Add model…</Btn>
+          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setAddOpen(true)}>Add Model…</Btn>
           <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
             <input type="search" aria-label="Search models and benchmark history" placeholder="Search models" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-7 pl-8 pr-2 rounded-[6px] bg-[var(--hover)] text-[13px] placeholder:text-[var(--color-text-muted)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" /></div>
         </div>
@@ -365,15 +367,15 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
         </nav>
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3">
           {mode === 'hub' && (<>
-            <h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">Model type</h3>
+            <h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Model type</h3>
             <nav className="space-y-0.5" aria-label="Model type">
               {KINDS.map((k) => <button key={k.id} type="button" aria-current={kind === k.id ? 'true' : undefined} onClick={() => setKind(k.id)} className={navBtn(kind === k.id)}>{k.icon}{k.label}</button>)}
             </nav>
           </>)}
           {mode === 'arena' && (<>
-            <h3 className="px-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)]">Benchmark history</h3>
+            <h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Benchmark history</h3>
             {history.filter((h) => !q.trim() || h.prompt.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 30).map((h) => (
-              <div key={h.id} className="px-2.5 py-1.5 rounded-[8px] hover:bg-[var(--hover)]"><p className="text-[12px] truncate">{h.prompt}</p><p className="text-[11px] text-[var(--color-text-muted)] truncate">Winner: {h.winner ?? '—'}</p></div>
+              <div key={h.id} className="px-2.5 py-1.5 rounded-[8px] hover:bg-[var(--hover)]"><p className="text-[12px] truncate">{h.prompt}</p><p className="text-[12px] text-[var(--color-text-muted)] truncate">Winner: {h.winner ?? '—'}</p></div>
             ))}
             {!history.length && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)]">Run a comparison and pick a winner to start a history.</p>}
           </>)}
@@ -402,7 +404,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
           <Section title="Leaderboard" hint="From the winners you picked.">
             {!wins.length && <p className="text-[13px] text-[var(--color-text-muted)]">No votes yet.</p>}
             {wins.map(([m, e]) => <KV key={m} k={m} v={`${e.w}/${e.n} wins${e.tps.length ? ` · ${Math.round(e.tps.reduce((a, b) => a + b, 0) / e.tps.length)} tok/s` : ''}`} />)}
-            {history.length > 0 && <Btn size="sm" variant="ghost" className="mt-3" onClick={() => setHistory([])}>Clear history</Btn>}
+            {history.length > 0 && <Btn size="sm" variant="ghost" className="mt-3" onClick={() => setHistory([])}>Clear History</Btn>}
           </Section>
         </InspectorPane>
       )}

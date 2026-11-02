@@ -30,8 +30,8 @@ export const NewProjectDialog: React.FC<{
 
   return (
     <Modal open={open} onClose={onClose} title="New project" wide
-      footer={<><Btn variant="ghost" onClick={onOpenFolder} className="mr-auto">Open an existing folder…</Btn><Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        <Btn variant="primary" loading={busy} disabled={!ok} onClick={() => void create()}>Create project</Btn></>}>
+      footer={<><Btn variant="ghost" onClick={onOpenFolder} className="mr-auto">Open an Existing Folder…</Btn><Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn variant="primary" loading={busy} disabled={!ok} onClick={() => void create()}>Create Project</Btn></>}>
       {error && <Banner tone="error" className="mb-3">{error}</Banner>}
       <Label>Name</Label>
       <TextInput autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void create(); }} aria-label="Project name" placeholder="My app" maxLength={60} />
@@ -43,7 +43,7 @@ export const NewProjectDialog: React.FC<{
             <button key={t.id} type="button" role="radio" aria-checked={on} onClick={() => setTarget(t.id)}
               className={cx('text-left p-3 rounded-[10px] border transition-colors', on ? 'border-[var(--color-accent-vibrant)] bg-[var(--color-accent-pastel)]' : 'border-[var(--sep)] hover:bg-[var(--hover)]')}>
               <span className="flex items-center gap-1.5 text-[13px] font-semibold">{t.title}{on && <Check className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />}</span>
-              <span className="mt-0.5 block text-[11px] text-[var(--color-text-muted)]">{t.platforms.join(' · ')}</span>
+              <span className="mt-0.5 block text-[12px] text-[var(--color-text-muted)]">{t.platforms.join(' · ')}</span>
               <span className="mt-1 block text-[12px] text-[var(--color-text-muted)] leading-snug">{t.blurb}</span>
             </button>
           );

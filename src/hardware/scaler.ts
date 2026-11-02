@@ -199,7 +199,7 @@ export function planScale(i: ScaleInput): ScalePlan {
   }
 
   if (!g || g.totalMb <= 0) {
-    notes.push('Video memory could not be measured on this PC, so Lotus uses your context setting and runs one background agent at a time.');
+    notes.push('Video memory could not be measured on this computer, so Lotus uses your context setting and runs one background agent at a time.');
     return base(manual);
   }
 

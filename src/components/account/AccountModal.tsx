@@ -32,8 +32,8 @@ export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: 
             : (
               <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--hover)]">
                 <Avatar user={null} size={36} />
-                <p className="flex-1 text-[13px] text-[var(--color-text-main)]">Not signed in. Your usage below is counted on this PC; sign in to keep your studio in sync between PCs.</p>
-                <Btn variant="primary" onClick={() => onView('signin')}>Sign in</Btn>
+                <p className="flex-1 text-[13px] text-[var(--color-text-main)]">Not signed in. Your usage below is counted on this computer; sign in to keep your studio in sync between PCs.</p>
+                <Btn variant="primary" onClick={() => onView('signin')}>Sign In</Btn>
               </div>
             )}
           <UsageDashboard sessions={sessions} />
@@ -51,7 +51,7 @@ const NoServer: React.FC<{ onSetUp: () => void }> = ({ onSetUp }) => (
     <p className="text-[var(--color-text-muted)] leading-relaxed">
       You can use a free Supabase project or host one yourself. Everything else in Lotus keeps working without an account.
     </p>
-    <div className="flex justify-end"><Btn variant="primary" onClick={onSetUp}>Set up sync server</Btn></div>
+    <div className="flex justify-end"><Btn variant="primary" onClick={onSetUp}>Set Up Sync Server</Btn></div>
   </div>
 );
 
@@ -84,7 +84,7 @@ const SignInForm: React.FC<{ onSignUp: () => void; onServer: () => void; onDone:
       <div><Label>Password</Label><TextInput type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></div>
       <div className="flex items-center justify-between gap-2 pt-1">
         <button type="button" onClick={onSignUp} className="text-[13px] text-[var(--color-accent-vibrant)] hover:underline">Create an account</button>
-        <Btn variant="primary" type="submit" loading={busy} disabled={!email || !password}>Sign in</Btn>
+        <Btn variant="primary" type="submit" loading={busy} disabled={!email || !password}>Sign In</Btn>
       </div>
       <ServerLine onChange={onServer} />
     </form>
@@ -110,7 +110,7 @@ const SignUpForm: React.FC<{ onSignIn: () => void; onDone: () => void }> = ({ on
     return (
       <div className="flex flex-col gap-3 text-[13px]">
         <Banner tone="info">We sent a confirmation link to {email}. Open it, then come back and sign in.</Banner>
-        <div className="flex justify-end"><Btn variant="primary" onClick={onSignIn}>Go to sign in</Btn></div>
+        <div className="flex justify-end"><Btn variant="primary" onClick={onSignIn}>Go to Sign In</Btn></div>
       </div>
     );
   }
@@ -122,7 +122,7 @@ const SignUpForm: React.FC<{ onSignIn: () => void; onDone: () => void }> = ({ on
       <div><Label hint="At least 8 characters">Password</Label><TextInput type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
       <div className="flex items-center justify-between gap-2 pt-1">
         <button type="button" onClick={onSignIn} className="text-[13px] text-[var(--color-accent-vibrant)] hover:underline">I already have an account</button>
-        <Btn variant="primary" type="submit" loading={busy} disabled={!name || !email || password.length < 8}>Create account</Btn>
+        <Btn variant="primary" type="submit" loading={busy} disabled={!name || !email || password.length < 8}>Create Account</Btn>
       </div>
     </form>
   );
@@ -155,7 +155,7 @@ const ProfileForm: React.FC<{ onSignedOut: () => void }> = ({ onSignedOut }) => 
         <Avatar user={user} size={64} />
         <div className="flex flex-col gap-1.5">
           <div className="flex gap-2">
-            <Btn size="sm" onClick={() => file.current?.click()} loading={busy === 'pic'}>Change picture</Btn>
+            <Btn size="sm" onClick={() => file.current?.click()} loading={busy === 'pic'}>Change Picture</Btn>
             {user.avatar && <Btn size="sm" variant="ghost" onClick={() => void run('pic', () => updateProfile({ avatar: null }))} disabled={!!busy}>Remove</Btn>}
           </div>
           <span className="text-[12px] text-[var(--color-text-muted)]">{user.email}</span>
@@ -168,7 +168,7 @@ const ProfileForm: React.FC<{ onSignedOut: () => void }> = ({ onSignedOut }) => 
       </form>
       <div className="flex items-center justify-between pt-2 border-t border-[var(--sep)]">
         <ServerLine onChange={() => undefined} />
-        <Btn className="ml-auto" variant="danger" loading={busy === 'out'} onClick={() => void run('out', async () => { await signOut(); onSignedOut(); })}>Log out</Btn>
+        <Btn className="ml-auto" variant="danger" loading={busy === 'out'} onClick={() => void run('out', async () => { await signOut(); onSignedOut(); })}>Log Out</Btn>
       </div>
     </div>
   );
@@ -184,7 +184,7 @@ const ServerForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     e.preventDefault();
     try {
       const u = new URL(url.trim());
-      if (u.protocol !== 'https:' && !/^(127\.0\.0\.1|localhost)$/.test(u.hostname)) throw new Error('Use an https:// address (plain http is only allowed for a server on this PC).');
+      if (u.protocol !== 'https:' && !/^(127\.0\.0\.1|localhost)$/.test(u.hostname)) throw new Error('Use an https:// address (plain http is only allowed for a server on this computer).');
     } catch (err) { setError(err instanceof TypeError ? 'That is not a valid web address.' : msg(err)); return; }
     if (account.kind === 'signed-in' && cur && cur.url !== url.trim().replace(/\/+$/, '')) void signOut();
     setServer({ url, anonKey: key });
@@ -205,7 +205,7 @@ const ServerForm: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       <div><Label>Public (anon) key</Label><TextInput placeholder="eyJhbGciOi…" value={key} onChange={(e) => setKey(e.target.value)} required spellCheck={false} /></div>
       <p className="text-[12px] text-[var(--color-text-muted)]">The public key is safe to share; each person can only reach their own data.</p>
       <div className="flex justify-between gap-2 pt-1">
-        {cur ? <Btn type="button" variant="danger" onClick={() => { void signOut(); setServer(null); setUrl(''); setKey(''); }}>Remove server</Btn> : <span />}
+        {cur ? <Btn type="button" variant="danger" onClick={() => { void signOut(); setServer(null); setUrl(''); setKey(''); }}>Remove Server</Btn> : <span />}
         <Btn variant="primary" type="submit" disabled={!url.trim() || !key.trim()}>Save</Btn>
       </div>
     </form>

@@ -70,7 +70,7 @@ function renderBlocks(blocks: Block[], o: Opts, key: string, tight = false): Rea
       case 'code':
         return (
           <div key={k} className="my-2 relative group/code">
-            {b.lang && <span className={`absolute top-1.5 left-2.5 text-[10px] uppercase tracking-wide ${o.onDark ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>{b.lang}</span>}
+            {b.lang && <span className={`absolute top-1.5 left-2.5 text-[12px] ${o.onDark ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>{b.lang}</span>}
             <pre className={`p-2.5 ${b.lang ? 'pt-6' : ''} rounded-[8px] text-[12px] leading-relaxed overflow-x-auto whitespace-pre font-mono ${o.onDark ? 'bg-black/30' : 'bg-[var(--hover)]'}`}><code>{b.v}</code></pre>
             {o.codeActions && !b.open && <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover/code:opacity-100 focus-within:opacity-100 transition-opacity">{o.codeActions(b.lang, b.v)}</div>}
           </div>

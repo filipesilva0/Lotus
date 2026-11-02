@@ -39,7 +39,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
       </Card>
 
       {state.kind === 'error' && (
-        <Banner tone="error" action={<Btn size="sm" variant="ghost" onClick={u.check}>Try again</Btn>}>
+        <Banner tone="error" action={<Btn size="sm" variant="ghost" onClick={u.check}>Try Again</Btn>}>
           {state.message}
         </Banner>
       )}

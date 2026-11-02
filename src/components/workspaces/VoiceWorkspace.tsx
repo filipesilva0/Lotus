@@ -74,10 +74,10 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
         ) : data.status === 'offline' ? (
           <div className="max-w-md mx-auto py-16 px-6 space-y-4">
             <Empty icon={<Power className="w-5 h-5" />} title="The voice engine isn't running"
-              body="Voice runs on Voicebox, a local engine that keeps your voices, history and models on this PC. Start it to continue."
+              body="Voice runs on Voicebox, a local engine that keeps your voices, history and models on this computer. Start it to continue."
               action={<>
                 <Btn variant="primary" loading={starting} icon={<Power className="w-3.5 h-3.5" />} onClick={start}>{starting ? 'Starting…' : 'Start Voicebox'}</Btn>
-                <Btn variant="ghost" onClick={onOpenEngines}>Engine settings</Btn>
+                <Btn variant="ghost" onClick={onOpenEngines}>Engine Settings</Btn>
               </>} />
             {needsExe && (
               <Banner tone="warn" action={<Btn size="sm" variant="secondary" icon={<FolderSearch className="w-3 h-3" />}

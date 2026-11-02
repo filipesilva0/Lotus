@@ -71,7 +71,7 @@ export const ChoiceCard: React.FC<{
                       className={cx('choice-option group/opt w-full min-h-9 flex items-center gap-2.5 px-2.5 py-1.5 rounded-[8px] text-left text-[13px] transition-colors duration-100 focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]',
                         on ? 'bg-[var(--color-accent-pastel)] text-[var(--color-text-main)] shadow-[inset_0_0_0_1px_var(--color-accent-vibrant)]' : 'hover:bg-[var(--hover)] active:bg-[var(--pressed)]',
                         !live && !on && 'opacity-60')}>
-                      <span aria-hidden="true" className={cx('w-5 h-5 shrink-0 inline-flex items-center justify-center text-[11px] font-semibold tabular-nums',
+                      <span aria-hidden="true" className={cx('w-5 h-5 shrink-0 inline-flex items-center justify-center text-[12px] font-semibold tabular-nums',
                         q.type === 'multi' ? 'rounded-[5px]' : 'rounded-[6px]',
                         on ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] text-[var(--color-text-muted)] group-hover/opt:text-[var(--color-text-main)]')}>
                         {on ? <Check className="w-3 h-3" strokeWidth={3} /> : String.fromCharCode(65 + i)}
@@ -108,7 +108,7 @@ export const ChoiceCard: React.FC<{
       {!instant && live && (
         <div className="flex items-center justify-end gap-2 px-3.5 py-2.5 border-t border-[var(--sep)]">
           <span className="mr-auto text-[12px] text-[var(--color-text-muted)]">{ready ? 'Ready to send' : poll.questions.length > 1 ? 'Answer every question to send' : 'Pick at least one'}</span>
-          <Btn size="sm" variant="primary" disabled={!ready} onClick={send}>Send answers</Btn>
+          <Btn size="sm" variant="primary" disabled={!ready} onClick={send}>Send Answers</Btn>
         </div>
       )}
       {answered && (

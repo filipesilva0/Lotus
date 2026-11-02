@@ -34,5 +34,5 @@ export function memoryFile(items: MemoryItem[]): string {
 
 /** The persona Lotus uses: the system prompt from Settings, then any project soul files. */
 export function soulFile(systemPrompt: string): string {
-  return `# Lotus\n\nThe system prompt sent at the start of every chat (Settings → Model & Inference).\n\n---\n\n${systemPrompt.trim() || '_Empty: the model uses its own default persona._'}`;
+  return `# Lotus\n\nThe system prompt sent at the start of every chat (Settings → Models).\n\n---\n\n${systemPrompt.trim() || '_Empty: the model uses its own default persona._'}`;
 }

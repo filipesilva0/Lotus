@@ -26,7 +26,7 @@ async function rest<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     res = await http(`${srv.url}/rest/v1/${path}`, { ...init, headers });
   } catch (e) {
-    throw new AccountError(`Could not reach the sync server. Changes stay on this PC until it is back. (${(e as Error).message})`);
+    throw new AccountError(`Could not reach the sync server. Changes stay on this computer until it is back. (${(e as Error).message})`);
   }
   const text = await res.text();
   if (!res.ok) {

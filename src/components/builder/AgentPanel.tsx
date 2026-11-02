@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { EngineNotice } from '../common/EngineNotice';
 import { Ban, Check, ChevronDown, ChevronRight, FileEdit, FilePlus2, FileSearch, ListChecks, ListTree, MessageSquarePlus, Play, Rocket, Terminal as TerminalIcon, Trash2, X } from 'lucide-react';
 import { Banner, Btn, Card, IconBtn, Spinner, TextArea, cx } from '../common/ui';
 import { MenuItem, Popover } from '../common/Pane';
@@ -17,12 +18,12 @@ const Plan: React.FC<{ item: Extract<AgentItem, { kind: 'plan' }>; disabled: boo
   const proposed = item.state === 'proposed';
   return (
     <Card className="p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)] mb-1.5">{proposed ? 'Plan for your approval' : 'Plan'}</p>
+      <p className="text-[12px] font-semibold text-[var(--color-text-muted)] mb-1.5">{proposed ? 'Plan for your approval' : 'Plan'}</p>
       {proposed ? (<>
         <TextArea aria-label="Plan (you can edit it)" value={md} onChange={(e) => setMd(e.target.value)} rows={Math.min(12, Math.max(4, md.split('\n').length + 1))} className="font-mono !text-[12px]" />
         <div className="mt-2 flex items-center gap-2">
-          <Btn variant="primary" size="sm" icon={<Check className="w-3 h-3" />} disabled={disabled || !md.trim()} onClick={() => onApprove(md)}>Approve and build</Btn>
-          <span className="text-[11px] text-[var(--color-text-muted)]">Edit the steps first if you like.</span>
+          <Btn variant="primary" size="sm" icon={<Check className="w-3 h-3" />} disabled={disabled || !md.trim()} onClick={() => onApprove(md)}>Approve and Build</Btn>
+          <span className="text-[12px] text-[var(--color-text-muted)]">Edit the steps first if you like.</span>
         </div>
       </>) : (
         <ul className="space-y-1">
@@ -47,14 +48,14 @@ const Action: React.FC<{ item: Extract<AgentItem, { kind: 'action' }> }> = ({ it
       <button type="button" onClick={() => has && setOpen((o) => !o)} aria-expanded={has ? open : undefined} className="w-full h-8 px-2.5 flex items-center gap-2 text-left text-[12px]">
         <span className="text-[var(--color-text-muted)] shrink-0">{ICON[item.tool] ?? <TerminalIcon className="w-3.5 h-3.5" />}</span>
         <span className="flex-1 min-w-0 truncate font-mono">{item.label}</span>
-        {(item.added !== undefined || item.removed !== undefined) && <span className="shrink-0 tabular-nums text-[11px]"><span className="text-[var(--c-green)]">+{item.added ?? 0}</span> <span className="text-[var(--c-red)]">−{item.removed ?? 0}</span></span>}
-        {item.detail && item.added === undefined && <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">{item.detail}</span>}
+        {(item.added !== undefined || item.removed !== undefined) && <span className="shrink-0 tabular-nums text-[12px]"><span className="text-[var(--c-green)]">+{item.added ?? 0}</span> <span className="text-[var(--c-red)]">−{item.removed ?? 0}</span></span>}
+        {item.detail && item.added === undefined && <span className="shrink-0 text-[12px] text-[var(--color-text-muted)]">{item.detail}</span>}
         <span className="shrink-0" aria-label={item.status}>
           {item.status === 'running' ? <Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" /> : item.status === 'ok' ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : item.status === 'denied' ? <Ban className="w-3.5 h-3.5 text-[var(--c-orange)]" /> : <X className="w-3.5 h-3.5 text-[var(--c-red)]" />}
         </span>
         {has && <ChevronRight className={cx('w-3 h-3 shrink-0 transition-transform text-[var(--color-text-muted)]', open && 'rotate-90')} />}
       </button>
-      {has && open && <pre className="mx-2.5 mb-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-snug text-[var(--color-text-muted)]">{item.output}</pre>}
+      {has && open && <pre className="mx-2.5 mb-2 max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-snug text-[var(--color-text-muted)]">{item.output}</pre>}
     </div>
   );
 };
@@ -81,7 +82,7 @@ export const AgentPanel: React.FC<{
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div ref={list} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2.5" aria-live="polite" aria-label="Agent conversation">
-        {ollamaUp === false && <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>Ollama isn't running, so the agent can't think. Start it in Engines.</Banner>}
+        {ollamaUp === false && <EngineNotice id="ollama" purpose="so the agent can work" />}
         {ollamaUp !== false && !model && <Banner tone="info">Pick a model in the box below. A code-tuned model of 7B or more (for example qwen2.5-coder) works best for building.</Banner>}
         {!items.length && hasProject && (
           <div className="pt-2">
@@ -96,7 +97,7 @@ export const AgentPanel: React.FC<{
             case 'user': return <div key={it.id} className="ml-6 rounded-[10px] px-3 py-2 text-[13px] whitespace-pre-wrap bg-[var(--color-accent-pastel)]">{it.text}</div>;
             case 'assistant': return (it.text || it.streaming) ? (
               <div key={it.id} className="text-[13px] leading-snug whitespace-pre-wrap">{it.text}
-                {it.streaming && <span className="flex items-center gap-1.5 mt-1 text-[12px] text-[var(--color-text-muted)]"><Spinner className="w-3 h-3 text-[var(--color-accent-vibrant)]" />{it.status ?? 'Working…'}</span>}
+                {it.streaming && <span className="flex items-center gap-1.5 mt-1 text-[12px] text-[var(--color-text-muted)]"><Spinner className="w-3 h-3 text-[var(--color-accent-vibrant)]" />{it.status ?? 'Planning the next step…'}</span>}
               </div>) : null;
             case 'plan': return <Plan key={it.id} item={it} disabled={running} onApprove={(md) => onApprovePlan(it.id, md)} />;
             case 'action': return <Action key={it.id} item={it} />;
@@ -108,11 +109,11 @@ export const AgentPanel: React.FC<{
       {approval && (
         <div className="shrink-0 mx-3 mb-2 p-3 rounded-[10px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_2px_10px_rgba(0,0,0,.12)]" role="alertdialog" aria-label="Allow this command?">
           <p className="text-[12px] font-semibold mb-1">{approval.why === 'danger' ? 'This command looks risky. Run it?' : 'The agent wants to run a command'}</p>
-          <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-[6px] bg-[var(--hover)] px-2 py-1.5 font-mono text-[11px]">{approval.command}</pre>
-          <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)] leading-snug">It runs in the project folder with your user's permissions.</p>
+          <pre className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-[6px] bg-[var(--hover)] px-2 py-1.5 font-mono text-[12px]">{approval.command}</pre>
+          <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug">It runs in the project folder with your user's permissions.</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Btn size="sm" variant="primary" onClick={() => approval.answer('once')}>Allow once</Btn>
-            {approval.why === 'ask' && <Btn size="sm" onClick={() => approval.answer('always')}>Always allow in this project</Btn>}
+            <Btn size="sm" variant="primary" onClick={() => approval.answer('once')}>Allow Once</Btn>
+            {approval.why === 'ask' && <Btn size="sm" onClick={() => approval.answer('always')}>Always Allow in This Project</Btn>}
             <Btn size="sm" variant="ghost" onClick={() => approval.answer('deny')}>Deny</Btn>
           </div>
         </div>
@@ -120,7 +121,7 @@ export const AgentPanel: React.FC<{
 
       <div className="shrink-0 px-3 pb-3 pt-1">
         <PromptShell tray={<>
-          <TrayButton onClick={onReset} disabled={running || !items.length} icon={<MessageSquarePlus className="w-4 h-4" />} label="New chat" title="Start a new conversation with the agent (the project files stay)" />
+          <TrayButton onClick={onReset} disabled={running || !items.length} icon={<MessageSquarePlus className="w-4 h-4" />} label="New Chat" title="Start a new conversation with the agent (the project files stay)" />
         </>}>
           <textarea aria-label="Message to the agent" value={text} rows={2} disabled={!hasProject}
             onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}

@@ -129,7 +129,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
     return (
       <Empty icon={<Wand2 className="w-5 h-5" />} title="Create your first voice"
         body="Clone a voice from a few seconds of audio, pick a built-in voice, or describe one in words."
-        action={<Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={onCreateVoice}>New voice</Btn>} />
+        action={<Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={onCreateVoice}>New Voice</Btn>} />
     );
   }
 
@@ -144,14 +144,14 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
               {data.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </div>
-          <Btn variant="ghost" size="sm" className="h-9" icon={<Plus className="w-3.5 h-3.5" />} onClick={onCreateVoice}>New voice</Btn>
+          <Btn variant="ghost" size="sm" className="h-9" icon={<Plus className="w-3.5 h-3.5" />} onClick={onCreateVoice}>New Voice</Btn>
         </div>
 
         <PromptShell tray={<>
           <span className="text-[12px] text-[var(--color-text-muted)] px-1" id="tags-label">Insert</span>
           <div className="flex flex-wrap items-center gap-1" role="group" aria-labelledby="tags-label" title="Tags are read by engines that support them (such as Chatterbox).">
             {['[laugh]', '[sigh]', '[gasp]', '[cough]', '[pause: 1.5s]'].map((t) => (
-              <button key={t} type="button" onClick={() => insertTag(t)} className="h-6 px-2 rounded-full text-[11px] font-mono text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]">{t}</button>
+              <button key={t} type="button" onClick={() => insertTag(t)} className="h-6 px-2 rounded-full text-[12px] font-mono text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]">{t}</button>
             ))}
           </div>
           <div className="flex-1" />
@@ -164,7 +164,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
             className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed min-h-[220px] placeholder:text-[var(--color-text-muted)] focus:outline-none" />
           <div className="flex items-center gap-2 px-3 pb-2.5">
             {busy
-              ? <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" role="status"><Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />Generating… <span className="tabular-nums">{elapsed.toFixed(1)}s</span></span>
+              ? <span className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]" role="status"><Spinner className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />Generating speech… <span className="tabular-nums">{elapsed.toFixed(1)}s</span></span>
               : <span className="text-xs text-[var(--color-text-muted)]">Ctrl + Enter to generate</span>}
             <div className="flex-1" />
             {busy
@@ -174,7 +174,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
         </PromptShell>
 
         {err && (
-          <Banner tone="error" action={modelHint ? <Btn size="sm" variant="secondary" onClick={onOpenModels}>Open models</Btn> : undefined}>
+          <Banner tone="error" action={modelHint ? <Btn size="sm" variant="secondary" onClick={onOpenModels}>Open Models</Btn> : undefined}>
             {err}
           </Banner>
         )}
@@ -190,7 +190,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
                 {rtf !== null && <> · {rtf.toFixed(2)}× real time ({rtf < 1 ? 'faster than playback' : 'slower than playback'})</>}
                 {data.health?.vram_used_mb ? <> · {(data.health.vram_used_mb / 1024).toFixed(1)} GB video memory</> : null}
               </p>
-              <Btn size="sm" variant="ghost" onClick={() => onAddToStory(result.gen.id)}>Add to story</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => onAddToStory(result.gen.id)}>Add to Story</Btn>
             </div>
           </Card>
         )}
@@ -236,7 +236,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
         </div>
 
         {profile.personality && (
-          <label className="flex items-start gap-2.5 cursor-pointer">
+          <label className="flex items-start gap-2.5">
             <input type="checkbox" checked={personality} onChange={(e) => setPersonality(e.target.checked)} className="mt-0.5 accent-[var(--color-accent-vibrant)]" />
             <span className="text-xs leading-snug">
               <span className="font-semibold text-[var(--color-text-main)] block">Speak in character</span>
@@ -275,7 +275,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
           </button>
           {advOpen && (
             <div className="mt-3 space-y-3">
-              <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <label className="flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} className="accent-[var(--color-accent-vibrant)]" />
                 Even out loudness
               </label>

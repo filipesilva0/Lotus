@@ -60,11 +60,11 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
             {langs.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
           </Select>
         </div>
-        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Audio is transcribed by Whisper running on this PC. Nothing leaves your machine.</p>
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Audio is transcribed by Whisper running on this computer. Nothing leaves your machine.</p>
       </Card>
 
       <div className="space-y-3 min-w-0">
-        {err && <Banner tone="error" action={modelHint ? <Btn size="sm" variant="secondary" onClick={onOpenModels}>Open models</Btn> : undefined}>{err}</Banner>}
+        {err && <Banner tone="error" action={modelHint ? <Btn size="sm" variant="secondary" onClick={onOpenModels}>Open Models</Btn> : undefined}>{err}</Banner>}
         {items.length === 0 ? (
           <Empty icon={<Mic className="w-5 h-5" />} title="No dictations yet" body="Your transcripts will appear here, ready to copy, speak back, or send to chat." />
         ) : items.map((c) => <CaptureCard key={c.id} c={c} onSpeak={onSpeak}
@@ -88,7 +88,7 @@ const CaptureCard: React.FC<{ c: Capture; onChange: (c: Capture) => void; onDele
         </span>
         {!c.transcript_refined && c.transcript_raw && (
           <Btn size="sm" variant="ghost" loading={refining} icon={<Sparkles className="w-3 h-3" />}
-            onClick={async () => { setRefining(true); try { onChange(await voicebox.refineCapture(c.id)); } finally { setRefining(false); } }}>Clean up</Btn>
+            onClick={async () => { setRefining(true); try { onChange(await voicebox.refineCapture(c.id)); } finally { setRefining(false); } }}>Clean Up</Btn>
         )}
         <IconBtn label={copied ? 'Copied' : 'Copy'} onClick={() => { void navigator.clipboard.writeText(text); flash(); }}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
         <IconBtn label="Speak this" onClick={() => onSpeak(text)}><Volume2 className="w-3.5 h-3.5" /></IconBtn>

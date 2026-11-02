@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { EngineNotice } from '../common/EngineNotice';
 import { FlaskConical, Plus, Trash2, Sparkles, RefreshCw, Play, User } from 'lucide-react';
 import { ResearchApi } from '../../research/store';
 import { Project, SubTopic, Persona } from '../../research/types';
@@ -23,7 +24,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       {r.error && <Banner tone="error" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>{r.error}</Banner>}
-      {ollamaUp === false && <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>Ollama isn't running. Deep research uses your local model for every step.</Banner>}
+      {ollamaUp === false && <EngineNotice id="ollama" purpose="to research" note="Deep research uses your local model for every step." />}
 
       {/* 1 · Question */}
       {stage === 'ask' && (
@@ -106,12 +107,12 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
                         <IconBtn label="Remove sub-question" onClick={() => patchPlan((pl) => pl.map((x) => (x.id === t.id ? { ...x, questions: x.questions.filter((_, j) => j !== qi) } : x)))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                       </div>
                     ))}
-                    <Btn size="sm" variant="ghost" icon={<Plus className="w-3 h-3" />} onClick={() => patchPlan((pl) => pl.map((x) => (x.id === t.id ? { ...x, questions: [...x.questions, ''] } : x)))}>Add sub-question</Btn>
+                    <Btn size="sm" variant="ghost" icon={<Plus className="w-3 h-3" />} onClick={() => patchPlan((pl) => pl.map((x) => (x.id === t.id ? { ...x, questions: [...x.questions, ''] } : x)))}>Add Sub-Question</Btn>
                   </div>
                 </div>
               </Card>
             ))}
-            <Btn variant="secondary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => patchPlan((pl) => [...pl, { id: uid(), title: 'New sub-topic', objective: '', questions: [''] }])}>Add sub-topic</Btn>
+            <Btn variant="secondary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => patchPlan((pl) => [...pl, { id: uid(), title: 'New sub-topic', objective: '', questions: [''] }])}>Add Sub-Topic</Btn>
           </section>
 
           <section className="space-y-3">
@@ -142,9 +143,9 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
 
           <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-white/95 dark:bg-[#18191E]/95 backdrop-blur border-t border-[var(--color-border-subtle)] flex items-center gap-4">
             <p className="flex-1 text-xs text-[var(--color-text-muted)] leading-relaxed">
-              Search keywords will be sent to <strong className="text-[var(--color-text-main)]">{enabled.length ? enabled.join(', ') : 'no repository (enable one in the inspector)'}</strong>. Everything else stays on this PC.
+              Search keywords will be sent to <strong className="text-[var(--color-text-main)]">{enabled.length ? enabled.join(', ') : 'no repository (enable one in the inspector)'}</strong>. Everything else stays on this computer.
             </p>
-            <Btn variant="primary" disabled={!enabled.length || !p.plan.some((t) => t.title.trim()) || ollamaUp === false} icon={<Play className="w-3.5 h-3.5" fill="currentColor" />} onClick={() => r.approveAndStart(p.id)}>Approve &amp; start research</Btn>
+            <Btn variant="primary" disabled={!enabled.length || !p.plan.some((t) => t.title.trim()) || ollamaUp === false} icon={<Play className="w-3.5 h-3.5" fill="currentColor" />} onClick={() => r.approveAndStart(p.id)}>Approve &amp; Start Research</Btn>
           </div>
         </>
       )}
@@ -158,7 +159,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
               <div key={t.id} className="p-4"><p className="text-sm font-semibold text-[var(--color-text-main)]">{i + 1}. {t.title}</p><p className="text-xs text-[var(--color-text-muted)] mt-0.5">{t.objective}</p></div>
             ))}
           </Card>
-          <Btn variant="secondary" onClick={() => r.backToPlan(p.id)}>Edit the plan and run again</Btn>
+          <Btn variant="secondary" onClick={() => r.backToPlan(p.id)}>Edit the Plan and Run Again</Btn>
         </section>
       )}
     </div>

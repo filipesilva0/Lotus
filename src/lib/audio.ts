@@ -114,7 +114,11 @@ export class MicRecorder {
 /** Friendly message for the ways getUserMedia fails. */
 export function micErrorMessage(e: unknown): string {
   const name = (e as DOMException)?.name;
-  if (name === 'NotAllowedError') return 'Microphone access is blocked. Allow it in Windows Settings → Privacy → Microphone.';
+  if (name === 'NotAllowedError') {
+    const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+    const where = /Mac/.test(ua) ? 'System Settings → Privacy & Security → Microphone' : /Linux/.test(ua) ? "your desktop's privacy or sound settings" : 'Windows Settings → Privacy → Microphone';
+    return `Microphone access is blocked. Allow it in ${where}.`;
+  }
   if (name === 'NotFoundError') return 'No microphone found. Plug one in or pick another input.';
   return 'Could not start the microphone.';
 }
@@ -205,7 +209,7 @@ export async function trimAudio(blob: Blob, start: number, end: number): Promise
   } finally { void ctx.close(); }
 }
 
-/** Records what the PC is playing. The system shows its own picker; choose a screen or tab and tick “share audio”. */
+/** Records what the computer is playing. The system shows its own picker; choose a screen or tab and tick “share audio”. */
 export class SystemAudioRecorder {
   private stream: MediaStream | null = null;
   private rec: MediaRecorder | null = null;

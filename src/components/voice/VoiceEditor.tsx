@@ -202,7 +202,7 @@ export const VoiceEditor: React.FC<{
                 <>
                   <Segmented label="Record from" value={source} onChange={setSource} options={[{ id: 'mic', label: 'Microphone' }, { id: 'system', label: 'System audio' }]} />
                   <Btn variant="secondary" icon={<Mic className="w-3.5 h-3.5" />} onClick={startRec}>Record</Btn>
-                  <Btn variant="secondary" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => fileInput.current?.click()}>Upload audio</Btn>
+                  <Btn variant="secondary" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => fileInput.current?.click()}>Upload Audio</Btn>
                   <input ref={fileInput} type="file" accept="audio/*" multiple hidden onChange={(e) => {
                     Array.from(e.target.files ?? []).forEach((f) => addSample({ blob: f, fileName: f.name }));
                     e.target.value = '';
@@ -251,7 +251,7 @@ export const VoiceEditor: React.FC<{
         )}
 
         <details className="group">
-          <summary className="text-xs font-semibold text-[var(--color-text-muted)] cursor-pointer select-none">More options</summary>
+          <summary className="text-xs font-semibold text-[var(--color-text-muted)] select-none">More options</summary>
           <div className="mt-3 space-y-3">
             <div><Label hint="optional">Description</Label><TextInput value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} /></div>
             <div><Label>Preferred engine</Label>

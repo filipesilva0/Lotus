@@ -15,6 +15,7 @@ import { effectiveNumCtx, hardware, modelCapabilities } from '../hardware/monito
 import { agentPool } from '../agents/pool';
 import { loadMemory, memoryStore, useMemoryStore } from '../memory/store';
 import { buildRecall } from '../memory/recall';
+import { feedbackEffect, feedbackNote, type Feedback } from '../chat/feedback';
 import { considerSkill, correction, isComplexExchange, positiveFeedback, recordUse, recordWin, reflect, refineSkill, shouldReflect } from '../memory/learn';
 import type { ContextFile } from '../context/discover';
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
@@ -404,6 +405,23 @@ export function useChat(settings: LotusSettings) {
     patchMsg(activeId, msgId, { memoryEvent: { ...m.memoryEvent, status: verdict } });
   }, [activeId, patchMsg]);
 
+  /** Thumbs up / down on a reply (see chat/feedback.ts). Clicking the chosen thumb again clears it. */
+  const rateReply = useCallback((msgId: string, v: Feedback) => {
+    const s = ref.current.find((x) => x.messages.some((m) => m.id === msgId));
+    const i = s ? s.messages.findIndex((m) => m.id === msgId) : -1;
+    if (!s || i < 0) return;
+    const m = s.messages[i];
+    const next = m.feedback === v ? null : v;
+    const ids = m.recall?.skillIds ?? [];
+    const effect = feedbackEffect(m.feedback, next, ids.length > 0, memoryOnFor(s) && setRef.current.autoSkills);
+    patchMsg(s.id, msgId, { feedback: next ?? undefined, feedbackNote: feedbackNote(next, effect) ?? undefined });
+    if (effect === 'win') void recordWin(ids);
+    if (effect === 'refine') {
+      const turns = [...s.messages.slice(0, i + 1).map((x) => ({ role: x.role, content: x.content })), { role: 'user' as const, content: 'That answer was not helpful.' }];
+      memoryStore.get().skills.filter((k) => ids.includes(k.id)).slice(0, 1).forEach((k) => void refineSkill(k, turns).catch(() => undefined));
+    }
+  }, [patchMsg]);
+
   const setMemory = useCallback((list: MemoryItem[] | ((p: MemoryItem[]) => MemoryItem[])) => {
     const next = typeof list === 'function' ? list(memoryStore.get().memories) : list;
     void memoryStore.setMemories(next);
@@ -448,7 +466,7 @@ export function useChat(settings: LotusSettings) {
 
   return {
     sessions, active, activeId: active?.id ?? '', setActiveId, folders, setFolders, memory, setMemory, isStreaming, raw,
-    send, answerPoll, decideInstall, stop, regenerate, editMessage, switchTo, rateMemory, newChat, deleteChat, clearChat, importMessages,
+    send, answerPoll, decideInstall, stop, regenerate, editMessage, switchTo, rateMemory, rateReply, newChat, deleteChat, clearChat, importMessages,
     patchSession, addContext, patchContext, estimateTokens, toggleMemory, setProjectContext,
   };
 }

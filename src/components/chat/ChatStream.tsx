@@ -13,6 +13,8 @@ interface Props {
   session: ChatSession; isStreaming: boolean; autoScroll: boolean; reasoningMode: 'collapsed' | 'expanded' | 'hidden';
   onEdit: (id: string, text: string) => void; onRegenerate: (id: string) => void; onSwitch: (id: string, d: -1 | 1) => void;
   onMemory: (id: string, v: 'confirmed' | 'forgotten') => void; onOpenArtifact: (lang: string, code: string) => void;
+  /** Thumbs up / down on a reply. */
+  onFeedback?: (id: string, v: 'good' | 'bad') => void;
   /** The user clicked an option on a reply's choices card. */
   onAnswer?: (msgId: string, text: string) => void;
   /** Allow / Deny on a model install the reply proposed. */
@@ -29,7 +31,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
     <div className="mb-2 rounded-[8px] bg-[var(--hover)]">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="w-full flex items-center gap-2 px-2.5 h-8 text-[12px] text-[var(--color-text-muted)]">
         {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
-        <span className="font-medium">{running ? 'Thinking…' : m.thinking ? `Thought${secs ? ` for ${secs}s` : ''}` : 'Steps'}</span>
+        <span className="font-medium">{running ? `${tools.find((t) => t.status === 'running')?.label ?? 'Reasoning'}…` : m.thinking ? `Thought${secs ? ` for ${secs}s` : ''}` : 'Steps'}</span>
         {tools.length > 0 && <span>· {tools.length} tool call{tools.length > 1 ? 's' : ''}</span>}
         <ChevronDown className={cx('w-3.5 h-3.5 ml-auto transition-transform', open && 'rotate-180')} />
       </button>
@@ -48,7 +50,8 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
   );
 };
 
-export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall }) => {
+export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall, onFeedback }) => {
+  const modelName = session.model || 'The model';
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                     <TextArea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} aria-label="Edit message" />
                     <div className="flex justify-end gap-2">
                       <Btn size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Btn>
-                      <Btn size="sm" variant="primary" disabled={!draft.trim()} onClick={() => { onEdit(m.id, draft.trim()); setEditing(null); }}>Save as new version</Btn>
+                      <Btn size="sm" variant="primary" disabled={!draft.trim()} onClick={() => { onEdit(m.id, draft.trim()); setEditing(null); }}>Save as New Version</Btn>
                     </div>
                   </div>
                 ) : (
@@ -92,13 +95,13 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                     {body
                       ? <MarkdownLite text={body} onDark={user} sources={m.sources}
                           codeActions={(lang, code) => (<>
-                            <button type="button" onClick={() => void navigator.clipboard.writeText(code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px]">Copy</button>
-                            <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[11px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Artifacts</button>
+                            <button type="button" onClick={() => void navigator.clipboard.writeText(code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[12px]">Copy</button>
+                            <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[12px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Open in Artifacts</button>
                           </>)} />
-                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? 'Thinking…' : 'Working…')}</span> : null}
+                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? `${modelName} is reasoning before it answers…` : `${modelName} is reading your message…`)}</span> : null}
                     {inst?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing an install request…</p>}
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
-                    {m.interrupted && <p className="mt-1.5 text-[11px] opacity-70">Stopped here.</p>}
+                    {m.interrupted && <p className="mt-1.5 text-[12px] opacity-70">Stopped here.</p>}
                   </div>
                 )}
 
@@ -118,7 +121,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {m.sources.map((s) => (
                       <button key={s.n} type="button" onClick={() => void openExternal(s.url)} title={s.title}
-                        className="inline-flex items-center gap-1.5 h-6 px-2 max-w-[260px] rounded-[6px] text-[11px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)]">
+                        className="inline-flex items-center gap-1.5 h-6 px-2 max-w-[260px] rounded-[6px] text-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)]">
                         <span className="font-semibold text-[var(--color-accent-vibrant)]">{s.n}</span><span className="truncate">{s.title}</span><ExternalLink className="w-3 h-3 shrink-0 opacity-60" />
                       </button>
                     ))}
@@ -137,7 +140,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                 )}
 
                 {!user && !m.isStreaming && (m.recall || m.mode) && (
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--color-text-muted)]">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-[var(--color-text-muted)]">
                     {m.mode?.thinking && <span className="inline-flex items-center gap-1"><Brain className="w-3 h-3" />Thinking mode</span>}
                     {m.mode?.web && <span className="inline-flex items-center gap-1"><Globe className="w-3 h-3" />Web search</span>}
                     {m.recall && (() => {
@@ -153,18 +156,24 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                   </div>
                 )}
 
-                <div className={cx('mt-1 flex items-center gap-0.5 h-6 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity', user && 'flex-row-reverse')}>
+                {/* HIG Generative AI: edit, retry and feedback sit next to the output. The latest reply always shows them. */}
+                {!user && m.feedbackNote && <p role="status" className="mt-1 text-[12px] text-[var(--color-text-muted)]">{m.feedbackNote}</p>}
+                <div className={cx('mt-1 flex items-center gap-0.5 h-6 transition-opacity', !(isLast && !user && !m.isStreaming) && 'opacity-0 group-hover:opacity-100 focus-within:opacity-100', user && 'flex-row-reverse')}>
                   {b && b.list.length > 1 && (
-                    <span className="inline-flex items-center text-[11px] text-[var(--color-text-muted)] tabular-nums">
+                    <span className="inline-flex items-center text-[12px] text-[var(--color-text-muted)] tabular-nums">
                       <IconBtn label="Previous version" className="!w-5 !h-5" disabled={b.index === 0} onClick={() => onSwitch(m.id, -1)}><ChevronLeft className="w-3.5 h-3.5" /></IconBtn>
                       {b.index + 1} / {b.list.length}
                       <IconBtn label="Next version" className="!w-5 !h-5" disabled={b.index === b.list.length - 1} onClick={() => onSwitch(m.id, 1)}><ChevronRight className="w-3.5 h-3.5" /></IconBtn>
                     </span>
                   )}
-                  {user && !isStreaming && <IconBtn label="Edit prompt" className="!w-6 !h-6" onClick={() => { setDraft(m.content); setEditing(m.id); }}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
+                  {user && !isStreaming && <IconBtn label="Edit message" className="!w-6 !h-6" onClick={() => { setDraft(m.content); setEditing(m.id); }}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
                   <IconBtn label="Copy" className="!w-6 !h-6" onClick={() => copy(m.content, m.id)}>{copied === m.id ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
-                  {!user && !m.isStreaming && !isStreaming && <IconBtn label="Regenerate" className="!w-6 !h-6" onClick={() => onRegenerate(m.id)}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>}
-                  {!user && m.tokensPerSec ? <span className="ml-1.5 text-[11px] text-[var(--color-text-muted)] tabular-nums">{m.tokensPerSec} tok/s</span> : null}
+                  {!user && !m.isStreaming && !isStreaming && <IconBtn label="Try again" className="!w-6 !h-6" onClick={() => onRegenerate(m.id)}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>}
+                  {!user && !m.isStreaming && onFeedback && (<>
+                    <IconBtn label="Good reply" active={m.feedback === 'good'} className="!w-6 !h-6" onClick={() => onFeedback(m.id, 'good')}><ThumbsUp className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn label="Bad reply" active={m.feedback === 'bad'} className="!w-6 !h-6" onClick={() => onFeedback(m.id, 'bad')}><ThumbsDown className="w-3.5 h-3.5" /></IconBtn>
+                  </>)}
+                  {!user && m.tokensPerSec ? <span className="ml-1.5 text-[12px] text-[var(--color-text-muted)] tabular-nums">{m.tokensPerSec} tok/s</span> : null}
                 </div>
               </div>
             </div>

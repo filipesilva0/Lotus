@@ -28,11 +28,11 @@ const Card: React.FC<{ t: Task; all: Task[]; selected: boolean; onSelect: () => 
       {t.steps.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
           <div className="flex-1 h-1 rounded-full bg-[var(--hover)] overflow-hidden"><div className="h-full bg-[var(--color-accent-fill)] transition-[width]" style={{ width: `${Math.round(p * 100)}%` }} /></div>
-          <span className="text-[11px] tabular-nums text-[var(--color-text-muted)]">{t.steps.filter((s) => s.done).length}/{t.steps.length}</span>
+          <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">{t.steps.filter((s) => s.done).length}/{t.steps.length}</span>
         </div>
       )}
       {(running || t.run?.state === 'failed' || blocked.length > 0 || t.links.length > 0 || t.due || t.labels.length > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-[var(--color-text-muted)]">
           {running && <span className="inline-flex items-center gap-1 text-[var(--color-accent-vibrant)]"><Loader2 className="w-3 h-3 animate-spin" />{t.run?.state === 'queued' ? 'Waiting for a free agent' : 'Lotus is working'}</span>}
           {t.run?.state === 'failed' && <span className="inline-flex items-center gap-1 text-[var(--c-red)]"><AlertCircle className="w-3 h-3" />{t.run.error === 'Stopped' ? 'Stopped' : 'Failed'}</span>}
           {blocked.length > 0 && <span className="inline-flex items-center gap-1" title={`Waiting for: ${blocked.map((b) => b.title).join(', ')}`}><Lock className="w-3 h-3" />Blocked by {blocked.length}</span>}
@@ -65,7 +65,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
 
   return (
     <div className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden">
-      <div className="h-full flex gap-3 p-4 min-w-max">
+      <div className="h-full flex gap-1.5 p-4 min-w-max">
         {COLUMNS.map((c) => {
           const list = columnTasks(all, c.id);
           return (
@@ -73,7 +73,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
               onDragOver={(e) => { if (!dragId) return; e.preventDefault(); const card = (e.target as HTMLElement).closest('[data-task]') as HTMLElement | null; setOver({ col: c.id, before: card?.dataset.task ?? null }); }}
               onDragLeave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setOver(null); }}
               onDrop={(e) => { e.preventDefault(); drop(c.id, over?.col === c.id ? over.before : null); }}
-              className={cx('w-[272px] shrink-0 flex flex-col min-h-0 rounded-[12px] bg-[var(--hover)] transition-shadow', over?.col === c.id && 'shadow-[inset_0_0_0_2px_var(--color-accent-fill)]')}>
+              className={cx('w-[272px] shrink-0 flex flex-col min-h-0 px-1.5 border-r border-[var(--sep)] last:border-r-0 transition-colors', over?.col === c.id && 'bg-[var(--hover)] rounded-[12px]')}>
               <header className="px-3 pt-2.5 pb-2 flex items-center gap-2" title={c.hint}>
                 <h3 className="text-[13px] font-semibold">{c.title}</h3>
                 <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">{list.length}</span>
@@ -81,7 +81,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
                 {(c.id === 'done' || c.id === 'review') && <span className="w-6 h-6" aria-hidden="true" />}
                 {c.id !== 'done' && c.id !== 'review' && (
                   <button type="button" aria-label={`Add a task to ${c.title}`} title={`Add a task to ${c.title}`} onClick={() => { setAdding(c.id); setDraft(''); }}
-                    className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-card)] hover:text-[var(--color-text-main)]"><Plus className="w-4 h-4" /></button>
+                    className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]"><Plus className="w-4 h-4" /></button>
                 )}
               </header>
               <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-2">
@@ -90,7 +90,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
                     <textarea autoFocus rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="New task title" placeholder="What needs doing?"
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(c.id); } if (e.key === 'Escape') setAdding(null); }}
                       className="w-full resize-none bg-transparent text-[13px] focus:outline-none" />
-                    <p className="text-[11px] text-[var(--color-text-muted)]">Enter to add · Esc to cancel</p>
+                    <p className="text-[12px] text-[var(--color-text-muted)]">Enter to add · Esc to cancel</p>
                   </form>
                 )}
                 {list.map((t) => (

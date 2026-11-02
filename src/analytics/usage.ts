@@ -1,4 +1,4 @@
-// Usage analytics for the profile page (session 7). Computed on this PC from data Lotus already
+// Usage analytics for the profile page (session 7). Computed on this computer from data Lotus already
 // keeps (saved chats, memory, skills, plugins, the image gallery). Nothing is sent anywhere, and
 // every number shown comes from here: no estimates are dressed up as measurements.
 

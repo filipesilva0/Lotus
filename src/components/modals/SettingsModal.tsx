@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { chromeOs } from '../common/TitleBar';
 import {
   X,
   Sliders,
@@ -46,9 +47,12 @@ interface SettingsModalProps {
   updates: Updates;
   /** Installed chat models (for the background tasks model). */
   models: { id: string; name: string; tag: string }[];
+  /** Open on this pane (e.g. Help › Check for Updates…); otherwise the last pane used. */
+  pane?: SettingsTab | null;
 }
 
-type SettingsTab =
+const PANE_KEY = 'lotus.settingsPane.v1';
+export type SettingsTab =
   | 'inference'
   | 'engine'
   | 'memory'
@@ -66,8 +70,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSettings,
   updates,
   models,
+  pane,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('inference');
+  // HIG Settings: reopen on the pane used last.
+  const [activeTab, setActiveTabRaw] = useState<SettingsTab>(() => {
+    if (pane) return pane;
+    try { return (localStorage.getItem(PANE_KEY) as SettingsTab | null) ?? 'inference'; } catch { return 'inference'; }
+  });
+  const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { localStorage.setItem(PANE_KEY, t); } catch { /* memory only */ } };
+  useEffect(() => { if (isOpen && pane) setActiveTabRaw(pane); }, [isOpen, pane]);
+  useEffect(() => {
+    if (!isOpen) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [isOpen, onClose]);
   const [ollamaCheckStatus, setOllamaCheckStatus] = useState<'idle' | 'checking' | 'online' | 'offline'>('idle');
   const [copiedShortcut, setCopiedShortcut] = useState(false);
 
@@ -93,57 +110,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
-    { id: 'inference', label: 'Model & Inference', icon: Sliders },
-    { id: 'engine', label: 'Local Engine & VRAM', icon: Server },
-    { id: 'chat', label: 'Chat & Formatting', icon: MessageSquare },
-    { id: 'memory', label: 'Memory & Skills', icon: Sparkles },
+    { id: 'inference', label: 'Models', icon: Sliders },
+    { id: 'engine', label: 'Engines', icon: Server },
+    { id: 'chat', label: 'Chat', icon: MessageSquare },
+    { id: 'memory', label: 'Memory', icon: Sparkles },
     { id: 'voice', label: 'Voice', icon: Volume2 },
-    { id: 'island', label: 'Island & Agents', icon: Cpu },
+    { id: 'island', label: 'Island', icon: Cpu },
     { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'updates', label: 'About & Updates', icon: Download },
-    { id: 'licenses', label: 'Licenses & Legal', icon: Shield },
+    { id: 'updates', label: 'Updates', icon: Download },
+    { id: 'licenses', label: 'Legal', icon: Shield },
   ];
+  const paneName = tabs.find((t) => t.id === activeTab)?.label ?? 'Settings';
+  const mac = chromeOs() === 'macos';
+  const closeBtn = <IconBtn label="Close Settings" onClick={onClose}><X className="w-4 h-4" /></IconBtn>;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label="Settings" className="material-frosted w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
-        {/* Header: same as every other sheet (profile, sign in) */}
-        <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-[var(--sep)]">
-          <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">Settings</h2>
-          <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
+      <div role="dialog" aria-modal="true" aria-label={`Settings: ${paneName}`} className="material-frosted w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
+        {/* HIG Settings: the title is the pane's name; a fixed pane toolbar shows which pane is open. */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-2 h-10 shrink-0">
+          <div className="flex">{mac && closeBtn}</div>
+          <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">{paneName}</h2>
+          <div className="flex justify-end">{!mac && closeBtn}</div>
         </div>
+        <nav className="shrink-0 flex justify-center gap-0.5 px-3 pb-2 border-b border-[var(--sep)] overflow-x-auto" aria-label="Settings panes" role="tablist">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button key={tab.id} type="button" role="tab" aria-selected={isActive} onClick={() => setActiveTab(tab.id)}
+                className={`min-w-[64px] px-2 pt-1.5 pb-1 flex flex-col items-center gap-0.5 rounded-[8px] text-[12px] transition-colors focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'}`}>
+                <Icon className={`w-5 h-5 ${isActive ? 'text-[var(--color-accent-vibrant)]' : ''}`} strokeWidth={1.6} aria-hidden="true" />
+                <span className="whitespace-nowrap">{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
         <div className="flex-1 min-h-0 flex">
-        {/* Sections */}
-        <div className="w-48 shrink-0 p-2 flex flex-col justify-between border-r border-[var(--sep)]">
-            <nav className="flex flex-col gap-0.5 overflow-y-auto" aria-label="Settings sections">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`w-full flex items-center gap-2.5 px-2.5 h-8 rounded-[8px] text-[13px] transition-colors text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)]'}`}
-                  >
-                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-[var(--color-accent-vibrant)]' : 'text-[var(--color-text-muted)]'}`} strokeWidth={1.7} aria-hidden="true" />
-                    <span className="truncate">{tab.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          <p className="px-2.5 pt-2 text-[12px] text-[var(--color-text-muted)]">{updates.version ? `Lotus ${updates.version}` : 'Lotus'}</p>
-        </div>
-
         {/* Section content */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <h3 className="px-5 pt-4 pb-1 text-[13px] font-semibold text-[var(--color-text-main)] shrink-0">
-            {tabs.find((t) => t.id === activeTab)?.label}
-          </h3>
-
           {/* Body Content */}
-          <div className="flex-1 overflow-y-auto px-5 pb-5">
+          <div className="flex-1 overflow-y-auto px-5 pt-2 pb-5">
             {/* 1. Model & Inference Parameters (formerly in Card B & Weights) */}
             {activeTab === 'inference' && (
               <div className="space-y-5">
@@ -159,7 +166,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     aria-label="Background tasks model"
                     value={settings.backgroundModel}
                     onChange={(e) => onUpdateSettings({ backgroundModel: e.target.value })}
-                    className="w-full h-9 bg-[var(--color-bg-card)] rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--sep)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] cursor-pointer"
+                    className="w-full h-9 bg-[var(--color-bg-card)] rounded-[10px] px-3 text-xs font-semibold text-[var(--color-text-main)] border border-[var(--sep)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]"
                   >
                     <option value="">Same as the chat model{settings.selectedModel ? ` (${settings.selectedModel})` : ''}</option>
                     {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.tag ? ` · ${m.tag}` : ''}</option>)}
@@ -262,7 +269,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         Context Window (Max Tokens)
                       </span>
                       <p className="text-xs text-[var(--color-text-muted)]">
-                        {settings.autoScale ? `Auto-scaling is on (Local Engine & VRAM), so chat uses the size free video memory allows; this value is used when it is off.` : "KV cache size allocated in VRAM for conversation memory."}
+                        {settings.autoScale ? `Auto-scaling is on (Settings → Engines), so chat uses the size free video memory allows; this value is used when it is off.` : "KV cache size allocated in VRAM for conversation memory."}
                       </p>
                     </div>
                   </div>
@@ -340,7 +347,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     value={settings.systemPrompt}
                     onChange={(e) => onUpdateSettings({ systemPrompt: e.target.value })}
                     rows={3}
-                    placeholder="Provide overarching guidelines for how the model should behave, respond, and format answers..."
+                    placeholder="Provide overarching guidelines for how the model should behave, respond, and format answers…"
                     className="w-full p-3 bg-[var(--color-bg-card)]  rounded-[10px] text-xs text-[var(--color-text-main)] border border-[var(--sep)] focus:outline-none resize-none leading-relaxed"
                   />
                 </div>
@@ -414,7 +421,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center justify-between gap-4 py-3">
                     <div>
                       <span className="text-[13px] block">Appearance</span>
-                      <span className="text-[12px] text-[var(--color-text-muted)]">Auto follows the light or dark setting in Windows.</span>
+                      <span className="text-[12px] text-[var(--color-text-muted)]">Auto follows your system's light or dark setting.</span>
                     </div>
                     <Segmented
                       label="Appearance"
@@ -431,14 +438,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center justify-between gap-4 py-3">
                     <div>
                       <span className="text-[13px] block">Accent colours</span>
-                      <span className="text-[12px] text-[var(--color-text-muted)]">Each page uses its own petal of the Lotus mark.</span>
+                      <span className="text-[12px] text-[var(--color-text-muted)]">Each page uses its own petal of the Lotus mark: {PETAL_ORDER.map((id) => `${VIEW_TITLES[id]} ${PALETTES[PAGE_PALETTE[id]].name.toLowerCase()}`).join(', ')}.</span>
                     </div>
-                    <ul className="flex items-center gap-2" aria-label="Page colours">
-                      {PETAL_ORDER.map((id) => {
-                        const pal = PALETTES[PAGE_PALETTE[id]];
-                        return <li key={id} title={VIEW_TITLES[id]} aria-label={`${VIEW_TITLES[id]}: ${pal.name}`} className="w-4 h-4 rounded-full" style={{ background: pal.vibrant }} />;
-                      })}
-                    </ul>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-3">
@@ -446,7 +447,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="text-[13px] block">Interface font</span>
                       <span className="text-[12px] text-[var(--color-text-muted)]">System uses San Francisco on Mac and Segoe UI on Windows.</span>
                     </div>
-                    <div className="w-44">
+                    <div className="w-56 shrink-0">
                       <Select aria-label="Interface font" value={settings.fontFamily} onChange={(e) => onUpdateSettings({ fontFamily: e.target.value as FontFamily })}>
                         {(Object.keys(FONTS) as FontFamily[]).map((id) => <option key={id} value={id}>{FONTS[id].name}</option>)}
                       </Select>
@@ -488,12 +489,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
         </div>
-        </div>
-
-        {/* Footer: same as the other sheets */}
-        <div className="px-4 py-3 border-t border-[var(--sep)] flex items-center justify-between gap-2 shrink-0">
-          <span className="text-[12px] text-[var(--color-text-muted)]">Changes are saved automatically.</span>
-          <Btn variant="primary" onClick={onClose}>Done</Btn>
         </div>
       </div>
     </div>

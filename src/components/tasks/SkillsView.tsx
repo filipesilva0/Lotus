@@ -88,7 +88,7 @@ export const SkillsView: React.FC<{ settings: LotusSettings; onSettings: (p: Par
         <PaneBar><span className="text-[13px] font-semibold flex-1">Skills</span><IconBtn label="New skill" onClick={create}><Plus className="w-4 h-4" /></IconBtn></PaneBar>
         <div className="px-3 pt-2.5 pb-2 border-b border-[var(--sep)]">
           <label className="flex items-center justify-between gap-2 text-[12px]"><span>Write and improve skills automatically</span><Toggle size="sm" checked={settings.autoSkills} onChange={(v) => onSettings({ autoSkills: v })} ariaLabel="Write skills automatically" /></label>
-          <p className="mt-1 text-[11px] text-[var(--color-text-muted)] leading-snug">After a complex chat or a finished task, Lotus writes the procedure down; when a skill helps or gets corrected, it updates it. Skills stay on this PC.</p>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)] leading-snug">After a complex chat or a finished task, Lotus writes the procedure down; when a skill helps or gets corrected, it updates it. Skills stay on this computer.</p>
           {skills.length > 5 && <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter skills" aria-label="Filter skills" className="mt-2" />}
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
@@ -98,13 +98,13 @@ export const SkillsView: React.FC<{ settings: LotusSettings; onSettings: (p: Par
               <span className="flex items-center gap-1.5">
                 {s.origin === 'auto' ? <Sparkles className="w-3.5 h-3.5 shrink-0 text-[var(--color-accent-vibrant)]" aria-label="Written by Lotus" /> : <User className="w-3.5 h-3.5 shrink-0 text-[var(--color-text-muted)]" aria-label="Edited by you" />}
                 <span className="text-[13px] font-medium truncate flex-1">{s.name}</span>
-                <span className="text-[11px] tabular-nums text-[var(--color-text-muted)]">v{s.version}</span>
+                <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">v{s.version}</span>
               </span>
-              <span className="block pl-5 text-[11px] text-[var(--color-text-muted)] truncate">{s.whenToUse || s.description || 'No description'}</span>
+              <span className="block pl-5 text-[12px] text-[var(--color-text-muted)] truncate">{s.whenToUse || s.description || 'No description'}</span>
             </button>
           ))}
         </div>
-        {status && <p className="px-3 py-2 border-t border-[var(--sep)] text-[11px] text-[var(--color-text-muted)]">{status.native ? `${status.skills} skills · ${status.fts5 ? 'full-text search' : 'simple search'}` : 'Browser preview: stored in this browser'}</p>}
+        {status && <p className="px-3 py-2 border-t border-[var(--sep)] text-[12px] text-[var(--color-text-muted)]">{status.native ? `${status.skills} skills · ${status.fts5 ? 'full-text search' : 'simple search'}` : 'Browser preview: stored in this browser'}</p>}
       </SidebarPane>
       <div className="flex-1 min-w-0 flex flex-col">
         {error && <div className="p-3"><Banner tone="error" action={<Btn size="sm" onClick={memoryStore.clearError}>Dismiss</Btn>}>{error}</Banner></div>}
@@ -112,7 +112,7 @@ export const SkillsView: React.FC<{ settings: LotusSettings; onSettings: (p: Par
           <div className="flex-1 flex">
             <Empty icon={<BookOpen className="w-5 h-5" />} className="flex-1" title="No skills yet"
               body="Skills are procedures Lotus writes for itself after it finishes something complex, so it does it better next time. They appear here; you can read, edit, switch off or delete any of them."
-              action={<Btn icon={<Plus className="w-3.5 h-3.5" />} onClick={create}>Write one yourself</Btn>} />
+              action={<Btn icon={<Plus className="w-3.5 h-3.5" />} onClick={create}>Write One Yourself</Btn>} />
           </div>
         )}
       </div>

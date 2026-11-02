@@ -105,7 +105,7 @@ export const AddModelDialog: React.FC<Props> = ({ open, onClose, initialKind, st
 
         <div className="mt-3"><Label hint="optional">Access token</Label>
           <TextInput type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} aria-label="Access token (optional)" placeholder="Only for gated or login-only files" />
-          <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">Used for this download only and never saved.</p></div>
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Used for this download only and never saved.</p></div>
 
         <div className="mt-3 text-[12px] text-[var(--color-text-muted)]">
           Saved to: <span className="font-mono text-[var(--color-text-main)]">{modelsDir ? folderPath(modelsDir, folder) : 'ComfyUI\u2019s models folder (asked on download)'}</span>

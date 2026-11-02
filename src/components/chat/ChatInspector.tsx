@@ -30,7 +30,7 @@ const TABS: { id: InspectorTab; label: string; icon: React.ReactNode }[] = [
   { id: 'artifacts', label: 'Artifacts', icon: <Code2 className="w-3.5 h-3.5" /> },
   { id: 'context', label: 'Context', icon: <Layers className="w-3.5 h-3.5" /> },
   { id: 'research', label: 'Sources', icon: <FlaskConical className="w-3.5 h-3.5" /> },
-  { id: 'params', label: 'Parameters', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
+  { id: 'params', label: 'Model', icon: <SlidersHorizontal className="w-3.5 h-3.5" /> },
 ];
 
 // ── Artifacts ─────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ const ArtifactsTab: React.FC<{ messages: ChatMessage[]; focus: Props['focusArtif
       {canPreview && mode === 'preview' ? (
         <>
           <iframe title="Artifact preview" srcDoc={doc} sandbox="" className="flex-1 min-h-[240px] w-full bg-white" />
-          <p className="px-3 py-2 text-[11px] text-[var(--color-text-muted)] border-t border-[var(--sep)]">Previews run without scripts, for safety. Layout, styles and SVG graphics render; JavaScript does not.</p>
+          <p className="px-3 py-2 text-[12px] text-[var(--color-text-muted)] border-t border-[var(--sep)]">Previews run without scripts, for safety. Layout, styles and SVG graphics render; JavaScript does not.</p>
         </>
       ) : (
         <textarea aria-label="Edit code" spellCheck={false} value={code} onChange={(e) => setEdits((x) => ({ ...x, [cur.id]: e.target.value }))}
@@ -117,10 +117,10 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
                     <button type="button" className={cx('flex-1 min-w-0 flex items-center gap-1.5 text-left text-[13px]', (off || memSkip) && 'opacity-50')} aria-expanded={peek === f.rel} onClick={() => setPeek(peek === f.rel ? null : f.rel)}>
                       <span className="truncate">{f.rel}</span>
                     </button>
-                    <span className="text-[11px] text-[var(--color-text-muted)]">{KIND_LABEL[f.kind]}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{KIND_LABEL[f.kind]}</span>
                   </div>
-                  {peek === f.rel && <pre className="mx-2.5 mb-2 p-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-[6px] bg-[var(--color-bg-card)] text-[11px] leading-snug font-mono">{f.content.slice(0, 2000)}{f.truncated ? '\n…(longer file: the first 24 KB is used)' : ''}</pre>}
-                  {memSkip && !off && <p className="px-2.5 pb-1.5 text-[11px] text-[var(--color-text-muted)]">Not applied while memory is off for this chat.</p>}
+                  {peek === f.rel && <pre className="mx-2.5 mb-2 p-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-[6px] bg-[var(--color-bg-card)] text-[12px] leading-snug font-mono">{f.content.slice(0, 2000)}{f.truncated ? '\n…(longer file: the first 24 KB is used)' : ''}</pre>}
+                  {memSkip && !off && <p className="px-2.5 pb-1.5 text-[12px] text-[var(--color-text-muted)]">Not applied while memory is off for this chat.</p>}
                 </li>
               );
             })}
@@ -139,14 +139,14 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
                   <input type="checkbox" aria-label={`Include ${it.name}`} checked={on === it.chunks.length} ref={(el) => { if (el) el.indeterminate = on > 0 && on < it.chunks.length; }}
                     onChange={(e) => onContext((c) => c.map((x) => (x.id === it.id ? { ...x, chunks: x.chunks.map((k) => ({ ...k, on: e.target.checked })) } : x)))} />
                   <button type="button" className="flex-1 min-w-0 flex items-center gap-1.5 text-left text-[13px]" onClick={() => setOpen(open === it.id ? null : it.id)} aria-expanded={open === it.id}>
-                    <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{it.name}</span><span className="ml-auto text-[11px] text-[var(--color-text-muted)] tabular-nums">{on}/{it.chunks.length}</span>
+                    <FileText className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{it.name}</span><span className="ml-auto text-[12px] text-[var(--color-text-muted)] tabular-nums">{on}/{it.chunks.length}</span>
                   </button>
                   <IconBtn label={`Remove ${it.name}`} className="!w-6 !h-6" onClick={() => onContext((c) => c.filter((x) => x.id !== it.id))}><X className="w-3.5 h-3.5" /></IconBtn>
                 </div>
                 {open === it.id && (
                   <div className="px-2.5 pb-2 space-y-1">
                     {it.chunks.map((k, i) => (
-                      <label key={k.id} className={cx('flex items-start gap-2 p-1.5 rounded-[6px] text-[11px] leading-snug bg-[var(--color-bg-card)]', !k.on && 'opacity-50')}>
+                      <label key={k.id} className={cx('flex items-start gap-2 p-1.5 rounded-[6px] text-[12px] leading-snug bg-[var(--color-bg-card)]', !k.on && 'opacity-50')}>
                         <input type="checkbox" className="mt-0.5" checked={k.on} onChange={(e) => onContext((c) => c.map((x) => (x.id === it.id ? { ...x, chunks: x.chunks.map((z) => (z.id === k.id ? { ...z, on: e.target.checked } : z)) } : x)))} />
                         <span><span className="font-semibold">Chunk {i + 1}</span> · {k.text.slice(0, 140).replace(/\s+/g, ' ')}…</span>
                       </label>
@@ -158,7 +158,7 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
           })}
         </div>
         {items.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">About {toks.toLocaleString()} tokens of the {settings.contextWindow.toLocaleString()}-token window.</p>}
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">For current information from the web, turn on Web search (globe) in the message box instead.</p>
+        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">For current information from the web, turn on Web search (globe) in the message box instead.</p>
       </Section>
       <Section title="Memory & instructions" hint={memOn
         ? 'Lotus saves what you ask it to (“remember …”, “from now on …”) and learns lasting facts and preferences as you talk. Learned items are marked; remove anything that is wrong.'
@@ -169,16 +169,16 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
         <ul className="space-y-1">
           {shown.map((m) => (
             <li key={m.id} className="flex items-start gap-2 text-[13px]">
-              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[10px] font-semibold uppercase mt-0.5 shrink-0">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
-              <span className="flex-1">{m.text}{m.source === 'auto' && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-[var(--color-text-muted)]" title="Learned from a conversation"><Sparkles className="w-3 h-3" />learned</span>}</span>
+              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[12px] font-semibold mt-0.5 shrink-0">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
+              <span className="flex-1">{m.text}{m.source === 'auto' && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[12px] text-[var(--color-text-muted)]" title="Learned from a conversation"><Sparkles className="w-3 h-3" />learned</span>}</span>
               <IconBtn label="Forget" className="!w-6 !h-6" onClick={() => onMemory(memory.filter((x) => x.id !== m.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
             </li>
           ))}
         </ul>
         {status && (
-          <p className="mt-2 text-[11px] text-[var(--color-text-muted)] leading-snug">
+          <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-snug">
             {status.native
-              ? `${status.messages.toLocaleString()} messages searchable · ${status.skills} skills · ${status.fts5 ? 'SQLite full-text search (FTS5)' : 'SQLite (FTS5 unavailable: simple search)'} · stored only on this PC`
+              ? `${status.messages.toLocaleString()} messages searchable · ${status.skills} skills · ${status.fts5 ? 'SQLite full-text search (FTS5)' : 'SQLite (FTS5 unavailable: simple search)'} · stored only on this computer`
               : 'Browser preview: memory is kept in this browser only.'}
           </p>
         )}
@@ -206,7 +206,7 @@ const ResearchTab: React.FC<Pick<Props, 'session' | 'searchOn' | 'onToggleSearch
             {m.sources?.map((s) => (
               <button key={s.n} type="button" onClick={() => void openExternal(s.url)} className="w-full text-left p-2 rounded-[8px] bg-[var(--hover)] hover:bg-[var(--pressed)]">
                 <span className="flex items-start gap-2 text-[12px]"><span className="font-semibold text-[var(--color-accent-vibrant)]">[{s.n}]</span><span className="flex-1 leading-snug">{s.title}</span><ExternalLink className="w-3 h-3 mt-0.5 opacity-60" /></span>
-                <span className="block mt-0.5 ml-6 text-[11px] text-[var(--color-text-muted)]">{[s.repo, s.year].filter(Boolean).join(' · ')}</span>
+                <span className="block mt-0.5 ml-6 text-[12px] text-[var(--color-text-muted)]">{[s.repo, s.year].filter(Boolean).join(' · ')}</span>
               </button>
             ))}
           </div>
@@ -222,7 +222,7 @@ const CodeBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{title}</span>{text && <IconBtn label={`Copy ${title}`} className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(text)}><Copy className="w-3.5 h-3.5" /></IconBtn>}</div>
-      <pre className="max-h-56 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-all">{text || 'Send a message to see it.'}</pre>
+      <pre className="max-h-56 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">{text || 'Send a message to see it.'}</pre>
     </div>
   );
 };
@@ -244,7 +244,7 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
         {s.autoScale ? (
           <div className="mb-2">
             <div className="flex items-center justify-between text-[12px]"><span>Context window</span><span className="tabular-nums">Auto · {hw.plan.numCtx.toLocaleString()} tokens</span></div>
-            <p className="text-[11px] text-[var(--color-text-muted)] leading-snug mt-0.5">Sized to free video memory. <button type="button" className="text-[var(--color-accent-vibrant)] font-medium" onClick={() => set({ autoScale: false })}>Set it by hand</button></p>
+            <p className="text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">Sized to free video memory. <button type="button" className="text-[var(--color-accent-vibrant)] font-medium" onClick={() => set({ autoScale: false })}>Set it by hand</button></p>
           </div>
         ) : (
           <div className="flex items-center justify-between text-[12px] mb-2"><span>Context window</span><Stepper label="Context window" value={s.contextWindow} min={512} max={131072} step={512} onChange={(v) => set({ contextWindow: v })} unit="tokens" /></div>
@@ -273,7 +273,7 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
           <KV k="Prompt tokens" v={r.prompt_eval_count ?? '—'} /><KV k="Reply tokens" v={r.eval_count ?? '—'} />
           <KV k="Load time" v={r.load_duration ? `${Math.round(r.load_duration / 1e6)} ms` : '—'} /><KV k="Finish" v={r.done_reason ?? '—'} />
         </div>); })() : null}
-        <p className="mt-2 text-[11px] text-[var(--color-text-muted)]">Logit bias and per-token confidence aren't offered here: they aren't part of the request Lotus sends to Ollama.</p>
+        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Logit bias and per-token confidence aren't offered here: they aren't part of the request Lotus sends to Ollama.</p>
       </Section>
     </div>
   );
@@ -285,7 +285,7 @@ export const ChatInspector: React.FC<Props> = (p) => (
       <div role="tablist" aria-label="Inspector" className="grid grid-cols-4 gap-0.5 p-0.5 rounded-[8px] bg-[var(--hover)]">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={p.tab === t.id} title={t.label} onClick={() => p.onTab(t.id)}
-            className={cx('h-7 inline-flex items-center justify-center gap-1 rounded-[6px] text-[11px] font-medium', p.tab === t.id ? 'bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_1px_2px_rgba(0,0,0,.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]')}>
+            className={cx('h-7 inline-flex items-center justify-center gap-1 rounded-[6px] text-[12px] font-medium', p.tab === t.id ? 'bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_1px_2px_rgba(0,0,0,.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]')}>
             {t.icon}<span className="truncate">{t.label}</span>
           </button>
         ))}

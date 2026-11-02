@@ -86,9 +86,9 @@ for (const dark of [false, true]) {
   await p.click('button[role="menuitem"]:has-text("View")'); await p.waitForTimeout(300);
   await shot(p, `view-menu-${m}`);
   await p.keyboard.press('Escape');
-  await p.click('button[aria-label="Hide left panel"]'); await p.click('button[aria-label="Hide right panel"]'); await p.waitForTimeout(300);
+  await p.click('button[aria-label="Hide sidebar"]'); await p.click('button[aria-label="Hide inspector"]'); await p.waitForTimeout(300);
   await shot(p, `chat-panels-hidden-${m}`);
-  await p.click('button[aria-label="Show left panel"]'); await p.click('button[aria-label="Show right panel"]');
+  await p.click('button[aria-label="Show sidebar"]'); await p.click('button[aria-label="Show inspector"]');
   await p.click('button[aria-pressed]:has-text("Research")'); await p.waitForTimeout(200);
   await shot(p, `chat-research-mode-${m}`);
   // (Ollama is offline in this preview, so the box is disabled; open a task from the sidebar instead.)

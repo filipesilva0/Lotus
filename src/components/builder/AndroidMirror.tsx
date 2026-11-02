@@ -81,7 +81,7 @@ export const AndroidMirror: React.FC<{ onRun: (command: string) => void }> = ({ 
         <IconBtn label="Look for devices" onClick={() => void scan()}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>
         {avds.length > 0 && paths?.emulator && (<>
           <Select aria-label="Virtual device to start" value={avd} onChange={(e) => setAvd(e.target.value)} className="!w-[170px]">{avds.map((a) => <option key={a}>{a}</option>)}</Select>
-          <Btn size="sm" icon={<Play className="w-3 h-3" />} onClick={() => onRun(`"${paths.emulator}" -avd ${avd}`)} disabled={!avd}>Start emulator</Btn>
+          <Btn size="sm" icon={<Play className="w-3 h-3" />} onClick={() => onRun(`"${paths.emulator}" -avd ${avd}`)} disabled={!avd}>Start Emulator</Btn>
         </>)}
         <span className="flex-1" />
         <IconBtn label="Back" onClick={() => key(4)} disabled={!serial}><ChevronLeft className="w-4 h-4" /></IconBtn>

@@ -47,7 +47,7 @@ export const ResearchView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEn
             <ScopingView key={p.id} r={r} p={p} models={models} ollamaUp={ollamaUp} onOpenEngines={onOpenEngines} />
           ) : p.agents.length === 0 && !p.report && p.phase !== 'running' ? (
             <Empty className="h-full" icon={<FlaskConical className="w-5 h-5" />} title="Nothing is running yet" body="Finish scoping and approve the plan to start the agents."
-              action={<Btn variant="secondary" onClick={() => setMode('A')}>Go to scoping</Btn>} />
+              action={<Btn variant="secondary" onClick={() => setMode('A')}>Go to Scoping</Btn>} />
           ) : (
             <LiveView key={p.id} r={r} p={p} onOpenEngines={onOpenEngines} />
           )}

@@ -59,7 +59,7 @@ export const AudioPlayer: React.FC<{
         className="w-9 h-9 shrink-0 rounded-full bg-[var(--color-accent-vibrant)] text-white flex items-center justify-center hover:bg-[var(--color-accent-hover)] disabled:opacity-40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--color-accent-vibrant)]">
         {playing ? <Pause className="w-4 h-4" fill="currentColor" /> : <Play className="w-4 h-4 ml-0.5" fill="currentColor" />}
       </button>
-      <div onClick={seek} className="flex-1 h-9 flex items-center gap-[2px] cursor-pointer" role="slider" aria-label="Seek" aria-valuenow={Math.round(progress * 100)}>
+      <div onClick={seek} className="flex-1 h-9 flex items-center gap-[2px]" role="slider" aria-label="Seek" aria-valuenow={Math.round(progress * 100)}>
         {(peaks.length ? peaks : Array.from({ length: 96 }, () => 0.12)).map((p, i, arr) => (
           <div key={i} className={cx('flex-1 rounded-[6px] transition-colors', i / arr.length <= progress ? 'bg-[var(--color-accent-vibrant)]' : 'bg-black/15 dark:bg-white/20')}
             style={{ height: `${Math.max(8, p * 100)}%` }} />
@@ -69,7 +69,7 @@ export const AudioPlayer: React.FC<{
         {fmtDuration(pos)} / {fmtDuration(duration)}
       </span>
       <button type="button" onClick={() => { const r = [1, 1.25, 1.5, 2, 0.75][([1, 1.25, 1.5, 2, 0.75].indexOf(rate) + 1) % 5]; setRate(r); if (audioRef.current) audioRef.current.playbackRate = r; }}
-        aria-label={`Playback speed ${rate}×. Click to change`} className="h-6 px-1.5 rounded-[6px] text-[11px] font-medium tabular-nums bg-black/5 dark:bg-white/10 hover:bg-black/10">{rate}×</button>
+        aria-label={`Playback speed ${rate}×. Click to change`} className="h-6 px-1.5 rounded-[6px] text-[12px] font-medium tabular-nums bg-black/5 dark:bg-white/10 hover:bg-black/10">{rate}×</button>
       {onDownload && <IconBtn label="Save as WAV" onClick={onDownload}><Download className="w-4 h-4" /></IconBtn>}
     </div>
   );

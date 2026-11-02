@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { EngineNotice } from '../common/EngineNotice';
+import { confirmAlert } from '../common/Alerts';
 import { Download, Plus, Trash2 } from 'lucide-react';
 import { voicebox, ModelStatus, DownloadTask } from '../../services/voicebox';
 import { reportActivity } from '../../lib/bus';
@@ -32,10 +34,10 @@ export const VoiceModelsHub: React.FC<{ up: boolean | null; refreshKey: number; 
     <div className="space-y-4">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0"><h2 className="text-[15px] font-semibold">Voice models</h2><p className="text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">Speech synthesis and transcription models, managed by Voicebox.</p></div>
-        <Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={onAdd}>Download by name…</Btn>
+        <Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={onAdd}>Download by Name…</Btn>
       </div>
       {err && <Banner tone="error">{err}</Banner>}
-      {up === false ? <Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>Voicebox isn't running, so its models can't be listed.</Banner>
+      {up === false ? <EngineNotice id="voicebox" purpose="to list its models" />
         : models === null ? <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" /> : (
           <ul className="space-y-2">
             {models.map((m) => {
@@ -56,7 +58,7 @@ export const VoiceModelsHub: React.FC<{ up: boolean | null; refreshKey: number; 
                   ) : (
                     <div className="flex gap-1.5">
                       {m.loaded ? <Btn size="sm" onClick={() => act(() => voicebox.unloadModel(m.model_name))}>Unload</Btn> : <Btn size="sm" onClick={() => act(() => voicebox.loadModel(m.model_name))}>Load</Btn>}
-                      <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => act(() => voicebox.deleteModel(m.model_name))}>Delete</Btn>
+                      <Btn size="sm" variant="danger" icon={<Trash2 className="w-3 h-3" />} onClick={() => void confirmAlert({ title: `Delete “${m.display_name ?? m.model_name}”?`, message: 'This removes the voice model from this computer. You can download it again later.', confirm: 'Delete' }).then((ok) => { if (ok) void act(() => voicebox.deleteModel(m.model_name)); })}>Delete</Btn>
                     </div>
                   )}
                 </Card></li>

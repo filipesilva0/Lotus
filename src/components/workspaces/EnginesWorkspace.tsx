@@ -80,7 +80,7 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
                 <span className="text-[var(--color-text-muted)] flex-1">
                   {engines[id].up ? 'Running' : id === 'comfyui' ? 'Optional, for images' : 'Not running'}
                 </span>
-                {engines[id].up && id !== 'comfyui' && <Btn size="sm" variant="secondary" onClick={goModels}>Get models</Btn>}
+                {engines[id].up && id !== 'comfyui' && <Btn size="sm" variant="secondary" onClick={goModels}>Get Models</Btn>}
               </li>
             ))}
           </ul>
@@ -124,7 +124,7 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
           <p className="text-xs text-[var(--color-text-muted)] mt-1" role="status">{status}{remote && <> · on another computer</>}</p>
         </div>
         {remote ? (
-          !s.up && <Btn size="sm" variant="secondary" icon={<RefreshCw className="w-3 h-3" />} onClick={() => void eng.refresh()}>Try again</Btn>
+          !s.up && <Btn size="sm" variant="secondary" icon={<RefreshCw className="w-3 h-3" />} onClick={() => void eng.refresh()}>Try Again</Btn>
         ) : s.up ? (
           <Btn size="sm" variant="secondary" loading={s.phase === 'stopping'} disabled={!s.supervised || busy} icon={<Square className="w-3 h-3" fill="currentColor" />}
             title={s.supervised ? undefined : 'Started outside Lotus. Close it where you launched it.'} onClick={() => eng.stop(id)}>Stop</Btn>
@@ -147,7 +147,7 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
 
       <div className="mt-auto pt-3 border-t border-[var(--color-border-subtle)] space-y-3">
         {!remote && (
-          <label className="flex items-center gap-2 text-xs cursor-pointer text-[var(--color-text-main)] dark:text-slate-200">
+          <label className="flex items-center gap-2 text-xs text-[var(--color-text-main)] dark:text-slate-200">
             <input type="checkbox" className="accent-[var(--color-accent-vibrant)]" checked={s.policy === 'on_launch'}
               onChange={(e) => eng.setPolicy(id, (e.target.checked ? 'on_launch' : 'manual') as Policy)} />
             Start with Lotus

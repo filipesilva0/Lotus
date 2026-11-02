@@ -1,4 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { offerUndo, flushUndo } from '../common/Alerts';
+import { useCommand } from '../../lib/commands';
+import { EngineNotice } from '../common/EngineNotice';
 import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal, Maximize2 } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
@@ -145,13 +148,29 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
 
   const actionBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-[7px] text-[12px] font-medium text-white hover:bg-white/20 disabled:opacity-40';
 
+  const newImage = () => { g.newSession(); setPrompt(''); set({ seed: null }); setRef(null); };
+  useCommand('new-image', newImage);
+
+  // Deleting a generation hides it at once and offers Undo; it is removed when the Undo note closes.
+  const gRef = useRef(g);
+  gRef.current = g;
+  const [hiddenGen, setHiddenGen] = useState<Set<string>>(() => new Set());
+  const unhideGen = (id: string) => setHiddenGen((h) => { const n = new Set(h); n.delete(id); return n; });
+  const deleteGen = (id: string) => {
+    const s = g.sessions.find((x) => x.id === id);
+    if (!s?.versions.length) { g.remove(id); return; }
+    setHiddenGen((h) => new Set(h).add(id));
+    if (g.activeId === id) { const next = g.sessions.find((x) => x.id !== id && !hiddenGen.has(x.id)); if (next) g.setActiveId(next.id); else g.newSession(); }
+    offerUndo('Generation deleted', () => { unhideGen(id); gRef.current.setActiveId(id); }, () => { gRef.current.remove(id); unhideGen(id); });
+  };
+  useEffect(() => () => flushUndo(), []);
+
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
 
-      <ImageSidebar sessions={g.sessions} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={() => { g.newSession(); setPrompt(''); set({ seed: null }); setRef(null); }} onDelete={g.remove} onPatch={g.patch} />
+      <ImageSidebar sessions={g.sessions.filter((s) => !hiddenGen.has(s.id))} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={newImage} onDelete={deleteGen} onPatch={g.patch} />
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        {comfyUp === false && <div className="px-6 pt-3"><Banner tone="warn" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>ComfyUI isn't running at {engineUrl('comfyui')}. Start it to generate images.</Banner></div>}
         {g.error && <div className="px-6 pt-3"><Banner tone="error" action={<IconBtn label="Dismiss" onClick={() => g.setError(null)}><X className="w-3.5 h-3.5" /></IconBtn>}>{g.error}</Banner></div>}
 
         {/* Canvas */}
@@ -167,13 +186,13 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
                   <div className="flex items-center justify-between text-[13px] mb-2"><span className="font-medium">{g.label}…</span><span className="tabular-nums text-[var(--color-text-muted)]">{Math.floor(g.elapsed)}s</span></div>
                   <Progress label="Generating" />
-                  <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[11px] text-[var(--color-text-muted)]">
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[12px] text-[var(--color-text-muted)]">
                     <div className="flex justify-between"><dt>Size</dt><dd className="tabular-nums">{g.info ? `${g.info.width}×${g.info.height}` : '—'}</dd></div>
                     <div className="flex justify-between"><dt>Steps</dt><dd className="tabular-nums">{g.info?.steps ?? '—'}</dd></div>
                     <div className="flex justify-between col-span-2"><dt>Checkpoint</dt><dd className="truncate ml-3">{g.info?.checkpoint ?? '—'}</dd></div>
                   </dl>
                   <Btn size="sm" className="mt-2.5 w-full" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={g.cancel}>Cancel</Btn>
-                  <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">ComfyUI doesn't report step progress over the connection Lotus uses, so this shows elapsed time.</p>
+                  <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">ComfyUI doesn't report step progress over the connection Lotus uses, so this shows elapsed time.</p>
                 </div>
               )}
 
@@ -191,7 +210,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                       const out = (pad: { left: number; top: number; right: number; bottom: number }) => { close(); void g.outpaint(cur, pad, prompt.trim() || cur.prompt, params); };
                       return (<>
                         <MenuItem onClick={() => { close(); setMaskOpen(true); }}>Inpaint: paint an area…</MenuItem>
-                        <p className="px-2.5 pt-1.5 text-[11px] text-[var(--color-text-muted)]">Outpaint: extend by 25%</p>
+                        <p className="px-2.5 pt-1.5 text-[12px] text-[var(--color-text-muted)]">Outpaint: extend by 25%</p>
                         <MenuItem onClick={() => out({ left: w / 4, top: 0, right: 0, bottom: 0 })}>Left</MenuItem>
                         <MenuItem onClick={() => out({ left: 0, top: 0, right: w / 4, bottom: 0 })}>Right</MenuItem>
                         <MenuItem onClick={() => out({ left: 0, top: h / 4, right: 0, bottom: 0 })}>Top</MenuItem>
@@ -241,6 +260,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 ))}
               </div>
             )}
+            {comfyUp === false && <EngineNotice id="comfyui" purpose="to generate images" className="mb-1.5 px-1" />}
             {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
             <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
               tray={<>
@@ -315,7 +335,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                   <button type="button" aria-pressed={!ASPECTS.includes(params.aspect)} onClick={() => set({ aspect: '768x1024' })} className={cx('h-7 rounded-[6px] text-[12px] font-medium', !ASPECTS.includes(params.aspect) ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>Custom</button>
                 </div>
                 {!ASPECTS.includes(params.aspect) && <TextInput aria-label="Custom size, for example 768x1024" value={params.aspect} onChange={(e) => set({ aspect: e.target.value })} placeholder="768x1024" />}
-                <p className="mt-1.5 text-[11px] text-[var(--color-text-muted)]">{dims.width}×{dims.height} px (rounded to multiples of 64)</p>
+                <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">{dims.width}×{dims.height} px (rounded to multiples of 64)</p>
               </Section>
               <Section title="Images per run">
                 <div className="grid grid-cols-4 gap-1.5">{[1, 2, 4, 8].map((n) => <button key={n} type="button" aria-pressed={params.count === n} onClick={() => set({ count: n })} className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums', params.count === n ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{n}</button>)}</div>
@@ -353,11 +373,11 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                   <TextInput value={styleName} onChange={(e) => setStyleName(e.target.value)} placeholder="Style name" aria-label="Style name" />
                   <Btn size="sm" disabled={!prompt.trim() || !styleName.trim()} onClick={() => { setStyles((s) => [...s, { id: uid('sty'), name: styleName.trim(), prompt: prompt.trim(), negative: undefined }]); setStyleName(''); }}>Save</Btn>
                 </div>
-                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">Saves what is typed in the prompt box.</p>
+                <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Saves what is typed in the prompt box.</p>
                 <ul className="mt-3 space-y-1.5">
                   {styles.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 p-2 rounded-[8px] bg-[var(--hover)]">
-                      <span className="flex-1 min-w-0"><span className="block text-[13px] font-medium">@{handle(s)}</span><span className="block text-[11px] text-[var(--color-text-muted)] line-clamp-2">{s.prompt}</span></span>
+                      <span className="flex-1 min-w-0"><span className="block text-[13px] font-medium">@{handle(s)}</span><span className="block text-[12px] text-[var(--color-text-muted)] line-clamp-2">{s.prompt}</span></span>
                       <IconBtn label={`Delete style ${s.name}`} className="!w-6 !h-6" onClick={() => setStyles((l) => l.filter((x) => x.id !== s.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                     </li>
                   ))}
@@ -367,13 +387,13 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
             )}
 
             {tab === 'details' && (cur ? (
-              <Section title="This image" action={<Btn size="sm" variant="ghost" onClick={() => reuse(cur)}>Reuse settings</Btn>}>
+              <Section title="This image" action={<Btn size="sm" variant="ghost" onClick={() => reuse(cur)}>Reuse Settings</Btn>}>
                 <p className="text-[12px] leading-snug mb-2">{cur.prompt}</p>
                 <KV k="Type" v={cur.kind ?? 'txt2img'} /><KV k="Size" v={cur.dimensions} /><KV k="Seed" v={cur.seed} /><KV k="Steps" v={cur.steps} /><KV k="CFG" v={cur.cfg} />
                 {cur.sampler && <KV k="Sampler" v={cur.sampler} />}{cur.denoise !== undefined && <KV k="Strength" v={`${Math.round(cur.denoise * 100)}%`} />}
                 <KV k="Checkpoint" v={cur.checkpoint} mono />{cur.loras?.length ? <KV k="LoRA" v={cur.loras.map((l) => `${l.name} ×${l.strength}`).join(', ')} mono /> : null}<KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
                 {cur.negativePrompt && <KV k="Negative" v={cur.negativePrompt} />}
-                <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => g.removeVersion(g.active.id, cur.id)}>Delete this image</Btn>
+                <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => g.removeVersion(g.active.id, cur.id)}>Delete This Image</Btn>
               </Section>
             ) : <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Generate an image to see its details.</p>)}
           </div>

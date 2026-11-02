@@ -241,14 +241,14 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               </button>
               {modelOpen && (
                 <div role="listbox" aria-label="Models" className="material-frosted absolute bottom-full right-2 mb-2 w-[300px] max-h-[320px] overflow-y-auto p-1 rounded-[10px] z-30">
-                  <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--color-text-muted)]">Chat model</p>
+                  <p className="px-2.5 pt-1.5 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Chat model</p>
                   {!models.length && <p className="px-2.5 py-2 text-[12px] text-[var(--color-text-muted)]">No models listed. Start Ollama, or download a model.</p>}
                   {models.map((m) => (
                     <button key={m.id} type="button" role="option" aria-selected={m.id === model} onClick={() => { onModel(m.id); setModelOpen(false); ta.current?.focus(); }}
                       className={cx('w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px] focus:outline-none focus-visible:bg-[var(--hover)]', m.id === model ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-[var(--hover)]')}>
                       <span className="w-4 shrink-0">{m.id === model && <Check className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />}</span>
                       <span className="flex-1 min-w-0 truncate">{m.name}</span>
-                      <span className="text-[11px] text-[var(--color-text-muted)] shrink-0">{m.tag}</span>
+                      <span className="text-[12px] text-[var(--color-text-muted)] shrink-0">{m.tag}</span>
                     </button>
                   ))}
                   <div role="separator" className="my-1 mx-2 h-px bg-[var(--sep)]" />
@@ -271,7 +271,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
           </div>
 
           <div className="h-10 flex items-center gap-0.5 px-3">
-            {trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose folder', "Attach a folder: its text and code files join this chat's context")}
+            {trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', "Attach a folder: its text and code files join this chat's context")}
             {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Library', 'The skills, memory and soul Lotus uses')}
             {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
             <div className="flex-1" />

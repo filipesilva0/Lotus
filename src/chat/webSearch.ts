@@ -1,7 +1,7 @@
 // Web search for chat (the globe button). Off by default; only runs when the user turns it on.
 // Providers:
 //   duckduckgo — DuckDuckGo's no-JavaScript results page (no account or key needed)
-//   searxng    — a SearXNG instance the user runs (e.g. on this PC), via its JSON API
+//   searxng    — a SearXNG instance the user runs (e.g. on this computer), via its JSON API
 // The top results are then opened and their readable text is passed to the model with citations.
 
 import { http, timeoutSignal } from '../lib/http';

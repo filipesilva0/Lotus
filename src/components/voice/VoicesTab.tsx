@@ -65,7 +65,7 @@ export const VoicesTab: React.FC<{
         <div className="flex-1" />
         <Btn variant="ghost" icon={<Upload className="w-3.5 h-3.5" />} onClick={() => importRef.current?.click()}>Import</Btn>
         <input ref={importRef} type="file" accept=".zip" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ''; }} />
-        <Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>New voice</Btn>
+        <Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>New Voice</Btn>
       </div>
 
       {err && <Banner tone="error">{err}</Banner>}
@@ -75,7 +75,7 @@ export const VoicesTab: React.FC<{
       ) : data.profiles.length === 0 ? (
         <Empty icon={<Mic2 className="w-5 h-5" />} title="No voices yet"
           body="Clone a voice from a short recording, choose a built-in voice, or describe the voice you want."
-          action={<Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>New voice</Btn>} />
+          action={<Btn variant="primary" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setCreating(true)}>New Voice</Btn>} />
       ) : list.length === 0 ? (
         <Empty title="No voices match" body={`Nothing found for “${q}”.`} />
       ) : (
@@ -130,8 +130,8 @@ export const VoicesTab: React.FC<{
 
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} title="Delete this voice?"
         footer={<>
-          <Btn variant="ghost" onClick={() => setToDelete(null)}>Keep it</Btn>
-          <Btn variant="primary" className="!bg-rose-600 hover:!bg-rose-700" loading={busy} onClick={doDelete}>Delete voice</Btn>
+          <Btn variant="ghost" onClick={() => setToDelete(null)}>Keep It</Btn>
+          <Btn variant="primary" className="!bg-rose-600 hover:!bg-rose-700" loading={busy} onClick={doDelete}>Delete Voice</Btn>
         </>}>
         <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
           <strong className="text-[var(--color-text-main)]">{toDelete?.name}</strong> and its samples will be removed. Audio you already generated with it stays in your library.

@@ -14,13 +14,13 @@ export const SampleHealthPanel: React.FC<{ blob: Blob; onTrim: (wav: Blob, durat
     analyzeSample(blob).then((r) => { if (!off) { setH(r); setB(r.durationSec.toFixed(1)); setA('0'); } }).catch(() => { if (!off) setErr(true); });
     return () => { off = true; };
   }, [blob]);
-  if (err) return <p className="text-[11px] text-[var(--color-text-muted)]">Couldn't analyse this clip.</p>;
-  if (!h) return <p className="text-[11px] text-[var(--color-text-muted)]">Checking quality…</p>;
+  if (err) return <p className="text-[12px] text-[var(--color-text-muted)]">Couldn't analyse this clip.</p>;
+  if (!h) return <p className="text-[12px] text-[var(--color-text-muted)]">Checking quality…</p>;
   const tone = h.verdict === 'good' ? 'text-[var(--c-green)]' : h.verdict === 'ok' ? 'text-[var(--c-orange)]' : 'text-[var(--c-red)]';
   const s = parseFloat(a), e = parseFloat(b);
   const valid = s >= 0 && e > s && e <= h.durationSec + 0.05 && (s > 0.01 || e < h.durationSec - 0.05);
   return (
-    <div className="space-y-1.5 text-[11px]">
+    <div className="space-y-1.5 text-[12px]">
       <p className="tabular-nums text-[var(--color-text-muted)]">{h.durationSec.toFixed(1)} s · {(h.sampleRate / 1000).toFixed(1)} kHz · SNR {h.snrDb !== null ? `≈${h.snrDb} dB` : '—'} · peak {h.peakDb} dB</p>
       <p className={cx('font-medium', tone)}>{h.advice}</p>
       <div className="flex items-center gap-1.5">

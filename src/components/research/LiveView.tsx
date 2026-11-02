@@ -71,7 +71,7 @@ export const LiveView: React.FC<{ r: ResearchApi; p: Project; onOpenEngines: () 
 
       {p.error && (
         <Banner tone={p.sources.length ? 'warn' : 'error'} action={<div className="flex gap-1.5">
-          {p.sources.length > 0 && <Btn size="sm" variant="secondary" onClick={() => r.writeReportFromPartial(p.id)}>Write report from what was found</Btn>}
+          {p.sources.length > 0 && <Btn size="sm" variant="secondary" onClick={() => r.writeReportFromPartial(p.id)}>Write Report from What Was Found</Btn>}
           <Btn size="sm" variant="ghost" onClick={onOpenEngines}>Engines</Btn>
         </div>}>{p.error}</Banner>
       )}

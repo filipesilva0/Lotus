@@ -3,7 +3,7 @@ export type TargetId = 'website' | 'webapp' | 'pwa' | 'desktop' | 'mobile' | 'bl
 export interface BuilderProject {
   id: string;
   name: string;
-  /** Absolute folder on this PC. */
+  /** Absolute folder on this computer. */
   path: string;
   target: TargetId;
   createdAt: number;

@@ -76,6 +76,14 @@ Give the user a short manual checklist and collect results:
 |---|---|---|---|
 | T31 | **Mac check of session 12**: traffic lights level with Back / Forward after launch, resize, switching apps, light/dark change and leaving full screen; a Mac that ran 0.3.0 now shows the guide (if no chat has messages); full-screen viewer enters and leaves macOS full screen cleanly. If the lights still sit at the top, log the button frames from `mac_chrome.rs` (macOS 26 may lay the title bar out differently). | P0 | D36. |
 
+## Session 13 additions (HIG pass)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T32 | **Check the native Mac menu**: ⌃⌘S / ⌥⌘I / ⌘[ / ⌘] / ⌘? / ⌘1–6 work once, without toggling twice; Window menu lists windows; Help has the search field; Find focuses the page search. | P0 | D40. |
+| T33 | **Undo on the Mac**: ⌘Z goes to the system Undo item, so only the Undo note restores a deleted chat. Route Edit › Undo through the app when no text field is focused (custom Undo item instead of the predefined one). | P2 | D39. |
+| T34 | Decide on HIG items 4 (one labelled sidebar) and 5 (system accent). | P3 | D44. |
+| T35 | Settings as its own window on macOS (needs settings/models/updates over the bus). | P3 | D42. |
+
 ## Dependency sketch
 ```
 T1 ──► T2 ──► T3 ──┬─► T4

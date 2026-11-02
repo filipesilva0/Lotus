@@ -45,7 +45,7 @@ export const Repos: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) => {
   const { locked, set } = useLimits(r, p);
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Pick where agents may search. Only short keyword queries leave your PC; nothing else is uploaded.</p>
+      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">Pick where agents may search. Only short keyword queries leave your computer; nothing else is uploaded.</p>
       {(Object.keys(REPO_INFO) as RepoId[]).map((id) => (
         <Card key={id} className="p-3 flex items-start gap-3">
           <div className="flex-1 min-w-0">
@@ -178,7 +178,7 @@ export const Context: React.FC<{ r: ResearchApi; p: Project }> = ({ r, p }) => {
         <p className="text-xs text-[var(--color-text-muted)] mt-1.5 leading-relaxed">Larger windows let the report cite more sources but use more GPU memory. Applies to the next run.</p>
       </div>
       <div className="space-y-3.5">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Largest prompt so far</h4>
+        <h4 className="text-xs font-semibold text-[var(--color-text-muted)]">Largest prompt so far</h4>
         <Meter label="Supervisor (report)" value={p.supervisorCtx} max={p.numCtx} note={supHot ? 'Close to the limit. Lower sources per agent or raise the window.' : undefined} />
         {p.agents.map((a) => <Meter key={a.id} label={a.title} value={a.ctxPeak} max={p.numCtx} />)}
         {!p.agents.length && <p className="text-xs text-[var(--color-text-muted)]">Meters appear once agents start.</p>}

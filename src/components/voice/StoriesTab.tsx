@@ -180,7 +180,7 @@ export const StoriesTab: React.FC<{
     <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-5 p-5 min-w-0">
       {/* Story list */}
       <div className="space-y-2">
-        <Btn variant="secondary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setNaming(true)}>New story</Btn>
+        <Btn variant="secondary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setNaming(true)}>New Story</Btn>
         {naming && (
           <div className="flex gap-1.5">
             <TextInput autoFocus value={newName} placeholder="Story name" onChange={(e) => setNewName(e.target.value)}
@@ -213,7 +213,7 @@ export const StoriesTab: React.FC<{
             <span className="text-xs tabular-nums text-[var(--color-text-muted)] w-20">{fmtDuration(playheadMs / 1000)} / {fmtDuration(totalMs / 1000 - 2)}</span>
             <div className="flex-1" />
             <div className="w-24"><Slider min={30} max={200} step={5} value={pxPerSec} onChange={setPxPerSec} label="Zoom" /></div>
-            <Btn variant="ghost" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLineOpen(!lineOpen)}>Add line</Btn>
+            <Btn variant="ghost" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLineOpen(!lineOpen)}>Add Line</Btn>
             <Btn variant="secondary" loading={exporting} disabled={!items.length} icon={<Download className="w-3.5 h-3.5" />}
               onClick={async () => { setExporting(true); try { downloadBlob(await voicebox.exportStoryAudio(story.id), `${story.name}.wav`); } catch (e) { setErr((e as Error).message); } finally { setExporting(false); } }}>
               Export WAV
@@ -228,7 +228,7 @@ export const StoriesTab: React.FC<{
                 <Select aria-label="Voice for new line" value={lineProfile} onChange={(e) => setLineProfile(e.target.value)} className="!w-48">
                   {data.profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </Select>
-                <Btn variant="primary" loading={lineBusy} disabled={!lineText.trim()} icon={<Sparkles className="w-3.5 h-3.5" />} onClick={addLine}>Generate & add</Btn>
+                <Btn variant="primary" loading={lineBusy} disabled={!lineText.trim()} icon={<Sparkles className="w-3.5 h-3.5" />} onClick={addLine}>Generate & Add</Btn>
               </div>
               <TextArea rows={2} value={lineText} placeholder="What should this voice say?" onChange={(e) => setLineText(e.target.value)} />
             </Card>

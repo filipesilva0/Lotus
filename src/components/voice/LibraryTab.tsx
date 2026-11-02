@@ -95,8 +95,8 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                   <div className="mt-3 pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
                     <AudioPlayer src={open.url} autoPlay />
                     <div className="flex gap-2">
-                      <Btn size="sm" variant="ghost" onClick={() => onSpeakAgain(g.text, g.profile_id)}>Edit & regenerate</Btn>
-                      <Btn size="sm" variant="ghost" onClick={() => onAddToStory(g.id)}>Add to story</Btn>
+                      <Btn size="sm" variant="ghost" onClick={() => onSpeakAgain(g.text, g.profile_id)}>Edit & Regenerate</Btn>
+                      <Btn size="sm" variant="ghost" onClick={() => onAddToStory(g.id)}>Add to Story</Btn>
                     </div>
                   </div>
                 )}
@@ -107,7 +107,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
       )}
 
       {items.length < total && !favOnly && (
-        <div className="flex justify-center"><Btn variant="secondary" loading={loading} onClick={() => load(false, items.length)}>Load more</Btn></div>
+        <div className="flex justify-center"><Btn variant="secondary" loading={loading} onClick={() => load(false, items.length)}>Load More</Btn></div>
       )}
     </div>
   );

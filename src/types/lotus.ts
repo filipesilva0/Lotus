@@ -40,6 +40,9 @@ export interface ChatMessage {
   mode?: { thinking?: boolean; web?: boolean };
   /** The answer the user picked on this reply's options card (session 7). */
   pollAnswer?: string;
+  /** Thumbs up / down on a reply, and the note shown after the click (session 13). */
+  feedback?: 'good' | 'bad';
+  feedbackNote?: string;
 }
 
 export interface ChatSession {

@@ -8,7 +8,7 @@ import { FileRead, FsEntry } from './types';
 import { stripAnsi } from './protocol';
 
 async function call<T>(cmd: string, args: Record<string, unknown>): Promise<T> {
-  if (!isTauri) throw new Error('The App Builder needs the Lotus desktop app (it works with files and programs on your PC).');
+  if (!isTauri) throw new Error('The App Builder needs the Lotus desktop app (it works with files and programs on your computer).');
   try {
     return (await invokeNative<T>(cmd, args)) as T;
   } catch (e) {

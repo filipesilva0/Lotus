@@ -45,7 +45,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
         <div className="px-4 pt-3 pb-2">
           <TextArea aria-label="Task title" rows={2} value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => title.trim() && title !== t.title && patch((x) => ({ ...x, title: title.trim() }))}
             className="!text-[15px] !font-semibold !shadow-none hover:!shadow-[inset_0_0_0_0.5px_var(--sep)] !px-1.5" />
-          {t.source && <p className="mt-1 px-1.5 text-[11px] text-[var(--color-text-muted)]">From routine “{t.source.name}”</p>}
+          {t.source && <p className="mt-1 px-1.5 text-[12px] text-[var(--color-text-muted)]">From routine “{t.source.name}”</p>}
         </div>
 
         <Section title="Agent">
@@ -58,7 +58,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
             {running
               ? <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={() => store.stop(t.id)}>Stop</Btn>
               : t.run?.state === 'failed'
-                ? <Btn variant="primary" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => store.retry(t.id)} disabled={blockers.length > 0}>Try again</Btn>
+                ? <Btn variant="primary" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => store.retry(t.id)} disabled={blockers.length > 0}>Try Again</Btn>
                 : <Btn variant="primary" icon={<Play className="w-3.5 h-3.5" />} onClick={() => store.run(t.id)} disabled={blockers.length > 0 || t.status === 'done'}>{t.result ? 'Run again' : 'Run with Lotus'}</Btn>}
             <Checkbox checked={!!t.web} onChange={(v) => patch((x) => ({ ...x, web: v }))} label="Search the web first" />
           </div>
@@ -154,7 +154,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
           )}
           {!showLog && <p className="text-[12px] text-[var(--color-text-muted)]">Created {new Date(t.created).toLocaleString()} · updated {new Date(t.updated).toLocaleString()}</p>}
         </Section>
-        {t.web && <p className="px-4 pb-4 text-[11px] text-[var(--color-text-muted)] inline-flex items-center gap-1"><Globe className="w-3 h-3" />The task title is sent to your web search provider when Lotus runs it.</p>}
+        {t.web && <p className="px-4 pb-4 text-[12px] text-[var(--color-text-muted)] inline-flex items-center gap-1"><Globe className="w-3 h-3" />The task title is sent to your web search provider when Lotus runs it.</p>}
       </div>
     </InspectorPane>
   );

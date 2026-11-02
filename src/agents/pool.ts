@@ -13,7 +13,7 @@ import { uid } from '../lib/persist';
 
 export type JobKind = 'task' | 'routine' | 'skill' | 'memory' | 'rename' | 'other';
 
-/** Housekeeping jobs that use the Background tasks model (Settings → Model & Inference) when one is set. */
+/** Housekeeping jobs that use the Background tasks model (Settings → Models) when one is set. */
 export const BACKGROUND_KINDS: JobKind[] = ['memory', 'skill', 'rename'];
 
 /** Which model a job runs on: the user's background model for housekeeping, else the scaler's pick. */

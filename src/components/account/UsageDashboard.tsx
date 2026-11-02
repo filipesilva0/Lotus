@@ -20,7 +20,7 @@ const Tile: React.FC<{ icon: React.ReactNode; label: string; value: string; hint
     <span aria-hidden="true" className="absolute left-0 top-2.5 bottom-2.5 w-[3px] rounded-r-[2px]" style={{ background: tint }} />
     <p className="flex items-center gap-1.5 text-[12px] text-[var(--color-text-muted)]"><span style={{ color: tint }}>{icon}</span>{label}</p>
     <p className="mt-0.5 text-[20px] font-semibold tabular-nums tracking-[-0.01em] text-[var(--color-text-main)]">{value}</p>
-    {hint && <p className="text-[11px] text-[var(--color-text-muted)] truncate">{hint}</p>}
+    {hint && <p className="text-[12px] text-[var(--color-text-muted)] truncate">{hint}</p>}
   </div>
 );
 
@@ -144,7 +144,7 @@ const HoursChart: React.FC<{ u: Usage }> = ({ u }) => {
           <div key={h} onMouseEnter={() => setHover(h)} className={cx('h-8 rounded-[4px] transition-transform', hover === h && 'scale-y-110')} style={{ background: fill[step(v)] }} />
         ))}
       </div>
-      <div className="mt-1 grid grid-cols-4 text-[10px] text-[var(--color-text-muted)]">{[0, 6, 12, 18].map((h) => <span key={h}>{h12(h)}</span>)}</div>
+      <div className="mt-1 grid grid-cols-4 text-[12px] text-[var(--color-text-muted)]">{[0, 6, 12, 18].map((h) => <span key={h}>{h12(h)}</span>)}</div>
       {hover !== null && <Tip x={`${((hover + 0.5) / 24) * 100}%`} y={0}><b className="tabular-nums">{u.hours[hover]}</b> message{u.hours[hover] === 1 ? '' : 's'} at {h12(hover)}</Tip>}
       {u.sent > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Busiest hour: <span className="text-[var(--color-text-main)] font-medium">{h12(peak)}</span></p>}
       <table className="sr-only"><caption>Messages by hour</caption><tbody>{u.hours.map((v, h) => <tr key={h}><td>{h12(h)}</td><td>{v}</td></tr>)}</tbody></table>
@@ -183,7 +183,7 @@ export const UsageDashboard: React.FC<{ sessions: ChatSession[] }> = ({ sessions
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline gap-2">
         <h3 className="text-[15px] font-semibold">Your usage</h3>
-        <p className="text-[12px] text-[var(--color-text-muted)]">{since ? `Since ${since} · counted on this PC from saved chats (incognito chats are never counted)` : 'Nothing yet. Start a chat and this fills in.'}</p>
+        <p className="text-[12px] text-[var(--color-text-muted)]">{since ? `Since ${since} · counted on this computer from saved chats (incognito chats are never counted)` : 'Nothing yet. Start a chat and this fills in.'}</p>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <Tile icon={<MessageSquare className="w-3.5 h-3.5" />} label="Chats" value={compact(u.chats)} tint="var(--petal-blue)" />

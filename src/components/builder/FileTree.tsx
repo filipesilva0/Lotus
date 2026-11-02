@@ -80,14 +80,14 @@ export const FileTree: React.FC<{
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="h-9 shrink-0 flex items-center gap-0.5 px-2">
-        <span className="flex-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--color-text-muted)] px-1">Files</span>
+        <span className="flex-1 text-[12px] font-semibold text-[var(--color-text-muted)] px-1">Files</span>
         <IconBtn label="New file" className="!w-6 !h-6" onClick={() => begin({ kind: 'file', target: activePath ?? undefined })}><FilePlus className="w-3.5 h-3.5" /></IconBtn>
         <IconBtn label="New folder" className="!w-6 !h-6" onClick={() => begin({ kind: 'folder' })}><FolderPlus className="w-3.5 h-3.5" /></IconBtn>
         <IconBtn label="Refresh files" className="!w-6 !h-6" onClick={onRefresh}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-2">
         {nodes.length ? <ul role="tree" aria-label="Project files">{nodes.map((n) => row(n, 0))}</ul> : <p className="px-2 py-3 text-[12px] text-[var(--color-text-muted)]">This folder is empty. Ask the agent to build something, or add a file.</p>}
-        {truncated && <p className="px-2 py-2 text-[11px] text-[var(--color-text-muted)]">Only the first files are listed.</p>}
+        {truncated && <p className="px-2 py-2 text-[12px] text-[var(--color-text-muted)]">Only the first files are listed.</p>}
       </div>
 
       <Modal open={!!ask} onClose={() => setAsk(null)} title={ask?.kind === 'file' ? 'New file' : ask?.kind === 'folder' ? 'New folder' : ask?.kind === 'rename' ? 'Rename' : 'Delete'}
