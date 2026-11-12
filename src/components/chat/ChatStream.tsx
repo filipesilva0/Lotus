@@ -8,6 +8,8 @@ import { parseChoices } from '../../chat/choices';
 import { ChoiceCard } from './ChoiceCard';
 import { parseInstall, type InstallTarget } from '../../chat/install';
 import { InstallCard } from './InstallCard';
+import { AgentSteps, UnverifiedNote } from './AgentSteps';
+import type { ChatToolCall } from '../../types/lotus';
 
 interface Props {
   session: ChatSession; isStreaming: boolean; autoScroll: boolean; reasoningMode: 'collapsed' | 'expanded' | 'hidden';
@@ -19,12 +21,15 @@ interface Props {
   onAnswer?: (msgId: string, text: string) => void;
   /** Allow / Deny on a model install the reply proposed. */
   onInstall?: (msgId: string, target: InstallTarget, allow: boolean) => void;
+  /** Allow / Deny on an agent step that needs permission. */
+  onStep?: (msgId: string, step: ChatToolCall, allow: boolean) => void;
 }
 
 const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
   const [open, setOpen] = useState(mode === 'expanded');
   const running = m.isStreaming && !m.content;
-  const tools = m.tools ?? [];
+  // Agent steps are shown on their own, always visible (AgentSteps); the drawer keeps lookups and thinking.
+  const tools = (m.tools ?? []).filter((t) => !t.tool);
   if (mode === 'hidden' || (!m.thinking && !tools.length)) return null;
   const secs = m.thinkingMs ? (m.thinkingMs / 1000).toFixed(1) : null;
   return (
@@ -50,7 +55,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
   );
 };
 
-export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall, onFeedback }) => {
+export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall, onFeedback, onStep }) => {
   const modelName = session.model || 'The model';
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -78,6 +83,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
               </div>
               <div className={cx('min-w-0 max-w-[85%]', user && 'flex flex-col items-end')}>
                 {!user && <ThinkingDrawer m={m} mode={reasoningMode} />}
+                {!user && <AgentSteps steps={(m.tools ?? []).filter((t) => t.tool)} onDecide={m.isStreaming && onStep ? (t, allow) => onStep(m.id, t, allow) : undefined} />}
                 {editing === m.id ? (
                   <div className="w-[min(560px,80vw)] space-y-2">
                     <TextArea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} aria-label="Edit message" />
@@ -98,10 +104,11 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                             <button type="button" onClick={() => void navigator.clipboard.writeText(code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[12px]">Copy</button>
                             <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[12px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Open in Artifacts</button>
                           </>)} />
-                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? `${modelName} is reasoning before it answers…` : `${modelName} is reading your message…`)}</span> : null}
+                      : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.some((t) => t.status === 'waiting') ? 'Waiting for your answer above…' : m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? `${modelName} is reasoning before it answers…` : `${modelName} is reading your message…`)}</span> : null}
                     {inst?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing an install request…</p>}
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
                     {m.interrupted && <p className="mt-1.5 text-[12px] opacity-70">Stopped here.</p>}
+                    {!!m.unverified?.length && !m.isStreaming && <UnverifiedNote items={m.unverified} />}
                   </div>
                 )}
 

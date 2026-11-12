@@ -2,7 +2,7 @@
 // recommended models for each engine in three tiers. Pure data + pure helpers, so it is tested in
 // handover/verification/s10-tests.ts. Picked in November 2026; see DECISIONS D27 for why.
 
-import type { EngineId } from '../services/engineConfig';
+import type { EngineId } from '../services/engineIds';
 
 export type DesktopOs = 'windows' | 'macos' | 'linux';
 export type Arch = 'x86_64' | 'aarch64';

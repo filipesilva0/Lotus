@@ -45,6 +45,7 @@ import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
 import { kv } from './lib/store';
 
+import { DEFAULT_DENY } from './agents/toolDefaults';
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
 /** Help › Lotus Help opens the user guide (the project README) in the browser. */
@@ -92,6 +93,10 @@ const DEFAULT_SETTINGS: LotusSettings = {
   sessionRecall: true,
   backgroundModel: '',
   autoRename: true,
+  agentTools: true,
+  agentApproval: 'risky',
+  agentFolders: [],
+  agentDeny: DEFAULT_DENY,
 };
 
 function load<T>(key: string, fallback: T): T {

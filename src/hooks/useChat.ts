@@ -24,6 +24,7 @@ import { installTarget } from '../setup/jobs';
 import { shouldRename, suggestTitle } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
 import { kv, storeMode } from '../lib/store';
+import { agentAvailable, decideStep, runAgent, type AgentStep } from '../lib/agent';
 
 const SESSIONS_KEY = 'lotus.sessions.v1';
 const ACTIVE_KEY = 'lotus.activeSession.v1';
@@ -250,18 +251,50 @@ export function useChat(settings: LotusSettings) {
         if (Date.now() - lastReport > 1000) { lastReport = Date.now(); reportActivity({ id: 'main-chat', kind: 'chat', label: `${st.tokensPerSec} tok/s` }); }
       };
       const t0 = performance.now();
-      const stream = o.thinking
-        ? thinkingStream(turns, { ...opts, nativeThinking }, {
-          onStage: (id, status, detail) => {
-            const label = STAGES.find((x) => x.id === id)!.label;
-            const k = tools.findIndex((t) => t.label === label);
-            if (k < 0) tool(label, detail); else toolDone(tools[k].id, status === 'running' ? 'done' : status, detail);
-            reportActivity({ id: 'main-chat', kind: 'chat', label });
-          },
-          onThinking: (text) => { thinking = text; patchMsg(sid, aiId, { thinking, thinkingMs: Math.round(performance.now() - t0) }); },
-        }, onStats)
-        : llm.streamChat(turns, opts, onStats);
-      for await (const token of stream) { acc += token; patchMsg(sid, aiId, { content: acc }); }
+
+      // 3a. With the core: the agent, which can use tools (files, tasks, images, memory, web) and
+      // shows each step with its real result. Thinking mode keeps its own multi-pass pipeline.
+      if (s.agentTools !== false && !o.thinking && agentAvailable()) {
+        const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, media: st.media });
+        setRaw({ request: { agent: true, model: o.model, messages: turns.length, web: !!o.web, memory: memOn }, response: null, at: Date.now() });
+        const done = await runAgent({
+          model: o.model, prompt: o.query ?? '', chatId: sid,
+          messages: turns.map((t) => ({ role: t.role as 'system' | 'user' | 'assistant', content: t.content, images: t.images })),
+          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences },
+          memoryOn: memOn, web: !!o.web, folders: session0.folder ? [session0.folder] : [],
+        }, (e) => {
+          if (e.kind === 'token') { acc += e.text; patchMsg(sid, aiId, { content: acc }); }
+          else if (e.kind === 'reset') { acc = acc.slice(0, e.keep); patchMsg(sid, aiId, { content: acc }); }
+          else if (e.kind === 'thinking') {
+            if (!tStart) tStart = performance.now();
+            thinking += e.text; patchMsg(sid, aiId, { thinking, thinkingMs: Math.round(performance.now() - tStart) });
+          } else if (e.kind === 'step') {
+            const k = tools.findIndex((t) => t.id === e.step.id);
+            if (k < 0) tools.push(toCall(e.step)); else tools[k] = toCall(e.step);
+            patchMsg(sid, aiId, { tools: [...tools] });
+            reportActivity({ id: 'main-chat', kind: 'chat', label: e.step.label });
+          } else if (e.kind === 'stats') {
+            onStats({ tokensPerSec: e.tokensPerSec, durationMs: e.durationMs });
+            if (e.promptTokens || e.evalTokens) patchSession(sid, (x) => ({ ...x, usedTokens: (e.promptTokens ?? 0) + (e.evalTokens ?? 0) }));
+          }
+        }, ctrl.signal);
+        if (done.content && done.content !== acc.trim()) { acc = done.content; patchMsg(sid, aiId, { content: acc }); }
+        if (done.unverified.length) patchMsg(sid, aiId, { unverified: done.unverified });
+        setRaw((r) => ({ request: r?.request ?? null, response: { agent: true, mode: done.mode, steps: done.steps, unverified: done.unverified }, at: Date.now() }));
+      } else {
+        const stream = o.thinking
+          ? thinkingStream(turns, { ...opts, nativeThinking }, {
+            onStage: (id, status, detail) => {
+              const label = STAGES.find((x) => x.id === id)!.label;
+              const k = tools.findIndex((t) => t.label === label);
+              if (k < 0) tool(label, detail); else toolDone(tools[k].id, status === 'running' ? 'done' : status, detail);
+              reportActivity({ id: 'main-chat', kind: 'chat', label });
+            },
+            onThinking: (text) => { thinking = text; patchMsg(sid, aiId, { thinking, thinkingMs: Math.round(performance.now() - t0) }); },
+          }, onStats)
+          : llm.streamChat(turns, opts, onStats);
+        for await (const token of stream) { acc += token; patchMsg(sid, aiId, { content: acc }); }
+      }
     } catch (e) {
       if (!ctrl.signal.aborted) {
         const msg = (e as Error).message;
@@ -394,6 +427,14 @@ export function useChat(settings: LotusSettings) {
     catch (e) { patchMsg(sid, msgId, { install: { status: 'failed', error: (e as Error).message } }); }
   }, [activeId, patchMsg]);
 
+  /** Allow or Deny on an agent step that asked for permission. */
+  const decideAgentStep = useCallback((msgId: string, step: ChatToolCall, allow: boolean) => {
+    if (!step.runId) return;
+    const sid = ref.current.find((x) => x.messages.some((m) => m.id === msgId))?.id ?? activeId;
+    patchMsg(sid, msgId, (m) => ({ tools: m.tools?.map((t) => (t.id === step.id ? { ...t, status: allow ? 'running' : 'denied', ask: undefined, detail: allow ? undefined : 'You said no' } : t)) }));
+    void decideStep(step.runId, step.id, allow).catch(() => undefined);
+  }, [activeId, patchMsg]);
+
   const switchTo = useCallback((msgId: string, dir: -1 | 1) => {
     if (abort.current) abort.current.abort();
     patchSession(activeId, (x) => { const i = x.messages.findIndex((m) => m.id === msgId); return i < 0 ? x : { ...x, messages: switchBranch(x.messages, i, dir) }; });
@@ -467,7 +508,7 @@ export function useChat(settings: LotusSettings) {
 
   return {
     sessions, active, activeId: active?.id ?? '', setActiveId, folders, setFolders, memory, setMemory, isStreaming, raw,
-    send, answerPoll, decideInstall, stop, regenerate, editMessage, switchTo, rateMemory, rateReply, newChat, deleteChat, clearChat, importMessages,
+    send, answerPoll, decideInstall, decideAgentStep, stop, regenerate, editMessage, switchTo, rateMemory, rateReply, newChat, deleteChat, clearChat, importMessages,
     patchSession, addContext, patchContext, estimateTokens, toggleMemory, setProjectContext,
   };
 }

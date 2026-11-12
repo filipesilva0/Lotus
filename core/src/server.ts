@@ -10,16 +10,17 @@
 //   GET    /v1/media/<path>              the file (token may be passed as ?t= for <img>/<audio>)
 //   DELETE /v1/media/<path>
 //   GET    /v1/media-list?kind=image
-//   POST   /v1/rpc/<method>              JSON args → JSON result (memory today; agent tools next)
-//   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin }
+//   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
+//   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin } · { type: 'agent', runId, kind, … } · { type: 'memory' }
 
 import type { Server, ServerWebSocket } from 'bun';
 import { Db, schemaVersion, SCHEMA_VERSION } from './db';
 import { KvChange, kvAll, kvApply, kvMigrate } from './kv';
 import * as mem from './memory';
 import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, resolveMedia, saveMedia } from './media';
+import { AgentService, type StartArgs } from './agent/service';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 export interface CoreOptions {
   db: Db;
@@ -29,6 +30,8 @@ export interface CoreOptions {
   /** Extra browser origins allowed to call the API (tests, dev server). */
   origins?: string[];
   log?: (msg: string) => void;
+  /** Engine and web access for the agent (tests pass a fake). */
+  fetch?: typeof fetch;
 }
 
 const DEFAULT_ORIGINS = ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost', 'http://127.0.0.1:3000', 'http://localhost:3000'];
@@ -64,7 +67,22 @@ function sameToken(a: string, b: string): boolean {
   return d === 0;
 }
 
-export function startServer(o: CoreOptions): Server<{ id: number }> {
+/** Agent methods: they need the running service (events, approvals), not just the database. */
+function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json): { found: boolean; value?: unknown } {
+  switch (method) {
+    case 'agent_start': return { found: true, value: agent.start(a as unknown as StartArgs) };
+    case 'agent_decide': return { found: true, value: agent.decide(str(a.runId), str(a.stepId), a.allow === true) };
+    case 'agent_stop': return { found: true, value: agent.stop(str(a.runId)) };
+    case 'agent_tools': return { found: true, value: { tools: agent.describeTools(), folders: agent.folders(Array.isArray(a.folders) ? a.folders.map(String) : []), studio: o.studio } };
+    case 'agent_run': return { found: true, value: agent.run(str(a.runId)) };
+    case 'agent_runs': return { found: true, value: agent.list(num(a.limit, 50)) };
+    default: return { found: false };
+  }
+}
+
+export type CoreServer = Server<{ id: number }> & { agent: AgentService };
+
+export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
   const origins = new Set([...DEFAULT_ORIGINS, ...(o.origins ?? [])]);
   const sockets = new Set<ServerWebSocket<{ id: number }>>();
@@ -89,6 +107,7 @@ export function startServer(o: CoreOptions): Server<{ id: number }> {
     const msg = JSON.stringify(event);
     for (const s of sockets) { try { s.send(msg); } catch { /* closed */ } }
   };
+  const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log });
 
   const server = Bun.serve<{ id: number }, never>({
     hostname: '127.0.0.1',
@@ -154,10 +173,15 @@ export function startServer(o: CoreOptions): Server<{ id: number }> {
         if (url.pathname.startsWith('/v1/rpc/') && req.method === 'POST') {
           const method = url.pathname.slice('/v1/rpc/'.length);
           const fn = Object.prototype.hasOwnProperty.call(RPC, method) ? RPC[method] : undefined;
-          if (!fn) return fail(req, 404, `The core has no method called ${method}.`);
           const text = await req.text();
-          const args = (text ? JSON.parse(text) : {}) as Json;
-          return json(req, { result: (await fn(o.db, args && typeof args === 'object' ? args : {})) ?? null });
+          const raw = (text ? JSON.parse(text) : {}) as Json;
+          const args = raw && typeof raw === 'object' ? raw : {};
+          if (!fn) {
+            const r = agentRpc(agent, o, method, args);
+            if (!r.found) return fail(req, 404, `The core has no method called ${method}.`);
+            return json(req, { result: r.value ?? null });
+          }
+          return json(req, { result: (await fn(o.db, args)) ?? null });
         }
         return fail(req, 404, 'Not found.');
       } catch (e) {
@@ -172,5 +196,5 @@ export function startServer(o: CoreOptions): Server<{ id: number }> {
       message() { /* clients only listen */ },
     },
   });
-  return server;
+  return Object.assign(server, { agent });
 }

@@ -2,12 +2,19 @@
 export type ViewMode = 'chat' | 'images' | 'voice' | 'builder' | 'tasks' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
-export interface ChatToolCall { id: string; label: string; status: 'running' | 'done' | 'error'; detail?: string }
+export interface ChatToolCall {
+  id: string; label: string; status: 'running' | 'done' | 'error' | 'waiting' | 'denied'; detail?: string;
+  /** Agent steps (session 15): the tool's name, the run it belongs to, what it is about to do (while waiting
+   *  for Allow / Deny) and the images or audio it saved (Lotus Studio paths). Older lookup steps have none. */
+  tool?: string; runId?: string; ask?: string; media?: string[];
+}
 export interface ChatMemoryEvent { kind: 'memory' | 'instruction'; text: string; itemId: string; status: 'saved' | 'confirmed' | 'forgotten' }
 export interface ChatFileRef { name: string; kind: 'image' | 'text'; url?: string }
 
 export interface ChatMessage {
   id: string;
+  /** Things the reply says Lotus did that no step did ("no step, no claim", session 15). */
+  unverified?: string[];
   /** Reasoning tokens from thinking models, and how long the model thought. */
   thinking?: string;
   thinkingMs?: number;
@@ -156,6 +163,15 @@ export interface LotusSettings {
   backgroundModel: string;
   /** Give new chats a short title after the first reply (uses the background model). */
   autoRename: boolean;
+  // ── Tools (session 15: the agent in the core) ──
+  /** Let chat models use tools (files, tasks, images, memory, web). Off = plain replies as before. */
+  agentTools: boolean;
+  /** ask = every tool call waits for Allow; risky = only changes to your files (default); auto = never asks. */
+  agentApproval: 'ask' | 'risky' | 'auto';
+  /** Folders the file tools may use, besides the Lotus Studio folder and a chat's own folder. */
+  agentFolders: string[];
+  /** Tool calls that are always refused, one rule per line (tool, tool.*, or tool:pattern). */
+  agentDeny: string[];
 }
 
 export interface GeneratedImage {

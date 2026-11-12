@@ -1,10 +1,10 @@
 # CLAUDE.md: Lotus
 
-Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: prototype in a rebuild (project doc `claude/rebuild-plan.md`). CI builds and releases Windows/macOS/Linux, and 0.5.0 runs on the user's Windows PC. Step 1 (lotusd core + storage) landed in session 14; step 2 (agent + tools) is next.**
+Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: prototype in a rebuild (project doc `claude/rebuild-plan.md`). CI builds and releases Windows/macOS/Linux, and 0.5.0 runs on the user's Windows PC. Step 1 (lotusd core + storage) landed in session 14; step 2 (agent + tools) in session 15; step 3 (built-in engines + new first run) is next.**
 
 ## Read first (in this order)
 1. `CURRENT_STATE.md` — what is verified, known bugs (B1…B17), CI history. **Start here.**
-2. `TASKS.md` — prioritized work; since session 14 the next tasks are **T36** (verify the core on Windows/macOS) and **T37** (rebuild step 2).
+2. `TASKS.md` — prioritized work; since session 15 the next tasks are **T36** (the full app on Windows/macOS), **T46** (re-run real tasks, with ComfyUI on), **T42/T43** (tables, other callers onto the agent), then rebuild step 3.
 3. `ARCHITECTURE.md` — structure, windows/events, integrations, version-alignment.
 4. `DECISIONS.md` — what was decided, what was rejected, what is still an unverified assumption.
 5. `PROJECT_BRIEF.md` — purpose, workflows, requirements. `README.md` is the user-facing doc.
@@ -35,20 +35,29 @@ node handover/screenshots/shoot-s10.mjs           # session 10: every first-run 
 node handover/screenshots/shoot-s11.mjs           # session 11: remote engines in the guide and Engines → Change (browser mode, faked engines)
 node handover/screenshots/shoot-s13.mjs           # session 13: menus, Undo note, Settings panes, Tasks, Voice, Engines (light + dark); prints Find/Undo/Esc checks
 node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install card (ask, running, done) with a fake Ollama
-cd core && bun install && bun test       # 19 core tests (session 14): memory, kv, import, media, API security, watchdog
+cd core && bun install && bun test       # 55 core tests: 19 session 14 (memory, kv, import, media, API security, watchdog) + 36 session 15 (agent, tools)
+node handover/verification/agent-e2e.mjs  # 19 checks (session 15): Chat → agent → tools in Chromium against a real core and fake engines; screenshots /tmp/shots/s15-*
+node handover/verification/real-tasks.mjs --model <ollama model>   # 31 real tasks against a REAL model (needs Ollama; `--list`, `--only 1,2`, `--comfy URL`, `--lotusd path`); results in handover/real-tasks/
 cd core && bun scripts/build.ts           # compile lotusd → src-tauri/binaries/lotusd-<triple> (needed before any cargo build/check)
 node handover/verification/core-e2e.mjs   # 16 checks: the built app against a REAL lotusd in Chromium (LOTUSD_BIN=… for the compiled one)
 cd src-tauri && cargo test --lib          # 13 Rust tests: hook installer, approve/deny server, GPU parsers 2, context files 1, folder reader 1, session 10 setup 3, installer allow-list 1, mac traffic lights, lotusd token + ready line 2
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today (session 14):** core 19/19; core-e2e 16/16; 13 Rust tests; base TS tests 58/63 (5 stale research-render expectations, T41); the rest as below. **Before session 14:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
+**Expected today (session 15):** core 55/55; agent-e2e 19/19; core-e2e 16/16; 13 Rust tests; base TS tests 63/63; the rest as below. Real tasks (user's PC): qwen3-abliterated 8B 30/31, llama3.2 3B 22/31. **Before session 14:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 15 map (agent + tools)
+- Map: `ARCHITECTURE.md` §5h. **Every new model capability is a tool** in `core/src/tools/` registered in `agent/service.ts ALL_TOOLS`, with a `risk`, a plain `label`, a `describe()` for approval cards, a test in `core/test/agent.test.ts`, and real tasks in `real-tasks.mjs`. Tools return `{ ok, text, summary }` with the real result; never report success without doing the thing.
+- "No step, no claim": a new kind of action needs a claim pattern in `agent/claims.ts` (`CLAIM_TOOLS`).
+- Core code may import pure modules from `src/` (no DOM, Tauri or `kv`); keep it that way, the core type-checks without DOM types.
+- The core writes `kv` keys the UI also writes (`lotus.tasks.v1`, `lotus.gallery.v2`) through `ctx.kvSet` (broadcast); UI stores must listen for `storage` events on keys the core writes.
+- A feature is done when its real tasks pass on the user's PC (rebuild plan §5), not only against the fakes.
 
 ## Session 14 map (lotusd core + storage)
 - Map: `ARCHITECTURE.md` §5g. Data lives in the core: **never use `localStorage`/IndexedDB directly**; use `kv` from `lib/store.ts` (same API) and `saveMedia/loadMedia` from `lib/core.ts` for images and audio. Core calls go through `rpc()`/`coreFetch()`.

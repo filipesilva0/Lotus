@@ -61,6 +61,7 @@ Each petal of the logo is a page, and each page wears its petal's colour.
 
 Streaming conversations with any model in Ollama, with images, files and whole folders as context.
 
+- **Tools.** Ask in plain words and Lotus does it: list, read and save files in folders you allow, add and move tasks on your board, make an image with your ComfyUI model, remember things, search the web. Each step shows in the reply with its real result, saving files asks you first, and a reply that says it did something no step did is marked as such. Choose what needs asking in Settings → Tools.
 - **Think** works through a problem in passes: analyse, draft, check.
 - **Web** searches the live web and reads the top pages, only when you turn it on.
 - **Deep Research** turns a question into an editable plan, sends parallel agents through public academic databases, and writes a report where every citation links to a source it actually read.
@@ -153,7 +154,7 @@ Lotus talks to each engine over your own machine's loopback address. Your prompt
 
 Install only the engines you want. A page whose engine isn't running tells you so and offers to start it. Lotus never pretends.
 
-Behind the window runs **lotusd**, Lotus's background core. It keeps your chats, settings, tasks, memory and skills in one database file (`lotus.db` in the Lotus data folder) and saves generated images as ordinary files in `Lotus Studio/Images`, so they survive restarts and you can open them yourself. It starts and stops with Lotus and only listens on your own computer.
+Behind the window runs **lotusd**, Lotus's background core. It keeps your chats, settings, tasks, memory and skills in one database file (`lotus.db` in the Lotus data folder) and saves generated images as ordinary files in `Lotus Studio/Images`, so they survive restarts and you can open them yourself. It also runs the agent: the model's tool calls go through it, so a task added from Chat lands on the Tasks board and an image made from Chat appears on the Images page. It starts and stops with Lotus and only listens on your own computer.
 
 <div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 

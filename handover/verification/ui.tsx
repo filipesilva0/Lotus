@@ -30,15 +30,15 @@ const props = { models: ['llama3.2:3b'], ollamaUp: true as boolean | null, onOpe
 // Scoping stages
 let h = html(<ScopingView r={r} p={base} {...props} />); ok('scoping: ask stage has question box + Start scoping', /Research question/.test(h) && /Start scoping/.test(h));
 h = html(<ScopingView r={r} p={{ ...base, clarifications: withPlan.clarifications }} {...props} />); ok('scoping: clarify stage shows questions + Build plan', /Which years\?/.test(h) && /Build the research plan/.test(h));
-h = html(<ScopingView r={r} p={withPlan} {...props} />); ok('scoping: plan stage has editable plan, personas, approve bar naming repositories', /Approve &amp; start research/.test(h) && /Skeptic/.test(h) && /arXiv, PubMed, OpenAlex/.test(h) && /Add sub-question/.test(h) && /Add sub-topic/.test(h));
-h = html(<ScopingView r={r} p={running} {...props} />); ok('scoping: read-only once a run exists', /Edit the plan and run again/.test(h));
-h = html(<ScopingView r={r} p={withPlan} {...props} ollamaUp={false} />); ok('scoping: warns when Ollama is down', /Ollama isn't running/.test(h));
+h = html(<ScopingView r={r} p={withPlan} {...props} />); ok('scoping: plan stage has editable plan, personas, approve bar naming repositories', /Approve &amp; start research/i.test(h) && /Skeptic/.test(h) && /arXiv, PubMed, OpenAlex/.test(h) && /Add sub-question/i.test(h) && /Add sub-topic/i.test(h));
+h = html(<ScopingView r={r} p={running} {...props} />); ok('scoping: read-only once a run exists', /Edit the plan and run again/i.test(h));
+h = html(<ScopingView r={r} p={withPlan} {...props} ollamaUp={false} />); ok('scoping: warns when Ollama is down', /Ollama is offline\. Deep research uses your local model/.test(h));
 // Live
 h = html(<LiveView r={r} p={running} onOpenEngines={noop} />); ok('live: status tiles, agents, steering, terminal', /Active sub-agents/.test(h) && /1 \/ 2/.test(h) && /Sources read/.test(h) && /Tokens processed/.test(h) && /Estimated completion/.test(h) && /Steering/.test(h) && /Live query terminal/.test(h));
 ok('live: terminal shows HTTP codes (200 and failing 503)', /200/.test(h) && /503/.test(h) && /sparse attention/.test(h));
 ok('live: injected instruction + excluded chips shown', /focus on toxicity/.test(h));
 h = html(<LiveView r={r} p={done} onOpenEngines={noop} />); ok('done: opens on Report with citation chips and reference ids', /Sparse attention helps/.test(h) && /aria-label="Citation 1"/.test(h) && /id="ref-1"/.test(h) && /<h1/.test(h) && /<h2/.test(h) && /Abstracts only|abstracts only/i.test(h));
-h = html(<LiveView r={r} p={stopped} onOpenEngines={noop} />); ok('stopped: error banner offers "write report from what was found"', /Can't reach Ollama/.test(h) && /Write report from what was found/.test(h));
+h = html(<LiveView r={r} p={stopped} onOpenEngines={noop} />); ok('stopped: error banner offers "write report from what was found"', /Can't reach Ollama/.test(h) && /Write report from what was found/i.test(h));
 // Markdown
 h = html(<ReportMarkdown text={done.report} onCite={noop} />); ok('markdown: lists, bold, code, [2, 3] split into two chips', /<ul/.test(h) && /<strong>bold<\/strong>/.test(h) && /<code/.test(h) && /Citation 2/.test(h) && /Citation 3/.test(h) && /<ol/.test(h));
 // Inspector tabs
@@ -59,7 +59,7 @@ ok('research in chat: interrupted run is restored as Stopped', /Stopped/.test(h)
 ok('research in chat: back to chat, Scoping / Live switch', /Back to the chat/.test(h) && /Scoping/.test(h) && /Live/.test(h));
 h = html(<ChatSidebar sessions={[]} activeId="" folders={[]} onFolders={noop} onSelect={noop} onNew={noop} onDelete={noop} onPatch={noop}
   research={{ projects: [running, done], openId: 'p1', onOpen: noop, onNew: noop, onDelete: noop }} />);
-ok('chat sidebar: Deep research section lists tasks', /Deep research/.test(h) && /Sparse transformers/.test(h) && /New deep research task/.test(h));
+ok('chat sidebar: Deep research section lists tasks', /Deep research/i.test(h) && /Sparse transformers/.test(h) && /New deep research task/.test(h));
 h = html(<ChatSidebar sessions={[]} activeId="" folders={[]} onFolders={noop} onSelect={noop} onNew={noop} onDelete={noop} onPatch={noop}
   research={{ projects: [], openId: null, onOpen: noop, onNew: noop, onDelete: noop }} />);
 ok('chat sidebar: empty research section explains the Research toggle', /Turn on Research in the chat bar/.test(h));

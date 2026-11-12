@@ -171,7 +171,8 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
             onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory} onFeedback={chat.rateReply}
             onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }}
             onAnswer={(id, text) => void chat.answerPoll(id, text)}
-            onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)} />
+            onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)}
+            onStep={(id, step, allow) => chat.decideAgentStep(id, step, allow)} />
         )}
         {offline && <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}

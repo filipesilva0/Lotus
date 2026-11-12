@@ -1,0 +1,148 @@
+// Fake engines for tests: an Ollama that answers /api/chat from a script (streamed as NDJSON, with
+// tool calls like a real tool-capable model) and a ComfyUI that "renders" a tiny PNG.
+// Also used by handover/verification/agent-e2e.mjs (through `bun test/fakes.ts --serve`).
+
+import type { WireMsg } from '../src/agent/llm';
+
+export interface FakeTurn { content?: string; calls?: { name: string; args: Record<string, unknown> }[]; thinking?: string; error?: string; status?: number }
+export type Responder = (messages: WireMsg[], body: { tools?: unknown[]; model: string }) => FakeTurn;
+
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+/** Lets the web app in a plain browser (agent-e2e.mjs) call the fakes directly. */
+function withCors(f: (req: Request) => Response | Promise<Response>) {
+  return async (req: Request) => {
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    const r = await f(req);
+    const h = new Headers(r.headers);
+    for (const [k, v] of Object.entries(CORS)) h.set(k, v);
+    return new Response(r.body, { status: r.status, headers: h });
+  };
+}
+
+export interface FakeOllama { url: string; requests: { messages: WireMsg[]; tools?: unknown[]; model: string }[]; stop: () => void }
+
+export function fakeOllama(respond: Responder | FakeTurn[], o: { capabilities?: string[]; rejectTools?: boolean } = {}): FakeOllama {
+  const requests: FakeOllama['requests'] = [];
+  let i = 0;
+  const next: Responder = Array.isArray(respond) ? () => respond[Math.min(i, respond.length - 1)] : respond;
+  const server = Bun.serve({
+    port: 0, hostname: '127.0.0.1',
+    fetch: withCors(async (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === '/api/version') return Response.json({ version: '0.12.0' });
+      if (url.pathname === '/api/ps') return Response.json({ models: [] });
+      if (url.pathname === '/api/show') return Response.json({ capabilities: o.capabilities ?? ['completion', 'tools'] });
+      if (url.pathname === '/api/tags') return Response.json({ models: [{ name: 'fake:latest', model: 'fake:latest', size: 5e9, details: { parameter_size: '8B', family: 'qwen3', quantization_level: 'Q4_K_M' } }] });
+      if (url.pathname !== '/api/chat') return new Response('not found', { status: 404 });
+      const body = (await req.json()) as { messages: WireMsg[]; tools?: unknown[]; model: string };
+      if (o.rejectTools && body.tools?.length) return Response.json({ error: `registry.ollama.ai/library/${body.model} does not support tools` }, { status: 400 });
+      requests.push({ messages: body.messages, tools: body.tools, model: body.model });
+      const turn = next(body.messages, body);
+      i++;
+      if (turn.status) return Response.json({ error: turn.error ?? 'boom' }, { status: turn.status });
+      const lines: string[] = [];
+      if (turn.thinking) lines.push(JSON.stringify({ message: { role: 'assistant', content: '', thinking: turn.thinking }, done: false }));
+      // Split the content in a few chunks, like a real stream (and across tag boundaries).
+      const text = turn.content ?? '';
+      for (let k = 0; k < text.length; k += 7) lines.push(JSON.stringify({ message: { role: 'assistant', content: text.slice(k, k + 7) }, done: false }));
+      if (turn.calls?.length) lines.push(JSON.stringify({ message: { role: 'assistant', content: '', tool_calls: turn.calls.map((c) => ({ function: { name: c.name, arguments: c.args } })) }, done: false }));
+      lines.push(JSON.stringify({ message: { role: 'assistant', content: '' }, done: true, prompt_eval_count: 50, eval_count: 20, eval_duration: 1e9 }));
+      return new Response(lines.join('\n') + '\n', { headers: { 'content-type': 'application/x-ndjson' } });
+    }),
+  });
+  return { url: `http://127.0.0.1:${server.port}`, requests, stop: () => server.stop(true) };
+}
+
+/** The last message of a role. */
+export const last = (ms: WireMsg[], role: WireMsg['role']) => [...ms].reverse().find((m) => m.role === role);
+
+import { deflateSync } from 'node:zlib';
+
+/** A small picture (snowy gradient with an orange disc) so screenshots show something. */
+export function makePng(w = 320, h = 240): Uint8Array {
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc = (b: Uint8Array) => { let c = 0xffffffff; for (const x of b) c = crcTable[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type: string, data: Uint8Array) => {
+    const out = new Uint8Array(12 + data.length); const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length); out.set(new TextEncoder().encode(type), 4); out.set(data, 8);
+    dv.setUint32(8 + data.length, crc(out.subarray(4, 8 + data.length))); return out;
+  };
+  const raw = new Uint8Array((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    raw[y * (w * 3 + 1)] = 0;
+    for (let x = 0; x < w; x++) {
+      const i = y * (w * 3 + 1) + 1 + x * 3;
+      const d = Math.hypot(x - w * 0.55, y - h * 0.55);
+      const sky = [200 + (y / h) * 40, 215 + (y / h) * 30, 235];
+      const fox = d < h * 0.22 ? [214, 110, 40] : sky;
+      raw[i] = fox[0]; raw[i + 1] = fox[1]; raw[i + 2] = fox[2];
+    }
+  }
+  const ihdr = new Uint8Array(13); const dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, w); dv.setUint32(4, h); ihdr[8] = 8; ihdr[9] = 2;
+  const parts = [Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', new Uint8Array())];
+  const all = new Uint8Array(parts.reduce((a, p) => a + p.length, 0)); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; }
+  return all;
+}
+
+// 1×1 PNG
+export const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+
+export function fakeComfy(o: { models?: string[]; fail?: string; big?: boolean } = {}): { url: string; prompts: unknown[]; stop: () => void } {
+  const prompts: unknown[] = [];
+  let polls = 0;
+  const server = Bun.serve({
+    port: 0, hostname: '127.0.0.1',
+    fetch: withCors(async (req) => {
+      const url = new URL(req.url);
+      if (url.pathname === '/system_stats') return Response.json({ system: { comfyui_version: 'fake' }, devices: [] });
+      if (url.pathname === '/object_info/CheckpointLoaderSimple') return Response.json({ CheckpointLoaderSimple: { input: { required: { ckpt_name: [o.models ?? ['sdxl-fake.safetensors']] } } } });
+      if (url.pathname === '/object_info/UNETLoader') return Response.json({ UNETLoader: { input: { required: { unet_name: [[]] } } } });
+      if (url.pathname === '/prompt') { prompts.push(await req.json()); polls = 0; return Response.json({ prompt_id: 'p1' }); }
+      if (url.pathname === '/history/p1') {
+        if (polls++ < 1) return Response.json({});
+        if (o.fail) return Response.json({ p1: { status: { status_str: 'error', messages: [['execution_error', { exception_message: o.fail }]] }, outputs: {} } });
+        return Response.json({ p1: { status: { status_str: 'success' }, outputs: { 9: { images: [{ filename: 'lotus_0001.png', subfolder: '', type: 'output' }] } } } });
+      }
+      if (url.pathname === '/view') return new Response(o.big ? makePng() : PNG, { headers: { 'content-type': 'image/png' } });
+      if (url.pathname === '/interrupt') return Response.json({});
+      return new Response('not found', { status: 404 });
+    }),
+  });
+  return { url: `http://127.0.0.1:${server.port}`, prompts, stop: () => server.stop(true) };
+}
+
+// ── `bun test/fakes.ts --serve`: a rule-following fake model for the UI end-to-end run ──────────
+
+const quoted = (t: string) => /[“"']([^”"']{2,80})[”"']/.exec(t)?.[1];
+
+/** Behaves like a decent tool-calling model for a few phrasings (agent-e2e.mjs). */
+export const helpful: Responder = (ms) => {
+  const tool = last(ms, 'tool') as { content: string; tool_name: string } | undefined;
+  const user = String(last(ms, 'user')?.content ?? '');
+  const lastIsTool = ms[ms.length - 1]?.role === 'tool';
+  if (lastIsTool && tool) {
+    if (/denied/i.test(tool.content)) return { content: "Okay, I didn't save it." };
+    if (tool.tool_name === 'task_add') return { content: `Done. ${tool.content.replace(/^Added task \S+ /, 'I added ')}` };
+    if (tool.tool_name === 'image_generate') return { content: /^Error/.test(tool.content) ? `I couldn't make the image: ${tool.content.slice(7)}` : 'Here is your image. It is also on the Images page.' };
+    if (tool.tool_name === 'files_write') return { content: `Saved. ${tool.content}` };
+    if (tool.tool_name === 'files_list') return { content: `Here is what is in the folder:\n\n\`\`\`\n${tool.content.slice(0, 400)}\n\`\`\`` };
+    return { content: tool.content.slice(0, 300) };
+  }
+  if (/\b(task|to-?do|remind)/i.test(user)) return { calls: [{ name: 'task_add', args: { title: quoted(user) ?? 'Buy oat milk', due: /friday/i.test(user) ? '2026-11-13' : undefined } }] };
+  if (/\b(image|picture|draw|photo)/i.test(user)) return { calls: [{ name: 'image_generate', args: { prompt: 'a red fox sitting in fresh snow, soft morning light, detailed fur', aspect: '4:3' } }] };
+  if (/\b(save|note|write)/i.test(user)) return { calls: [{ name: 'files_write', args: { path: 'shopping-list.md', content: '# Shopping\n- oat milk\n- bread\n' } }] };
+  if (/\b(folder|files)\b/i.test(user)) return { calls: [{ name: 'files_list', args: {} }] };
+  return { content: 'Hello! How can I help?' };
+};
+
+/** Always claims, never acts. */
+export const liar: Responder = () => ({ content: "I've added “Renew passport” to your task board." });
+
+if (import.meta.main && process.argv.includes('--serve')) {
+  const a = fakeOllama(helpful);
+  const b = fakeOllama(liar);
+  const c = fakeComfy({ models: ['sdxl-fake.safetensors'], big: true });
+  console.log(`FAKES ${JSON.stringify({ ollama: a.url, liar: b.url, comfy: c.url })}`);
+  setTimeout(() => process.exit(0), Number(process.env.FAKES_TTL ?? 240) * 1000);
+}

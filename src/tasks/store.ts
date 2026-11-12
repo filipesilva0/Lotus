@@ -58,6 +58,17 @@ function set(p: Partial<State>) {
   if (p.tasks) queueMicrotask(autoRun);
 }
 
+// The agent (in the core) adds and moves tasks too: its saves arrive as storage events. Take them
+// without writing them back.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== TASKS_KEY) return;
+    state = { ...state, tasks: read<Task>(TASKS_KEY) };
+    subs.forEach((f) => f());
+    queueMicrotask(autoRun);
+  });
+}
+
 const patchTask = (id: string, fn: (t: Task) => Task) => set({ tasks: state.tasks.map((t) => (t.id === id ? { ...fn(t), updated: Date.now() } : t)) });
 const logTask = (id: string, text: string, kind: Task['log'][number]['kind'] = 'agent') => patchTask(id, (t) => ({ ...t, log: [...t.log, { at: Date.now(), text, kind }].slice(-60) }));
 const patchRoutine = (id: string, fn: (r: Routine) => Routine) => set({ routines: state.routines.map((r) => (r.id === id ? fn(r) : r)) });

@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Sun,
   Moon,
+  Wrench,
 } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
@@ -38,6 +39,7 @@ import { ollamaClient } from '../../services/ollamaService';
 import { UpdatesPanel } from './UpdatesPanel';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAgentSettings';
 import type { Updates } from '../../hooks/useUpdates';
+import { ToolsPanel } from './ToolsSettings';
 import { kv } from '../../lib/store';
 
 interface SettingsModalProps {
@@ -57,6 +59,7 @@ export type SettingsTab =
   | 'inference'
   | 'engine'
   | 'memory'
+  | 'tools'
   | 'chat'
   | 'voice'
   | 'island'
@@ -115,6 +118,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'engine', label: 'Engines', icon: Server },
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'memory', label: 'Memory', icon: Sparkles },
+    { id: 'tools', label: 'Tools', icon: Wrench },
     { id: 'voice', label: 'Voice', icon: Volume2 },
     { id: 'island', label: 'Island', icon: Cpu },
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -413,6 +417,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'engine' && <EngineScalingPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
             {activeTab === 'memory' && <MemorySkillsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+            {activeTab === 'tools' && <ToolsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
             {/* 4. Voice & Speech (Kokoro & Whisper) */}
             {activeTab === 'appearance' && (

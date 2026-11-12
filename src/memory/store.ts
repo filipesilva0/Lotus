@@ -5,7 +5,7 @@
 // One shared instance; React components subscribe with `useMemoryStore()`.
 
 import { useSyncExternalStore } from 'react';
-import { rpc } from '../lib/core';
+import { onCoreEvent, rpc } from '../lib/core';
 import { kv, storeMode } from '../lib/store';
 import { MemoryItem } from '../types/lotus';
 
@@ -180,6 +180,10 @@ const refreshStatus = () => { void be().status().then((status) => set({ status }
 
 export const memoryStore = {
   get: () => state,
+  /** Re-reads memories (the agent saved one in the core). */
+  async reload() {
+    try { set({ memories: await be().listMemories() }); refreshStatus(); } catch { /* keep what we have */ }
+  },
   subscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
 
   // memory items
@@ -232,3 +236,6 @@ export const memoryStore = {
 export function useMemoryStore(): State {
   return useSyncExternalStore(memoryStore.subscribe, memoryStore.get, memoryStore.get);
 }
+
+// The agent's memory.save happens in the core; it says so on the event socket.
+onCoreEvent((e) => { if (e.type === 'memory') void memoryStore.reload(); });

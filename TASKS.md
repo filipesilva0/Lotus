@@ -88,11 +88,11 @@ Give the user a short manual checklist and collect results:
 | # | Task | Priority | Notes |
 |---|---|---|---|
 | T36 | **Run a release build on Windows**: the MSI installs `lotusd.exe` beside Lotus, the core starts (no console window), old chats/settings/memory appear after the import, Images page images are in Documents\Lotus Studio\Images, quitting from the tray stops `lotusd.exe`, and an update installs while it was running. Same on macOS (signed universal sidecar). | P0 | D45–D48. Only Linux was run. |
-| T37 | Rebuild step 2: agent loop + tool registry in the core (chat, tasks, images as tools; approval modes; real-task test set). Chats and tasks become tables. | P0 | Rebuild plan. |
+| T37 | ✔ **Session 15 (partly):** agent loop + tool registry in the core, Chat on it, files/tasks/image/memory/web tools, approval modes, deny rules, claim check, real-task runner. Left: chats and tasks as tables (T42), other callers (T43). | P0 | ARCHITECTURE §5h, D52–D58. |
 | T38 | Chat attachments (images, files) as media files instead of session-only (B9). | P2 | `saveMedia` is ready. |
 | T39 | Decide whether the core may outlive the app (start at login, tray in the core) for routines and messaging. | P2 | D48. |
 | T40 | Sidecar size (~110 MB): try `--bytecode`, UPX is not an option on macOS; or port the core to Rust later. | P3 | D46. |
-| T41 | Fix the 5 research render expectations that fail since session 13 (`ui.tsx`: "Ollama isn't running", "Can't reach Ollama", Deep research sidebar copy changed with EngineNotice). | P2 | They fail identically before and after session 14. |
+| T41 | ✔ **Done in session 15** (stale since session 13's Title Case labels and EngineNotice copy). Fix the 5 research render expectations that fail since session 13 (`ui.tsx`: "Ollama isn't running", "Can't reach Ollama", Deep research sidebar copy changed with EngineNotice). | P2 | They fail identically before and after session 14. |
 
 ## Dependency sketch
 ```
@@ -143,3 +143,14 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T24 | **Guide on Windows**: real Ollama/ComfyUI/Voicebox installer downloads, the opened installers, detection while waiting, ComfyUI Desktop port 8000, Gemma pull, Z-Image files into ComfyUI's models folder, Voicebox model names match. | P0 | A12, A13. |
 | T25 | **Mac pass**: traffic lights centred in the 38 px bar (tune `trafficLightPosition`), menu bar items work (⌘N, ⌘,, ⌘⌥S), Edit copy/paste in fields, Dock reopen, DMG window layout, vibrancy behind the guide. | P1 | |
 | T26 | Generate images once with each recommended model in Images (Klein, Z-Image, Qwen-Image) and confirm the graphs run. | P1 | |
+
+## Session 15 additions (rebuild step 2: agent + tools)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T42 | Chats and tasks as tables in lotus.db, with the core as the only writer (removes the ~40 ms lost-write window of D53). | P1 | Do with T43 / routines in the core. |
+| T43 | Move the other model callers onto the agent loop: Tasks' task agent (`tasks/runner.ts`), routines, the island chat, the App Builder (its tag protocol becomes tools), Thinking mode (passes as a tool-free pre-step). | P1 | D52. |
+| T44 | More tools: voice.speak/transcribe, image.edit/upscale, engine.start, model.install (through the existing Allow card), research.start, shell.run (sandboxed, needs a decision), routine.create. | P1 | Rebuild plan §2. |
+| T45 | Inspector "Steps" view: past runs and steps from `agent_runs` (RPC `agent_runs`/`agent_run` exist). | P2 | |
+| T46 | Re-run `real-tasks.mjs` on the user's PC after every agent change and with ComfyUI running (image tasks were only checked for an honest failure). Keep the latest results in the repo (`handover/real-tasks/`). | P0 | Plan §5. |
+| T47 | Claim check: more kinds (deleted, sent, scheduled, installed) as tools for them arrive. | P2 | `core/src/agent/claims.ts`. |
+| T48 | Thinking models: tool turns run with `think: false` (D58). Try letting a model think on the final answer only, and compare real-task results. | P2 | |

@@ -1,5 +1,6 @@
 import { kv } from '../lib/store';
-export type EngineId = 'ollama' | 'comfyui' | 'voicebox';
+import type { EngineId } from './engineIds';
+export type { EngineId };
 
 export const DEFAULT_URLS: Record<EngineId, string> = {
   ollama: 'http://127.0.0.1:11434',

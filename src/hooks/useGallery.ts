@@ -88,6 +88,32 @@ export function useGallery(comfyUp: boolean | null) {
     else void idbGetLocal<GenSession[]>(KEY).then((legacy) => show(fromBlobs(legacy)));
   }, [core]);
 
+  // Images the agent made from a chat (core tool image.generate) arrive as a change to the saved list.
+  // They are kept in `external` until their files are loaded, so a save meanwhile doesn't drop them.
+  const external = useRef<Saved[]>([]);
+  useEffect(() => {
+    if (!core) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== CORE_KEY || !e.newValue) return;
+      let list: Saved[] = [];
+      try { list = JSON.parse(e.newValue) as Saved[]; } catch { return; }
+      const known = new Set([...ref.current.map((x) => x.id), ...external.current.map((x) => x.id)]);
+      const fresh = list.filter((x) => !known.has(x.id));
+      if (!fresh.length) return;
+      external.current = [...fresh, ...external.current];
+      void loadFiles(fresh).then((loadedList) => {
+        external.current = external.current.filter((x) => !fresh.some((f) => f.id === x.id));
+        if (!loadedList.length) return;
+        setSessions((p) => {
+          const blankFirst = p[0] && !p[0].versions.length ? [p[0]] : [];
+          return [...blankFirst, ...loadedList, ...p.slice(blankFirst.length)];
+        });
+      });
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [core]);
+
   // Save. With the core, new images are written to disk first (once each), then the list.
   const [saveError, setSaveError] = useState<string | null>(null);
   const uploading = useRef(new Set<string>());
@@ -99,7 +125,7 @@ export function useGallery(comfyUp: boolean | null) {
         return;
       }
       const unsaved = sessions.flatMap((s) => s.versions.filter((v) => v.blob && !v.file && !uploading.current.has(v.id)).map((v) => ({ s, v })));
-      kv.setJson(CORE_KEY, toSaved(sessions));
+      kv.setJson(CORE_KEY, [...external.current, ...toSaved(sessions)]);
       if (!unsaved.length) return;
       unsaved.forEach(({ v }) => uploading.current.add(v.id));
       void (async () => {

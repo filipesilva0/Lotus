@@ -9,7 +9,12 @@
 const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
 export interface CoreInfo { port: number; token: string; version: string; pid: number }
-export type CoreEvent = { type: 'kv'; set: Record<string, string>; remove: string[]; origin: string } | { type: 'hello'; version: string };
+export type CoreEvent =
+  | { type: 'kv'; set: Record<string, string>; remove: string[]; origin: string }
+  | { type: 'hello'; version: string }
+  /** Agent run events (lib/agent.ts) and "memory changed" (memory/store.ts). */
+  | { type: 'agent'; runId: string; kind: string }
+  | { type: 'memory' };
 
 let info: CoreInfo | null = null;
 let lastError: string | null = null;

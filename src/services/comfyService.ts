@@ -2,11 +2,12 @@
 
 import { http, EngineError, errorText, timeoutSignal } from '../lib/http';
 import { engineUrl } from './engineConfig';
-import { recipeFor, ImageRecipe } from '../setup/catalog';
+import { recipeFor } from '../setup/catalog';
+import { dimensionsFor, GraphError, graphImg2Img, graphInpaint, graphOutpaint, graphScale, graphTxt2Img, type LoraUse } from './comfyGraph';
+
+export { dimensionsFor, type LoraUse };
 
 const ENGINE = 'ComfyUI';
-
-export interface LoraUse { name: string; strength: number }
 
 export interface TxtToImageInput {
   prompt: string;
@@ -43,16 +44,9 @@ export interface ComfyStats {
   version: string | null;
 }
 
-/** Common aspect ratios → pixel sizes. SD 1.x checkpoints get the smaller 512-based set. */
-export function dimensionsFor(aspect: string, checkpoint: string): { width: number; height: number } {
-  const r64 = (n: number) => Math.max(64, Math.round(n / 64) * 64);
-  const custom = /^(\d{2,5})\s*[x×]\s*(\d{2,5})$/.exec(aspect);
-  if (custom) return { width: r64(+custom[1]), height: r64(+custom[2]) };
-  const small = /sd[_-]?1\.?5|v1-5|sd15/i.test(checkpoint);
-  const [a, b] = aspect.split(':').map(Number);
-  const ratio = a > 0 && b > 0 ? a / b : 1;
-  const area = (recipeFor(checkpoint)?.base ?? (small ? 512 : 1024)) ** 2;
-  return { width: r64(Math.sqrt(area * ratio)), height: r64(Math.sqrt(area / ratio)) };
+/** Graph errors (a model that can't edit, …) become ComfyUI engine errors. */
+function wrap<T>(f: () => T): T {
+  try { return f(); } catch (e) { if (e instanceof GraphError) throw new EngineError(e.message, ENGINE); throw e; }
 }
 
 class ComfyService {
@@ -147,149 +141,14 @@ class ComfyService {
     return j.name as string;
   }
 
-  /**
-   * The model, text encoder and VAE. A classic checkpoint is one node ('4'); a split model with a known
-   * recipe (setup/catalog.ts) is UNETLoader '4' + CLIPLoader '40' + VAELoader '41' (+ ModelSamplingAuraFlow '42').
-   */
-  private loaders(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [string, number]; clip: [string, number]; vae: [string, number]; recipe?: ImageRecipe } {
-    const r = recipeFor(i.checkpoint);
-    if (!r) return { nodes: { '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: i.checkpoint } } }, model: ['4', 0], clip: ['4', 1], vae: ['4', 2] };
-    const nodes: Record<string, unknown> = {
-      '4': { class_type: 'UNETLoader', inputs: { unet_name: i.checkpoint, weight_dtype: 'default' } },
-      '40': { class_type: 'CLIPLoader', inputs: { clip_name: r.clip, type: r.clipType, device: 'default' } },
-      '41': { class_type: 'VAELoader', inputs: { vae_name: r.vae } },
-    };
-    let model: [string, number] = ['4', 0];
-    if (r.shift !== undefined) { nodes['42'] = { class_type: 'ModelSamplingAuraFlow', inputs: { model, shift: r.shift } }; model = ['42', 0]; }
-    return { nodes, model, clip: ['40', 0], vae: ['41', 0], recipe: r };
-  }
-
-  /**
-   * LoRAs are chained one after another between the loaders and everything that uses the model and
-   * text encoder: loader → LoraLoader 20 → LoraLoader 21 → … Node ids 20+ are reserved for them.
-   * With no LoRAs the loaders feed the graph directly, exactly as before.
-   */
-  private lora(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [string, number]; clip: [string, number] } {
-    const ld = this.loaders(i);
-    const nodes: Record<string, unknown> = {};
-    let model = ld.model;
-    let clip = ld.clip;
-    (i.loras ?? []).slice(0, 4).forEach((l, k) => {
-      const id = String(20 + k);
-      nodes[id] = { class_type: 'LoraLoader', inputs: { model, clip, lora_name: l.name, strength_model: l.strength, strength_clip: l.strength } };
-      model = [id, 0];
-      clip = [id, 1];
-    });
-    return { nodes, model, clip };
-  }
-
-  /** Recipe models have fixed steps, guidance and sampler (distilled models break with other values). */
-  private sampler(i: TxtToImageInput, seed: number, latent: [string, number], denoise: number) {
-    const r = recipeFor(i.checkpoint);
-    return {
-      class_type: 'KSampler',
-      inputs: {
-        seed, steps: r?.steps ?? i.steps, cfg: r?.cfg ?? i.cfg, sampler_name: r?.sampler ?? i.sampler ?? 'euler', scheduler: r?.scheduler ?? i.scheduler ?? 'normal', denoise,
-        model: this.lora(i).model, positive: ['6', 0], negative: ['7', 0], latent_image: latent,
-      },
-    };
-  }
-
-  private vae(i: TxtToImageInput): [string, number] { return this.loaders(i).vae; }
-
-  private base(i: TxtToImageInput) {
-    const ld = this.loaders(i);
-    const l = this.lora(i);
-    const negative = ld.recipe?.negative === 'zero'
-      ? { class_type: 'ConditioningZeroOut', inputs: { conditioning: ['6', 0] } }
-      : { class_type: 'CLIPTextEncode', inputs: { text: i.negativePrompt ?? '', clip: l.clip } };
-    return {
-      ...ld.nodes,
-      ...l.nodes,
-      '6': { class_type: 'CLIPTextEncode', inputs: { text: i.prompt, clip: l.clip } },
-      '7': negative,
-      '8': { class_type: 'VAEDecode', inputs: { samples: ['3', 0], vae: ld.vae } },
-      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'lotus', images: ['8', 0] } },
-    };
-  }
-
-  /** FLUX.2 Klein is driven through the custom-sampler nodes, and Lotus wires text-to-image only. */
-  private onlyTxt2Img(i: TxtToImageInput) {
-    if (recipeFor(i.checkpoint)?.kind === 'flux2') {
-      throw new EngineError(`${i.checkpoint} only does text to image in Lotus for now. Pick another model (Z-Image Turbo or a checkpoint) to edit, inpaint or extend images.`, ENGINE);
-    }
-  }
-
   /** Exposed for tests: the workflow that would be queued for a text-to-image run. */
-  buildTxt2ImgGraph(i: TxtToImageInput, seed: number) { return this.graph(i, seed); }
+  buildTxt2ImgGraph(i: TxtToImageInput, seed: number) { return graphTxt2Img(i, seed); }
 
-  /** Text → image. */
-  private graph(i: TxtToImageInput, seed: number) {
-    const r = recipeFor(i.checkpoint);
-    const size = { width: i.width, height: i.height, batch_size: i.count ?? 1 };
-    if (r?.kind === 'flux2') {
-      // Same wiring as ComfyUI's own FLUX.2 Klein template: noise + guider + sampler + sigmas.
-      return {
-        ...this.base(i),
-        '5': { class_type: 'EmptyFlux2LatentImage', inputs: size },
-        '30': { class_type: 'RandomNoise', inputs: { noise_seed: seed } },
-        '31': { class_type: 'KSamplerSelect', inputs: { sampler_name: r.sampler } },
-        '32': { class_type: 'Flux2Scheduler', inputs: { steps: r.steps, width: i.width, height: i.height } },
-        '33': { class_type: 'CFGGuider', inputs: { model: this.lora(i).model, positive: ['6', 0], negative: ['7', 0], cfg: r.cfg } },
-        '3': { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['30', 0], guider: ['33', 0], sampler: ['31', 0], sigmas: ['32', 0], latent_image: ['5', 0] } },
-      };
-    }
-    return {
-      ...this.base(i),
-      '3': this.sampler(i, seed, ['5', 0], 1),
-      '5': { class_type: r ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: size },
-    };
-  }
-
-  /** Image → image: the reference is encoded and partly re-noised (denoise < 1 keeps more of it). */
-  private graphImg2Img(i: TxtToImageInput, seed: number, file: string, denoise: number) {
-    this.onlyTxt2Img(i);
-    return {
-      ...this.base(i),
-      '10': { class_type: 'LoadImage', inputs: { image: file } },
-      '11': { class_type: 'ImageScale', inputs: { image: ['10', 0], upscale_method: 'lanczos', width: i.width, height: i.height, crop: 'center' } },
-      '12': { class_type: 'VAEEncode', inputs: { pixels: ['11', 0], vae: this.vae(i) } },
-      '3': this.sampler(i, seed, ['12', 0], denoise),
-    };
-  }
-
-  /** Inpainting: transparent pixels of the uploaded PNG are repainted. */
-  private graphInpaint(i: TxtToImageInput, seed: number, file: string) {
-    this.onlyTxt2Img(i);
-    return {
-      ...this.base(i),
-      '10': { class_type: 'LoadImage', inputs: { image: file } },
-      '12': { class_type: 'VAEEncodeForInpaint', inputs: { pixels: ['10', 0], vae: this.vae(i), mask: ['10', 1], grow_mask_by: 8 } },
-      '3': this.sampler(i, seed, ['12', 0], 1),
-    };
-  }
-
-  /** Outpainting: pad the canvas, then repaint the new border. Pads are rounded to multiples of 8. */
-  private graphOutpaint(i: TxtToImageInput, seed: number, file: string, pad: { left: number; top: number; right: number; bottom: number }) {
-    const r8 = (n: number) => Math.round(n / 8) * 8;
-    this.onlyTxt2Img(i);
-    return {
-      ...this.base(i),
-      '10': { class_type: 'LoadImage', inputs: { image: file } },
-      '11': { class_type: 'ImagePadForOutpaint', inputs: { image: ['10', 0], left: r8(pad.left), top: r8(pad.top), right: r8(pad.right), bottom: r8(pad.bottom), feathering: 40 } },
-      '12': { class_type: 'VAEEncodeForInpaint', inputs: { pixels: ['11', 0], vae: this.vae(i), mask: ['11', 1], grow_mask_by: 8 } },
-      '3': this.sampler(i, seed, ['12', 0], 1),
-    };
-  }
-
-  /** Resize with a classic filter (no AI upscaler model needed). */
-  private graphScale(file: string, factor: number) {
-    return {
-      '10': { class_type: 'LoadImage', inputs: { image: file } },
-      '11': { class_type: 'ImageScaleBy', inputs: { image: ['10', 0], upscale_method: 'lanczos', scale_by: factor } },
-      '9': { class_type: 'SaveImage', inputs: { filename_prefix: 'lotus-up', images: ['11', 0] } },
-    };
-  }
+  private graph(i: TxtToImageInput, seed: number) { return wrap(() => graphTxt2Img(i, seed)); }
+  private graphImg2Img(i: TxtToImageInput, seed: number, file: string, denoise: number) { return wrap(() => graphImg2Img(i, seed, file, denoise)); }
+  private graphInpaint(i: TxtToImageInput, seed: number, file: string) { return wrap(() => graphInpaint(i, seed, file)); }
+  private graphOutpaint(i: TxtToImageInput, seed: number, file: string, pad: { left: number; top: number; right: number; bottom: number }) { return wrap(() => graphOutpaint(i, seed, file, pad)); }
+  private graphScale(file: string, factor: number) { return graphScale(file, factor); }
 
   /** Queues a graph, waits for it and returns every output image. */
   private async execute(graph: object, signal?: AbortSignal, onTick?: (ms: number, queued: boolean) => void): Promise<{ blobs: Blob[]; promptId: string; sec: number }> {

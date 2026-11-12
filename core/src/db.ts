@@ -4,6 +4,7 @@
 // Schema versions (PRAGMA user_version):
 //   0  what the Rust memory module created: memories, skills, *_fts tables
 //   1  adds kv (what the web layer kept in localStorage/IndexedDB), meta and media
+//   2  adds agent_runs and agent_steps (session 15: every tool call the agent makes, with its result)
 // New versions append a step to MIGRATIONS; never edit a step that has shipped.
 
 import { Database } from 'bun:sqlite';
@@ -53,6 +54,36 @@ const MIGRATIONS: ((sql: Database) => void)[] = [
       bytes INTEGER NOT NULL,
       created INTEGER NOT NULL
     )`);
+  },
+  // 1 → 2
+  (sql) => {
+    sql.run(`CREATE TABLE IF NOT EXISTS agent_runs(
+      id TEXT PRIMARY KEY,
+      chat_id TEXT,
+      created INTEGER NOT NULL,
+      finished INTEGER,
+      model TEXT NOT NULL,
+      mode TEXT,                  -- 'native' | 'tags'
+      status TEXT NOT NULL,       -- 'running' | 'done' | 'error' | 'stopped'
+      prompt TEXT NOT NULL,       -- the user's message
+      reply TEXT,
+      unverified TEXT             -- JSON: claims the reply made with no matching step
+    )`);
+    sql.run(`CREATE TABLE IF NOT EXISTS agent_steps(
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+      seq INTEGER NOT NULL,
+      tool TEXT NOT NULL,
+      args TEXT NOT NULL,         -- JSON
+      status TEXT NOT NULL,       -- 'waiting' | 'running' | 'done' | 'error' | 'denied'
+      detail TEXT,
+      media TEXT,                 -- JSON array of Lotus Studio paths
+      data TEXT,                  -- JSON
+      started INTEGER NOT NULL,
+      finished INTEGER
+    )`);
+    sql.run('CREATE INDEX IF NOT EXISTS agent_steps_run ON agent_steps(run_id, seq)');
+    sql.run('CREATE INDEX IF NOT EXISTS agent_runs_created ON agent_runs(created)');
   },
 ];
 
