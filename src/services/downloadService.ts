@@ -6,6 +6,7 @@ import { invokeNative, onEvent } from '../lib/bus';
 import { isTauri } from '../lib/http';
 import { uid } from '../lib/persist';
 import { savedExe } from './engineControl';
+import { kv } from '../lib/store';
 
 export type ModelFolder = 'checkpoints' | 'loras';
 /** Every models/ subfolder Lotus writes to (split image models use the last three; session 10). */
@@ -23,8 +24,8 @@ export interface DownloadProgress {
 export const MODEL_EXTENSIONS = ['safetensors', 'ckpt', 'pt', 'pth', 'bin', 'gguf', 'sft', 'onnx'];
 
 const DIR_KEY = 'lotus.comfy.modelsDir.v1';
-export const savedModelsDir = () => localStorage.getItem(DIR_KEY) || '';
-export const setSavedModelsDir = (p: string) => localStorage.setItem(DIR_KEY, p);
+export const savedModelsDir = () => kv.getItem(DIR_KEY) || '';
+export const setSavedModelsDir = (p: string) => kv.setItem(DIR_KEY, p);
 
 const sep = (dir: string) => (dir.includes('\\') ? '\\' : '/');
 export const folderPath = (modelsDir: string, kind: ComfySubfolder) => `${modelsDir.replace(/[\\/]+$/, '')}${sep(modelsDir)}${kind}`;

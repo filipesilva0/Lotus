@@ -23,6 +23,7 @@ import { installInstructions, type InstallTarget } from '../chat/install';
 import { installTarget } from '../setup/jobs';
 import { shouldRename, suggestTitle } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
+import { kv, storeMode } from '../lib/store';
 
 const SESSIONS_KEY = 'lotus.sessions.v1';
 const ACTIVE_KEY = 'lotus.activeSession.v1';
@@ -45,7 +46,7 @@ function strip(ms: ChatMessage[]): ChatMessage[] {
 
 function load(): ChatSession[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]') as ChatSession[];
+    const raw = JSON.parse(kv.getItem(SESSIONS_KEY) || '[]') as ChatSession[];
     const t = Date.now();
     return raw.map((s, i) => ({ ...s, ts: s.ts ?? t - i * 60_000 }));
   } catch { return []; }
@@ -68,7 +69,7 @@ export function useChat(settings: LotusSettings) {
   if (!initial.current) { const l = load(); initial.current = l.length ? l : [newSession('')]; }
   const ref = useRef<ChatSession[]>(initial.current);
   const [sessions, setSessionsState] = useState<ChatSession[]>(initial.current);
-  const [activeId, setActiveId] = useState<string>(() => { try { return JSON.parse(localStorage.getItem(ACTIVE_KEY) || '""'); } catch { return ''; } });
+  const [activeId, setActiveId] = useState<string>(() => { try { return JSON.parse(kv.getItem(ACTIVE_KEY) || '""'); } catch { return ''; } });
   const [folders, setFolders] = usePersisted<ChatFolder[]>('lotus.folders.v1', []);
   const { memories: memory } = useMemoryStore();
   const [isStreaming, setIsStreaming] = useState(false);
@@ -86,15 +87,15 @@ export function useChat(settings: LotusSettings) {
 
   const active = sessions.find((s) => s.id === activeId) ?? sessions[0];
 
-  useEffect(() => { if (!isStreaming) { try { localStorage.setItem(SESSIONS_KEY, JSON.stringify(clean(sessions).slice(0, 80))); } catch { /* quota */ } } }, [sessions, isStreaming]);
-  useEffect(() => { if (active) localStorage.setItem(ACTIVE_KEY, JSON.stringify(active.id)); }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!isStreaming) { try { kv.setItem(SESSIONS_KEY, JSON.stringify(clean(sessions).slice(0, storeMode() === 'core' ? 200 : 80))); } catch { /* quota */ } } }, [sessions, isStreaming]);
+  useEffect(() => { if (active) kv.setItem(ACTIVE_KEY, JSON.stringify(active.id)); }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Long-term memory: load it, and index chats saved before memory search existed (once).
   useEffect(() => {
     void loadMemory().then(() => {
-      if (localStorage.getItem(BACKFILL_KEY)) return;
+      if (kv.getItem(BACKFILL_KEY)) return;
       const msgs = ref.current.filter(memoryOnFor).flatMap((s) => indexable(s, s.messages));
-      void memoryStore.index(msgs).then(() => localStorage.setItem(BACKFILL_KEY, '1'));
+      void memoryStore.index(msgs).then(() => kv.setItem(BACKFILL_KEY, '1'));
     });
   }, []);
 
@@ -279,7 +280,7 @@ export function useChat(settings: LotusSettings) {
 
     if (setRef.current.autoReadResponses && acc && !ctrl.signal.aborted) {
       try {
-        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: localStorage.getItem('lotus.voice.profile') ?? undefined });
+        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: kv.getItem('lotus.voice.profile') ?? undefined });
         const done = await voicebox.waitFor(q.id);
         await new Audio(await voicebox.audioUrl(done.id)).play();
       } catch { /* read-aloud is best effort */ }

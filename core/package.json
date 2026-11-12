@@ -1,0 +1,17 @@
+{
+  "name": "lotusd",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lotus core: the local background process that owns Lotus's data (lotus.db, media files, memory).",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p .",
+    "build": "bun scripts/build.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.3",
+    "typescript": "5.9.3"
+  }
+}

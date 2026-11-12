@@ -1,17 +1,17 @@
 # CLAUDE.md: Lotus
 
-Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: feature-complete prototype that has never been built on Windows; the CI build is currently failing (B1).**
+Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: prototype in a rebuild (project doc `claude/rebuild-plan.md`). CI builds and releases Windows/macOS/Linux, and 0.5.0 runs on the user's Windows PC. Step 1 (lotusd core + storage) landed in session 14; step 2 (agent + tools) is next.**
 
 ## Read first (in this order)
 1. `CURRENT_STATE.md` — what is verified, known bugs (B1…B17), CI history. **Start here.**
-2. `TASKS.md` — prioritized work; the **next three tasks are T1, T2, T3**.
+2. `TASKS.md` — prioritized work; since session 14 the next tasks are **T36** (verify the core on Windows/macOS) and **T37** (rebuild step 2).
 3. `ARCHITECTURE.md` — structure, windows/events, integrations, version-alignment.
 4. `DECISIONS.md` — what was decided, what was rejected, what is still an unverified assumption.
 5. `PROJECT_BRIEF.md` — purpose, workflows, requirements. `README.md` is the user-facing doc.
 
 ## Start-of-session checklist
-- Do **not** assume the CI problem is fixed. Ask the user for the CI log lines starting with `MISMATCH` and whether `src-tauri/Cargo.lock` is committed (TASKS T1).
-- The ZIP the user last received predates the `Cargo.toml` tilde pins and the `handover/` folder. Deliver a fresh zip after changes.
+- Read the project docs `claude/rebuild-plan.md` and `claude/investigation-why-lotus-feels-incomplete.md` first; they supersede older status lines in these files.
+- The user works from a git clone of github.com/filipesilva0/Lotus; deliver through commits, not zips.
 - Verify the environment before trusting any status in these docs: run the commands below.
 
 ## Commands
@@ -35,17 +35,27 @@ node handover/screenshots/shoot-s10.mjs           # session 10: every first-run 
 node handover/screenshots/shoot-s11.mjs           # session 11: remote engines in the guide and Engines → Change (browser mode, faked engines)
 node handover/screenshots/shoot-s13.mjs           # session 13: menus, Undo note, Settings panes, Tasks, Voice, Engines (light + dark); prints Find/Undo/Esc checks
 node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install card (ask, running, done) with a fake Ollama
-cd src-tauri && cargo test --lib          # 15 Rust tests (session 12: mac traffic-light maths): hook installer, approve/deny server, GPU parsers 2, context files 1, memory db 4, folder reader 1, session 10 setup 3 + installer allow-list 1
+cd core && bun install && bun test       # 19 core tests (session 14): memory, kv, import, media, API security, watchdog
+cd core && bun scripts/build.ts           # compile lotusd → src-tauri/binaries/lotusd-<triple> (needed before any cargo build/check)
+node handover/verification/core-e2e.mjs   # 16 checks: the built app against a REAL lotusd in Chromium (LOTUSD_BIN=… for the compiled one)
+cd src-tauri && cargo test --lib          # 13 Rust tests: hook installer, approve/deny server, GPU parsers 2, context files 1, folder reader 1, session 10 setup 3, installer allow-list 1, mac traffic lights, lotusd token + ready line 2
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
+**Expected today (session 14):** core 19/19; core-e2e 16/16; 13 Rust tests; base TS tests 58/63 (5 stale research-render expectations, T41); the rest as below. **Before session 14:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 14 map (lotusd core + storage)
+- Map: `ARCHITECTURE.md` §5g. Data lives in the core: **never use `localStorage`/IndexedDB directly**; use `kv` from `lib/store.ts` (same API) and `saveMedia/loadMedia` from `lib/core.ts` for images and audio. Core calls go through `rpc()`/`coreFetch()`.
+- New core methods go in `core/src/server.ts RPC` with a test in `core/test/`. Schema changes are new steps in `core/src/db.ts MIGRATIONS` (never edit a shipped step).
+- Modules that read saved state at import time are fine only because `main.tsx`/`island/main.tsx` await `initStore()` before importing App/Island; keep it that way.
+- `lib/core.ts` must not import `lib/http.ts` (import cycle through engineConfig → store).
+- `tauri build`/`cargo check` need `src-tauri/binaries/lotusd-<triple>` to exist (externalBin); build it first.
 
 ## Session 13 map (Apple HIG pass, all OSes)
 - Menus live in App's `menus`: `shortcut` is the Windows/Linux key (one handler runs them all), `mac` is the Mac key equivalent. On the Mac only the native menu handles keys. Page commands (File › New Image…) go through `lib/commands.ts` (`runCommand` / `useCommand`).
@@ -90,7 +100,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - Map and request flow: `ARCHITECTURE.md` §5c. All background model work goes through `agents/pool.ts` (never call the model in a loop outside it), and through `services/llm.ts` (so llama.cpp works too).
 - Memory must stay off when `session.incognito || session.memoryOff` (`memoryOnFor` in `useChat.ts`): no recall, no indexing, no learning. Keep it that way for anything new that reads or writes memory.
 - Markdown: `lib/gfm.ts` (parser, tested) + `lib/markdownLite.tsx` (renderer). Never render model output any other way.
-- `rusqlite` was added without registry access: the first CI build resolves it; commit the updated `Cargo.lock`.
+- Memory, skills and chat recall moved to the core in session 14 (`core/src/memory.ts`); `rusqlite` is gone.
 
 ## Session 4 map (App Builder, Models, LoRA)
 - Builder code: `src/builder/*` (logic, testable) and `src/components/builder/*` (UI); Rust in `src-tauri/src/appbuilder.rs`. The agent's tag protocol is in `builder/protocol.ts`, its prompt in `builder/agent.ts` (`systemPrompt`). Keep file/model access behind `AgentIO` so `builder-tests.cjs` can drive the loop.
@@ -101,7 +111,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **TypeScript:** strict; function components + hooks; no `any` unless parsing external JSON; no `dangerouslySetInnerHTML` (use `lib/markdownLite.tsx` / `ReportMarkdown`).
 - **All HTTP** goes through `http()` in `src/lib/http.ts` (Rust-backed, no CORS). Engine addresses come from `services/engineConfig.ts`. Wrap failures in `EngineError` with a message that says **what happened and how to recover**.
 - **Cross-window messaging** only via `src/lib/bus.ts` (`emitEvent/onEvent/invokeNative/reportActivity`). Add new events to the table in `ARCHITECTURE.md`.
-- **Persistence:** `localStorage` keys prefixed `lotus.`, versioned (`.v1`); list new keys in `ARCHITECTURE.md §6`. No blob URLs in persisted data.
+- **Persistence:** through `kv` (`lib/store.ts`, lotus.db via the core), keys prefixed `lotus.`, versioned (`.v1`); list new keys in `ARCHITECTURE.md §6`. No blob URLs in persisted data; images and audio go to `saveMedia`.
 - **UI:** Tailwind 4 with CSS variables (`--color-accent-vibrant|pastel|hover`); reuse `components/common/ui.tsx` primitives; type scale **12 (captions/labels, the minimum) / 14 (body, chat) / 18 (titles)**, weights 500/600, radii **8/12/16** (`rounded-lg/xl/2xl`); colours only via `var(--color-*)` tokens (never hard-coded hex, never a grey lighter than `--color-text-muted`); every control labelled; handle empty/loading/error states; verify dark mode. Use **named breakpoints (`lg:`, `xl:`)**, not arbitrary `min-[…]:` (ordering bug seen). Prefer `self-stretch` over `h-full` in flex rows.
 - **Rust:** plain `std` where possible; no new crates without a reason; register commands in `lib.rs`; keep `#[cfg(windows)]` blocks tiny; any new outbound host must be added to `capabilities/default.json`, the README privacy section and `THIRD_PARTY_LICENSES.md`.
 - Copy tone: plain, specific, no jargon; no emoji in the product UI.

@@ -6,17 +6,18 @@ import { reportActivity } from '../lib/bus';
 import { EngineError } from '../lib/http';
 
 import { currentLimit } from '../agents/pool';
+import { kv } from '../lib/store';
 
 const KEY = 'lotus.research.v1';
 const LIMITS_KEY = 'lotus.research.limits.v1';
 
 const loadLimits = (): ResearchLimits => {
-  try { return { ...DEFAULT_LIMITS, ...JSON.parse(localStorage.getItem(LIMITS_KEY) || '{}') }; } catch { return DEFAULT_LIMITS; }
+  try { return { ...DEFAULT_LIMITS, ...JSON.parse(kv.getItem(LIMITS_KEY) || '{}') }; } catch { return DEFAULT_LIMITS; }
 };
 
 function loadProjects(): Project[] {
   try {
-    const list: Project[] = JSON.parse(localStorage.getItem(KEY) || '[]');
+    const list: Project[] = JSON.parse(kv.getItem(KEY) || '[]');
     // A run cannot survive closing the app; keep what it collected and say so.
     return list.map((p) => (p.phase === 'running' || p.phase === 'synthesizing'
       ? { ...p, phase: 'stopped' as Phase, paused: false, error: 'Lotus was closed during this run. Partial results are kept; you can write the report from them.' }
@@ -36,7 +37,7 @@ export function useResearch(opts: { model: string }) {
   // Persist (debounced). Large histories may hit the browser quota; fail quietly and keep working in memory.
   useEffect(() => {
     const t = setTimeout(() => {
-      try { localStorage.setItem(KEY, JSON.stringify(projects.slice(0, 40))); } catch { /* quota */ }
+      try { kv.setItem(KEY, JSON.stringify(projects.slice(0, 40))); } catch { /* quota */ }
     }, 600);
     return () => clearTimeout(t);
   }, [projects]);
@@ -113,7 +114,7 @@ export function useResearch(opts: { model: string }) {
     controls.current.get(id)?.stop();
     const ctl = new RunControl();
     controls.current.set(id, ctl);
-    localStorage.setItem(LIMITS_KEY, JSON.stringify(get(id).limits));
+    kv.setItem(LIMITS_KEY, JSON.stringify(get(id).limits));
     patch(id, (p) => ({ ...p, model: opts.model || p.model }));
     let last = 0;
     const api = {

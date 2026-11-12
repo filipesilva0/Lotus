@@ -4,7 +4,7 @@ import type { ChatSession } from '../../types/lotus';
 import { compact, computeUsage, topModels, Usage } from '../../analytics/usage';
 import { useMemoryStore } from '../../memory/store';
 import { usePlugins } from '../../plugins/store';
-import { idbGet } from '../../lib/idb';
+import { countSavedImages } from '../../hooks/useGallery';
 import { cx } from '../common/ui';
 
 /**
@@ -175,7 +175,7 @@ export const UsageDashboard: React.FC<{ sessions: ChatSession[] }> = ({ sessions
   const installed = usePlugins();
   const [images, setImages] = useState<number | null>(null);
   useEffect(() => {
-    void idbGet<{ versions?: unknown[] }[]>('gallery.v1').then((g) => setImages(Array.isArray(g) ? g.reduce((a, s) => a + (s.versions?.length ?? 0), 0) : 0));
+    void countSavedImages().then(setImages);
   }, []);
   const since = u.firstUse ? new Date(u.firstUse).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : null;
 

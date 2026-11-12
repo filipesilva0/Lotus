@@ -3,6 +3,15 @@
 > Snapshot taken at the end of session 1. Evidence legend: ✅ confirmed (command/test output seen) · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
+## 0k. Session 14: rebuild step 1, lotusd core + storage (✅ Linux; ⚠️ not run on Windows or macOS)
+The user asked to start phase 1 of the overhaul: rebuild-plan step 1, a background core that owns the data, SQLite instead of localStorage, with the UI unchanged. Map: `ARCHITECTURE.md` §5g; decisions D45–D51.
+Verified here: `tsc` clean · `vite build` OK · all earlier suites unchanged (63 base with the same 5 research-render failures as before this session, T41; 34 builder; 56/24 s5; 27/11 s7; 22 s10; 12 s11; 3 s12; 10 s13) · **19 core tests** (`cd core && bun test`: memory port incl. the 4 former Rust tests, opening a Rust-written lotus.db, kv atomicity, one-time import, media path confinement, token/Host/CORS, WebSocket broadcast, stdin watchdog) · **16-check end-to-end run against a real core** in Chromium (`core-e2e.mjs`, also against the compiled binary): import of an older profile incl. an IndexedDB image blob and App Builder chat, memory into the memories table, image saved as a file, everything still there after wiping browser storage, cross-window storage event, a UI delete saved to lotus.db · `cargo check --locked` clean, no warnings · **13 Rust tests** (4 memory tests moved to the core, 2 new) · WiX render check passes with the sidecar (HKCU key path) · **the real Tauri app (debug build) under Xvfb on Linux**: started lotusd beside itself, the WebKit window connected and ran the import, `kill -9` of lotusd → restarted on a new port within a second, `kill -9` of Lotus → lotusd stopped itself ("the Lotus app closed") · notice screenshots in light and dark.
+- **Core (`core/`, lotusd 0.1.0):** Bun-compiled TypeScript; `bun:sqlite` (FTS5 present), `Bun.serve` on 127.0.0.1. Owns `lotus.db` (adds `kv`, `meta`, `media`; keeps memories/skills/FTS tables as the Rust module made them) and image files under Lotus Studio/Images.
+- **App side:** `src-tauri/src/lotusd.rs` starts/supervises it; `memory_db.rs` and the `rusqlite` crate were removed (memory calls go to the core with the same method names). Sidecar in `bundle.externalBin`, WiX component with an HKCU key path, portable zip includes `lotusd.exe`, CI installs Bun 1.4.4, tests and builds the core per OS. CSP allows `ws://127.0.0.1:*` for the event socket.
+- **Web side:** `lib/core.ts`, `lib/store.ts` (`kv`); every `localStorage` call site now uses `kv`; `idb.ts` routes through the core; the gallery saves images as files and re-reads them at start; memory store uses the core. A blank "Starting Lotus…" shows only if the core takes over 0.7 s.
+- **Size:** the sidecar is ~110 MB per OS (~54 MB compressed), so installers grow by roughly that much (D46).
+- ⚠️ **Unverified:** Windows (no console window flash, MSI with the sidecar, update while the core runs, Defender scanning a new 115 MB exe on first start), macOS (universal `lipo` sidecar, ad-hoc signing), the window reconnecting after a core restart (the event is sent; reconnection was only exercised in the browser harness through the `hello` resync path).
+
 ## 0j. Session 13: Apple HIG pass on Windows, macOS and Linux (⚠️ not run in a real desktop window)
 The user asked for the HIG review items 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13 and 14 (4: one sidebar instead of rail + list, and 5: system accent instead of per-page petals, were left out on purpose). Mid-session they asked for every change to apply to Windows and Linux too, with Mac-only behaviour adapted, and for the full-width **New Chat** button to come back.
 Verified here: `tsc` clean · `vite build` OK · all earlier suites pass (63 base, 34 builder, 56/24 s5, 27/11 s7, 22 s10, 12 s11, 3 s12; 5 render expectations updated for renamed labels, listed below) · **10 new session 13 tests** (`run-s13-tests.sh`) · Chromium screenshots (`shoot-s13.mjs`, light and dark) checked by eye, with these scripted checks: Ctrl+F focuses the page search, deleting a chat then pressing Undo restores it, Esc closes Settings. No Rust changed.
@@ -137,7 +146,7 @@ What was asked (user's words, condensed): (1) VRAM auto-scaling for the local ex
 | B33 | Thinking mode makes 4 model calls; with a small model the "check" pass can be shallow. |
 | B34 | Learned memory/skills quality depends on the local model; validators reject secrets, duplicates and malformed output, but a 3B model may propose little. Max 80 learned items. |
 | B35 | Routines run only while Lotus runs; no OS-level scheduling. Task agents can only write (no tools, files or shell): they produce instructions/results, not actions. |
-| B36 | Memory items, skills and the chat index live in `lotus.db`; board, routines and settings stay in `localStorage` (B10 still applies to those). |
+| B36 | ~~Board, routines and settings stay in `localStorage`~~ Session 14: everything is in `lotus.db` through the core. |
 | B37 | Context files are read from the folder root, `.lotus/`, `.hermes/`, `.cursor/rules/`, `.clinerules/`, `.github/copilot-instructions.md` only (no parent-folder walk), 24 KB per file, 24 files. Read-only. |
 
 ## 0b. Session 4 changes: App Builder, merged Models, LoRA (⚠️ not built, not run on Windows)
@@ -177,7 +186,9 @@ What was asked: (1) an **App Builder** page in the spirit of an agent-first IDE,
 
 ## 1. Development stage
 
-**Feature-complete prototype (v0.1.0). Compiles on Windows CI (user-reported); MSI linking fails (§5), and the app has never been run on Windows.** All five product areas have working code that is verified only in a Linux sandbox against mocks and fixtures. **The GitHub Actions Windows build has never succeeded.** The nearest milestone is *first green CI build, then a smoke test on a real Windows machine*.
+**Session 14 correction:** the paragraph below is out of date. CI builds and releases for all three OSes, and Lotus 0.5.0 was installed and used on the user's Windows PC on 12 Nov 2026 (see the project doc `claude/investigation-why-lotus-feels-incomplete.md` for what was seen live). The rebuild plan (project doc `claude/rebuild-plan.md`) is in progress: step 1 (core + storage) is section 0k.
+
+~~Feature-complete prototype (v0.1.0). Compiles on Windows CI (user-reported); MSI linking fails (§5), and the app has never been run on Windows.~~ All five product areas have working code that is verified only in a Linux sandbox against mocks and fixtures, apart from the live 0.5.0 test above.
 
 ## 2. What is verified, and how ✅
 
@@ -227,8 +238,8 @@ IDs are referenced from `TASKS.md`.
 | **B6** | Dead hook | `voice:speak-text` has a listener in `VoiceWorkspace` but nothing emits it (no "send to Speak" from the island/chat). | grep ✅ |
 | **B7** | Limitation | Research runs and ComfyUI progress are not resumable; a run is lost on app close (partial results kept, can write report). ComfyUI shows elapsed time only (no step progress). Reasoning-model `thinking` tokens are discarded with no UI. | code read ✅ |
 | **B8** | Limitation | If the model returns bad JSON twice, plan/questions/personas silently fall back to generic defaults (1 sub-topic) without telling the user. | code + test ✅ |
-| **B9** | Limitation | Generated images and chat image attachments are session-only (blob URLs). | code ✅ |
-| **B10** | Risk | `localStorage` quota (~5 MB in WebView2, ❓ unmeasured) could be exceeded by many long chats/research projects; errors are swallowed for research, not for chats. | ⚠️ |
+| **B9** | Limitation | ~~Generated images are session-only~~ Session 14: images are files in Lotus Studio/Images (e2e ✅). **Chat image attachments are still session-only** (T38). | code ✅ |
+| **B10** | ~~Risk~~ Fixed in session 14 | `localStorage` quota no longer applies: data lives in lotus.db (64 MB per value). It still applies when the desktop app runs without its core (the notice says so). | e2e ✅ |
 | **B11** | Risk | Voicebox server executable name/location on Windows and its start-up args are assumptions; `engine_find` candidate paths are guesses. | ⚠️ |
 | **B12** | Risk | Island: primary monitor only; no click-through; hover "peek" relies on pointer events inside a tiny window; transparency/always-on-top under WebView2 untested. | ⚠️ |
 | **B13** | Risk | Hook server port 17495 is fixed; if bind fails the only signal is stderr (no UI message). Claude Code hook contract unverified. | ⚠️ |

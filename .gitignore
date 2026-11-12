@@ -10,3 +10,7 @@ src-tauri/gen/
 # Updater signing key: never commit it (it belongs only in the GitHub secret)
 LOTUS_SIGNING_PRIVATE_KEY.txt
 *.key
+
+# lotusd sidecar builds (core/scripts/build.ts); CI builds them per OS
+src-tauri/binaries/
+core/node_modules/

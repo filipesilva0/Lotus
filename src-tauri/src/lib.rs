@@ -5,8 +5,8 @@ mod engines;
 mod hardware;
 mod hooks;
 mod island;
+mod lotusd;
 mod mac_chrome;
-mod memory_db;
 mod paths;
 mod setup;
 mod updates;
@@ -87,7 +87,7 @@ pub fn run() {
         .manage(appbuilder::AppBuilder::default())
         .manage(downloads::Downloads::default())
         .manage(hooks::Pending::default())
-        .manage(memory_db::MemoryDb::default())
+        .manage(lotusd::Core::default())
         .invoke_handler(tauri::generate_handler![
             app_paths,
             main_ready,
@@ -140,19 +140,7 @@ pub fn run() {
             hardware::hw_snapshot,
             context_files::ctx_discover,
             context_files::ctx_read_folder,
-            memory_db::mem_status,
-            memory_db::mem_index,
-            memory_db::mem_forget_session,
-            memory_db::mem_wipe_history,
-            memory_db::mem_search,
-            memory_db::memories_list,
-            memory_db::memories_put,
-            memory_db::memories_delete,
-            memory_db::memories_search,
-            memory_db::skills_list,
-            memory_db::skills_put,
-            memory_db::skills_delete,
-            memory_db::skills_search,
+            lotusd::core_info,
             updates::update_check,
             updates::update_install,
         ])
@@ -223,6 +211,8 @@ pub fn run() {
                 let _ = gs.register(tauri_plugin_global_shortcut::Shortcut::new(Some(ca), code));
             }
 
+            // The background core (lotusd) owns Lotus's data; start it before the windows need it.
+            app.state::<lotusd::Core>().start(app.handle());
             hooks::start(app.handle().clone());
             mac_chrome::place_traffic_lights(app.handle());
 
@@ -242,6 +232,7 @@ pub fn run() {
 
     app.run(|handle, event| match event {
         RunEvent::Exit => {
+            handle.state::<lotusd::Core>().stop();
             engines::kill_all(&handle.state::<engines::Engines>());
             appbuilder::kill_all(&handle.state::<appbuilder::AppBuilder>());
         }

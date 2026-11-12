@@ -8,6 +8,7 @@ import { IslandChat, IslandChatHandle } from './IslandChat';
 import { ApprovalCard } from './ApprovalCard';
 import { useActivity, useAgents, useEngineStatus } from './hooks';
 import { Activity, IslandView, Mood, loadIsland, mainSettings } from './state';
+import { kv } from '../lib/store';
 
 const ease = 'cubic-bezier(.32,.72,0,1)';
 
@@ -30,7 +31,7 @@ export const Island: React.FC = () => {
   const returnView = useRef<IslandView>('strip');
   const forcedShow = useRef(false);
 
-  // Settings are edited in the main window; the two windows share localStorage.
+  // Settings are edited in the main window; the two windows share kv.
   useEffect(() => {
     const sync = (e: StorageEvent) => {
       if (e.key !== 'lotus.island.v1') return;
@@ -144,7 +145,7 @@ export const Island: React.FC = () => {
     try {
       const text = (await navigator.clipboard.readText()).trim();
       if (!text) return say('The clipboard is empty.');
-      const profile = loadIsland().voiceProfileId || localStorage.getItem('lotus.voice.profile') || undefined;
+      const profile = loadIsland().voiceProfileId || kv.getItem('lotus.voice.profile') || undefined;
       say('Reading aloud…');
       const q = await voicebox.speak(text.slice(0, 4000), { profile });
       const done = await voicebox.waitFor(q.id);

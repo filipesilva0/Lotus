@@ -37,11 +37,13 @@ import { useSetupJobs } from './setup/jobs';
 import { installMacMenu, matchesShortcut, menuSignature } from './lib/nativeMenu';
 import { focusPageSearch, runCommand, type PageCommand } from './lib/commands';
 import { AlertHost, flushUndo, takeUndoIfIdle } from './components/common/Alerts';
+import { CoreNotice } from './components/common/CoreNotice';
 import { EnginesContext } from './components/common/EngineNotice';
 import { openExternal } from './lib/open';
 import { isTauri } from './lib/http';
 import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
+import { kv } from './lib/store';
 
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
@@ -94,7 +96,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
 
 function load<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = kv.getItem(key);
     return raw ? (JSON.parse(raw) as T) : fallback;
   } catch {
     return fallback;
@@ -141,7 +143,7 @@ export default function App() {
 
   // Each page's left panel (its list) and right panel (its inspector), toggled from the title bar.
   const [panelMap, setPanelMap] = useState<Partial<Record<ViewMode, PanelState>>>(() => load('lotus.panels.v1', {}));
-  useEffect(() => { try { localStorage.setItem('lotus.panels.v1', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
+  useEffect(() => { try { kv.setItem('lotus.panels.v1', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
   const panels = panelMap[currentView] ?? DEFAULT_PANELS;
   const viewRefForPanels = useRef(currentView);
   viewRefForPanels.current = currentView;
@@ -207,7 +209,7 @@ export default function App() {
   useEffect(() => { startHardwareMonitor(); void loadMemory(); startScheduler(); }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────
-  useEffect(() => { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
+  useEffect(() => { kv.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
 
   // Each page wears its own petal colour as the accent (no accent setting since session 8).
   useEffect(() => {
@@ -430,6 +432,7 @@ export default function App() {
       <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} />
       <LibrarySheet open={library !== null} tab={library ?? 'skills'} onTab={setLibrary} onClose={() => setLibrary(null)} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} folder={chat.active?.folder} />
       <AlertHost />
+      <CoreNotice />
       <SettingsModal isOpen={isSettingsOpen} pane={settingsPane} onClose={closeSettings} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );

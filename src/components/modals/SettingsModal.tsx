@@ -38,6 +38,7 @@ import { ollamaClient } from '../../services/ollamaService';
 import { UpdatesPanel } from './UpdatesPanel';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAgentSettings';
 import type { Updates } from '../../hooks/useUpdates';
+import { kv } from '../../lib/store';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -75,9 +76,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // HIG Settings: reopen on the pane used last.
   const [activeTab, setActiveTabRaw] = useState<SettingsTab>(() => {
     if (pane) return pane;
-    try { return (localStorage.getItem(PANE_KEY) as SettingsTab | null) ?? 'inference'; } catch { return 'inference'; }
+    try { return (kv.getItem(PANE_KEY) as SettingsTab | null) ?? 'inference'; } catch { return 'inference'; }
   });
-  const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { localStorage.setItem(PANE_KEY, t); } catch { /* memory only */ } };
+  const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { kv.setItem(PANE_KEY, t); } catch { /* memory only */ } };
   useEffect(() => { if (isOpen && pane) setActiveTabRaw(pane); }, [isOpen, pane]);
   useEffect(() => {
     if (!isOpen) return;

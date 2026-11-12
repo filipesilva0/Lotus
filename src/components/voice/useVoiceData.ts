@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   voicebox, VoiceProfile, AvailableEffect, EffectPreset, Health,
 } from '../../services/voicebox';
+import { kv } from '../../lib/store';
 
 export type VbStatus = 'checking' | 'online' | 'offline';
 
@@ -75,12 +76,12 @@ export function useVoiceData(): VoiceData {
 
 /** Persisted selection of the active voice profile. */
 export function useSelectedProfile(profiles: VoiceProfile[]): [VoiceProfile | null, (id: string) => void] {
-  const [id, setId] = useState<string | null>(() => localStorage.getItem('lotus.voice.profile'));
+  const [id, setId] = useState<string | null>(() => kv.getItem('lotus.voice.profile'));
   const selected = profiles.find((p) => p.id === id) ?? profiles[0] ?? null;
   return [
     selected,
     (next: string) => {
-      localStorage.setItem('lotus.voice.profile', next);
+      kv.setItem('lotus.voice.profile', next);
       setId(next);
     },
   ];

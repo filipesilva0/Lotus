@@ -1,7 +1,20 @@
 # Third-party licenses and attributions
 
 Lotus is a front end for local AI engines and borrows ideas from two open-source projects.
-No code, artwork, sounds or trademarks from either project are bundled in Lotus.
+No code, artwork, sounds or trademarks from either project are bundled in Lotus. The one bundled
+third-party runtime is Bun, inside lotusd (below).
+
+## Bun (bundled inside lotusd)
+
+lotusd, Lotus's background core, is compiled with `bun build --compile`, which puts the Bun runtime
+inside the `lotusd` executable. Lotus ships that executable next to the app. lotusd itself uses only
+Bun's built-in modules (no third-party npm packages at run time).
+
+- Project: https://github.com/oven-sh/bun
+- License: MIT, Copyright (c) Oven and Bun contributors. Bun statically links other open-source
+  components, listed at https://bun.sh/docs/project/licensing, including JavaScriptCore/WebKit
+  (LGPL-2; Bun publishes the WebKit source it builds from at https://github.com/oven-sh/WebKit)
+  and SQLite (public domain). ⚠️ Not reviewed by a lawyer; check before selling Lotus.
 
 ## Voicebox (integration)
 

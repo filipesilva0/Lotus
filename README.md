@@ -153,6 +153,8 @@ Lotus talks to each engine over your own machine's loopback address. Your prompt
 
 Install only the engines you want. A page whose engine isn't running tells you so and offers to start it. Lotus never pretends.
 
+Behind the window runs **lotusd**, Lotus's background core. It keeps your chats, settings, tasks, memory and skills in one database file (`lotus.db` in the Lotus data folder) and saves generated images as ordinary files in `Lotus Studio/Images`, so they survive restarts and you can open them yourself. It starts and stops with Lotus and only listens on your own computer.
+
 <div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
 <a name="get-started"></a>
@@ -222,7 +224,7 @@ The setup guide downloads only what you pick, and only from each project's own s
 | **Model downloads** | Only when you press *Download* | A request to the link you pasted |
 | **Update check** | When you press the button, or at launch if you opt in | A request to this repository's Releases |
 
-No telemetry, no analytics, no remote fonts. Memory lives in a single file in your Lotus data folder, and skills are plain files you can open and edit. The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+No telemetry, no analytics, no remote fonts. Your chats, settings, tasks and memory live in a single file in your Lotus data folder (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
 
 <div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
@@ -230,10 +232,11 @@ No telemetry, no analytics, no remote fonts. Memory lives in a single file in yo
 
 ## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Build from source
 
-You'll need **Node 22+** and **Rust** (stable). On Windows use the MSVC toolchain; on Linux first install `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`; on macOS the Xcode command line tools.
+You'll need **Node 22+**, **Rust** (stable) and **[Bun](https://bun.sh) 1.4+** (it compiles lotusd, the background core, into one file). On Windows use the MSVC toolchain; on Linux first install `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`; on macOS the Xcode command line tools.
 
 ```powershell
 npm install
+cd core; bun install; bun scripts/build.ts; cd ..   # build lotusd for this computer (once, and after core changes)
 npm run tauri:dev                  # run with hot reload
 npm run tauri:build                # MSI on Windows, .app/.dmg on macOS, AppImage/.deb/.rpm on Linux
 ./scripts/package-portable.ps1     # Windows only: then build the portable zip
@@ -250,7 +253,8 @@ src/                 The interface
   components/        Pages, panels and shared controls
   island/            The floating island (its own window)
   services/          Clients for Ollama, ComfyUI and Voicebox
-src-tauri/           The native shell: windows, tray, shortcuts, engine launcher
+core/                lotusd, the background core: lotus.db, media files, memory (TypeScript, Bun)
+src-tauri/           The native shell: windows, tray, shortcuts, engine launcher, starts lotusd
   wix/               Installer template
 handover/            Test harnesses and screenshot scripts
 ```

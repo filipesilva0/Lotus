@@ -215,6 +215,7 @@ pub fn setup_prepare(app: AppHandle, dir: String) -> Result<String, String> {
         return Err("Choose a full folder path, for example your Documents folder.".into());
     }
     prepare(&d)?;
+    let changed = studio_dir(&app) != d;
     if !crate::paths::is_portable() {
         if let Some(f) = chosen_file(&app) {
             if let Some(parent) = f.parent() {
@@ -222,6 +223,12 @@ pub fn setup_prepare(app: AppHandle, dir: String) -> Result<String, String> {
             }
             std::fs::write(&f, d.to_string_lossy().as_bytes()).map_err(|e| format!("Could not remember the folder: {e}"))?;
         }
+    }
+    if changed {
+        // The core saves images and audio in this folder: restart it there (off the UI thread).
+        let core = app.state::<crate::lotusd::Core>().inner().clone();
+        let handle = app.clone();
+        std::thread::spawn(move || core.restart(&handle));
     }
     Ok(d.to_string_lossy().into_owned())
 }

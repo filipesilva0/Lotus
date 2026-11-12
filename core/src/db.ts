@@ -1,0 +1,95 @@
+// lotus.db: the one SQLite file the core owns. It sits in Lotus's data folder (the same file the
+// Rust memory module used before session 14, so existing memories, skills and chat recall carry over).
+//
+// Schema versions (PRAGMA user_version):
+//   0  what the Rust memory module created: memories, skills, *_fts tables
+//   1  adds kv (what the web layer kept in localStorage/IndexedDB), meta and media
+// New versions append a step to MIGRATIONS; never edit a step that has shipped.
+
+import { Database } from 'bun:sqlite';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+export interface Db {
+  sql: Database;
+  /** Whether SQLite has FTS5 (it should; search falls back to LIKE without it). */
+  fts: boolean;
+  /** Data folder that holds lotus.db and skills/. */
+  dir: string;
+  path: string;
+}
+
+function createMemoryTables(sql: Database): boolean {
+  sql.run('CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY, kind TEXT, text TEXT, source TEXT, uses INTEGER, ts INTEGER, updated INTEGER)');
+  sql.run('CREATE TABLE IF NOT EXISTS skills(id TEXT PRIMARY KEY, json TEXT NOT NULL, updated INTEGER)');
+  try {
+    sql.run("CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(msg_id UNINDEXED, session_id UNINDEXED, title, role UNINDEXED, content, ts UNINDEXED, tokenize='unicode61 remove_diacritics 2')");
+    sql.run("CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED, text, tokenize='unicode61 remove_diacritics 2')");
+    sql.run("CREATE VIRTUAL TABLE IF NOT EXISTS skills_fts USING fts5(id UNINDEXED, name, description, when_to_use, body, tokenize='unicode61 remove_diacritics 2')");
+    return true;
+  } catch {
+    sql.run('CREATE TABLE IF NOT EXISTS messages_fts(msg_id TEXT, session_id TEXT, title TEXT, role TEXT, content TEXT, ts INTEGER)');
+    sql.run('CREATE TABLE IF NOT EXISTS memories_fts(id TEXT, text TEXT)');
+    sql.run('CREATE TABLE IF NOT EXISTS skills_fts(id TEXT, name TEXT, description TEXT, when_to_use TEXT, body TEXT)');
+    return false;
+  }
+}
+
+/** Is `name` an FTS5 virtual table (rather than the plain fallback table)? */
+function isFts(sql: Database, name: string): boolean {
+  const row = sql.query<{ sql: string }, [string]>("SELECT sql FROM sqlite_master WHERE name = ?").get(name);
+  return !!row && /using\s+fts5/i.test(row.sql);
+}
+
+const MIGRATIONS: ((sql: Database) => void)[] = [
+  // 0 → 1
+  (sql) => {
+    sql.run('CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT NOT NULL, updated INTEGER NOT NULL)');
+    sql.run('CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    sql.run(`CREATE TABLE IF NOT EXISTS media(
+      path TEXT PRIMARY KEY,      -- relative to the Lotus Studio folder, '/' separated
+      kind TEXT NOT NULL,         -- 'image' | 'audio'
+      mime TEXT NOT NULL,
+      bytes INTEGER NOT NULL,
+      created INTEGER NOT NULL
+    )`);
+  },
+];
+
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+export function openDb(dir: string): Db {
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'lotus.db');
+  const sql = new Database(path, { create: true });
+  // Two processes may briefly share the file during an update (an older Lotus still running).
+  sql.run('PRAGMA busy_timeout = 5000');
+  try { sql.query('PRAGMA journal_mode = WAL').get(); } catch { /* best effort */ }
+  sql.run('PRAGMA foreign_keys = ON');
+
+  createMemoryTables(sql);
+  const fts = isFts(sql, 'messages_fts');
+
+  const current = (sql.query('PRAGMA user_version').get() as { user_version: number }).user_version;
+  for (let v = current; v < MIGRATIONS.length; v++) {
+    sql.transaction(() => {
+      MIGRATIONS[v](sql);
+      sql.run(`PRAGMA user_version = ${v + 1}`);
+    })();
+  }
+  return { sql, fts, dir, path };
+}
+
+export function schemaVersion(db: Db): number {
+  return (db.sql.query('PRAGMA user_version').get() as { user_version: number }).user_version;
+}
+
+// ── meta ────────────────────────────────────────────────────────────────────
+
+export function getMeta(db: Db, key: string): string | null {
+  return db.sql.query<{ value: string }, [string]>('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
+}
+
+export function setMeta(db: Db, key: string, value: string): void {
+  db.sql.query('INSERT INTO meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+}

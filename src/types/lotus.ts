@@ -163,6 +163,8 @@ export interface GeneratedImage {
   url: string;
   /** The image data itself; `url` is an object URL made from it each launch. */
   blob?: Blob;
+  /** Where the image is saved, relative to the Lotus Studio folder (`Images/2026-11/….png`). Session 14. */
+  file?: string;
   sampler?: string;
   /** LoRAs used for this image. */
   loras?: { name: string; strength: number }[];

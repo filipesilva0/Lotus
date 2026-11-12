@@ -202,3 +202,14 @@ Rejected this session: Monaco/CodeMirror (weight, workers vs CSP); Ollama native
 | D37 | **"Used before" means a chat with messages**, not the presence of saved chats, when deciding whether to skip the first-run guide. | Me | s12 tests. |
 | D38 | **Generated images open in a full-screen viewer** that also puts the window into OS full screen while open. | User (asked) + Me (design) | Chromium screenshots. ⚠️ OS full screen not tried in WebView2/WKWebView. |
 
+## Session 14: rebuild step 1, the background core
+| # | Decision | Who | Evidence |
+|---|---|---|---|
+| D45 | **A separate core process, `lotusd`, owns Lotus's data**; the windows are clients. First step of the rebuild plan (core + storage); the agent and tools (step 2) will live there too. | User (agreed plan) + Me | Session 14 tests; real Tauri app on Linux started, restarted and orphan-stopped it. |
+| D46 | **TypeScript compiled with Bun** (`bun build --compile`), as the plan chose, using only Bun built-ins (`bun:sqlite`, `Bun.serve`). Cost: the sidecar is ~110 MB on disk (~54 MB gzipped) per OS, where Lotus itself is ~10 MB. Accepted for reuse of the TS code and the MCP TypeScript SDK; revisit (Rust port of the core) if size matters more. | User (plan) + Me | Measured: Linux 109 MB, Windows 115 MB, 54 MB gzipped. |
+| D47 | **Storage moves without reshaping**: every localStorage/IndexedDB key becomes a row in `kv` with the same text value, behind a localStorage-shaped API (`kv`), so the UI behaves exactly as before. Chats and tasks become real tables in step 2, when the agent needs to query them. | Me | e2e: import, reload after wiping browser storage, cross-window events. |
+| D48 | **The core lives and dies with the app for now**: stdin watchdog, restart on crash, stopped before updates. The tray stays in the Tauri process. Running the core while Lotus is closed (routines, messaging) comes with step 5 and needs a decision on autostart. | Me | Linux run. ⚠️ Not run on Windows/macOS. |
+| D49 | **Security of the local API**: 127.0.0.1 only, random port, per-run 256-bit token (`RandomState`-seeded, no new crate), constant-time compare, Host-header check, CORS allow-list. | Me | Core tests (401/403/CORS/WebSocket). |
+| D50 | **Images are written to `Lotus Studio/Images/<yyyy-mm>/`** and removing one in Lotus does not delete the file (it is the user's folder, and deletes are undoable). | Me | e2e. |
+| D51 | **Without a core the app still works on browser storage, and says so** (`CoreNotice`) instead of pretending changes are safe. | Me | Screenshots (light, dark). |
+

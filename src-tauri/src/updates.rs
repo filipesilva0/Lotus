@@ -9,7 +9,7 @@
 //! HTTP request itself.
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Serialize, Clone)]
@@ -64,15 +64,21 @@ pub async fn update_install(app: AppHandle) -> Result<(), String> {
     };
     let mut downloaded: u64 = 0;
     let emitter = app.clone();
-    update
+    let core = app.state::<crate::lotusd::Core>().inner().clone();
+    let result = update
         .download_and_install(
             move |chunk, total| {
                 downloaded += chunk as u64;
                 let _ = emitter.emit("update:progress", Progress { downloaded, total });
             },
-            || {},
+            // Stop the core before the installer runs, so its file is not in use (Windows).
+            move || core.stop(),
         )
-        .await
-        .map_err(|e| e.to_string())?;
+        .await;
+    if let Err(e) = result {
+        // Nothing was replaced: bring the core back.
+        app.state::<crate::lotusd::Core>().restart(&app);
+        return Err(e.to_string());
+    }
     app.restart()
 }

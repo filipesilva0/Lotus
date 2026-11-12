@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { http } from '../lib/http';
 import { syncDelete, syncGet, syncPut } from './sync';
+import { kv } from '../lib/store';
 
 /**
  * Lotus accounts: sign-in for syncing the studio between PCs.
@@ -45,7 +46,7 @@ const SESSION_KEY = 'lotus.account.v1';
 // ── Server config ──────────────────────────────────────────────────────────
 export function getServer(): SyncServer | null {
   try {
-    const saved = JSON.parse(localStorage.getItem(SERVER_KEY) || 'null') as SyncServer | null;
+    const saved = JSON.parse(kv.getItem(SERVER_KEY) || 'null') as SyncServer | null;
     if (saved?.url && saved.anonKey) return saved;
   } catch { /* fall through */ }
   const url = import.meta.env.VITE_LOTUS_SYNC_URL as string | undefined;
@@ -54,14 +55,14 @@ export function getServer(): SyncServer | null {
 }
 
 export function setServer(s: SyncServer | null): void {
-  if (!s) localStorage.removeItem(SERVER_KEY);
-  else localStorage.setItem(SERVER_KEY, JSON.stringify({ url: s.url.trim().replace(/\/+$/, ''), anonKey: s.anonKey.trim() }));
+  if (!s) kv.removeItem(SERVER_KEY);
+  else kv.setItem(SERVER_KEY, JSON.stringify({ url: s.url.trim().replace(/\/+$/, ''), anonKey: s.anonKey.trim() }));
   emit();
 }
 
 // ── Session store ──────────────────────────────────────────────────────────
 let session: StoredSession | null = (() => {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') as StoredSession | null; } catch { return null; }
+  try { return JSON.parse(kv.getItem(SESSION_KEY) || 'null') as StoredSession | null; } catch { return null; }
 })();
 let snapshot: AccountState = session ? { kind: 'signed-in', user: session.user } : { kind: 'signed-out' };
 const subs = new Set<() => void>();
@@ -72,8 +73,8 @@ function emit() {
 }
 function save(s: StoredSession | null) {
   session = s;
-  if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
-  else localStorage.removeItem(SESSION_KEY);
+  if (s) kv.setItem(SESSION_KEY, JSON.stringify(s));
+  else kv.removeItem(SESSION_KEY);
   emit();
 }
 
@@ -81,7 +82,7 @@ function save(s: StoredSession | null) {
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key !== SESSION_KEY && e.key !== SERVER_KEY) return;
-    try { session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null') as StoredSession | null; } catch { session = null; }
+    try { session = JSON.parse(kv.getItem(SESSION_KEY) || 'null') as StoredSession | null; } catch { session = null; }
     emit();
   });
 }

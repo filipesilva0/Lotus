@@ -21,9 +21,9 @@
     reads them, downloads each engine's official installer and opens it, so the user accepts each
     engine's own terms. The MSI itself never downloads or runs an engine.
   - Every component in a per-user folder has an HKCU registry key path (ICE38/ICE43/ICE64).
-    That includes the main program: its file is not the key path. If resources or sidecar
-    binaries are ever added to tauri.conf.json, Tauri generates file key paths for them, which
-    ICE38 rejects in a per-user folder; give those an HKCU key path too (see CURRENT_STATE).
+    That includes the main program and the lotusd sidecar (session 14): their files are not the key
+    path. If resources are ever added to tauri.conf.json, Tauri generates file key paths for them,
+    which ICE38 rejects in a per-user folder; give those an HKCU key path too (see CURRENT_STATE).
   - In this template a doubled backslash before a Handlebars placeholder is an escape; everywhere else write a
     single backslash (a doubled one broke the Run key in session 2: LGHT0204/ICE03).
 -->
@@ -309,9 +309,12 @@
                 <File Id="Path" Source="{{main_binary_path}}" KeyPath="no" Checksum="yes"/>
                 <RegistryValue Root="HKCU" Key="Software\\{{manufacturer}}\\{{product_name}}" Name="Program" Type="string" Value="[#Path]" KeyPath="yes" />
             </Component>
+            <!-- Sidecars (lotusd, the background core). In a per-user folder the key path must be an
+                 HKCU value, not the file (ICE38), like the main program above. -->
             {{#each binaries as |bin| ~}}
             <Component Id="{{ bin.id }}" Guid="{{bin.guid}}" Win64="$(var.Win64)">
-                <File Id="Bin_{{ bin.id }}" Source="{{bin.path}}" KeyPath="yes"/>
+                <File Id="Bin_{{ bin.id }}" Source="{{bin.path}}" KeyPath="no" Checksum="yes"/>
+                <RegistryValue Root="HKCU" Key="Software\\{{../manufacturer}}\\{{../product_name}}\Sidecars" Name="{{ bin.id }}" Type="string" Value="[#Bin_{{ bin.id }}]" KeyPath="yes" />
             </Component>
             {{/each~}}
             {{#if enable_elevated_update_task}}

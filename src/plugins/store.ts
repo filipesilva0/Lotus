@@ -5,12 +5,13 @@
 //   • commands     — slash commands (/name text) that expand to a prompt template ({{input}})
 //   • skills       — reference notes loaded into a reply only when the question matches them
 // Plugins are data, not code: nothing in a plugin runs on the PC, so an imported plugin cannot do
-// anything a typed prompt could not. They are stored in localStorage (`lotus.plugins.v1`) and can be
+// anything a typed prompt could not. They are stored in lotus.db (`lotus.plugins.v1`) and can be
 // exported/imported as `.lotus-plugin.json` files. The plugin creator (plugins/creator.ts) drafts them.
 
 import { useSyncExternalStore } from 'react';
 import { matchScore, queryWords } from '../memory/store';
 import { uid } from '../lib/persist';
+import { kv } from '../lib/store';
 
 export interface PluginCommand { name: string; description: string; prompt: string }
 export interface PluginSkill { name: string; description: string; whenToUse: string; body: string }
@@ -92,13 +93,13 @@ export function validatePlugin(raw: unknown, others: Pick<LotusPlugin, 'commands
 // ── store ─────────────────────────────────────────────────────────────────
 
 function load(): LotusPlugin[] {
-  try { const v = JSON.parse(localStorage.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+  try { const v = JSON.parse(kv.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
-let list: LotusPlugin[] = typeof localStorage === 'undefined' ? [] : load();
+let list: LotusPlugin[] = load();
 const subs = new Set<() => void>();
 function commit(next: LotusPlugin[]) {
   list = next;
-  try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* quota */ }
+  try { kv.setItem(KEY, JSON.stringify(list)); } catch { /* quota */ }
   subs.forEach((f) => f());
 }
 

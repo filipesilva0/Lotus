@@ -3,12 +3,13 @@
 import { invokeNative } from '../lib/bus';
 import { isTauri, http, timeoutSignal, networkErrorText } from '../lib/http';
 import { engineUrl, EngineId, isRemote, isLoopbackHost, LISTEN_HINT, engineToken, normalizeEngineUrl, authHeaderFromToken } from './engineConfig';
+import { kv } from '../lib/store';
 
-export interface AppPaths { portable: boolean; dataDir: string; exeDir: string }
+export interface AppPaths { portable: boolean; dataDir: string; exeDir: string; studioDir?: string }
 
 const exeKey = (id: EngineId) => `lotus.engine.${id}.exe`;
-export const savedExe = (id: EngineId) => localStorage.getItem(exeKey(id)) || '';
-export const setSavedExe = (id: EngineId, p: string) => localStorage.setItem(exeKey(id), p);
+export const savedExe = (id: EngineId) => kv.getItem(exeKey(id)) || '';
+export const setSavedExe = (id: EngineId, p: string) => kv.setItem(exeKey(id), p);
 
 let pathsCache: AppPaths | undefined;
 export async function appPaths(): Promise<AppPaths | undefined> {

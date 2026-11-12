@@ -1,4 +1,4 @@
-// Task board and routines: shared state (localStorage `lotus.tasks.v1`, `lotus.routines.v1`), the
+// Task board and routines: shared state (lotus.db through `kv`: `lotus.tasks.v1`, `lotus.routines.v1`), the
 // auto-runner for tasks assigned to Lotus, and the routine scheduler. Lives outside React so routines
 // keep firing whichever page is open (and while the window is hidden in the tray).
 
@@ -13,6 +13,7 @@ import { considerSkill } from '../memory/learn';
 import { addLink, blockersOf, moveTask, newTask, nextRunnable, removeLink, removeTask, Status, Task, TaskLink } from './kanban';
 import { nextRun, validateCron } from './cron';
 import { runTaskAgent } from './runner';
+import { kv } from '../lib/store';
 
 const TASKS_KEY = 'lotus.tasks.v1';
 const ROUTINES_KEY = 'lotus.routines.v1';
@@ -38,8 +39,8 @@ export interface Routine {
   created: number;
 }
 
-const read = <T,>(k: string): T[] => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch { return []; } };
-const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota */ } };
+const read = <T,>(k: string): T[] => { try { return JSON.parse(kv.getItem(k) || '[]'); } catch { return []; } };
+const write = (k: string, v: unknown) => { try { kv.setItem(k, JSON.stringify(v)); } catch { /* quota */ } };
 
 interface State { tasks: Task[]; routines: Routine[]; notice: string | null }
 let state: State = {

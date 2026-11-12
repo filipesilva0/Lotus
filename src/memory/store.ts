@@ -1,11 +1,12 @@
 // Long-term memory store used by chat, tasks and skills.
-// In the desktop app everything lives in SQLite with FTS5 full-text search (src-tauri/src/memory_db.rs).
+// In the desktop app everything lives in lotus.db, owned by the lotusd core (core/src/memory.ts), with
+// SQLite FTS5 full-text search.
 // In a plain browser (vite preview, tests) a localStorage + word-matching fallback keeps the UI working.
 // One shared instance; React components subscribe with `useMemoryStore()`.
 
 import { useSyncExternalStore } from 'react';
-import { invokeNative } from '../lib/bus';
-import { isTauri } from '../lib/http';
+import { rpc } from '../lib/core';
+import { kv, storeMode } from '../lib/store';
 import { MemoryItem } from '../types/lotus';
 
 export interface Skill {
@@ -80,40 +81,40 @@ interface MemRow { id: string; kind: string; text: string; source: string; uses:
 
 const SKILL_META = 'lotus.skills.meta.v1'; // change history is UI-only metadata, kept beside the DB
 
-const nativeBackend: Backend = {
-  status: async () => ({ native: true, ...(await invokeNative<Omit<MemoryStatus, 'native'>>('mem_status'))! }),
-  index: async (messages) => { await invokeNative('mem_index', { messages }); },
-  forgetSession: async (sessionId) => { await invokeNative('mem_forget_session', { sessionId }); },
-  wipeHistory: async () => { await invokeNative('mem_wipe_history'); },
-  search: async (query, excludeSession, limit) => (await invokeNative<SessionHit[]>('mem_search', { query, excludeSession, limit })) ?? [],
-  listMemories: async () => ((await invokeNative<MemRow[]>('memories_list')) ?? []).map((r) => ({ id: r.id, kind: r.kind === 'instruction' ? 'instruction' : 'memory', text: r.text, source: r.source === 'auto' ? 'auto' : 'user', uses: r.uses, ts: r.ts, updated: r.updated })),
-  putMemories: async (items) => { await invokeNative('memories_put', { items: items.map((m) => ({ id: m.id, kind: m.kind, text: m.text, source: m.source ?? 'user', uses: m.uses ?? 0, ts: m.ts, updated: m.updated ?? m.ts })) }); },
-  deleteMemory: async (id) => { await invokeNative('memories_delete', { id }); },
-  searchMemories: async (query, limit) => (await invokeNative<string[]>('memories_search', { query, limit })) ?? [],
+const coreBackend: Backend = {
+  status: async () => ({ native: true, ...(await rpc<Omit<MemoryStatus, 'native'>>('mem_status'))! }),
+  index: async (messages) => { await rpc('mem_index', { messages }); },
+  forgetSession: async (sessionId) => { await rpc('mem_forget_session', { sessionId }); },
+  wipeHistory: async () => { await rpc('mem_wipe_history'); },
+  search: async (query, excludeSession, limit) => (await rpc<SessionHit[]>('mem_search', { query, excludeSession, limit })) ?? [],
+  listMemories: async () => ((await rpc<MemRow[]>('memories_list')) ?? []).map((r) => ({ id: r.id, kind: r.kind === 'instruction' ? 'instruction' : 'memory', text: r.text, source: r.source === 'auto' ? 'auto' : 'user', uses: r.uses, ts: r.ts, updated: r.updated })),
+  putMemories: async (items) => { await rpc('memories_put', { items: items.map((m) => ({ id: m.id, kind: m.kind, text: m.text, source: m.source ?? 'user', uses: m.uses ?? 0, ts: m.ts, updated: m.updated ?? m.ts })) }); },
+  deleteMemory: async (id) => { await rpc('memories_delete', { id }); },
+  searchMemories: async (query, limit) => (await rpc<string[]>('memories_search', { query, limit })) ?? [],
   listSkills: async () => {
     const meta = readMeta();
-    return ((await invokeNative<SkillRow[]>('skills_list')) ?? []).map((r) => ({ ...r, origin: r.origin === 'user' ? 'user' : 'auto', history: meta[r.id] }));
+    return ((await rpc<SkillRow[]>('skills_list')) ?? []).map((r) => ({ ...r, origin: r.origin === 'user' ? 'user' : 'auto', history: meta[r.id] }));
   },
   putSkill: async (s) => {
     const { history, ...row } = s;
     writeMeta(s.id, history);
-    return invokeNative<string>('skills_put', { skill: row });
+    return rpc<string>('skills_put', { skill: row });
   },
-  deleteSkill: async (id) => { writeMeta(id, undefined); await invokeNative('skills_delete', { id }); },
-  searchSkills: async (query, limit) => (await invokeNative<string[]>('skills_search', { query, limit })) ?? [],
+  deleteSkill: async (id) => { writeMeta(id, undefined); await rpc('skills_delete', { id }); },
+  searchSkills: async (query, limit) => (await rpc<string[]>('skills_search', { query, limit })) ?? [],
 };
 
-function readMeta(): Record<string, Skill['history']> { try { return JSON.parse(localStorage.getItem(SKILL_META) || '{}'); } catch { return {}; } }
+function readMeta(): Record<string, Skill['history']> { try { return JSON.parse(kv.getItem(SKILL_META) || '{}'); } catch { return {}; } }
 function writeMeta(id: string, h: Skill['history'] | undefined) {
   const m = readMeta();
   if (h?.length) m[id] = h.slice(-12); else delete m[id];
-  try { localStorage.setItem(SKILL_META, JSON.stringify(m)); } catch { /* quota */ }
+  try { kv.setItem(SKILL_META, JSON.stringify(m)); } catch { /* quota */ }
 }
 
 /** Browser fallback: memories and skills in localStorage, chat index in memory for this tab. */
 function webBackend(): Backend {
-  const load = <T,>(k: string): T[] => { try { return JSON.parse(localStorage.getItem(k) || '[]'); } catch { return []; } };
-  const save = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota */ } };
+  const load = <T,>(k: string): T[] => { try { return JSON.parse(kv.getItem(k) || '[]'); } catch { return []; } };
+  const save = (k: string, v: unknown) => { try { kv.setItem(k, JSON.stringify(v)); } catch { /* quota */ } };
   const MEM = 'lotus.memory.v1', SK = 'lotus.skills.v1';
   const idx = new Map<string, IndexedMsg>();
   return {
@@ -140,7 +141,9 @@ function webBackend(): Backend {
   };
 }
 
-const be: Backend = isTauri ? nativeBackend : webBackend();
+// Chosen per call: initStore() decides before the app renders whether the core is running.
+const web = webBackend();
+const be = (): Backend => (storeMode() === 'core' ? coreBackend : web);
 
 // ── shared state ────────────────────────────────────────────────────────────
 
@@ -156,15 +159,15 @@ export function loadMemory(): Promise<void> {
   if (loading) return loading;
   loading = (async () => {
     try {
-      let memories = await be.listMemories();
-      if (isTauri && !memories.length) {
+      let memories = await be().listMemories();
+      if (storeMode() === 'core' && !memories.length) {
         try {
-          const legacy = JSON.parse(localStorage.getItem('lotus.memory.v1') || '[]') as MemoryItem[];
-          if (legacy.length) { await be.putMemories(legacy.map((m) => ({ ...m, source: m.source ?? 'user' }))); memories = await be.listMemories(); localStorage.removeItem('lotus.memory.v1'); }
+          const legacy = JSON.parse(kv.getItem('lotus.memory.v1') || '[]') as MemoryItem[];
+          if (legacy.length) { await be().putMemories(legacy.map((m) => ({ ...m, source: m.source ?? 'user' }))); memories = await be().listMemories(); kv.removeItem('lotus.memory.v1'); }
         } catch { /* keep going */ }
       }
-      const skills = await be.listSkills();
-      const status = await be.status().catch(() => null);
+      const skills = await be().listSkills();
+      const status = await be().status().catch(() => null);
       set({ memories, skills, status, loaded: true, error: null });
     } catch (e) {
       set({ loaded: true, error: `The memory database could not be opened: ${(e as Error).message}` });
@@ -173,7 +176,7 @@ export function loadMemory(): Promise<void> {
   return loading;
 }
 
-const refreshStatus = () => { void be.status().then((status) => set({ status })).catch(() => undefined); };
+const refreshStatus = () => { void be().status().then((status) => set({ status })).catch(() => undefined); };
 
 export const memoryStore = {
   get: () => state,
@@ -185,12 +188,12 @@ export const memoryStore = {
     const map = new Map(state.memories.map((m) => [m.id, m]));
     items.forEach((m) => map.set(m.id, m));
     set({ memories: [...map.values()].sort((a, b) => a.ts - b.ts) });
-    await be.putMemories(items).catch((e) => set({ error: `Could not save memory: ${(e as Error).message}` }));
+    await be().putMemories(items).catch((e) => set({ error: `Could not save memory: ${(e as Error).message}` }));
     refreshStatus();
   },
   async deleteMemory(id: string) {
     set({ memories: state.memories.filter((m) => m.id !== id) });
-    await be.deleteMemory(id).catch(() => undefined);
+    await be().deleteMemory(id).catch(() => undefined);
     refreshStatus();
   },
   /** Replace the whole list (inspector edits): deletes what is gone, saves what is new or changed. */
@@ -199,30 +202,30 @@ export const memoryStore = {
     const gone = state.memories.filter((m) => !keep.has(m.id));
     const changed = list.filter((m) => { const o = state.memories.find((x) => x.id === m.id); return !o || o.text !== m.text || o.kind !== m.kind; });
     set({ memories: list });
-    await Promise.all(gone.map((m) => be.deleteMemory(m.id).catch(() => undefined)));
-    if (changed.length) await be.putMemories(changed).catch(() => undefined);
+    await Promise.all(gone.map((m) => be().deleteMemory(m.id).catch(() => undefined)));
+    if (changed.length) await be().putMemories(changed).catch(() => undefined);
     refreshStatus();
   },
-  searchMemories: (q: string, limit = 8) => be.searchMemories(q, limit).catch(() => [] as string[]),
+  searchMemories: (q: string, limit = 8) => be().searchMemories(q, limit).catch(() => [] as string[]),
 
   // chat history index
-  index: (msgs: IndexedMsg[]) => be.index(msgs).then(refreshStatus).catch(() => undefined),
-  forgetSession: (id: string) => be.forgetSession(id).then(refreshStatus).catch(() => undefined),
-  wipeHistory: () => be.wipeHistory().then(refreshStatus),
-  searchSessions: (q: string, exclude: string, limit = 6) => be.search(q, exclude, limit).catch(() => [] as SessionHit[]),
+  index: (msgs: IndexedMsg[]) => be().index(msgs).then(refreshStatus).catch(() => undefined),
+  forgetSession: (id: string) => be().forgetSession(id).then(refreshStatus).catch(() => undefined),
+  wipeHistory: () => be().wipeHistory().then(refreshStatus),
+  searchSessions: (q: string, exclude: string, limit = 6) => be().search(q, exclude, limit).catch(() => [] as SessionHit[]),
 
   // skills
   async putSkill(s: Skill): Promise<string | undefined> {
     set({ skills: [s, ...state.skills.filter((x) => x.id !== s.id)] });
-    try { const p = await be.putSkill(s); refreshStatus(); return p; }
+    try { const p = await be().putSkill(s); refreshStatus(); return p; }
     catch (e) { set({ error: `Could not save the skill: ${(e as Error).message}` }); return undefined; }
   },
   async deleteSkill(id: string) {
     set({ skills: state.skills.filter((s) => s.id !== id) });
-    await be.deleteSkill(id).catch(() => undefined);
+    await be().deleteSkill(id).catch(() => undefined);
     refreshStatus();
   },
-  searchSkills: (q: string, limit = 3) => be.searchSkills(q, limit).catch(() => [] as string[]),
+  searchSkills: (q: string, limit = 3) => be().searchSkills(q, limit).catch(() => [] as string[]),
   clearError: () => set({ error: null }),
 };
 

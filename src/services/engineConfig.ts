@@ -1,3 +1,4 @@
+import { kv } from '../lib/store';
 export type EngineId = 'ollama' | 'comfyui' | 'voicebox';
 
 export const DEFAULT_URLS: Record<EngineId, string> = {
@@ -14,7 +15,7 @@ const AUTH_KEY = 'lotus.engineAuth.v1';
 
 function readMap(key: string): Partial<Record<EngineId, string>> {
   try {
-    return JSON.parse(localStorage.getItem(key) || '{}');
+    return JSON.parse(kv.getItem(key) || '{}');
   } catch {
     return {};
   }
@@ -47,7 +48,7 @@ export function normalizeEngineUrl(id: EngineId, raw: string): string | null {
 
 export function setEngineUrl(id: EngineId, url: string) {
   const next = { ...readMap(KEY), [id]: normalizeEngineUrl(id, url) ?? DEFAULT_URLS[id] };
-  localStorage.setItem(KEY, JSON.stringify(next));
+  kv.setItem(KEY, JSON.stringify(next));
 }
 
 export function allEngineUrls(): Record<EngineId, string> {
@@ -73,7 +74,7 @@ export function setEngineToken(id: EngineId, token: string) {
   const map = readMap(AUTH_KEY);
   const t = token.trim();
   if (t) map[id] = t; else delete map[id];
-  localStorage.setItem(AUTH_KEY, JSON.stringify(map));
+  kv.setItem(AUTH_KEY, JSON.stringify(map));
 }
 
 /** Which engine (if any) a request URL belongs to: its address must be a prefix of the URL. */

@@ -1,5 +1,5 @@
 # Builds Lotus-portable-x64.zip from a finished `npm run tauri build`.
-# The zip holds lotus.exe plus an empty "lotus.portable" marker file. When that file sits next to the
+# The zip holds lotus.exe, lotusd.exe (the background core) plus an empty "lotus.portable" marker file. When that file sits next to the
 # exe, Lotus keeps ALL of its data in a "data" folder beside it (see src-tauri/src/paths.rs).
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -11,6 +11,10 @@ Remove-Item -Recurse -Force (Split-Path $stage) -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $stage | Out-Null
 
 Copy-Item $exe (Join-Path $stage 'Lotus.exe')
+# lotusd, the background core: Lotus starts it from its own folder.
+$core = Join-Path $root 'src-tauri\target\release\lotusd.exe'
+if (-not (Test-Path $core)) { throw "lotusd.exe not found next to lotus.exe. Build the core first (cd core; bun scripts/build.ts)." }
+Copy-Item $core (Join-Path $stage 'lotusd.exe')
 New-Item -ItemType File -Force (Join-Path $stage 'lotus.portable') | Out-Null
 Copy-Item (Join-Path $root 'LICENSE') $stage -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $root 'THIRD_PARTY_LICENSES.md') $stage -ErrorAction SilentlyContinue

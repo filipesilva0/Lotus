@@ -10,6 +10,7 @@ import { browseModelsDir, findModelsDir, folderPath, savedModelsDir } from '../.
 import { openExternal, revealPath } from '../../lib/open';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Btn, Card, Tabs, TextInput, Banner, Spinner, Label, cx } from '../common/ui';
+import { kv } from '../../lib/store';
 
 type Eng = ReturnType<typeof useEngines>;
 type Tab = 'engines' | 'models' | 'storage';
@@ -57,7 +58,7 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
 // ── Engines ────────────────────────────────────────────────────────────────
 
 const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModels }) => {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('lotus.setup.dismissed') === '1');
+  const [dismissed, setDismissed] = useState(() => kv.getItem('lotus.setup.dismissed') === '1');
   const { engines, gpu } = eng;
   const showSetup = !dismissed && (engines.ollama.up === false || engines.voicebox.up === false);
 
@@ -70,7 +71,7 @@ const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModel
               <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Get set up</h3>
               <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Lotus works with three engines, on this computer or another one. Chat and voice are the quickest to start with.</p>
             </div>
-            <Btn size="sm" variant="ghost" onClick={() => { localStorage.setItem('lotus.setup.dismissed', '1'); setDismissed(true); }}>Dismiss</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => { kv.setItem('lotus.setup.dismissed', '1'); setDismissed(true); }}>Dismiss</Btn>
           </div>
           <ul className="mt-4 space-y-2">
             {(['ollama', 'voicebox', 'comfyui'] as EngineId[]).map((id) => (
@@ -218,8 +219,10 @@ const StorageTab: React.FC = () => {
   if (paths === undefined) return <Spinner className="w-4 h-4 text-[var(--color-accent-vibrant)]" />;
   if (paths === null) return <Banner tone="info">Storage details are available in the Lotus desktop app.</Banner>;
 
+  const sep = paths.dataDir.includes('\\') ? '\\' : '/';
   const rows: [string, string][] = [
-    ['Chats, settings and the island', paths.portable ? `${paths.dataDir}\\webview` : "Lotus's app profile in your user folder"],
+    ['Chats, settings, tasks and memory', `${paths.dataDir}${sep}lotus.db`],
+    ['Generated images', paths.studioDir ? `${paths.studioDir}${sep}Images` : 'Lotus Studio/Images'],
     ['Voices, history and stories (Voicebox)', `${paths.dataDir}\\voicebox`],
     ['Chat models (Ollama)', "Ollama's own model folder"],
     ['Image checkpoints and LoRAs (ComfyUI)', modelsDir ? `${folderPath(modelsDir, 'checkpoints')}  ·  ${folderPath(modelsDir, 'loras')}` : "ComfyUI's models folder (not set yet)"],

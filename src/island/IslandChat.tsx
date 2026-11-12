@@ -6,6 +6,7 @@ import { MicRecorder, micErrorMessage } from '../lib/audio';
 import { emitEvent, invokeNative } from '../lib/bus';
 import { MarkdownLite, toSpeakable } from '../lib/markdownLite';
 import { loadIsland, mainSettings, Mood } from './state';
+import { kv } from '../lib/store';
 
 interface Msg { role: 'user' | 'assistant'; content: string; error?: boolean; files?: string[] }
 interface Attach { name: string; kind: 'text' | 'image'; data: string }
@@ -21,7 +22,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
   onClose: () => void;
   onHasContent: (has: boolean) => void;
 }>(({ onMood, onBusy, onClose, onHasContent }, ref) => {
-  const [msgs, setMsgs] = useState<Msg[]>(() => { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; } });
+  const [msgs, setMsgs] = useState<Msg[]>(() => { try { return JSON.parse(kv.getItem(HISTORY_KEY) || '[]'); } catch { return []; } });
   const [input, setInput] = useState('');
   const [attach, setAttach] = useState<Attach[]>([]);
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
   const input$ = useRef<HTMLTextAreaElement>(null);
   const end$ = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-30).map(({ files: _f, ...m }) => m))); onHasContent(msgs.length > 0); }, [msgs, onHasContent]);
+  useEffect(() => { kv.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-30).map(({ files: _f, ...m }) => m))); onHasContent(msgs.length > 0); }, [msgs, onHasContent]);
   useEffect(() => { end$.current?.scrollIntoView({ block: 'end' }); }, [msgs]);
   useEffect(() => { ollamaClient.listModels().then((m) => setModels(m.map((x) => x.name))).catch(() => undefined); }, []);
   useEffect(() => { input$.current?.focus(); }, []);
@@ -126,7 +127,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
     audio.current?.pause();
     setSpeakingIdx(i);
     try {
-      const profile = loadIsland().voiceProfileId || localStorage.getItem('lotus.voice.profile') || undefined;
+      const profile = loadIsland().voiceProfileId || kv.getItem('lotus.voice.profile') || undefined;
       const q = await voicebox.speak(toSpeakable(msgs[i].content), { profile });
       const done = await voicebox.waitFor(q.id);
       const a = new Audio(await voicebox.audioUrl(done.id));

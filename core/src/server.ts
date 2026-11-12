@@ -1,0 +1,176 @@
+// The core's local API. Listens on 127.0.0.1 only, on a port the OS picks, and answers only
+// requests that carry the session token the Lotus app generated when it started the core.
+//
+//   GET    /health                       liveness (no token, reveals nothing)
+//   GET    /v1/info                      version, schema, folders
+//   GET    /v1/kv                        every key → value
+//   PUT    /v1/kv                        { set: {k: v}, remove: [k], origin } (atomic; broadcast)
+//   POST   /v1/kv/migrate                { items: {k: v} } one-time import from browser storage
+//   POST   /v1/media?name=&type=         raw bytes → { path, ... } saved under Lotus Studio
+//   GET    /v1/media/<path>              the file (token may be passed as ?t= for <img>/<audio>)
+//   DELETE /v1/media/<path>
+//   GET    /v1/media-list?kind=image
+//   POST   /v1/rpc/<method>              JSON args → JSON result (memory today; agent tools next)
+//   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin }
+
+import type { Server, ServerWebSocket } from 'bun';
+import { Db, schemaVersion, SCHEMA_VERSION } from './db';
+import { KvChange, kvAll, kvApply, kvMigrate } from './kv';
+import * as mem from './memory';
+import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, resolveMedia, saveMedia } from './media';
+
+export const VERSION = '0.1.0';
+
+export interface CoreOptions {
+  db: Db;
+  studio: string;
+  token: string;
+  port?: number;
+  /** Extra browser origins allowed to call the API (tests, dev server). */
+  origins?: string[];
+  log?: (msg: string) => void;
+}
+
+const DEFAULT_ORIGINS = ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost', 'http://127.0.0.1:3000', 'http://localhost:3000'];
+
+type Json = Record<string, unknown>;
+type Rpc = (db: Db, args: Json) => unknown;
+
+const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
+const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+
+/** RPC methods keep the names the Rust commands had, so the web layer's calls map one to one. */
+export const RPC: Record<string, Rpc> = {
+  mem_status: (db) => mem.status(db),
+  mem_index: (db, a) => mem.indexMessages(db, Array.isArray(a.messages) ? (a.messages as mem.IndexedMsg[]) : []),
+  mem_forget_session: (db, a) => { mem.forgetSession(db, str(a.sessionId)); return null; },
+  mem_wipe_history: (db) => { mem.wipeHistory(db); return null; },
+  mem_search: (db, a) => mem.searchMessages(db, str(a.query), str(a.excludeSession), num(a.limit, 6)),
+  memories_list: (db) => mem.listMemories(db),
+  memories_put: (db, a) => { mem.putMemories(db, Array.isArray(a.items) ? (a.items as mem.MemoryRow[]) : []); return null; },
+  memories_delete: (db, a) => { mem.deleteMemory(db, str(a.id)); return null; },
+  memories_search: (db, a) => mem.searchMemories(db, str(a.query), num(a.limit, 8)),
+  skills_list: (db) => mem.listSkills(db),
+  skills_put: (db, a) => mem.putSkill(db, a.skill as mem.SkillRow),
+  skills_delete: (db, a) => { mem.deleteSkill(db, str(a.id)); return null; },
+  skills_search: (db, a) => mem.searchSkills(db, str(a.query), num(a.limit, 3)),
+};
+
+/** Constant-time comparison so the token can't be guessed byte by byte from timings. */
+function sameToken(a: string, b: string): boolean {
+  if (!a || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+export function startServer(o: CoreOptions): Server<{ id: number }> {
+  const log = o.log ?? (() => undefined);
+  const origins = new Set([...DEFAULT_ORIGINS, ...(o.origins ?? [])]);
+  const sockets = new Set<ServerWebSocket<{ id: number }>>();
+  let nextId = 1;
+
+  const cors = (req: Request): Record<string, string> => {
+    const origin = req.headers.get('origin');
+    if (!origin || !origins.has(origin)) return {};
+    return {
+      'access-control-allow-origin': origin,
+      'access-control-allow-methods': 'GET, PUT, POST, DELETE, OPTIONS',
+      'access-control-allow-headers': 'authorization, content-type, x-lotus-name',
+      'access-control-max-age': '600',
+      vary: 'origin',
+    };
+  };
+  const json = (req: Request, body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors(req) } });
+  const fail = (req: Request, status: number, error: string) => json(req, { error }, status);
+
+  const broadcast = (event: Json) => {
+    const msg = JSON.stringify(event);
+    for (const s of sockets) { try { s.send(msg); } catch { /* closed */ } }
+  };
+
+  const server = Bun.serve<{ id: number }, never>({
+    hostname: '127.0.0.1',
+    port: o.port ?? 0,
+    maxRequestBodySize: MAX_MEDIA + 1024 * 1024,
+    async fetch(req, srv) {
+      const url = new URL(req.url);
+      // Only this machine's loopback names: a web page that rebinds its own domain to 127.0.0.1
+      // still sends its own Host header and is refused.
+      const host = (req.headers.get('host') ?? '').toLowerCase();
+      if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) return new Response('Forbidden', { status: 403 });
+
+      if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(req) });
+      if (url.pathname === '/health') return json(req, { ok: true });
+
+      const auth = req.headers.get('authorization') ?? '';
+      const given = auth.startsWith('Bearer ') ? auth.slice(7) : (url.searchParams.get('t') ?? '');
+      if (!sameToken(given, o.token)) return fail(req, 401, 'Missing or wrong Lotus core token.');
+
+      try {
+        if (url.pathname === '/v1/events') {
+          if (srv.upgrade(req, { data: { id: nextId++ } })) return undefined as unknown as Response;
+          return fail(req, 400, 'Expected a WebSocket upgrade.');
+        }
+        if (url.pathname === '/v1/info' && req.method === 'GET') {
+          return json(req, { version: VERSION, schema: schemaVersion(o.db), latestSchema: SCHEMA_VERSION, dataDir: o.db.dir, dbPath: o.db.path, studioDir: o.studio, fts5: o.db.fts, pid: process.pid });
+        }
+        if (url.pathname === '/v1/kv') {
+          if (req.method === 'GET') return json(req, { items: kvAll(o.db) });
+          if (req.method === 'PUT') {
+            const body = (await req.json()) as Partial<KvChange> & { origin?: string };
+            const done = kvApply(o.db, { set: body.set ?? {}, remove: body.remove ?? [] });
+            if (Object.keys(done.set).length || done.remove.length) broadcast({ type: 'kv', ...done, origin: str(body.origin) });
+            return json(req, { ok: true });
+          }
+        }
+        if (url.pathname === '/v1/kv/migrate' && req.method === 'POST') {
+          const body = (await req.json()) as { items?: Record<string, string> };
+          const r = kvMigrate(o.db, body.items ?? {});
+          if (r) log(`imported ${r.added} keys from browser storage`);
+          return json(req, r ? { migrated: true, added: r.added } : { migrated: false });
+        }
+        if (url.pathname === '/v1/media' && req.method === 'POST') {
+          const type = req.headers.get('content-type') ?? url.searchParams.get('type') ?? '';
+          const row = await saveMedia(o.db, o.studio, await req.arrayBuffer(), type, url.searchParams.get('name') ?? 'file');
+          return json(req, row);
+        }
+        if (url.pathname === '/v1/media-list' && req.method === 'GET') {
+          const kind = url.searchParams.get('kind');
+          return json(req, { items: listMedia(o.db, kind === 'image' || kind === 'audio' ? (kind as MediaKind) : undefined) });
+        }
+        if (url.pathname.startsWith('/v1/media/')) {
+          const rel = decodeURIComponent(url.pathname.slice('/v1/media/'.length));
+          const full = resolveMedia(o.studio, rel);
+          if (!full) return fail(req, 400, 'That path is outside the Images and Audio folders.');
+          if (req.method === 'GET') {
+            const f = Bun.file(full);
+            if (!(await f.exists())) return fail(req, 404, 'That file is no longer in the Lotus Studio folder.');
+            return new Response(f, { headers: { 'content-type': mimeFor(full), 'cache-control': 'private, max-age=31536000, immutable', ...cors(req) } });
+          }
+          if (req.method === 'DELETE') { deleteMedia(o.db, o.studio, rel); return json(req, { ok: true }); }
+        }
+        if (url.pathname.startsWith('/v1/rpc/') && req.method === 'POST') {
+          const method = url.pathname.slice('/v1/rpc/'.length);
+          const fn = Object.prototype.hasOwnProperty.call(RPC, method) ? RPC[method] : undefined;
+          if (!fn) return fail(req, 404, `The core has no method called ${method}.`);
+          const text = await req.text();
+          const args = (text ? JSON.parse(text) : {}) as Json;
+          return json(req, { result: (await fn(o.db, args && typeof args === 'object' ? args : {})) ?? null });
+        }
+        return fail(req, 404, 'Not found.');
+      } catch (e) {
+        const msg = e instanceof SyntaxError ? 'The request body is not valid JSON.' : (e as Error).message || String(e);
+        log(`${req.method} ${url.pathname}: ${msg}`);
+        return fail(req, e instanceof SyntaxError ? 400 : 500, msg);
+      }
+    },
+    websocket: {
+      open(ws) { sockets.add(ws); ws.send(JSON.stringify({ type: 'hello', version: VERSION })); },
+      close(ws) { sockets.delete(ws); },
+      message() { /* clients only listen */ },
+    },
+  });
+  return server;
+}

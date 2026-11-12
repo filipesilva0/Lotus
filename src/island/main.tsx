@@ -1,6 +1,10 @@
 import { createRoot } from 'react-dom/client';
 import '../fonts';
 import '../index.css';
-import { Island } from './Island';
+import { initStore } from '../lib/store';
 
-createRoot(document.getElementById('root')!).render(<Island />);
+// Same order as the main window: saved data first, then the modules that read it.
+void initStore().finally(async () => {
+  const { Island } = await import('./Island');
+  createRoot(document.getElementById('root')!).render(<Island />);
+});

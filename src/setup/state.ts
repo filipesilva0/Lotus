@@ -1,6 +1,7 @@
-// First-run guide state (session 10). `lotus.setup.v1` in localStorage.
+// First-run guide state (session 10). `lotus.setup.v1` in lotus.db (through `kv`, lib/store.ts).
 
 import type { EngineId } from '../services/engineConfig';
+import { kv } from '../lib/store';
 
 export const SETUP_KEY = 'lotus.setup.v1';
 
@@ -18,11 +19,11 @@ export interface SetupState {
 
 export function loadSetup(): SetupState {
   try {
-    const raw = localStorage.getItem(SETUP_KEY);
+    const raw = kv.getItem(SETUP_KEY);
     if (raw) return { done: false, ...(JSON.parse(raw) as Partial<SetupState>) };
   } catch { /* fall through */ }
   // Installs from before session 10 that were really used skip the guide (it stays in Help).
-  const legacy = hasRealChats(localStorage.getItem('lotus.sessions.v1')) || localStorage.getItem('lotus.setup.dismissed') === '1';
+  const legacy = hasRealChats(kv.getItem('lotus.sessions.v1')) || kv.getItem('lotus.setup.dismissed') === '1';
   return { done: legacy, outcome: legacy ? 'skipped' : undefined };
 }
 
@@ -43,7 +44,7 @@ export function hasRealChats(raw: string | null): boolean {
 }
 
 export function saveSetup(s: SetupState) {
-  try { localStorage.setItem(SETUP_KEY, JSON.stringify(s)); } catch { /* storage full or blocked: the guide shows again next time */ }
+  try { kv.setItem(SETUP_KEY, JSON.stringify(s)); } catch { /* storage full or blocked: the guide shows again next time */ }
 }
 
 export const STEPS = ['welcome', 'folder', 'engines', 'install', 'chat', 'images', 'voice', 'done'] as const;

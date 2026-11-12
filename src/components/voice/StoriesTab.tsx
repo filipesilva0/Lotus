@@ -4,6 +4,7 @@ import { voicebox, Story, StoryDetail, StoryItem, fmtDuration } from '../../serv
 import { downloadBlob } from '../../lib/audio';
 import { Btn, Card, Select, TextArea, TextInput, Label, Slider, Empty, Banner, Spinner, IconBtn, cx } from '../common/ui';
 import { avatarGradient, VoiceData } from './useVoiceData';
+import { kv } from '../../lib/store';
 
 const ROW_H = 52;
 const effMs = (i: StoryItem) => Math.max(200, i.duration * 1000 - i.trim_start_ms - i.trim_end_ms);
@@ -37,14 +38,14 @@ export const StoriesTab: React.FC<{
     try { setStories(await voicebox.listStories()); } catch (e) { setErr((e as Error).message); } finally { setLoading(false); }
   }, []);
   const open = useCallback(async (id: string) => {
-    try { setStory(await voicebox.getStory(id)); setSelected(null); setPlayheadMs(0); localStorage.setItem('lotus.voice.story', id); }
+    try { setStory(await voicebox.getStory(id)); setSelected(null); setPlayheadMs(0); kv.setItem('lotus.voice.story', id); }
     catch (e) { setErr((e as Error).message); }
   }, []);
   const reload = useCallback(async () => { if (story) setStory(await voicebox.getStory(story.id)); void loadList(); }, [story, loadList]);
 
   useEffect(() => { void loadList(); }, [loadList]);
   useEffect(() => {
-    if (!story && stories.length) void open(stories.find((s) => s.id === localStorage.getItem('lotus.voice.story'))?.id ?? stories[0].id);
+    if (!story && stories.length) void open(stories.find((s) => s.id === kv.getItem('lotus.voice.story'))?.id ?? stories[0].id);
   }, [stories, story, open]);
   useEffect(() => { if (!lineProfile && data.profiles[0]) setLineProfile(data.profiles[0].id); }, [data.profiles, lineProfile]);
 

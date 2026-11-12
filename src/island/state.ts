@@ -1,5 +1,6 @@
-// Shared island types and settings. Settings live in localStorage, which both windows share.
+// Shared island types and settings. Settings live in `kv` (lotus.db); both windows see changes through `storage` events.
 
+import { kv } from '../lib/store';
 export type IslandView = 'strip' | 'peek' | 'chat' | 'approval';
 export type Mood = 'idle' | 'thinking' | 'speaking' | 'listening' | 'alert' | 'happy' | 'sleep';
 
@@ -24,12 +25,12 @@ const DEFAULTS: IslandSettings = { enabled: false, model: '', voiceProfileId: ''
 
 export function loadIsland(): IslandSettings {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<IslandSettings>;
+    const saved = JSON.parse(kv.getItem(KEY) || '{}') as Partial<IslandSettings>;
     if (saved.schema === SCHEMA) return { ...DEFAULTS, ...saved };
     // Session 11: settings saved by older builds (where the island was on by default) are switched
     // off once, so every install starts with the main window and no island. The user's later choice sticks.
     const next = { ...DEFAULTS, ...saved, enabled: false, schema: SCHEMA };
-    if (Object.keys(saved).length) localStorage.setItem(KEY, JSON.stringify(next));
+    if (Object.keys(saved).length) kv.setItem(KEY, JSON.stringify(next));
     return next;
   } catch {
     return DEFAULTS;
@@ -38,14 +39,14 @@ export function loadIsland(): IslandSettings {
 
 export function saveIsland(patch: Partial<IslandSettings>): IslandSettings {
   const next = { ...loadIsland(), ...patch };
-  localStorage.setItem(KEY, JSON.stringify(next));
+  kv.setItem(KEY, JSON.stringify(next));
   return next;
 }
 
 /** Fields of the main window's saved settings the island needs. */
 export function mainSettings(): { model: string; systemPrompt: string; palette: string; temperature: number } {
   try {
-    const s = JSON.parse(localStorage.getItem('lotus.settings.v1') || '{}');
+    const s = JSON.parse(kv.getItem('lotus.settings.v1') || '{}');
     return {
       model: s.selectedModel || 'llama3.2:3b',
       systemPrompt: s.systemPrompt || 'You are Lotus, a helpful local AI assistant.',

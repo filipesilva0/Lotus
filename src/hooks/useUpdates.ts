@@ -3,6 +3,7 @@ import {
   UpdateInfo, checkForUpdate, installUpdate, onUpdateProgress, updatesSupported, currentVersion,
 } from '../services/updateService';
 import { appPaths } from '../services/engineControl';
+import { kv } from '../lib/store';
 
 export type UpdateState =
   | { kind: 'idle' }
@@ -14,7 +15,7 @@ export type UpdateState =
 
 const PREF_KEY = 'lotus.updates.v1';
 const loadAuto = (): boolean => {
-  try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}').autoCheck === true; } catch { return false; }
+  try { return JSON.parse(kv.getItem(PREF_KEY) || '{}').autoCheck === true; } catch { return false; }
 };
 
 /** Update state for the whole studio window. Network is touched only by check() / install(). */
@@ -60,7 +61,7 @@ export function useUpdates() {
   }, []);
 
   const setAutoCheck = useCallback((v: boolean) => {
-    localStorage.setItem(PREF_KEY, JSON.stringify({ autoCheck: v }));
+    kv.setItem(PREF_KEY, JSON.stringify({ autoCheck: v }));
     setAutoCheckState(v);
   }, []);
 

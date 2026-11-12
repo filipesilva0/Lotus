@@ -4,6 +4,7 @@ import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { comfy } from '../services/comfyService';
 import { startEngine, stopEngine, isSupervised, diagnose, NeedsExecutable, savedExe } from '../services/engineControl';
+import { kv } from '../lib/store';
 
 export type Policy = 'on_launch' | 'manual';
 
@@ -30,7 +31,7 @@ const IDS: EngineId[] = ['ollama', 'comfyui', 'voicebox'];
 const polKey = (id: EngineId) => `lotus.engine.${id}.policy`;
 const initial = (id: EngineId): EngineState => ({
   up: null, version: null, supervised: false, phase: null, error: null, needsExe: false, detail: null,
-  policy: (localStorage.getItem(polKey(id)) as Policy) || 'manual',
+  policy: (kv.getItem(polKey(id)) as Policy) || 'manual',
 });
 
 export function useEngines() {
@@ -110,7 +111,7 @@ export function useEngines() {
     finally { patch(id, { phase: null }); }
   }, [patch, probe]);
 
-  const setPolicy = useCallback((id: EngineId, p: Policy) => { localStorage.setItem(polKey(id), p); patch(id, { policy: p }); }, [patch]);
+  const setPolicy = useCallback((id: EngineId, p: Policy) => { kv.setItem(polKey(id), p); patch(id, { policy: p }); }, [patch]);
 
   // "Start with Lotus": once, after the first probe, bring up engines that are set to launch with the app.
   useEffect(() => {

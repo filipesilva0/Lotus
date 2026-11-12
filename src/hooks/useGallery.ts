@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GeneratedImage } from '../types/lotus';
 import { comfy, ComfyBatch, dimensionsFor, LoraUse, TxtToImageInput } from '../services/comfyService';
-import { idbGet, idbSet } from '../lib/idb';
+import { idbGet, idbGetLocal, idbSet } from '../lib/idb';
+import { loadMedia, saveMedia } from '../lib/core';
+import { kv, storeMode } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
 
@@ -22,7 +24,38 @@ export const DEFAULT_PARAMS: ImageParams = {
   cfg: 7, steps: 28, sampler: 'euler', scheduler: 'normal', seed: null, denoise: 0.65, loras: [],
 };
 
+/** Browser-only builds (and Lotus before session 14): sessions with image blobs in IndexedDB. */
 const KEY = 'gallery.v1';
+/** With the core: sessions in lotus.db, each image a file in Lotus Studio/Images (`file`). */
+const CORE_KEY = 'lotus.gallery.v2';
+
+type Saved = Omit<GenSession, 'versions'> & { versions: Omit<GeneratedImage, 'url' | 'blob'>[] };
+const toSaved = (list: GenSession[]): Saved[] =>
+  list.filter((s) => s.versions.some((v) => v.file)).map((s) => ({ ...s, versions: s.versions.filter((v) => v.file).map(({ url: _u, blob: _b, ...v }) => v) }));
+
+/** Number of saved images (Usage page). */
+export async function countSavedImages(): Promise<number> {
+  const list = storeMode() === 'core' ? kv.getJson<Saved[]>(CORE_KEY, []) : ((await idbGet<GenSession[]>(KEY)) ?? []);
+  return Array.isArray(list) ? list.reduce((a, s) => a + (s.versions?.length ?? 0), 0) : 0;
+}
+
+/** Fetches saved image files back into blobs, a few at a time. Missing files are dropped. */
+async function loadFiles(list: Saved[]): Promise<GenSession[]> {
+  const jobs = list.flatMap((s) => s.versions.map((v) => v));
+  const blobs = new Map<string, Blob>();
+  let next = 0;
+  await Promise.all(Array.from({ length: 4 }, async () => {
+    while (next < jobs.length) {
+      const v = jobs[next++];
+      try { blobs.set(v.id, await loadMedia(v.file!)); } catch { /* moved or deleted outside Lotus */ }
+    }
+  }));
+  return list.map((s) => {
+    const versions = s.versions.filter((v) => blobs.has(v.id)).map((v) => { const blob = blobs.get(v.id)!; return { ...v, blob, url: URL.createObjectURL(blob) }; });
+    return { ...s, versions, index: Math.min(s.index, Math.max(0, versions.length - 1)) };
+  }).filter((s) => s.versions.length);
+}
+
 const stamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const blank = (): GenSession => ({ id: uid('gen'), title: 'New generation', ts: Date.now(), versions: [], index: 0 });
 
@@ -39,22 +72,52 @@ export function useGallery(comfyUp: boolean | null) {
   const ref = useRef(sessions); ref.current = sessions;
   const activeRef = useRef(activeId); activeRef.current = activeId;
 
-  // Load the saved gallery once (image data lives in IndexedDB, not localStorage).
+  // Load the saved gallery once. With the core the images are files in the Lotus Studio folder;
+  // a gallery saved by an older Lotus (blobs in IndexedDB) is read once and then saved as files.
+  const core = storeMode() === 'core';
   useEffect(() => {
-    void idbGet<GenSession[]>(KEY).then((saved) => {
-      if (saved?.length) {
-        const list = saved.map((s) => ({ ...s, versions: s.versions.map((v) => ({ ...v, url: v.blob ? URL.createObjectURL(v.blob) : '' })).filter((v) => v.url) }));
-        const fresh = blank();
-        setSessions([fresh, ...list]); setActiveId(fresh.id);
-      }
+    const show = (list: GenSession[]) => {
+      if (list.length) { const fresh = blank(); setSessions([fresh, ...list]); setActiveId(fresh.id); }
       setLoaded(true);
-    });
-  }, []);
+    };
+    const fromBlobs = (saved: GenSession[] | undefined) =>
+      (saved ?? []).map((s) => ({ ...s, versions: s.versions.map((v) => ({ ...v, url: v.blob ? URL.createObjectURL(v.blob) : '' })).filter((v) => v.url) })).filter((s) => s.versions.length);
+    if (!core) { void idbGet<GenSession[]>(KEY).then((saved) => show(fromBlobs(saved))); return; }
+    const saved = kv.getJson<Saved[] | null>(CORE_KEY, null);
+    if (saved) void loadFiles(saved).then(show);
+    else void idbGetLocal<GenSession[]>(KEY).then((legacy) => show(fromBlobs(legacy)));
+  }, [core]);
+
+  // Save. With the core, new images are written to disk first (once each), then the list.
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const uploading = useRef(new Set<string>());
   useEffect(() => {
     if (!loaded) return;
-    const t = setTimeout(() => void idbSet(KEY, sessions.filter((s) => s.versions.length).map((s) => ({ ...s, versions: s.versions.map((v) => ({ ...v, url: '' })) }))), 800);
+    const t = setTimeout(() => {
+      if (!core) {
+        void idbSet(KEY, sessions.filter((s) => s.versions.length).map((s) => ({ ...s, versions: s.versions.map((v) => ({ ...v, url: '' })) })));
+        return;
+      }
+      const unsaved = sessions.flatMap((s) => s.versions.filter((v) => v.blob && !v.file && !uploading.current.has(v.id)).map((v) => ({ s, v })));
+      kv.setJson(CORE_KEY, toSaved(sessions));
+      if (!unsaved.length) return;
+      unsaved.forEach(({ v }) => uploading.current.add(v.id));
+      void (async () => {
+        const files = new Map<string, string>();
+        for (const { s, v } of unsaved) {
+          try { files.set(v.id, (await saveMedia(v.blob!, `${s.title || v.prompt || 'image'} ${v.id.slice(-5)}`)).path); }
+          catch (e) { setSaveError(`An image could not be saved to the Lotus Studio folder: ${(e as Error).message}`); }
+          finally { uploading.current.delete(v.id); }
+        }
+        if (files.size) {
+          setSaveError(null);
+          // Updating state saves the list on the next pass.
+          setSessions((p) => p.map((s) => ({ ...s, versions: s.versions.map((v) => (files.has(v.id) ? { ...v, file: files.get(v.id) } : v)) })));
+        }
+      })();
+    }, 800);
     return () => clearTimeout(t);
-  }, [sessions, loaded]);
+  }, [sessions, loaded, core]);
 
   useEffect(() => {
     if (!busy) { setElapsed(0); return; }
@@ -144,6 +207,6 @@ export function useGallery(comfyUp: boolean | null) {
   const stepVersion = (d: -1 | 1) => patch(active.id, (s) => ({ ...s, index: Math.min(s.versions.length - 1, Math.max(0, s.index + d)) }));
   const selectVersion = (i: number) => patch(active.id, (s) => ({ ...s, index: i }));
 
-  return { sessions, active, activeId: active.id, setActiveId, current, busy, label, elapsed, error, info, comfyUp,
+  return { sessions, active, activeId: active.id, setActiveId, current, busy, label, elapsed, error: error ?? saveError, info, comfyUp,
     newSession, remove, removeVersion, patch, generate, variation, upscale, inpaint, outpaint, cancel, stepVersion, selectVersion, setError };
 }

@@ -19,6 +19,7 @@ No git repository exists in the working directory; the user presumably keeps the
 
 ```
 index.html / island.html          two Vite entry pages (studio window, island window)
+core/                             lotusd, the background core (session 14): src/{main,server,db,kv,memory,media}.ts, test/, scripts/build.ts
 src/
   main.tsx, App.tsx               studio entry; owns settings, chat sessions, image state, engine state wiring
   fonts.ts, index.css             bundled fonts; CSS variables, mascot keyframes
@@ -26,6 +27,7 @@ src/
   types/lotus.ts                   ViewMode, LotusSettings, ChatSession, GeneratedImage…
   lib/
     http.ts                       http() = Rust-backed fetch in Tauri, normal fetch in browser; EngineError; isTauri
+    core.ts, store.ts             session 14: connection to lotusd; `kv` (lotus.db-backed localStorage replacement)
     bus.ts                        cross-window events (Tauri events / BroadcastChannel); invokeNative(); reportActivity()
     audio.ts                      MicRecorder, WAV encoding, waveform peaks, downloadBlob
     open.ts, markdownLite.tsx     open URL / reveal path; tiny safe markdown renderer (no innerHTML)
@@ -58,15 +60,15 @@ handover/                         verification harnesses + screenshot scripts (s
 
 ## 3. Process and window model ✅
 
-Two WebView windows, one Rust process.
+Two WebView windows, one Rust process, and (since session 14) **lotusd**, the background core: a separate process the Rust side starts and supervises (§5g).
 
 - **`main`**: the studio (1280×820, min 980×640, native decorations, starts hidden; the web layer calls `main_ready` after first paint so there is no white flash). Closing it **hides to tray**; Quit is in the tray menu.
 - **`island`**: transparent, undecorated, always-on-top, skip-taskbar, starts hidden (config 420×64). The web layer owns animation and requests exact native sizes through `island_resize`; Rust clamps and centres it at the top of the **primary monitor only**. Current target sizes (`Island.tsx`): strip `(56+44+100·pills+12) × 36`, peek `max(340, 120+100·pills) × 96`, chat `460 × (500 | 214 when empty)`, approval `480 × 236`. The window grows first, then shrinks 340 ms after the CSS animation.
-- Both windows share **one origin**, so `localStorage` is shared and `storage` events propagate settings (e.g. the island reacts to `lotus.island.v1`).
+- Both windows share **one origin**. Saved state lives in lotus.db through the core; each window keeps a copy in memory (`lib/store.ts kv`) and the core's event socket turns another window's writes into ordinary `storage` events, so listeners such as the island's `lotus.island.v1` handler work unchanged.
 - `single-instance` plugin: a second launch just shows `main`.
 
 ### Rust Tauri commands ✅ (`lib.rs` handler list)
-`app_paths`, `main_ready`, `open_main(view?)`, `quit_app`, `island_resize/show/hide/focus/visible`, `hook_answer`, `hooks_installed/install/uninstall`, `engine_start/stop/supervised/find`, `engine_ping`; **session 4:** `download_start/cancel`, `comfy_models_dir`, `list_model_files` (`downloads.rs`); `proj_create/tree/read/write/mkdir/delete/rename`, `proc_spawn/kill/running`, `preview_serve/stop`, `toolchain_check`, `android_paths`, `adb_devices/screenshot/tap/swipe/key`, `emulator_avds` (`appbuilder.rs`); **session 5:** `hw_snapshot`, `ctx_discover`, `mem_*`, `memories_*`, `skills_*`; **session 7:** `ctx_read_folder(root, maxFiles?, maxChars?)` (`context_files.rs`, read-only folder walk for Attach a folder).
+`app_paths`, `main_ready`, `open_main(view?)`, `quit_app`, `island_resize/show/hide/focus/visible`, `hook_answer`, `hooks_installed/install/uninstall`, `engine_start/stop/supervised/find`, `engine_ping`; **session 4:** `download_start/cancel`, `comfy_models_dir`, `list_model_files` (`downloads.rs`); `proj_create/tree/read/write/mkdir/delete/rename`, `proc_spawn/kill/running`, `preview_serve/stop`, `toolchain_check`, `android_paths`, `adb_devices/screenshot/tap/swipe/key`, `emulator_avds` (`appbuilder.rs`); **session 5:** `hw_snapshot`, `ctx_discover`, `mem_*`, `memories_*`, `skills_*`; **session 7:** `ctx_read_folder(root, maxFiles?, maxChars?)` (`context_files.rs`, read-only folder walk for Attach a folder). **Session 14:** `core_info` (port + token of lotusd); the `mem_*`, `memories_*`, `skills_*` commands moved into the core as RPC methods of the same names and `memory_db.rs` was removed.
 
 ### Global shortcuts ✅ (registered in `lib.rs`, failures ignored)
 Ctrl+Alt+Space → `island:open-chat`; Ctrl+Alt+D → `island:dictate`; Ctrl+Alt+T → `island:toggle`.
@@ -176,14 +178,24 @@ No new cross-window events. Tasks/routines report progress through the existing 
 ## 5f. Session 11: model installs proposed in Chat
 `chat/install.ts` (pure: `installInstructions()` added to the chat system prompt next to `CHOICES_INSTRUCTIONS`; `parseInstall()` strips the ```install block; `resolveInstall()` limits it to installable models) → `components/chat/InstallCard.tsx` (Allow / Deny, then progress from `useSetupJobs`) → `useChat.decideInstall()` records `ChatMessage.install` and calls `setup/jobs.ts installTarget()` (Ollama pull, ComfyUI catalog files, Voicebox download). App refreshes its model and checkpoint lists when such a job finishes. Nothing is downloaded without Allow.
 
-## 6. Persistence map ✅ (all `localStorage`, shared by both windows)
+## 5g. Session 14: lotusd, the background core (rebuild step 1)
+- **What:** `core/` (TypeScript, Bun). `bun scripts/build.ts [triple]` compiles it to `src-tauri/binaries/lotusd-<triple>[.exe]`, which Tauri bundles as a sidecar (`bundle.externalBin`) and installs next to the app. CI builds it per OS (`universal-apple-darwin` = both Mac builds joined with `lipo`).
+- **Owns:** `<data>/lotus.db` (same file and tables the Rust memory module used; schema version in `PRAGMA user_version`, steps in `core/src/db.ts MIGRATIONS`): `kv` (every `lotus.*` key the web layer used to keep in localStorage/IndexedDB), `meta`, `media` (index of files), `memories`, `skills`, `*_fts`. Images (and later audio) are files in `<Lotus Studio>/Images|Audio/<yyyy-mm>/`. Logs: `<data>/logs/lotusd.log`.
+- **Lifecycle (`src-tauri/src/lotusd.rs`):** started in `setup` with `--data --studio --watch-stdin` and `LOTUSD_TOKEN` (256 random bits per run). It prints `LOTUSD_READY {port,pid,version}`; the app holds its stdin open, so the core exits when Lotus quits **or crashes**. If it stops, it is restarted (max 5 a minute) and `core:ready` carries the new port; `core:down` carries the reason. Stopped before an update installs; restarted when the Lotus Studio folder changes (`setup_prepare`). The tray stays in the Tauri process for now.
+- **API (127.0.0.1 only):** `/health`; `/v1/info`; `/v1/kv` GET/PUT (atomic batches, broadcast); `/v1/kv/migrate` (one-time import, never overwrites); `/v1/media` POST, `/v1/media/<path>` GET/DELETE (path confined to Images/Audio), `/v1/media-list`; `/v1/rpc/<method>`; `/v1/events` WebSocket. Every route but `/health` needs `Authorization: Bearer <token>` (or `?t=`); foreign `Host` headers are refused (DNS rebinding); CORS only for the Tauri origins (+ the dev server in debug builds, + `LOTUSD_ORIGINS`).
+- **Web side:** `lib/core.ts` (`coreReady`, `coreFetch`, `rpc`, `saveMedia/loadMedia`, `onCoreEvent`; `window.__LOTUS_CORE__` lets test harnesses point at a real core), `lib/store.ts` (`kv`: localStorage-shaped, synchronous reads from memory, batched writes, `storage` events from other windows, import on first run, localStorage fallback with `CoreNotice` when the desktop app has no core). `main.tsx`/`island/main.tsx` call `initStore()` **before** importing App/Island, because some modules read saved state at import time.
+- **Not yet (rebuild step 2+):** chats/tasks are still JSON values in `kv`, not tables; the agent and tool registry; the core outliving the app (start at login, routines while Lotus is closed).
+
+## 6. Persistence map ✅ (session 14: `kv` → lotus.db through the core; plain `localStorage` only without a core)
+
+All keys below are read and written through `kv` (`lib/store.ts`), never `localStorage` directly. The first run with a core imports every `lotus.*` localStorage key and every IndexedDB entry (as `lotus.idb.<key>`, JSON) once; the browser copies are left in place as a backup. Session 14 keys: `lotus.gallery.v2` (image sessions; each version has `file`, the image's path under Lotus Studio, and no blob), `lotus.idb.lotus.builder.chat.<project>` (App Builder chats, formerly IndexedDB), `lotus.core.migrated.v1` (browser-side flag; the core also records `meta.migrated.webStorage`). Saved chats: up to 200 with a core (80 without).
 
 `lotus.settings.v1`, `lotus.sessions.v1` (≤ 60 chats; blob attachments stripped), `lotus.activeSession.v1`, `lotus.engineUrls.v1`, `lotus.engineAuth.v1` (session 11), `lotus.engine.<id>.exe`, `lotus.engine.<id>.policy`, `lotus.setup.dismissed`, `lotus.voice.profile|tab|story`, `lotus.dictate.lang`, `lotus.image.checkpoint`, `lotus.island.v1` (`schema: 2` = session 11 one-time off reset applied), `lotus.island.chat.v1`, `lotus.research.v1` (≤ 40 projects, debounced, quota failures swallowed), `lotus.research.limits.v1`.
 Session 5 keys: `lotus.tasks.v1`, `lotus.routines.v1`, `lotus.tasks.tab.v1`, `lotus.skills.meta.v1` (skill change notes), `lotus.memory.backfilled.v1`; in a plain browser only: `lotus.memory.v1` (also the legacy key, migrated into `lotus.db` and removed on first desktop run) and `lotus.skills.v1`. `lotus.settings.v1` gained `llmBackend, llamacppUrl, autoScale, vramReserveMb, maxSubagents, webSearchProvider, searxngUrl, webPagesToRead, autoMemory, autoSkills, sessionRecall`; chat sessions gained `memoryOff, thinking, webSearch, folder, folderOff`; messages gained `recall, mode`. Accounts (session 6): `lotus.account.v1` (signed-in session: tokens + name/email/avatar), `lotus.account.server.v1` (sync server URL + anon key). Session 8: `lotus.panels.v1` (per-page left/right panel visibility), `lotus.chat.research.v1` (research task open in Chat); removed `lotus.sidebar.v1`, `lotus.chat.inspector.v1`, `lotus.image.inspector.v1`; `lotus.settings.v1` gained `appearance` and lost `darkMode`, `palette`. Session 13: `lotus.settingsPane.v1` (last Settings pane); chat messages gained `feedback`, `feedbackNote`. Synced to the account server (`user_state` table, see `sync-server/`): `profile.avatar`. On disk: `<data>/lotus.db` (SQLite, WAL) and `<data>/skills/<slug>/SKILL.md`.
 Session 7 keys: `lotus.plugins.v1` (installed plugins). `lotus.settings.v1` gained `backgroundModel, autoRename`; chat sessions gained `autoTitle`; messages gained `pollAnswer`.
 Session 4 keys: `lotus.comfy.modelsDir.v1` (ComfyUI models folder), `lotus.models.mode.v1`, `lotus.models.kind.v1`, `lotus.builder.projects.v1`, `lotus.builder.active.v1`, `lotus.builder.view.v1|term.v1|mode.v1|ctx.v1|model.v1`; `lotus.image.params.v1` gained optional `loras`.
 Session 10 keys: `lotus.setup.v1` (first-run guide: done/skipped, Lotus Studio folder, engines chosen). `lotus.island.v1` now defaults to `enabled: false`. On disk: `<app config>/studio-dir.txt` (folder picked in the guide). Registry (Windows, written by the MSI): `HKCU\Software\Lotus\Lotus\StudioDir`, `SetupEngines`.
-Generated images are **session-only** (blob URLs). Portable mode relocates the WebView2 profile (hence localStorage) to `<exe dir>\data\webview`.
+Generated images are files in `Lotus Studio/Images` since session 14 (before: IndexedDB blobs, or nothing). Removing an image in Lotus leaves its file on disk. Chat attachments are still session-only (B9). Portable mode relocates the WebView2 profile to `<exe dir>\data\webview`, and lotus.db to `<exe dir>\data`.
 
 ## 7. Install/packaging architecture
 

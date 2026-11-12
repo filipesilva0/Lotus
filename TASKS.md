@@ -84,6 +84,16 @@ Give the user a short manual checklist and collect results:
 | T34 | Decide on HIG items 4 (one labelled sidebar) and 5 (system accent). | P3 | D44. |
 | T35 | Settings as its own window on macOS (needs settings/models/updates over the bus). | P3 | D42. |
 
+## Session 14 additions (rebuild step 1: core + storage)
+| # | Task | Priority | Notes |
+|---|---|---|---|
+| T36 | **Run a release build on Windows**: the MSI installs `lotusd.exe` beside Lotus, the core starts (no console window), old chats/settings/memory appear after the import, Images page images are in Documents\Lotus Studio\Images, quitting from the tray stops `lotusd.exe`, and an update installs while it was running. Same on macOS (signed universal sidecar). | P0 | D45–D48. Only Linux was run. |
+| T37 | Rebuild step 2: agent loop + tool registry in the core (chat, tasks, images as tools; approval modes; real-task test set). Chats and tasks become tables. | P0 | Rebuild plan. |
+| T38 | Chat attachments (images, files) as media files instead of session-only (B9). | P2 | `saveMedia` is ready. |
+| T39 | Decide whether the core may outlive the app (start at login, tray in the core) for routines and messaging. | P2 | D48. |
+| T40 | Sidecar size (~110 MB): try `--bytecode`, UPX is not an option on macOS; or port the core to Rust later. | P3 | D46. |
+| T41 | Fix the 5 research render expectations that fail since session 13 (`ui.tsx`: "Ollama isn't running", "Can't reach Ollama", Deep research sidebar copy changed with EngineNotice). | P2 | They fail identically before and after session 14. |
+
 ## Dependency sketch
 ```
 T1 ──► T2 ──► T3 ──┬─► T4

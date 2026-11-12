@@ -6,7 +6,7 @@ import { BuilderProject, TargetId } from './types';
 import { projCreate, projWrite, projMkdir, projTree } from './projectFs';
 import { renderTemplate, slugify, templateFor } from './templates';
 
-/** The list of App Builder projects (kept in localStorage; the files live in their folders on disk). */
+/** The list of App Builder projects (kept in lotus.db through `kv`; the files live in their folders on disk). */
 export function useProjects() {
   const [projects, setProjects] = usePersisted<BuilderProject[]>('lotus.builder.projects.v1', []);
   const [activeId, setActiveId] = usePersisted<string | null>('lotus.builder.active.v1', null);

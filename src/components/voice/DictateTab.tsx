@@ -4,13 +4,14 @@ import { voicebox, Capture, STT_LANGUAGES, LANGUAGES, fmtDuration } from '../../
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { emitEvent } from '../../lib/bus';
 import { Btn, Card, Select, Label, Banner, Empty, Spinner, IconBtn, useFlash, cx } from '../common/ui';
+import { kv } from '../../lib/store';
 
 export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModels: () => void }> = ({ onSpeak, onOpenModels }) => {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [level, setLevel] = useState(0);
   const [secs, setSecs] = useState(0);
-  const [language, setLanguage] = useState(() => localStorage.getItem('lotus.dictate.lang') || '');
+  const [language, setLanguage] = useState(() => kv.getItem('lotus.dictate.lang') || '');
   const [items, setItems] = useState<Capture[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const rec = useRef<MicRecorder | null>(null);
@@ -55,7 +56,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
         </div>
         <div>
           <Label>Spoken language</Label>
-          <Select value={language} onChange={(e) => { setLanguage(e.target.value); localStorage.setItem('lotus.dictate.lang', e.target.value); }}>
+          <Select value={language} onChange={(e) => { setLanguage(e.target.value); kv.setItem('lotus.dictate.lang', e.target.value); }}>
             <option value="">Detect automatically</option>
             {langs.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
           </Select>

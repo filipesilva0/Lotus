@@ -13,13 +13,14 @@ import { LibraryTab } from '../voice/LibraryTab';
 import { startEngine, browseForExe, NeedsExecutable } from '../../services/engineControl';
 import { onEvent } from '../../lib/bus';
 import { voicebox } from '../../services/voicebox';
+import { kv } from '../../lib/store';
 
 type Tab = VoiceMode;
 
 export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngines }) => {
   const data = useVoiceData();
   const [profile, selectProfile] = useSelectedProfile(data.profiles);
-  const [tab, setTab] = useState<Tab>(() => (localStorage.getItem('lotus.voice.tab') as Tab) || 'speak');
+  const [tab, setTab] = useState<Tab>(() => (kv.getItem('lotus.voice.tab') as Tab) || 'speak');
   const [text, setText] = useState('');
   const [createRequested, setCreateRequested] = useState(false);
   const [storyClip, setStoryClip] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpen
   const [startErr, setStartErr] = useState<string | null>(null);
   const [needsExe, setNeedsExe] = useState(false);
 
-  const go = (t: Tab) => { setTab(t); localStorage.setItem('lotus.voice.tab', t); };
+  const go = (t: Tab) => { setTab(t); kv.setItem('lotus.voice.tab', t); };
 
   // Text sent over from the island or chat ("speak this").
   useEffect(() => {
