@@ -12,8 +12,11 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 
 Copy-Item $exe (Join-Path $stage 'Lotus.exe')
 # lotusd, the background core: Lotus starts it from its own folder.
+# Tauri puts the sidecar in the installer but doesn't always leave a copy next to lotus.exe, so fall
+# back to the binary the core build wrote (src-tauri/binaries/lotusd-<triple>.exe).
 $core = Join-Path $root 'src-tauri\target\release\lotusd.exe'
-if (-not (Test-Path $core)) { throw "lotusd.exe not found next to lotus.exe. Build the core first (cd core; bun scripts/build.ts)." }
+if (-not (Test-Path $core)) { $core = Join-Path $root 'src-tauri\binaries\lotusd-x86_64-pc-windows-msvc.exe' }
+if (-not (Test-Path $core)) { throw "lotusd.exe not found (looked next to lotus.exe and in src-tauri\binaries). Build the core first (cd core; bun scripts/build.ts)." }
 Copy-Item $core (Join-Path $stage 'lotusd.exe')
 New-Item -ItemType File -Force (Join-Path $stage 'lotus.portable') | Out-Null
 Copy-Item (Join-Path $root 'LICENSE') $stage -ErrorAction SilentlyContinue

@@ -156,7 +156,27 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ needs.prepare.outputs.release == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Linux AppImage: linuxdeploy strips every binary in usr/bin. Stripping lotusd (a Bun
+          # single-file executable) deletes the embedded core and leaves plain Bun (session 16), and
+          # the gtk plugin then crashed on it. NO_STRIP keeps binaries as built; it only affects linuxdeploy.
+          NO_STRIP: 'true'
         run: npm run tauri build -- --verbose --config ci-release.conf.json ${{ matrix.args }}
+
+      # The packaged core must still be the Lotus core (not a stripped, payload-less Bun).
+      - name: Check the packaged core
+        if: matrix.name == 'linux'
+        shell: bash
+        env:
+          B: ${{ matrix.bundle }}
+        run: |
+          set -euo pipefail
+          want=$(cd core && bun -e "import { VERSION } from './src/server'; console.log(VERSION)")
+          app=$(ls "$B"/appimage/*.AppImage | head -1)
+          chmod +x "$app"
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$app" --appimage-extract usr/bin/lotusd >/dev/null)
+          got=$("$RUNNER_TEMP/squashfs-root/usr/bin/lotusd" --version)
+          echo "packaged lotusd: $got (expected $want)"
+          [[ "$got" == "$want" ]] || { echo "::error::The AppImage's lotusd is not the Lotus core (got '$got', expected '$want')."; exit 1; }
 
       # Windows only, and only when the build fails: tauri hides light.exe's own error text, so run
       # the linker again by hand and print everything it says.
