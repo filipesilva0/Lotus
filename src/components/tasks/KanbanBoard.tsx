@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Bot, CalendarClock, Link2, Loader2, Lock, Plus, User } from 'lucide-react';
 import { blockersOf, COLUMNS, columnTasks, isOverdue, progress, Status, Task } from '../../tasks/kanban';
 import { tasks as store } from '../../tasks/store';
 import { cx } from '../common/ui';
+import { AgentFace } from '../common/AgentFace';
 
 const PRIO_DOT: Record<Task['priority'], string> = {
   urgent: 'bg-[var(--c-red)]', high: 'bg-[var(--c-orange)]', normal: 'bg-[var(--color-accent-fill)]', low: 'bg-[var(--color-text-muted)] opacity-50',
@@ -23,7 +24,7 @@ const Card: React.FC<{ t: Task; all: Task[]; selected: boolean; onSelect: () => 
       <div className="flex items-start gap-2">
         <span className={cx('w-2 h-2 rounded-full mt-1.5 shrink-0', PRIO_DOT[t.priority])} title={`${t.priority} priority`} aria-hidden="true" />
         <p className="flex-1 text-[13px] font-medium leading-snug break-words">{t.title}</p>
-        {t.assignee === 'lotus' ? <Bot className="w-3.5 h-3.5 shrink-0 text-[var(--color-accent-vibrant)]" aria-hidden="true" /> : <User className="w-3.5 h-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />}
+        {t.assignee === 'lotus' ? <AgentFace name={`task ${t.id}`} label="The Lotus agent working on this task" size={20} animate={running} mood={running ? 'thinking' : t.run?.state === 'failed' ? 'sad' : undefined} /> : <User className="w-3.5 h-3.5 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />}
       </div>
       {t.steps.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
@@ -45,12 +46,25 @@ const Card: React.FC<{ t: Task; all: Task[]; selected: boolean; onSelect: () => 
   );
 };
 
-/** Five-column board. Drag cards between columns (or use the task's Status field / keyboard in the inspector). */
+/**
+ * Five-column board that always fits the window: columns share the width (no sideways scrolling, session 16).
+ * When the window is too narrow for five readable columns, the board becomes one vertical list with a
+ * section per column. Drag cards between columns (or use the task's Status field in the inspector).
+ */
 export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSelect: (id: string) => void }> = ({ all, selected, onSelect }) => {
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<{ col: Status; before: string | null } | null>(null);
   const [adding, setAdding] = useState<Status | null>(null);
   const [draft, setDraft] = useState('');
+  const box = useRef<HTMLDivElement>(null);
+  const [stacked, setStacked] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setStacked(e.contentRect.width < COLUMNS.length * 176));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const drop = (col: Status, before: string | null) => {
     if (dragId) store.move(dragId, col, before === dragId ? null : before);
@@ -64,8 +78,8 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
   };
 
   return (
-    <div className="flex-1 min-w-0 overflow-x-auto overflow-y-hidden">
-      <div className="h-full flex gap-1.5 p-4 min-w-max">
+    <div ref={box} className={cx('flex-1 min-w-0 overflow-x-hidden', stacked ? 'overflow-y-auto' : 'overflow-y-hidden')}>
+      <div className={cx('flex p-4', stacked ? 'flex-col gap-3' : 'h-full gap-1.5')}>
         {COLUMNS.map((c) => {
           const list = columnTasks(all, c.id);
           return (
@@ -73,7 +87,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
               onDragOver={(e) => { if (!dragId) return; e.preventDefault(); const card = (e.target as HTMLElement).closest('[data-task]') as HTMLElement | null; setOver({ col: c.id, before: card?.dataset.task ?? null }); }}
               onDragLeave={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setOver(null); }}
               onDrop={(e) => { e.preventDefault(); drop(c.id, over?.col === c.id ? over.before : null); }}
-              className={cx('w-[272px] shrink-0 flex flex-col min-h-0 px-1.5 border-r border-[var(--sep)] last:border-r-0 transition-colors', over?.col === c.id && 'bg-[var(--hover)] rounded-[12px]')}>
+              className={cx('flex flex-col min-h-0 px-1.5 transition-colors', stacked ? 'border-b border-[var(--sep)] last:border-b-0 pb-2' : 'flex-1 basis-0 min-w-0 border-r border-[var(--sep)] last:border-r-0', over?.col === c.id && 'bg-[var(--hover)] rounded-[12px]')}>
               <header className="px-3 pt-2.5 pb-2 flex items-center gap-2" title={c.hint}>
                 <h3 className="text-[13px] font-semibold">{c.title}</h3>
                 <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">{list.length}</span>
@@ -84,7 +98,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
                     className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]"><Plus className="w-4 h-4" /></button>
                 )}
               </header>
-              <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2 space-y-2">
+              <div className={cx('px-2 pb-2', stacked ? 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2' : 'flex-1 min-h-0 overflow-y-auto space-y-2')}>
                 {adding === c.id && (
                   <form onSubmit={(e) => { e.preventDefault(); add(c.id); }} className="rounded-[10px] bg-[var(--color-bg-card)] p-2 shadow-[0_0_0_1px_var(--color-accent-fill)]">
                     <textarea autoFocus rows={2} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="New task title" placeholder="What needs doing?"
@@ -99,7 +113,7 @@ export const KanbanBoard: React.FC<{ all: Task[]; selected: string | null; onSel
                     <div className={dragId === t.id ? 'opacity-40' : ''} onDragEnd={() => { setDragId(null); setOver(null); }}><Card t={t} all={all} selected={selected === t.id} onSelect={() => onSelect(t.id)} onDragStart={setDragId} /></div>
                   </React.Fragment>
                 ))}
-                {!list.length && adding !== c.id && <p className="px-1.5 py-3 text-[12px] text-[var(--color-text-muted)] text-center">{c.hint}</p>}
+                {!list.length && adding !== c.id && <p className={cx('px-1.5 text-[12px] text-[var(--color-text-muted)]', stacked ? 'py-1' : 'py-3 text-center')}>{c.hint}</p>}
               </div>
             </section>
           );

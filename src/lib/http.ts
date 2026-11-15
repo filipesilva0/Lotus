@@ -24,7 +24,7 @@ const rawHttp: typeof fetch = (input, init) => {
 };
 
 /** Requests Lotus made to the local engines (newest last). Powers the Models → Monitor activity log. */
-export interface RequestLogEntry { t: number; method: string; url: string; status: number | 'error'; ms: number }
+export interface RequestLogEntry { t: number; method: string; url: string; status: number | 'error' | 'offline' | 'online'; ms: number }
 const LOG_MAX = 300;
 const logBuf: RequestLogEntry[] = [];
 const logSubs = new Set<() => void>();
@@ -33,15 +33,42 @@ export const requestLog = {
   subscribe: (fn: () => void) => { logSubs.add(fn); return () => { logSubs.delete(fn); }; },
 };
 
+/**
+ * Status checks (is the engine running?) happen every few seconds. Logging each one filled the log
+ * with an error every poll for any engine that is simply not running (session 16 report). They are
+ * now never logged one by one; the log gets a single line when an engine goes offline or comes back.
+ */
+const STATUS_PATH = /\/(api\/ps|system_stats|api\/tags|api\/version|health|models\/status)\/?(\?|$)/;
+const reach = new Map<string, boolean>();
+const ENGINE_NAMES: Record<string, string> = { ollama: 'Ollama', comfyui: 'ComfyUI', voicebox: 'Voicebox' };
+export function isStatusCheck(url: string): boolean {
+  try { return STATUS_PATH.test(new URL(url).pathname); } catch { return STATUS_PATH.test(url); }
+}
+
+function push(e: RequestLogEntry) {
+  logBuf.push(e);
+  if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
+  logSubs.forEach((f) => f());
+}
+
 export const http: typeof fetch = async (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const method = (init?.method ?? 'GET').toUpperCase();
   const t0 = performance.now();
   const note = (status: number | 'error') => {
-    if (!(/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url) || engineForUrl(url)) || /\/(api\/ps|system_stats|api\/tags|api\/version|health)\b/.test(url) && status === 200) return;
-    logBuf.push({ t: Date.now(), method, url: url.replace(/^https?:\/\//, '').slice(0, 120), status, ms: Math.round(performance.now() - t0) });
-    if (logBuf.length > LOG_MAX) logBuf.splice(0, logBuf.length - LOG_MAX);
-    logSubs.forEach((f) => f());
+    if (!(/^https?:\/\/(127\.0\.0\.1|localhost)/.test(url) || engineForUrl(url))) return;
+    const short = url.replace(/^https?:\/\//, '').slice(0, 120);
+    if (isStatusCheck(url)) {
+      let origin = url;
+      try { origin = new URL(url).origin; } catch { /* keep */ }
+      const up = status !== 'error' && status < 500;
+      const was = reach.get(origin);
+      reach.set(origin, up);
+      // First check of a running engine is not news; going down, or coming back after being down, is.
+      if (was === undefined ? !up : was !== up) push({ t: Date.now(), method, url: `${ENGINE_NAMES[engineForUrl(url) ?? ''] ?? origin.replace(/^https?:\/\//, '')} ${up ? 'is running' : 'is not reachable'}`, status: up ? 'online' : 'offline', ms: Math.round(performance.now() - t0) });
+      return;
+    }
+    push({ t: Date.now(), method, url: short, status, ms: Math.round(performance.now() - t0) });
   };
   try {
     const res = await rawHttp(input, init);

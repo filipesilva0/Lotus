@@ -25,7 +25,7 @@ export interface EngineSource {
 
 export const ENGINES: Record<EngineId, EngineSource> = {
   ollama: {
-    id: 'ollama', name: 'Ollama', role: 'Chat, Deep Research, App Builder and Tasks',
+    id: 'ollama', name: 'Ollama', role: 'Chat, Work, Deep Research and Tasks',
     licence: 'MIT', home: 'https://ollama.com', terms: 'https://github.com/ollama/ollama/blob/main/LICENSE',
     downloadPage: 'https://ollama.com/download',
     note: { linux: 'Unpacked into Lotus Studio/Engines, so it needs no administrator password.' },

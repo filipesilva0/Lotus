@@ -154,3 +154,10 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T46 | Re-run `real-tasks.mjs` on the user's PC after every agent change and with ComfyUI running (image tasks were only checked for an honest failure). Keep the latest results in the repo (`handover/real-tasks/`). | P0 | Plan §5. |
 | T47 | Claim check: more kinds (deleted, sent, scheduled, installed) as tools for them arrive. | P2 | `core/src/agent/claims.ts`. |
 | T48 | Thinking models: tool turns run with `think: false` (D58). Try letting a model think on the final answer only, and compare real-task results. | P2 | |
+| T49 | **Session 16 on Windows**: Work with a real model (qwen3 8B, Nemotron 3 Nano) on a few real jobs; add Work jobs (artifact made, question asked, helper used) to `real-tasks.mjs`. | P0 | Only a scripted fake ran. |
+| T50 | **Computer/browser control on real desktops**: screenshot scale vs DPI on Windows, click accuracy, SendKeys edge cases, macOS permissions prompts, Linux xdotool; Chrome CDP with Chrome 136+ (own profile), Edge fallback. Add real tasks. | P0 | Nothing here was run against a real screen or Chrome. |
+| T51 | **Voice on Windows**: Voicebox speak/transcribe round trip, system voice fallback, silence detection thresholds, voice answers to ask.user and permissions, Talk mode loop. | P1 | |
+| T52 | Remove the unused Rust `appbuilder` module and its commands (needs `cargo check`); remove `src-tauri` App Builder capabilities. Check `island.rs TOP_MARGIN = 0` and the island over the macOS notch/menu bar (window level). | P1 | |
+| T53 | Hardware: Windows CPU temperature without admin (LibreHardwareMonitor's driver needs admin too; maybe a Lotus-installed helper service), AMD/Intel GPUs on Windows (PDH counters for load). | P2 | |
+| T54 | Chat: show steps' helper faces and artifacts like Work (Chat runs don't get work tools today). | P2 | |
+

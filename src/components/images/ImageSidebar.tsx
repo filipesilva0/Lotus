@@ -9,9 +9,11 @@ import { uid } from '../../lib/persist';
 interface Props {
   sessions: GenSession[]; activeId: string; folders: ChatFolder[]; onFolders: (f: ChatFolder[]) => void;
   onSelect: (id: string) => void; onNew: () => void; onDelete: (id: string) => void; onPatch: (id: string, fn: (s: GenSession) => GenSession) => void;
+  /** The row a running generation belongs to (shows a spinner on that row). */
+  busyId?: string | null;
 }
 
-export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFolders, onSelect, onNew, onDelete, onPatch }) => {
+export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFolders, onSelect, onNew, onDelete, onPatch, busyId }) => {
   const [q, setQ] = useState('');
   const [folder, setFolder] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
   const [name, setName] = useState('');
   const [open, setOpen] = useState(true);
   const needle = q.trim().toLowerCase();
-  const list = sessions.filter((s) => s.versions.length > 0 || s.id === activeId)
+  const list = sessions.filter((s) => s.versions.length > 0 || s.id === activeId || s.id === busyId)
     .filter((s) => (!folder || s.folderId === folder) && (!needle || s.title.toLowerCase().includes(needle) || s.versions.some((v) => v.prompt.toLowerCase().includes(needle) || String(v.seed) === needle)));
   const pinned = list.filter((s) => s.pinned);
   const groups = groupByDate<GenSession>(list.filter((s) => !s.pinned));
@@ -33,8 +35,9 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
     return (
       <div key={s.id} role="button" tabIndex={0} onClick={() => onSelect(s.id)} onKeyDown={(e) => { if (e.key === 'Enter' && renaming !== s.id) onSelect(s.id); }}
         className={cx('group flex items-center gap-2 p-1.5 rounded-[8px] cursor-default', on ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
-        <span className="w-9 h-9 rounded-[6px] overflow-hidden bg-[var(--hover)] shrink-0 shadow-[0_0_0_0.5px_var(--sep)]">
-          {thumb && <img src={thumb} alt="" className="w-full h-full object-cover" />}
+        <span className="relative w-9 h-9 rounded-[6px] overflow-hidden bg-[var(--hover)] shrink-0 shadow-[0_0_0_0.5px_var(--sep)]">
+          {thumb && <img src={thumb} alt="" className={cx('w-full h-full object-cover', s.id === busyId && 'opacity-50')} />}
+          {s.id === busyId && <span className="absolute inset-0 flex items-center justify-center"><span className="w-4 h-4 rounded-full border-2 border-[var(--color-accent-vibrant)] border-t-transparent animate-spin" /></span>}
         </span>
         <span className="flex-1 min-w-0">
           {renaming === s.id ? (
@@ -43,7 +46,7 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
               className="w-full h-6 px-1.5 rounded-[5px] bg-[var(--color-bg-card)] text-[13px] shadow-[0_0_0_0.5px_var(--sep)] focus:outline-none" />
           ) : (<>
             <span className={cx('block truncate text-[13px]', on ? 'font-medium' : 'text-[var(--color-text-muted)]')}>{s.title}</span>
-            <span className="block text-[12px] text-[var(--color-text-muted)]">{s.versions.length} image{s.versions.length === 1 ? '' : 's'}</span>
+            <span className="block text-[12px] text-[var(--color-text-muted)]">{s.id === busyId ? 'Generating…' : `${s.versions.length} image${s.versions.length === 1 ? '' : 's'}`}</span>
           </>)}
         </span>
         {renaming !== s.id && (

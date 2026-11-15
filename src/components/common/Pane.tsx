@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Tip, glossaryTip } from './Tip';
 import { cx, Slider } from './ui';
 import { usePanels } from '../../lib/panels';
 
@@ -29,10 +30,10 @@ export const PaneBar: React.FC<{ children: React.ReactNode; className?: string }
 export const Section: React.FC<{ title: string; hint?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode; className?: string }> = ({ title, hint, action, children, className }) => (
   <section className={cx('px-4 py-3 border-b border-[var(--sep)] last:border-b-0', className)}>
     <div className="flex items-center justify-between mb-2">
-      <h3 className="text-[12px] font-semibold text-[var(--color-text-muted)]">{title}</h3>
+      <h3 className="flex items-center gap-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{title}<Tip label={title} text={typeof hint === 'string' ? hint : undefined} /></h3>
       {action}
     </div>
-    {hint && <p className="text-[12px] text-[var(--color-text-muted)] mb-2 leading-snug">{hint}</p>}
+    {hint && typeof hint !== 'string' && <div className="text-[12px] text-[var(--color-text-muted)] mb-2 leading-snug">{hint}</div>}
     {children}
   </section>
 );
@@ -42,17 +43,16 @@ export const SliderField: React.FC<{
 }> = ({ label, value, min, max, step = 0.01, onChange, format, hint, disabled }) => (
   <div className="mb-3 last:mb-0">
     <div className="flex items-baseline justify-between text-[12px] mb-0.5">
-      <span className="text-[var(--color-text-main)]">{label}</span>
+      <span className="inline-flex items-center gap-1 text-[var(--color-text-main)]">{label}<Tip label={label} text={hint && glossaryTip(label) ? `${glossaryTip(label)} ${hint}` : hint} /></span>
       <span className="tabular-nums text-[var(--color-text-muted)]">{format ? format(value) : value}</span>
     </div>
     <Slider value={value} min={min} max={max} step={step} onChange={onChange} label={label} disabled={disabled} />
-    {hint && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>}
   </div>
 );
 
 export const KV: React.FC<{ k: string; v: React.ReactNode; mono?: boolean }> = ({ k, v, mono }) => (
   <div className="flex items-baseline justify-between gap-3 py-1 text-[12px]">
-    <span className="text-[var(--color-text-muted)] shrink-0">{k}</span>
+    <span className="inline-flex items-center gap-1 text-[var(--color-text-muted)] shrink-0">{k}<Tip label={k} /></span>
     <span className={cx('text-right min-w-0 break-words tabular-nums', mono && 'font-mono text-[12px]')}>{v}</span>
   </div>
 );

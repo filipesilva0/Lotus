@@ -158,7 +158,6 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
           })}
         </div>
         {items.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">About {toks.toLocaleString()} tokens of the {settings.contextWindow.toLocaleString()}-token window.</p>}
-        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">For current information from the web, turn on Web search (globe) in the message box instead.</p>
       </Section>
       <Section title="Memory & instructions" hint={memOn
         ? 'Lotus saves what you ask it to (“remember …”, “from now on …”) and learns lasting facts and preferences as you talk. Learned items are marked; remove anything that is wrong.'
@@ -192,9 +191,8 @@ const ResearchTab: React.FC<Pick<Props, 'session' | 'searchOn' | 'onToggleSearch
   const withWork = session.messages.filter((m) => m.tools?.length || m.sources?.length);
   return (
     <div className="overflow-y-auto flex-1">
-      <Section title="Source search">
+      <Section title="Source search" hint="When on, your message's keywords are sent to OpenAlex, arXiv and PubMed (not the model). The best matches are given to the model, which cites them as [1], [2]…">
         <Checkbox checked={searchOn} onChange={onToggleSearch} label="Search academic sources before answering" />
-        <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-snug">When on, your message's keywords are sent to OpenAlex, arXiv and PubMed (not the model). The best matches are given to the model, which cites them as [1], [2]…</p>
       </Section>
       {!withWork.length && <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Queries and sources from this conversation will be listed here.</p>}
       {withWork.map((m) => (
@@ -259,6 +257,9 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
           </span>
         </div>
       </Section>
+      {/* Rarely needed: folded away so the Model tab is just the knobs people actually turn (session 16). */}
+      <details className="group border-t border-[var(--sep)]">
+        <summary className="px-4 py-2.5 text-[12px] font-semibold text-[var(--color-text-muted)] cursor-default list-none flex items-center gap-1 hover:text-[var(--color-text-main)]"><span className="transition-transform group-open:rotate-90">›</span>Advanced: stop sequences, system prompt, raw request</summary>
       <Section title="Stop sequences" hint="Generation stops when any of these appears. Use \n for a line break.">
         <div className="flex gap-1.5 mb-2"><TextInput value={stopDraft} onChange={(e) => setStopDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addStop(); }} placeholder="e.g. ###" aria-label="New stop sequence" /><Btn size="sm" onClick={addStop} disabled={!stopDraft}>Add</Btn></div>
         <div className="flex flex-wrap gap-1.5">{s.stopSequences.map((x) => <span key={x} className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-[6px] bg-[var(--hover)] text-[12px] font-mono">{x.replace(/\n/g, '\\n')}<IconBtn label={`Remove ${x}`} className="!w-4 !h-4" onClick={() => set({ stopSequences: s.stopSequences.filter((y) => y !== x) })}><X className="w-3 h-3" /></IconBtn></span>)}</div>
@@ -275,25 +276,37 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
         </div>); })() : null}
         <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Logit bias and per-token confidence aren't offered here: they aren't part of the request Lotus sends to Ollama.</p>
       </Section>
+      </details>
     </div>
   );
 };
 
-export const ChatInspector: React.FC<Props> = (p) => (
+/**
+ * The chat's right panel, trimmed in session 16 ("cluttered and redundant"): it is closed by default,
+ * and only shows the tabs that have something in them for this chat. Artifacts appear when a reply
+ * has an HTML/SVG page to preview; Sources when the chat searched or source search is on.
+ */
+export const ChatInspector: React.FC<Props> = (p) => {
+  const hasPreview = artifactsFrom(p.session.messages).some((a) => PREVIEWABLE.includes(a.lang));
+  const hasSources = p.searchOn || p.session.messages.some((m) => m.tools?.length || m.sources?.length);
+  const tabs = TABS.filter((t) => (t.id === 'artifacts' ? hasPreview : t.id === 'research' ? hasSources : true));
+  const tab = tabs.some((t) => t.id === p.tab) ? p.tab : 'context';
+  return (
   <InspectorPane label="Inspector">
     <div className="shrink-0 p-2 border-b border-[var(--sep)]">
-      <div role="tablist" aria-label="Inspector" className="grid grid-cols-4 gap-0.5 p-0.5 rounded-[8px] bg-[var(--hover)]">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={p.tab === t.id} title={t.label} onClick={() => p.onTab(t.id)}
-            className={cx('h-7 inline-flex items-center justify-center gap-1 rounded-[6px] text-[12px] font-medium', p.tab === t.id ? 'bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_1px_2px_rgba(0,0,0,.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]')}>
+      <div role="tablist" aria-label="Inspector" className="grid gap-0.5 p-0.5 rounded-[8px] bg-[var(--hover)]" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+        {tabs.map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} title={t.label} onClick={() => p.onTab(t.id)}
+            className={cx('h-7 inline-flex items-center justify-center gap-1 rounded-[6px] text-[12px] font-medium', tab === t.id ? 'bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_1px_2px_rgba(0,0,0,.12)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]')}>
             {t.icon}<span className="truncate">{t.label}</span>
           </button>
         ))}
       </div>
     </div>
-    {p.tab === 'artifacts' && <ArtifactsTab messages={p.session.messages} focus={p.focusArtifact} />}
-    {p.tab === 'context' && <ContextTab {...p} />}
-    {p.tab === 'research' && <ResearchTab session={p.session} searchOn={p.searchOn} onToggleSearch={p.onToggleSearch} />}
-    {p.tab === 'params' && <ParamsTab settings={p.settings} onSettings={p.onSettings} raw={p.raw} />}
+    {tab === 'artifacts' && <ArtifactsTab messages={p.session.messages} focus={p.focusArtifact} />}
+    {tab === 'context' && <ContextTab {...p} />}
+    {tab === 'research' && <ResearchTab session={p.session} searchOn={p.searchOn} onToggleSearch={p.onToggleSearch} />}
+    {tab === 'params' && <ParamsTab settings={p.settings} onSettings={p.onSettings} raw={p.raw} />}
   </InspectorPane>
-);
+  );
+};

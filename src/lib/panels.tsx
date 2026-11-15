@@ -3,7 +3,7 @@ import React, { createContext, useContext } from 'react';
 /**
  * Left / right panel visibility for the current page (session 8).
  * The title bar's "Show/Hide left panel" and "Show/Hide right panel" buttons drive this. Each page
- * remembers its own choice (App keeps one entry per view in `lotus.panels.v1`).
+ * remembers its own choice (App keeps one entry per view in `lotus.panels.v2`).
  * - left  = the page's list (chats, image sessions, voices, research tasks, project files, models)
  * - right = the page's inspector
  * SidebarPane / InspectorPane read it, so any page built from them follows automatically.
@@ -23,5 +23,6 @@ export const PanelsProvider: React.FC<{ value: PanelsApi; children: React.ReactN
   <PanelsContext.Provider value={value}>{children}</PanelsContext.Provider>
 );
 
-/** Default visibility for a page that has never been toggled. */
-export const DEFAULT_PANELS: PanelState = { left: true, right: true };
+/** Default visibility for a page that has never been toggled. The inspector starts closed (session 16):
+ *  it holds settings you reach for now and then, not something to look at all the time. */
+export const DEFAULT_PANELS: PanelState = { left: true, right: false };

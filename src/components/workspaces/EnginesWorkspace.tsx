@@ -226,7 +226,7 @@ const StorageTab: React.FC = () => {
     ['Voices, history and stories (Voicebox)', `${paths.dataDir}\\voicebox`],
     ['Chat models (Ollama)', "Ollama's own model folder"],
     ['Image checkpoints and LoRAs (ComfyUI)', modelsDir ? `${folderPath(modelsDir, 'checkpoints')}  ·  ${folderPath(modelsDir, 'loras')}` : "ComfyUI's models folder (not set yet)"],
-    ['App projects (App Builder)', `${paths.dataDir}\\projects`],
+    ['Work artifacts', paths.studioDir ? `${paths.studioDir}${sep}Work` : 'Lotus Studio/Work'],
   ];
   return (
     <div className="space-y-5 max-w-3xl">

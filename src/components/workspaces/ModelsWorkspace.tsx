@@ -6,6 +6,7 @@ import { ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaSe
 import { comfy, ComfyStats } from '../../services/comfyService';
 import { voicebox, Health } from '../../services/voicebox';
 import { requestLog, RequestLogEntry } from '../../lib/http';
+import { LiveHardware } from '../hardware/LiveHardware';
 import { EngineId } from '../../services/engineConfig';
 import type { EngineState } from '../../hooks/useEngines';
 import { usePersisted, uid } from '../../lib/persist';
@@ -260,17 +261,17 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
   }, [engines.comfyui.up, engines.ollama.up, engines.voicebox.up]);
 
   const ollamaVram = ps.reduce((n, m) => n + m.size_vram, 0) / 1024 ** 3;
-  const shown = (onlyErr ? log.filter((l) => l.status === 'error' || (typeof l.status === 'number' && l.status >= 400)) : log).slice(-120).reverse();
+  const isErr = (l: RequestLogEntry) => l.status === 'error' || l.status === 'offline' || (typeof l.status === 'number' && l.status >= 400);
+  const shown = (onlyErr ? log.filter(isErr) : log).slice(-120).reverse();
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
       {/* Engine on/off status lives on the Engines tab and the auto-scaling card in Settings → Engines;
           they are not repeated here (session 8). This page is live memory use and the request log. */}
+      <LiveHardware />
+
+      <h2 className="pt-2 text-[13px] font-semibold">Loaded by your engines</h2>
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">GPU video memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.vramTotalGb ? `${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} / ${stats.vramTotalGb.toFixed(1)} GB` : '—'}</span></div>
-          {stats && stats.vramTotalGb ? <><Gauge value={(stats.vramTotalGb - stats.vramFreeGb) / stats.vramTotalGb} label="Video memory" className="mb-2" /><Spark values={samples.map((s) => s.vram)} max={stats.vramTotalGb} label="Video memory over the last two minutes" /><p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">{stats.device} · whole-GPU figure reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">GPU memory is read from ComfyUI. Start it to see this.</p>}</Card>
-        <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">System memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{stats && stats.ramTotalGb ? `${(stats.ramTotalGb - stats.ramFreeGb).toFixed(1)} / ${stats.ramTotalGb.toFixed(1)} GB` : '—'}</span></div>
-          {stats && stats.ramTotalGb ? <><Gauge value={(stats.ramTotalGb - stats.ramFreeGb) / stats.ramTotalGb} label="System memory" className="mb-2" /><Spark values={samples.map((s) => s.ram)} max={stats.ramTotalGb} label="System memory over the last two minutes" color="var(--c-green)" /><p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Reported by ComfyUI</p></> : <p className="text-[12px] text-[var(--color-text-muted)]">System memory is read from ComfyUI. Start it to see this.</p>}</Card>
         <Card className="p-3.5"><div className="flex justify-between text-[13px] mb-1.5"><span className="font-semibold">Ollama models in memory</span><span className="tabular-nums text-[var(--color-text-muted)]">{ps.length ? `${ollamaVram.toFixed(1)} GB on GPU` : 'none loaded'}</span></div>
           <Spark values={samples.map((s) => s.ollama)} max={Math.max(1, ...samples.map((s) => s.ollama))} label="Ollama video memory over time" color="var(--c-orange)" />
           <ul className="mt-2 space-y-0.5 text-[12px]">{ps.map((m) => <li key={m.name} className="flex justify-between"><span className="truncate">{m.name}</span><span className="tabular-nums text-[var(--color-text-muted)]">{fmtGB(m.size)} ({Math.round((m.size_vram / Math.max(1, m.size)) * 100)}% on GPU)</span></li>)}</ul></Card>
@@ -278,15 +279,12 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
           {vb ? <p className="text-[12px] text-[var(--color-text-muted)]">{[vb.gpu_type, vb.backend_type, vb.model_loaded ? `model loaded${vb.model_size ? ` (${vb.model_size})` : ''}` : 'no model loaded'].filter(Boolean).join(' · ')}</p> : <p className="text-[12px] text-[var(--color-text-muted)]">Start Voicebox to see its status.</p>}</Card>
       </div>
 
-      <Card className="p-3.5"><div className="flex items-center gap-2 text-[13px] font-semibold"><Cpu className="w-4 h-4" />CPU load and temperature</div>
-        <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Not shown. None of your engines report them, and reading them needs a native helper that Lotus doesn't include. Use Task Manager for now.</p></Card>
-
       <section>
         <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] font-semibold">Request log</h2>
           <div className="flex items-center gap-3"><label className="inline-flex items-center gap-1.5 text-[12px]"><input type="checkbox" checked={onlyErr} onChange={(e) => setOnlyErr(e.target.checked)} />Errors only</label><Btn size="sm" variant="ghost" onClick={() => { requestLog.entries().length = 0; setLog([]); }}>Clear</Btn></div></div>
         <div className="rounded-[10px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] max-h-72 overflow-y-auto font-mono text-[12px]" role="log" aria-label="Requests Lotus made to the engines">
-          {!shown.length && <p className="p-3 font-sans text-[12px] text-[var(--color-text-muted)]">Nothing yet. Calls Lotus makes to Ollama, ComfyUI and Voicebox appear here (routine status checks are hidden).</p>}
-          {shown.map((l, i) => <div key={i} className="flex gap-3 px-3 py-1 border-b border-[var(--sep)] last:border-b-0"><span className="text-[var(--color-text-muted)] tabular-nums">{new Date(l.t).toLocaleTimeString()}</span><span className="w-12">{l.method}</span><span className="flex-1 truncate">{l.url}</span><span className={cx('w-10 text-right', l.status === 'error' || (typeof l.status === 'number' && l.status >= 400) ? 'text-[var(--c-red)]' : 'text-[var(--c-green)]')}>{l.status}</span><span className="w-14 text-right tabular-nums text-[var(--color-text-muted)]">{l.ms} ms</span></div>)}
+          {!shown.length && <p className="p-3 font-sans text-[12px] text-[var(--color-text-muted)]">Nothing yet. Calls Lotus makes to Ollama, ComfyUI and Voicebox appear here (status checks only show when an engine stops or starts).</p>}
+          {shown.map((l, i) => <div key={i} className="flex gap-3 px-3 py-1 border-b border-[var(--sep)] last:border-b-0"><span className="text-[var(--color-text-muted)] tabular-nums">{new Date(l.t).toLocaleTimeString()}</span><span className="w-12">{l.method}</span><span className="flex-1 truncate">{l.url}</span><span className={cx('w-10 text-right', isErr(l) ? (l.status === 'offline' ? 'text-[var(--color-text-muted)]' : 'text-[var(--c-red)]') : 'text-[var(--c-green)]')}>{l.status === 'offline' ? 'off' : l.status === 'online' ? 'on' : l.status}</span><span className="w-14 text-right tabular-nums text-[var(--color-text-muted)]">{l.ms} ms</span></div>)}
         </div>
         <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Output from the engine programs themselves isn't captured: engines Lotus starts have their console output discarded.</p>
       </section>
@@ -379,7 +377,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
             ))}
             {!history.length && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)]">Run a comparison and pick a winner to start a history.</p>}
           </>)}
-          {mode === 'monitor' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">Readings update every two seconds while this page is open.</p>}
+          {mode === 'monitor' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">Readings update every two seconds while this page is open. Hover a chart to see a moment.</p>}
         </div>
       </SidebarPane>
 

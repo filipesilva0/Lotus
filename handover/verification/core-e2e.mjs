@@ -110,7 +110,7 @@ try {
   ok('import: memory search works on it', (await rpc('memories_search', { query: 'where does he study physiotherapy' })).includes('m1'));
 
   // Gallery: visiting Images loads the old blobs and saves them as files.
-  await page.keyboard.press('Control+2');
+  await page.keyboard.press('Control+3');
   await page.waitForTimeout(2500);
   all = (await api('/v1/kv')).items;
   const gallery = JSON.parse(all['lotus.gallery.v2'] ?? '[]');
@@ -126,7 +126,7 @@ try {
   await page.goto(`${U}/index.html`);
   const stillThere = await page.waitForSelector('text=Knee rehab after ACL', { timeout: 10000 }).then(() => true, () => false);
   ok('browser storage cleared: chats still load (from the core)', stillThere);
-  await page.keyboard.press('Control+2');
+  await page.keyboard.press('Control+3');
   await page.waitForTimeout(2000);
   const imgShown = await page.evaluate(() => [...document.images].some((i) => i.src.startsWith('blob:') && i.naturalWidth > 0));
   ok('browser storage cleared: the image loads back from its file', imgShown);

@@ -5,7 +5,7 @@ import { EngineNotice } from '../common/EngineNotice';
 import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal, Maximize2 } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
-import { DEFAULT_PARAMS, ImageParams, useGallery } from '../../hooks/useGallery';
+import { DEFAULT_PARAMS, Gallery, ImageParams } from '../../hooks/useGallery';
 import { comfy, ComfyStats, dimensionsFor } from '../../services/comfyService';
 import { engineUrl } from '../../services/engineConfig';
 import { usePanels } from '../../lib/panels';
@@ -22,7 +22,7 @@ import { recipeFor } from '../../setup/catalog';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
-interface Props { comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void; onOpenModels: () => void }
+interface Props { g: Gallery; comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void; onOpenModels: () => void }
 
 const SLASH = [
   { name: 'ar', args: '<16:9 | 1024x768>', help: 'Aspect ratio or size' },
@@ -33,8 +33,10 @@ const SLASH = [
   { name: 'neg', args: '<text>', help: 'Negative prompt' },
 ];
 
-export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEngines, onOpenModels }) => {
-  const g = useGallery(comfyUp);
+export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpenEngines, onOpenModels }) => {
+  // The gallery lives in App, so a run keeps going (and lands in its row) when you open another page.
+  // Its progress shows only on the generation it belongs to; other rows look normal meanwhile.
+  const busyHere = g.busy && g.busyId === g.activeId;
   const [stored, setParams] = usePersisted<ImageParams>('lotus.image.params.v1', DEFAULT_PARAMS);
   const params: ImageParams = { ...DEFAULT_PARAMS, ...stored };
   const [loraList, setLoraList] = useState<string[]>([]);
@@ -168,21 +170,21 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
 
-      <ImageSidebar sessions={g.sessions.filter((s) => !hiddenGen.has(s.id))} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={newImage} onDelete={deleteGen} onPatch={g.patch} />
+      <ImageSidebar busyId={g.busy ? g.busyId : null} sessions={g.sessions.filter((s) => !hiddenGen.has(s.id))} activeId={g.activeId} folders={folders} onFolders={setFolders} onSelect={g.setActiveId} onNew={newImage} onDelete={deleteGen} onPatch={g.patch} />
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {g.error && <div className="px-6 pt-3"><Banner tone="error" action={<IconBtn label="Dismiss" onClick={() => g.setError(null)}><X className="w-3.5 h-3.5" /></IconBtn>}>{g.error}</Banner></div>}
 
         {/* Canvas */}
         <div className="flex-1 min-h-0 p-5 flex flex-col items-center justify-center">
-          {!cur && !g.busy && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body="Describe an image below and press Generate. ComfyUI makes it on your own GPU." className="flex-1" />}
-          {(cur || g.busy) && (
+          {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body="Describe an image below and press Generate. ComfyUI makes it on your own GPU." className="flex-1" />}
+          {(cur || busyHere) && (
             <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
-              {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!g.busy) setViewing(true); }}
-                className={cx('max-w-full max-h-full object-contain rounded-[12px] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', g.busy ? 'opacity-40 blur-[1px]' : 'cursor-zoom-in')} />}
+              {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!busyHere) setViewing(true); }}
+                className={cx('max-w-full max-h-full object-contain rounded-[12px] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]', busyHere ? 'opacity-40 blur-[1px]' : 'cursor-zoom-in')} />}
               {!cur && <div className="rounded-[12px] bg-[var(--hover)] shadow-[inset_0_0_0_0.5px_var(--sep)]" style={{ aspectRatio: `${dims.width}/${dims.height}`, height: '60%', maxWidth: '100%' }} />}
 
-              {g.busy && (
+              {busyHere && (
                 <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
                   <div className="flex items-center justify-between text-[13px] mb-2"><span className="font-medium">{g.label}…</span><span className="tabular-nums text-[var(--color-text-muted)]">{Math.floor(g.elapsed)}s</span></div>
                   <Progress label="Generating" />
@@ -196,7 +198,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 </div>
               )}
 
-              {cur && !g.busy && (
+              {cur && !busyHere && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-[10px] bg-black/65 backdrop-blur-md opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" role="toolbar" aria-label="Image actions">
                   <button type="button" className={actionBtn} onClick={() => setViewing(true)}><Maximize2 className="w-3.5 h-3.5" />Full screen</button>
                   <button type="button" className={actionBtn} onClick={download}><Download className="w-3.5 h-3.5" />Download</button>
@@ -223,7 +225,7 @@ export const ImageWorkspace: React.FC<Props> = ({ comfyUp, checkpoints, onOpenEn
                 </div>
               )}
 
-              {g.active.versions.length > 1 && !g.busy && (
+              {g.active.versions.length > 1 && !busyHere && (
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 px-1 h-8 rounded-[10px] bg-black/65 text-white text-[12px] tabular-nums backdrop-blur-md">
                   <button type="button" aria-label="Previous version" disabled={g.active.index === 0} onClick={() => g.stepVersion(-1)} className="w-6 h-6 inline-flex items-center justify-center rounded-[6px] hover:bg-white/20 disabled:opacity-40"><ChevronLeft className="w-4 h-4" /></button>
                   {g.active.index + 1} / {g.active.versions.length}

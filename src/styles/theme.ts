@@ -76,9 +76,10 @@ export const PALETTES: Record<ColorPalette, ThemeColors> = {
  * Engines & Models is not one of the five workspaces, so it gets the neutral graphite accent.
  */
 export const PAGE_PALETTE: Record<ViewMode, ColorPalette> = {
-  chat: 'blue', images: 'red', voice: 'amber', builder: 'yellow', tasks: 'green', engines: 'graphite',
+  chat: 'blue', work: 'red', images: 'amber', voice: 'yellow', tasks: 'green', engines: 'graphite',
 };
-export const PETAL_ORDER: ViewMode[] = ['chat', 'images', 'voice', 'builder', 'tasks'];
+/** Session 16: Work replaced App Builder and sits right after Chat, so the pages take the petals in order. */
+export const PETAL_ORDER: ViewMode[] = ['chat', 'work', 'images', 'voice', 'tasks'];
 
 export const FONTS: Record<FontFamily, { name: string; family: string }> = {
   // 'jakarta' is the stored key for the default; it now means the system UI font
@@ -159,6 +160,9 @@ export function applyThemeToDocument(
   root.style.setProperty('--c-green', darkMode ? '#30D158' : '#248A3D');
   root.style.setProperty('--c-red', darkMode ? '#FF453A' : '#D70015');
   root.style.setProperty('--c-orange', darkMode ? '#FF9F0A' : '#B25000');
+  // Chart hues (validated set from session 7, used by Hardware & Runtime).
+  root.style.setProperty('--c-blue', darkMode ? '#3B86EE' : '#0A6FE0');
+  root.style.setProperty('--c-purple', darkMode ? '#AE66D2' : '#B455D6');
 
   // Set Font Family & Size scale
   root.style.setProperty('--font-primary', font.family);

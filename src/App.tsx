@@ -14,7 +14,9 @@ import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspac
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
 import { EnginesWorkspace } from './components/workspaces/EnginesWorkspace';
-import { BuilderWorkspace } from './components/builder/BuilderWorkspace';
+import { WorkWorkspace } from './components/workspaces/WorkWorkspace';
+import { useWork } from './work/store';
+import { startVoiceController } from './voice/controller';
 import { useResearch } from './research/store';
 import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
 import { setLiveSettings } from './lib/liveSettings';
@@ -28,9 +30,11 @@ import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
 import { useEngines } from './hooks/useEngines';
+import { useGallery } from './hooks/useGallery';
 import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
-import { invokeNative, onEvent } from './lib/bus';
+import { emitEvent, invokeNative, onEvent } from './lib/bus';
+import { hueForPage, KEY_PETAL_HUE, petal } from './agents/avatars';
 import { WelcomeSetup } from './components/setup/WelcomeSetup';
 import { loadSetup } from './setup/state';
 import { useSetupJobs } from './setup/jobs';
@@ -119,7 +123,6 @@ export default function App() {
   const [setupOpen, setSetupOpen] = useState(() => !loadSetup().done);
   const [setupAccent, setSetupAccent] = useState<ColorPalette>('blue');
   const [currentView, setCurrentViewRaw] = useState<ViewMode>('chat');
-  const [builderSeen, setBuilderSeen] = useState(false);
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
   const [settings, setSettings] = useState<LotusSettings>(loadSettings);
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -147,8 +150,14 @@ export default function App() {
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
 
   // Each page's left panel (its list) and right panel (its inspector), toggled from the title bar.
-  const [panelMap, setPanelMap] = useState<Partial<Record<ViewMode, PanelState>>>(() => load('lotus.panels.v1', {}));
-  useEffect(() => { try { kv.setItem('lotus.panels.v1', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
+  // v2 (session 16): inspectors start closed; sidebars keep what v1 saved.
+  const [panelMap, setPanelMap] = useState<Partial<Record<ViewMode, PanelState>>>(() => {
+    const v2 = load<Partial<Record<ViewMode, PanelState>> | null>('lotus.panels.v2', null);
+    if (v2) return v2;
+    const v1 = load<Partial<Record<string, PanelState>>>('lotus.panels.v1', {});
+    return Object.fromEntries(Object.entries(v1).map(([k, v]) => [k, { left: v?.left ?? true, right: false }]));
+  });
+  useEffect(() => { try { kv.setItem('lotus.panels.v2', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
   const panels = panelMap[currentView] ?? DEFAULT_PANELS;
   const viewRefForPanels = useRef(currentView);
   viewRefForPanels.current = currentView;
@@ -211,11 +220,23 @@ export default function App() {
   const chat = useChat(settings);
   // Deep research lives in Chat, but its runs belong to the app so they keep going on other pages.
   const research = useResearch({ model: settings.selectedModel });
+  // Images too: a generation keeps running and lands in its row while you use other pages.
+  const gallery = useGallery(comfyUp);
+  // Work runs too (session 16), and spoken questions / permission prompts when voice is on.
+  const work = useWork(settings);
+  useEffect(() => { startVoiceController(); }, []);
   useEffect(() => { startHardwareMonitor(); void loadMemory(); startScheduler(); }, []);
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => { kv.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
 
+  // Petal, the mascot, wears the page's petal colour too (here and on the island).
+  useEffect(() => {
+    const h = hueForPage(currentView);
+    petal.set(h);
+    kv.setItem(KEY_PETAL_HUE, String(h));
+    void emitEvent('petal:hue', h).catch(() => undefined);
+  }, [currentView]);
   // Each page wears its own petal colour as the accent (no accent setting since session 8).
   useEffect(() => {
     applyThemeToDocument(setupOpen ? setupAccent : PAGE_PALETTE[currentView], settings.fontFamily, settings.fontSize, dark);
@@ -246,13 +267,12 @@ export default function App() {
   useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp, imageFilesDone]);
 
   // ── Messages from other windows ───────────────────────────────────────────
-  useEffect(() => { if (currentView === 'builder') setBuilderSeen(true); }, [currentView]);
   const openEngines = useCallback((tab: 'engines' | 'models' = 'engines') => { setEnginesTab(tab); setCurrentView('engines'); }, []);
   const enginesCtx = useMemo(() => ({ eng, openEngines: () => openEngines('engines') }), [eng, openEngines]);
 
   useEffect(() => {
     const offs: (() => void)[] = [];
-    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'images' || v === 'voice' || v === 'builder' || v === 'tasks' || v === 'engines') setCurrentView(v); else if (v === 'research') setCurrentView('chat'); }).then((u) => offs.push(u));
+    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'work' || v === 'images' || v === 'voice' || v === 'tasks' || v === 'engines') setCurrentView(v); else if (v === 'builder') setCurrentView('work'); else if (v === 'research') setCurrentView('chat'); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
@@ -286,7 +306,7 @@ export default function App() {
     { label: 'File', items: [
       { label: 'New Chat', shortcut: 'Ctrl+N', onSelect: newChat },
       { label: 'New Image', onSelect: newOn('images', 'new-image') },
-      { label: 'New Project…', onSelect: newOn('builder', 'new-project') },
+      { label: 'New Work', onSelect: newOn('work', 'new-work') },
       { label: 'New Task', onSelect: newOn('tasks', 'new-task') },
       'separator',
       { label: 'Settings…', shortcut: 'Ctrl+,', onSelect: () => openSettings() },
@@ -320,9 +340,9 @@ export default function App() {
       { label: 'Forward', shortcut: 'Alt+Right', mac: 'Cmd+]', onSelect: goForward, disabled: !future.length },
       'separator',
       { label: 'Chat', shortcut: 'Ctrl+1', checked: currentView === 'chat', onSelect: go('chat') },
-      { label: 'Images', shortcut: 'Ctrl+2', checked: currentView === 'images', onSelect: go('images') },
-      { label: 'Voice', shortcut: 'Ctrl+3', checked: currentView === 'voice', onSelect: go('voice') },
-      { label: 'App Builder', shortcut: 'Ctrl+4', checked: currentView === 'builder', onSelect: go('builder') },
+      { label: 'Work', shortcut: 'Ctrl+2', checked: currentView === 'work', onSelect: go('work') },
+      { label: 'Images', shortcut: 'Ctrl+3', checked: currentView === 'images', onSelect: go('images') },
+      { label: 'Voice', shortcut: 'Ctrl+4', checked: currentView === 'voice', onSelect: go('voice') },
       { label: 'Tasks', shortcut: 'Ctrl+5', checked: currentView === 'tasks', onSelect: go('tasks') },
       { label: 'Engines & Models', shortcut: 'Ctrl+6', checked: currentView === 'engines', onSelect: go('engines') },
     ] },
@@ -380,8 +400,8 @@ export default function App() {
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden mb-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
         {/* Chat and Images have no toolbar row: their controls live in the prompt box (session 8). */}
-        <header className={currentView === 'chat' || currentView === 'images' ? 'hidden' : 'h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]'} role="banner">
-          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'builder' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
+        <header className={currentView === 'chat' || currentView === 'images' || currentView === 'work' ? 'hidden' : 'h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]'} role="banner">
+          <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'work' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>
         <EnginesContext.Provider value={enginesCtx}>
@@ -394,17 +414,13 @@ export default function App() {
             research={research} onOpenEngines={() => openEngines('models')} />
         )}
 
-        {currentView === 'images' && <ImageWorkspace checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
+        {currentView === 'images' && <ImageWorkspace g={gallery} checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
         {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} />}
 
 
-        {/* The App Builder stays mounted once opened so dev servers, terminals and the agent keep going while you use other pages. */}
-        {(builderSeen || currentView === 'builder') && (
-          <div className={currentView === 'builder' ? 'flex-1 min-h-0 flex flex-col' : 'hidden'}>
-            <BuilderWorkspace active={currentView === 'builder'} models={models} selectedModel={settings.selectedModel} ollamaUp={ollamaUp} onOpenEngines={() => openEngines('engines')} />
-          </div>
-        )}
+        {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
+          onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} />}
 
         {currentView === 'tasks' && <TasksWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} ollamaUp={ollamaUp} />}
 

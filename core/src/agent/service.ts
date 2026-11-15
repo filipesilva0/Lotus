@@ -26,10 +26,29 @@ import { TASK_TOOLS } from '../tools/tasks';
 import { imageGenerate } from '../tools/image';
 import { MEMORY_TOOLS } from '../tools/memory';
 import { WEB_TOOLS } from '../tools/web';
+import { WORK_TOOLS, listArtifacts } from '../tools/work';
+import { COMPUTER_TOOLS } from '../tools/computer';
+import { BROWSER_TOOLS } from '../tools/browser';
+import { avatarCreate } from '../tools/avatar';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS];
+export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
-export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp'; llamacppUrl: string; enabled: boolean }
+/** Tools only Work mode gets (they need a work folder or are about long jobs). */
+const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate']);
+
+/** A work id from the UI, as a safe folder name. */
+export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
+
+const WORK_PROMPT = `\n\nYou are working in Lotus's Work mode: the user hands you a job and expects a finished result, not advice.
+- For anything with more than two steps, call plan.set first, then work through the plan and tick each step with plan.check.
+- Deliver the result as artifacts with artifact.write (documents as .md, web pages as one self-contained .html, tables as .csv, code in its own file). Write the whole content.
+- For big jobs, hand self-contained parts to helper agents with agent.delegate and combine what they return.
+- If you are blocked or a choice is the user's to make, use ask.user with short options instead of guessing.
+- Finish with a short summary of what you made and where it is.`;
+
+export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp'; llamacppUrl: string; enabled: boolean; computerUse: boolean; browserUse: boolean }
 
 export function readAgentSettings(db: Db): AgentSettings {
   let s: Record<string, unknown> = {};
@@ -41,6 +60,8 @@ export function readAgentSettings(db: Db): AgentSettings {
     backend: s.llmBackend === 'llamacpp' ? 'llamacpp' : 'ollama',
     llamacppUrl: typeof s.llamacppUrl === 'string' && s.llamacppUrl ? s.llamacppUrl : 'http://127.0.0.1:8080',
     enabled: s.agentTools !== false,
+    computerUse: s.computerUse === true,
+    browserUse: s.browserUse === true,
   };
 }
 
@@ -56,6 +77,8 @@ export interface StartArgs {
   folders?: string[];
   /** Limit to these tools (tests, routines). */
   only?: string[];
+  /** Work mode: the piece of work this run belongs to (its artifacts folder). */
+  workId?: string;
   capabilities?: string[];
 }
 
@@ -65,6 +88,7 @@ const APPROVAL_TIMEOUT = 15 * 60_000;
 export class AgentService {
   private runs = new Map<string, AbortController>();
   private waits = new Map<string, (allow: boolean) => void>();
+  private asks = new Map<string, (answer: string) => void>();
   readonly registry = new Registry(ALL_TOOLS);
 
   constructor(private o: { db: Db; studio: string; broadcast: (e: Record<string, unknown>) => void; fetch?: typeof fetch; log?: (m: string) => void }) {
@@ -84,13 +108,38 @@ export class AgentService {
     return [...new Set(all)];
   }
 
-  toolsFor(a: Pick<StartArgs, 'memoryOn' | 'web' | 'only'>): Tool[] {
+  toolsFor(a: Pick<StartArgs, 'memoryOn' | 'web' | 'only' | 'workId'>): Tool[] {
+    const s = readAgentSettings(this.o.db);
     return ALL_TOOLS.filter((t) => {
       if (a.only && !a.only.includes(t.name)) return false;
       if (t.name.startsWith('memory.') && !a.memoryOn) return false;
-      if (t.name.startsWith('web.') && !a.web) return false;
+      if (t.name.startsWith('web.') && !a.web && !a.workId) return false;
+      if (WORK_ONLY.has(t.name) && !a.workId) return false;
+      if (t.name.startsWith('computer.') && !s.computerUse) return false;
+      if (t.name.startsWith('browser.') && !s.browserUse) return false;
       return true;
     });
+  }
+
+  /** Lotus Studio/Work/<id>: where a piece of work keeps its artifacts. */
+  workDir(id: string): string | null {
+    const f = workFolderName(id);
+    return f ? join(this.o.studio, 'Work', f) : null;
+  }
+
+  artifacts(id: string) { const d = this.workDir(id); return d ? listArtifacts(d) : []; }
+  artifactText(id: string, file: string): string {
+    const d = this.workDir(id);
+    const hit = d && listArtifacts(d).find((x) => x.file === file);
+    if (!d || !hit) throw new Error('That artifact is no longer in the work folder.');
+    return readFileSync(join(d, hit.file), 'utf8');
+  }
+
+  answer(runId: string, askId: string, answer: string): boolean {
+    const f = this.asks.get(`${runId}/${askId}`);
+    if (!f) return false;
+    f(String(answer ?? ''));
+    return true;
   }
 
   start(a: StartArgs): { runId: string } {
@@ -109,18 +158,43 @@ export class AgentService {
     const folders = this.folders(a.folders);
     const tools = this.toolsFor(a);
     const messages = a.messages.map((m) => ({ ...m }));
+    const workDir = a.workId ? this.workDir(a.workId) ?? undefined : undefined;
+    if (workDir) {
+      mkdirSync(workDir, { recursive: true });
+      if (messages[0]?.role === 'system') messages[0] = { ...messages[0], content: `${messages[0].content}${WORK_PROMPT}` };
+      else messages.unshift({ role: 'system', content: WORK_PROMPT.trim() });
+    }
+    if (tools.some((t) => t.name.startsWith('computer.')) && messages[0]?.role === 'system') {
+      messages[0] = { ...messages[0], content: `${messages[0].content}\n\nYou can see and use the user's computer (computer.*). Always take a screenshot before clicking and after each action to check it worked. Prefer browser.* tools for websites.` };
+    }
+    // ask.user: the question goes to every window (chat, Work, the island), spoken aloud there if the
+    // user turned voice on, and the first answer wins.
+    let askSeq = 0;
+    const ask = (question: string, options: string[]) => new Promise<string>((done) => {
+      const askId = `ask${++askSeq}`;
+      const key = `${runId}/${askId}`;
+      const finish = (v: string) => { if (!this.asks.has(key)) return; this.asks.delete(key); clearTimeout(t); ctrl.signal.removeEventListener('abort', onAbort); emit({ kind: 'answered', askId }); done(v); };
+      const onAbort = () => finish('');
+      const t = setTimeout(() => finish(''), 30 * 60_000);
+      ctrl.signal.addEventListener('abort', onAbort);
+      this.asks.set(key, finish);
+      emit({ kind: 'ask', askId, question, options });
+    });
     if (tools.some((t) => t.name.startsWith('files.')) && messages[0]?.role === 'system') {
       messages[0] = { ...messages[0], content: `${messages[0].content}\n\nFolders you can use with the file tools: ${folders.join(', ')} (the last one is the Lotus Studio folder; save new notes there unless the user names another place).` };
     }
 
+    const llm = { backend: s.backend, url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options };
+    let helperSeq = 0;
     void (async () => {
       try {
         const out = await runAgent({
-          runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities,
+          runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined,
         }, {
-          llm: { backend: s.backend, url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options },
+          llm,
           registry: this.registry,
-          ctx: { db: this.o.db, studio: this.o.studio, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn },
+          ctx: { db: this.o.db, studio: this.o.studio, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
+            delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { goal, context, name, model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'ask.user'), llm, s, workDir, folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st) => this.waitFor(runId, st, ctrl.signal) }) : undefined },
           signal: ctrl.signal,
           emit,
           record: (st, seq) => {
@@ -143,6 +217,34 @@ export class AgentService {
       }
     })();
     return { runId };
+  }
+
+  /**
+   * A helper agent (agent.delegate): its own conversation and turn budget, the parent's tools minus
+   * delegating and asking, the parent's approvals. Its steps show inside the parent run, tagged with
+   * the helper's name so the UI can give each helper its own face.
+   */
+  private async helper(runId: string, n: number, h: {
+    goal: string; context: string; name?: string; model: string; tools: Tool[]; llm: Parameters<typeof runAgent>[1]['llm']; s: AgentSettings; workDir: string; folders: string[];
+    memoryOn: boolean; fetchFn: typeof fetch; signal: AbortSignal; emit: (e: AgentEvent) => void; approve: (st: Step) => Promise<boolean>;
+  }): Promise<{ content: string; steps: number; ok: boolean }> {
+    const name = (h.name ?? '').trim().slice(0, 40) || `Helper ${n}`;
+    const subId = `${runId}-h${n}`;
+    const out = await runAgent({
+      runId: subId, model: h.model, tools: h.tools, approval: h.s.approval, rules: parseRules(h.s.deny), maxTurns: 10,
+      messages: [
+        { role: 'system', content: `You are ${name}. You are a helper agent working for Lotus on one part of a bigger job. Do exactly the goal below with your tools, then reply with the result itself (facts, text, file names you saved), not a description of your process. Be concise.` },
+        { role: 'user', content: `Goal: ${h.goal}${h.context ? `\n\nContext:\n${h.context}` : ''}` },
+      ],
+    }, {
+      llm: h.llm, registry: this.registry,
+      ctx: { db: this.o.db, studio: this.o.studio, folders: h.folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: h.fetchFn, memoryOn: h.memoryOn, workDir: h.workDir },
+      signal: h.signal,
+      emit: (e) => { if (e.kind === 'step') h.emit({ kind: 'step', step: { ...e.step, data: { ...(e.step.data ?? {}), helper: name, goal: h.goal.slice(0, 120) } } }); },
+      record: (st, seq) => saveStep(this.o.db, { ...st, runId }, 1000 * n + seq),
+      approve: h.approve,
+    });
+    return { content: out.content, steps: out.steps.length, ok: out.steps.every((x) => x.status !== 'error') || !!out.content };
   }
 
   private waitFor(runId: string, st: Step, signal: AbortSignal): Promise<boolean> {

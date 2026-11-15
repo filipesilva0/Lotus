@@ -295,3 +295,7 @@ html.no-glass body { background: var(--color-bg-base); }
 .setup-tick.is-past { background: color-mix(in srgb, var(--color-text-main) 35%, transparent); }
 .setup-tick.is-now { width: 22px; background: var(--color-accent-fill); }
 @media (prefers-reduced-motion: reduce) { .setup-body { animation: none; } }
+
+/* Island (session 16): a plain dark pill; an indeterminate bar slides while work has no percentage. */
+@keyframes island-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { [style*="island-slide"] { animation: none !important; } }

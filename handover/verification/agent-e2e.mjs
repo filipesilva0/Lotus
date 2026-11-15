@@ -96,7 +96,7 @@ try {
   ok('image: a file in Lotus Studio/Images', !!file && existsSync(join(studio, ...file.split('/'))), file);
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${shots}/s15-chat-image-light.png` });
-  await page.keyboard.press('Control+2');
+  await page.keyboard.press('Control+3');
   await page.waitForTimeout(1500);
   const onImages = await page.evaluate(() => [...document.images].some((i) => i.src.startsWith('blob:') && i.naturalWidth >= 100));
   ok('image: on the Images page', onImages);

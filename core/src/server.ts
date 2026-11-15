@@ -19,6 +19,7 @@ import { KvChange, kvAll, kvApply, kvMigrate } from './kv';
 import * as mem from './memory';
 import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, resolveMedia, saveMedia } from './media';
 import { AgentService, type StartArgs } from './agent/service';
+import { readHardware } from './hardware';
 
 export const VERSION = '0.2.0';
 
@@ -57,6 +58,8 @@ export const RPC: Record<string, Rpc> = {
   skills_put: (db, a) => mem.putSkill(db, a.skill as mem.SkillRow),
   skills_delete: (db, a) => { mem.deleteSkill(db, str(a.id)); return null; },
   skills_search: (db, a) => mem.searchSkills(db, str(a.query), num(a.limit, 3)),
+  // Live CPU / RAM / GPU readings (Engines & Models → Hardware & Runtime).
+  hw_live: () => readHardware(),
 };
 
 /** Constant-time comparison so the token can't be guessed byte by byte from timings. */
@@ -76,6 +79,10 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
     case 'agent_tools': return { found: true, value: { tools: agent.describeTools(), folders: agent.folders(Array.isArray(a.folders) ? a.folders.map(String) : []), studio: o.studio } };
     case 'agent_run': return { found: true, value: agent.run(str(a.runId)) };
     case 'agent_runs': return { found: true, value: agent.list(num(a.limit, 50)) };
+    case 'agent_answer': return { found: true, value: agent.answer(str(a.runId), str(a.askId), str(a.answer)) };
+    case 'work_artifacts': return { found: true, value: agent.artifacts(str(a.workId)) };
+    case 'work_artifact': return { found: true, value: agent.artifactText(str(a.workId), str(a.file)) };
+    case 'work_dir': return { found: true, value: agent.workDir(str(a.workId)) };
     default: return { found: false };
   }
 }

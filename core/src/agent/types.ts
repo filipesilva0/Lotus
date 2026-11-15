@@ -43,6 +43,12 @@ export interface ToolCtx {
   /** Progress for a long step ("Generating · 12 s"). */
   progress: (detail: string) => void;
   memoryOn: boolean;
+  /** Work mode: the folder this piece of work keeps its artifacts in (Lotus Studio/Work/<id>). */
+  workDir?: string;
+  /** Asks the user a question and waits for the answer (typed, a picked option, or spoken). */
+  ask?: (question: string, options: string[]) => Promise<string>;
+  /** Runs a helper agent on one part of the job and returns its final answer and step count. */
+  delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean }>;
 }
 
 export interface Tool {
@@ -88,4 +94,7 @@ export type AgentEvent =
   | { kind: 'step'; step: Step }
   | { kind: 'stats'; tokensPerSec: number; durationMs: number; promptTokens?: number; evalTokens?: number }
   | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  /** The agent asked the user something (ask.user) and waits; answer with agent_answer. */
+  | { kind: 'ask'; askId: string; question: string; options: string[] }
+  | { kind: 'answered'; askId: string };

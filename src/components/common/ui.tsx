@@ -1,4 +1,5 @@
 import React from 'react';
+import { Tip } from './Tip';
 import { Loader2, AlertTriangle, Info, ChevronUp, ChevronDown, Check } from 'lucide-react';
 
 /*
@@ -150,7 +151,7 @@ export function Tabs<T extends string>({
 
 export const Label: React.FC<{ children: React.ReactNode; hint?: React.ReactNode; className?: string }> = ({ children, hint, className }) => (
   <div className={cx('flex items-baseline justify-between mb-1', className)}>
-    <span className="text-[12px] font-medium text-[var(--color-text-muted)]">{children}</span>
+    <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[var(--color-text-muted)]">{children}{typeof children === 'string' && <Tip label={children} />}</span>
     {hint && <span className="text-[12px] text-[var(--color-text-muted)] tabular-nums">{hint}</span>}
   </div>
 );

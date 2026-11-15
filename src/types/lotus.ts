@@ -1,5 +1,5 @@
 /** Pages. Five workspaces, one per petal of the logo (Research moved into Chat in session 8), plus Engines & Models. */
-export type ViewMode = 'chat' | 'images' | 'voice' | 'builder' | 'tasks' | 'engines';
+export type ViewMode = 'chat' | 'work' | 'images' | 'voice' | 'tasks' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
 export interface ChatToolCall {
@@ -172,6 +172,14 @@ export interface LotusSettings {
   agentFolders: string[];
   /** Tool calls that are always refused, one rule per line (tool, tool.*, or tool:pattern). */
   agentDeny: string[];
+  /** Session 16: let the agent see the screen and use the mouse and keyboard (Settings → Tools). */
+  computerUse?: boolean;
+  /** Session 16: let the agent drive its own Chrome window (Settings → Tools). */
+  browserUse?: boolean;
+  /** Session 16: read agent questions, permission requests and "done" aloud. */
+  voiceNotify?: boolean;
+  /** Session 16: after reading a question aloud, listen for the spoken answer. */
+  voiceAnswer?: boolean;
 }
 
 export interface GeneratedImage {

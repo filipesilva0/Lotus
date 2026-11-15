@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, Hammer, SquareKanban } from 'lucide-react';
+import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, Briefcase, SquareKanban } from 'lucide-react';
 import { ProfileButton } from '../account/ProfileButton';
 import type { AccountView } from '../account/AccountModal';
 import { LotusMark } from '../common/LotusMark';
@@ -50,7 +50,7 @@ interface LeftRailProps {
 }
 
 export const VIEW_TITLES: Record<ViewMode, string> = {
-  chat: 'Chat', images: 'Images', voice: 'Voice', builder: 'App Builder', tasks: 'Tasks', engines: 'Engines',
+  chat: 'Chat', work: 'Work', images: 'Images', voice: 'Voice', tasks: 'Tasks', engines: 'Engines',
 };
 
 const row =
@@ -66,9 +66,9 @@ const idle = 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-
 export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenAccount, onOpenLibrary, engines, updateAvailable = false, dark }) => {
   const nav = [
     { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
+    { id: 'work' as ViewMode, glyph: Briefcase, label: 'Work' },
     { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
     { id: 'voice' as ViewMode, glyph: AudioLines, label: 'Voice' },
-    { id: 'builder' as ViewMode, glyph: Hammer, label: 'App Builder' },
     { id: 'tasks' as ViewMode, glyph: SquareKanban, label: 'Tasks' },
   ];
   const { health, label: healthLabel } = engineHealth(engines);
@@ -91,7 +91,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
 
   return (
     <aside className="shrink-0 w-[68px] flex flex-col select-none" aria-label="Pages">
-      {/* The five-petal mark: one petal per page (Chat, Images, Voice, App Builder, Tasks). */}
+      {/* The five-petal mark: one petal per page (Chat, Work, Images, Voice, Tasks). */}
       <div className="h-14 shrink-0 flex items-center justify-center">
         <LotusMark size={32} label="Lotus" />
       </div>

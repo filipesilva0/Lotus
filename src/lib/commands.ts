@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from 'react';
 
-export type PageCommand = 'new-image' | 'new-project' | 'new-task';
+export type PageCommand = 'new-image' | 'new-work' | 'new-task';
 
 const handlers = new Map<PageCommand, () => void>();
 const pending = new Set<PageCommand>();

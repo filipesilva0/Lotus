@@ -59,11 +59,15 @@ async function loadFiles(list: Saved[]): Promise<GenSession[]> {
 const stamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const blank = (): GenSession => ({ id: uid('gen'), title: 'New generation', ts: Date.now(), versions: [], index: 0 });
 
+export type Gallery = ReturnType<typeof useGallery>;
+
 export function useGallery(comfyUp: boolean | null) {
   const [sessions, setSessions] = useState<GenSession[]>([blank()]);
   const [activeId, setActiveId] = useState<string>(sessions[0].id);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** The generation (sidebar row) the running job belongs to; its result lands there wherever you are. */
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +176,7 @@ export function useGallery(comfyUp: boolean | null) {
   const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal) => Promise<ComfyBatch>) => {
     const sid = activeRef.current;
     const c = new AbortController(); ctrl.current = c;
-    setBusy(true); setError(null); setLabel(title);
+    setBusy(true); setBusyId(sid); setError(null); setLabel(title);
     const id = uid('img');
     reportActivity({ id, kind: 'image', label: 'Image' });
     try {
@@ -182,11 +186,13 @@ export function useGallery(comfyUp: boolean | null) {
         ...s, ts: Date.now(), title: s.versions.length ? s.title : meta.prompt.slice(0, 40) || 'Untitled',
         versions: [...s.versions, ...made], index: s.versions.length,
       }));
+      // If that row was a blank "New generation" that got hidden meanwhile, make sure it is still listed.
+      setSessions((p) => (p.some((s) => s.id === sid) ? p : [{ ...blank(), id: sid, title: meta.prompt.slice(0, 40) || 'Untitled', versions: made, index: 0 }, ...p]));
       reportActivity({ id, kind: 'image', label: 'Image ready', done: true });
     } catch (e) {
       if (!c.signal.aborted) setError((e as Error).message);
       reportActivity({ id, kind: 'image', label: 'Image', done: true });
-    } finally { setBusy(false); ctrl.current = null; }
+    } finally { setBusy(false); setBusyId(null); ctrl.current = null; }
   }, [patch]);
 
   const input = (prompt: string, p: ImageParams, o: { width?: number; height?: number } = {}): TxtToImageInput => {
@@ -233,6 +239,6 @@ export function useGallery(comfyUp: boolean | null) {
   const stepVersion = (d: -1 | 1) => patch(active.id, (s) => ({ ...s, index: Math.min(s.versions.length - 1, Math.max(0, s.index + d)) }));
   const selectVersion = (i: number) => patch(active.id, (s) => ({ ...s, index: i }));
 
-  return { sessions, active, activeId: active.id, setActiveId, current, busy, label, elapsed, error: error ?? saveError, info, comfyUp,
+  return { sessions, active, activeId: active.id, setActiveId, current, busy, busyId, label, elapsed, error: error ?? saveError, info, comfyUp,
     newSession, remove, removeVersion, patch, generate, variation, upscale, inpaint, outpaint, cancel, stepVersion, selectVersion, setError };
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Tip } from '../common/Tip';
 import { LotusSettings } from '../../types/lotus';
 import { Toggle } from '../common/Toggle';
 import { Segmented, Stepper, TextInput, Btn } from '../common/ui';
@@ -11,7 +12,7 @@ interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettin
 const Row: React.FC<{ title: string; hint: React.ReactNode; children: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
     <div className="min-w-0">
-      <span className="text-xs font-semibold text-[var(--color-text-main)]">{title}</span>
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-main)]">{title}<Tip label={title} /></span>
       <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>
     </div>
     <div className="shrink-0">{children}</div>
@@ -28,7 +29,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
   };
   return (
     <div className="space-y-4">
-      <Row title="Model server" hint="Where chat, Thinking mode, tasks, routines and memory learning send requests. Images, voice, Research and the App Builder keep using their own engines.">
+      <Row title="Model server" hint="Where chat, Thinking mode, tasks, routines and memory learning send requests. Images and voice keep using their own engines.">
         <Segmented label="Model server" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'llama.cpp' }]} />
       </Row>
       {s.llmBackend === 'llamacpp' && (

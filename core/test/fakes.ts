@@ -136,6 +136,28 @@ export const helpful: Responder = (ms) => {
   return { content: 'Hello! How can I help?' };
 };
 
+/** Session 16: a Work-mode job (shoot-s16.mjs): plan, a face, a helper, a question, artifacts, ticks. */
+export const worker: Responder = (ms) => {
+  const sys = String(ms[0]?.content ?? '');
+  const done = ms.filter((m) => m.role === 'tool').map((m) => (m as { tool_name: string }).tool_name);
+  if (sys.includes('You are Researcher')) return done.length ? { content: 'Keychron V1 (€79, hot-swap), Akko 5075B (€89, wireless), Royal Kludge RK84 (€59, wireless).' } : { calls: [{ name: 'web_search', args: { query: 'best budget mechanical keyboard 2026' } }] };
+  const answer = [...ms].reverse().find((m) => m.role === 'tool' && (m as { tool_name: string }).tool_name === 'ask_user')?.content ?? '';
+  const script: [string, Record<string, unknown>][] = [
+    ['plan_set', { steps: ['Research current budget keyboards', 'Ask what matters most', 'Build the comparison table', 'Write a short buying guide page'] }],
+    ['avatar_create', { name: 'Researcher', color: 'teal', shape: 'cloud', expression: 'thinking', about: 'Finds and checks product facts' }],
+    ['agent_delegate', { name: 'Researcher', goal: 'Find three good mechanical keyboards under €100 with price and one standout feature each' }],
+    ['plan_check', { step: 1 }],
+    ['ask_user', { question: 'The three finalists differ mostly in wireless and hot-swap. What matters most to you?', options: ['Wireless', 'Hot-swap switches', 'Lowest price'] }],
+    ['plan_check', { step: 2 }],
+    ['artifact_write', { title: 'Keyboard comparison', filename: 'keyboards.csv', content: 'Keyboard,Price,Wireless,Hot-swap,Best for\nKeychron V1,€79,No,Yes,Tinkering\nAkko 5075B,€89,Yes,Yes,All-rounder\nRoyal Kludge RK84,€59,Yes,Yes,Lowest price\n' }],
+    ['plan_check', { step: 3 }],
+    ['artifact_write', { title: 'Buying guide', filename: 'guide.html', content: '<!doctype html><html><body style="font-family:system-ui;margin:32px;max-width:640px"><h1>Budget keyboards, November 2026</h1><p>Our pick: <b>Akko 5075B</b>. Wireless, hot-swap and under €90.</p><ol><li>Akko 5075B · €89</li><li>Royal Kludge RK84 · €59</li><li>Keychron V1 · €79</li></ol></body></html>' }],
+    ['plan_check', { step: 4 }],
+  ];
+  if (done.length < script.length) { const [name, args] = script[done.length]; return { calls: [{ name, args }] }; }
+  return { content: `Done. You said **${answer.replace('The user answered: ', '')}** matters most, so the guide recommends the Akko 5075B. I made a comparison table (keyboards.csv) and a one-page buying guide (guide.html); both are in the Artifacts panel.` };
+};
+
 /** Always claims, never acts. */
 export const liar: Responder = () => ({ content: "I've added “Renew passport” to your task board." });
 
@@ -143,6 +165,7 @@ if (import.meta.main && process.argv.includes('--serve')) {
   const a = fakeOllama(helpful);
   const b = fakeOllama(liar);
   const c = fakeComfy({ models: ['sdxl-fake.safetensors'], big: true });
-  console.log(`FAKES ${JSON.stringify({ ollama: a.url, liar: b.url, comfy: c.url })}`);
+  const w = fakeOllama(worker);
+  console.log(`FAKES ${JSON.stringify({ ollama: a.url, liar: b.url, comfy: c.url, work: w.url })}`);
   setTimeout(() => process.exit(0), Number(process.env.FAKES_TTL ?? 240) * 1000);
 }

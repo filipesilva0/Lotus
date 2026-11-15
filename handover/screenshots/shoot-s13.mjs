@@ -46,7 +46,7 @@ for (const dark of [false, true]) {
   console.log('escape closes settings:', !(await p.isVisible('[role="tablist"][aria-label="Settings panes"]')));
   await p.keyboard.press('Control+5'); await p.waitForTimeout(400);
   await shot(p, `tasks-${m}`);
-  await p.keyboard.press('Control+3'); await p.waitForTimeout(400);
+  await p.keyboard.press('Control+4'); await p.waitForTimeout(400);
   await shot(p, `voice-${m}`);
   await p.keyboard.press('Control+6'); await p.waitForTimeout(400);
   await shot(p, `engines-${m}`);

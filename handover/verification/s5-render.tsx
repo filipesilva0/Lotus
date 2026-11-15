@@ -13,7 +13,6 @@ import { Composer } from '../../src/components/chat/Composer';
 import { ChatStream } from '../../src/components/chat/ChatStream';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from '../../src/components/modals/LocalAgentSettings';
 import { TasksWorkspace } from '../../src/components/workspaces/TasksWorkspace';
-import { AgentPanel } from '../../src/components/builder/AgentPanel';
 import { LotusMark } from '../../src/components/common/LotusMark';
 import { TitleBar } from '../../src/components/common/TitleBar';
 import { LeftRail } from '../../src/components/rail/LeftRail';
@@ -93,11 +92,9 @@ check('Lotus mark: the user\'s own five-petal art, unchanged', <LotusMark label=
   if (ok5) { pass++; console.log('  ✓ Five pages, five petals, five distinct accents (Research lives in Chat)'); }
   else { fail++; console.log('  ✗ Five pages, five petals, five distinct accents'); }
 }
-check('App Builder agent: same prompt box (Plan first, model picker, round send, New chat in the tray)', <AgentPanel items={[]} running={false} approval={null} mode="plan" onMode={noop} model="qwen2.5-coder:7b" ollamaUp hasProject
-  models={[{ id: 'qwen2.5-coder:7b', name: 'qwen2.5-coder:7b' }]} onModel={noop} onSend={noop} onStop={noop} onApprovePlan={noop} onReset={noop} onOpenEngines={noop} />, '>Plan first<', 'Model the agent uses', 'aria-label="Send"', '>New Chat<', 'rounded-[24px]');
 const eng = { ollama: { up: true }, comfyui: { up: false }, voicebox: { up: false } } as never;
 absent('Rail is always folded: no visible page names, no Research page, no Models/Settings in the profile menu', <LeftRail currentView="chat" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, '>Chat<', '>Images<', '>Settings<', '>Profile<', 'data-tip="Research"');
-check('Rail: tips name every page', <LeftRail currentView="images" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, 'data-tip="Chat"', 'data-tip="Images"', 'data-tip="App Builder"', 'data-tip="Engines & Models"', 'data-tip="Settings"');
+check('Rail: tips name every page', <LeftRail currentView="images" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, 'data-tip="Chat"', 'data-tip="Images"', 'data-tip="Work"', 'data-tip="Engines & Models"', 'data-tip="Settings"');
 // Session 13 (HIG naming): the panel toggles are "sidebar" and "inspector".
 check('Title bar: sidebar and inspector toggles', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel={false} onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'aria-label="Hide sidebar"', 'aria-label="Show inspector"');
 absent('Title bar: no old "left panel" / "right panel" names', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'left panel', 'right panel');

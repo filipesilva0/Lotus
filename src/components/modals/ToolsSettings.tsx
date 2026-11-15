@@ -2,6 +2,7 @@
 // folders the file tools may use, deny rules, and the list of tools the core offers.
 
 import React, { useEffect, useState } from 'react';
+import { Tip } from '../common/Tip';
 import { FolderPlus, X } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { Toggle } from '../common/Toggle';
@@ -15,7 +16,7 @@ interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettin
 const Row: React.FC<{ title: string; hint: React.ReactNode; children?: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
     <div className="min-w-0">
-      <span className="text-[13px] font-semibold text-[var(--color-text-main)]">{title}</span>
+      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-text-main)]">{title}<Tip label={title} /></span>
       <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>
     </div>
     {children}
@@ -48,6 +49,12 @@ export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) 
     <div className="space-y-1">
       <Row title="Let models use tools" hint="Chat models can read and save files, add and move tasks, make images, use memory and, when Web is on for a chat, search the web. Every step shows in the chat with its result. Off: replies only, as before.">
         <Toggle checked={s.agentTools} onChange={(v) => set({ agentTools: v })} ariaLabel="Let models use tools" />
+      </Row>
+      <Row title="Use a browser" hint="Lets the agent open web pages in its own Chrome window (a separate profile: it never sees your tabs, passwords or cookies), read them, click and type. Clicking and typing ask first unless “Ask before” is Never. Needs Google Chrome, Edge or Chromium.">
+        <Toggle checked={s.browserUse === true} onChange={(v) => set({ browserUse: v })} ariaLabel="Use a browser" />
+      </Row>
+      <Row title="Control this computer" hint={`Lets the agent take screenshots and use your mouse and keyboard, like a person at your desk. Every click, key press and typing asks first unless “Ask before” is Never. Works best with a model that can see images (Qwen 3.5, Gemma 4).${navigator.platform.startsWith('Mac') ? ' macOS asks you to allow Lotus under Screen Recording and Accessibility.' : navigator.platform.startsWith('Linux') ? ' Needs xdotool and scrot.' : ''}`}>
+        <Toggle checked={s.computerUse === true} onChange={(v) => set({ computerUse: v })} ariaLabel="Control this computer" />
       </Row>
       <Row title="Ask before" hint={s.agentApproval === 'ask' ? 'Lotus waits for Allow before every tool step, even reading a file.' : s.agentApproval === 'auto' ? 'Lotus never waits; deny rules below still apply. Use this only with folders you don’t mind being changed.' : 'Lotus asks before it changes or creates files. Looking at files, tasks and images it makes happen without asking.'}>
         <Segmented label="Ask before" className="shrink-0 whitespace-nowrap" value={s.agentApproval} onChange={(v) => set({ agentApproval: v })}

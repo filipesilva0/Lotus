@@ -4,7 +4,9 @@
 
 use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewWindow};
 
-const TOP_MARGIN: f64 = 6.0;
+/// Session 16: flush with the top edge, so the island reads as growing out of the screen's top
+/// (the notch on a MacBook), like the Dynamic Island.
+const TOP_MARGIN: f64 = 0.0;
 
 fn island(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("island").ok_or_else(|| "island window missing".to_string())

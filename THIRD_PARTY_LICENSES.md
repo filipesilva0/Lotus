@@ -16,6 +16,14 @@ Bun's built-in modules (no third-party npm packages at run time).
   (LGPL-2; Bun publishes the WebKit source it builds from at https://github.com/oven-sh/WebKit)
   and SQLite (public domain). ⚠️ Not reviewed by a lawyer; check before selling Lotus.
 
+## blobatar (bundled source, session 16)
+
+Petal (Lotus's mascot) and every agent's face are drawn by blobatar 2.7.0, whose source is copied
+into `src/vendor/blobatar` (with its LICENSE) so the Lotus core can design new faces.
+
+- Project: https://github.com/Alain00/blobatar
+- License: MIT, Copyright (c) 2026 Alain
+
 ## Voicebox (integration)
 
 Lotus's Voice workspace talks to the Voicebox server over its local REST API
@@ -42,7 +50,7 @@ Update checks and downloads use the project's own GitHub Releases (github.com an
 arXiv API, NCBI PubMed E-utilities, OpenAlex and Crossref are queried over HTTPS with short keyword
 queries. Please follow each service's terms of use; Lotus rate-limits its requests accordingly.
 
-## Model downloads and App Builder templates (not bundled)
+## Model downloads (not bundled)
 
 Engines → Models downloads the model file at the https link the user pastes (Hugging Face and Civitai links are recognised). Each model has its own licence; check it before use.
 

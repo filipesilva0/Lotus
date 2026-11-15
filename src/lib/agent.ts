@@ -16,7 +16,9 @@ export type AgentEvent =
   | { kind: 'step'; step: AgentStep }
   | { kind: 'stats'; tokensPerSec: number; durationMs: number; promptTokens?: number; evalTokens?: number }
   | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  | { kind: 'ask'; askId: string; question: string; options: string[] }
+  | { kind: 'answered'; askId: string };
 
 export interface AgentMessage { role: 'system' | 'user' | 'assistant'; content: string; images?: string[] }
 
@@ -29,6 +31,8 @@ export interface AgentStart {
   memoryOn?: boolean;
   web?: boolean;
   folders?: string[];
+  /** Work mode: the piece of work (artifacts go to Lotus Studio/Work/<workId>). */
+  workId?: string;
 }
 
 export interface ToolInfo { name: string; label: string; description: string; risk: 'read' | 'write' | 'risky' }
@@ -68,3 +72,11 @@ export async function runAgent(a: AgentStart, on: (e: AgentEvent) => void, signa
 export const decideStep = (runId: string, stepId: string, allow: boolean) => rpc<boolean>('agent_decide', { runId, stepId, allow });
 
 export const listTools = (folders: string[] = []) => rpc<{ tools: ToolInfo[]; folders: string[]; studio: string }>('agent_tools', { folders });
+
+/** Answers an agent's ask.user question (typed, a picked option, or spoken). */
+export const answerAsk = (runId: string, askId: string, answer: string) => rpc<boolean>('agent_answer', { runId, askId, answer });
+
+export interface ArtifactInfo { file: string; title: string; kind: string; bytes: number; updated: number }
+export const workArtifacts = (workId: string) => rpc<ArtifactInfo[]>('work_artifacts', { workId });
+export const workArtifact = (workId: string, file: string) => rpc<string>('work_artifact', { workId, file });
+export const workDir = (workId: string) => rpc<string | null>('work_dir', { workId });

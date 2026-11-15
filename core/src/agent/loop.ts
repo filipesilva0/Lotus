@@ -42,7 +42,7 @@ export interface AgentDeps {
 
 export interface AgentOutcome { content: string; steps: Step[]; unverified: string[]; mode: 'native' | 'tags' }
 
-const RULES = `\n\nWhen the user asks you to do something one of your tools can do (files, tasks, images, memory, web), use the tool; don't describe how they could do it themselves. Never say you did something unless a tool call in this conversation did it and its result said so. If a tool fails or is denied, say so plainly.`;
+const RULES = `\n\nWhen the user asks you to do something one of your tools can do (files, tasks, images, memory, web, the computer, the browser), use the tool; don't describe how they could do it themselves. Never say you did something unless a tool call in this conversation did it and its result said so. If a tool fails or is denied, say so plainly.`;
 
 const MAX_CALLS_PER_TURN = 6;
 /** A turn stops after this many tokens (thinking included) unless the user set a limit, so a model that
@@ -151,6 +151,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     else messages.push({ role: 'assistant', content: result.content });
 
     const results: string[] = [];
+    const images: string[] = [];
     for (const call of calls.slice(0, MAX_CALLS_PER_TURN)) {
       if (d.signal.aborted) break;
       const sig = `${call.name}:${JSON.stringify(call.args)}`;
@@ -158,7 +159,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       lastCall = sig;
       const text = repeats >= 2
         ? 'You already made this exact call twice. Stop calling it and answer with what you have.'
-        : await runStep(call.name, call.args, req, d, steps);
+        : await runStep(call.name, call.args, req, d, steps, images);
       if (mode === 'native') messages.push({ role: 'tool', tool_name: toWire(call.name), content: text });
       else results.push(`Tool result for ${call.name}:\n${text}`);
     }
@@ -168,6 +169,9 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       else results.push(note);
     }
     if (mode === 'tags') messages.push({ role: 'user', content: results.join('\n\n') });
+    // Screenshots (computer.screenshot, browser.screenshot) go to the model as images so a vision
+    // model can see the screen. Only the newest is kept to save context.
+    if (images.length) messages.push({ role: 'user', content: '(Lotus) The screenshot you asked for is attached. Coordinates you give to computer.click are pixels in this image.', images: [images[images.length - 1]] });
   }
 
   const ok = steps.filter((s) => s.status === 'done').map((s) => s.tool);
@@ -176,7 +180,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
 }
 
 /** One tool call: checks, approval, run, record. Returns the text the model reads. */
-async function runStep(name: string, rawArgs: Record<string, unknown>, req: AgentRequest, d: AgentDeps, steps: Step[]): Promise<string> {
+async function runStep(name: string, rawArgs: Record<string, unknown>, req: AgentRequest, d: AgentDeps, steps: Step[], images: string[] = []): Promise<string> {
   const tool = d.registry.get(name);
   const offered = tool && req.tools.some((t) => t.name === tool.name);
   if (!tool || !offered) {
@@ -214,7 +218,9 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
     update({ status: 'error', detail: msg, finished: Date.now() });
     return `Error: ${msg}`;
   }
-  update({ status: r.ok ? 'done' : 'error', detail: r.summary, media: r.media, data: r.data, finished: Date.now() });
+  const { imageB64, ...data } = (r.data ?? {}) as Record<string, unknown> & { imageB64?: string };
+  if (typeof imageB64 === 'string' && imageB64) images.push(imageB64);
+  update({ status: r.ok ? 'done' : 'error', detail: r.summary, media: r.media, data: r.data ? data : undefined, finished: Date.now() });
   return r.ok ? r.text : `Error: ${r.text}`;
 }
 

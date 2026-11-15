@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Tip } from '../common/Tip';
 import { Toggle } from '../common/Toggle';
 import { Btn, Banner, Select } from '../common/ui';
 import { IslandSettings, loadIsland, saveIsland } from '../../island/state';
@@ -11,7 +12,7 @@ import { LotusSettings } from '../../types/lotus';
 const Row: React.FC<{ title: string; hint?: string; children: React.ReactNode }> = ({ title, hint, children }) => (
   <div className="flex items-center justify-between gap-6 py-3.5">
     <div className="min-w-0">
-      <p className="text-xs font-semibold text-[var(--color-text-main)]">{title}</p>
+      <p className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-main)]">{title}<Tip label={title} /></p>
       {hint && <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-relaxed">{hint}</p>}
     </div>
     <div className="shrink-0">{children}</div>
@@ -53,7 +54,7 @@ export const IslandSettingsPanel: React.FC = () => {
   return (
     <div className="space-y-4">
       <Group title="Floating island">
-        <Row title="Show the island" hint="A small always-on-top pill at the top of your screen for quick chat, dictation and notifications.">
+        <Row title="Show the island" hint="A small pill at the top of your screen that appears only while something is happening (work, images, voice) or when Lotus needs your answer, then gets out of the way. Questions and permission requests always show, even with this off. Quick chat: Ctrl+Alt+Space.">
           <Toggle checked={s.enabled} onChange={(v) => set({ enabled: v })} ariaLabel="Show the island" />
         </Row>
         <Row title="Model" hint="Which chat model the island uses.">
@@ -100,6 +101,12 @@ export const VoiceSettingsPanel: React.FC<{ settings: LotusSettings; onUpdateSet
   <Group title="Voice">
     <Row title="Read replies aloud" hint="Speak each chat reply with your selected voice (needs Voicebox running).">
       <Toggle checked={settings.autoReadResponses} onChange={(v) => onUpdateSettings({ autoReadResponses: v })} ariaLabel="Read replies aloud" />
+    </Row>
+    <Row title="Speak when Lotus needs you" hint="Reads aloud when an agent asks you something (“This happened. Should I continue with A, B or C?”), needs your permission, or finishes a piece of work. Uses Voicebox when it is running, otherwise your computer's own voice.">
+      <Toggle checked={settings.voiceNotify === true} onChange={(v) => onUpdateSettings({ voiceNotify: v })} ariaLabel="Speak when Lotus needs you" />
+    </Row>
+    <Row title="Listen for my answer" hint="After a spoken question, Lotus listens and answers for you when you stop talking: say an option (“the second one”), “allow” or “deny”, or anything else. Needs Voicebox running for speech to text. Clicking or typing an answer still works.">
+      <Toggle checked={settings.voiceAnswer !== false} onChange={(v) => onUpdateSettings({ voiceAnswer: v })} ariaLabel="Listen for my answer" />
     </Row>
     <p className="text-xs text-[var(--color-text-muted)] pt-3 leading-relaxed">Voices, languages, effects and dictation are managed in the Voice tab.</p>
   </Group>
