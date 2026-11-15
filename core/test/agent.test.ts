@@ -2,7 +2,7 @@
 // Models and ComfyUI are faked (test/fakes.ts); the real-model check is real-tasks.mjs on a real PC.
 
 import { afterAll, describe, expect, test } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb, type Db } from '../src/db';
@@ -26,7 +26,7 @@ import { fakeComfy, fakeOllama, last } from './fakes';
 const dirs: string[] = [];
 const tmp = (tag: string) => { const d = mkdtempSync(join(tmpdir(), `lotus-agent-${tag}-`)); dirs.push(d); return d; };
 const stops: (() => void)[] = [];
-afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => rmSync(d, { recursive: true, force: true })); });
+afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows: a test database may still be open; the OS cleans temp */ } }); });
 
 function ctxFor(db: Db, studio: string, folders: string[], extra: Partial<ToolCtx> = {}): ToolCtx {
   return {
@@ -170,8 +170,9 @@ describe('file tools', () => {
     expect('error' in resolveInFolders([], 'x')).toBe(true);
   });
   test('an invented location that names an allowed folder maps to it', () => {
-    const studio = join(root, 'Lotus Studio');
-    mkdirSync(join(studio, 'notes'), { recursive: true });
+    mkdirSync(join(root, 'Lotus Studio', 'notes'), { recursive: true });
+    // Paths come back resolved (macOS /var → /private/var, Windows 8.3 names → long names), so compare real paths.
+    const studio = realpathSync.native(join(root, 'Lotus Studio'));
     const r = resolveInFolders([studio], '/path/to/Lotus Studio/notes');
     expect('path' in r && r.path).toBe(join(studio, 'notes'));
     const w = resolveInFolders([studio], 'C:\\Program Files\\Lotus Studio\\new.md', true);

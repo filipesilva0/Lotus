@@ -18,7 +18,7 @@ import { fakeOllama, last } from './fakes';
 const dirs: string[] = [];
 const tmp = (tag: string) => { const d = mkdtempSync(join(tmpdir(), `lotus-s16-${tag}-`)); dirs.push(d); return d; };
 const stops: (() => void)[] = [];
-afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => rmSync(d, { recursive: true, force: true })); });
+afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows: a test database may still be open; the OS cleans temp */ } }); });
 const until = async (f: () => boolean, n = 400) => { for (let i = 0; i < n && !f(); i++) await Bun.sleep(10); expect(f()).toBe(true); };
 
 describe('artifacts', () => {

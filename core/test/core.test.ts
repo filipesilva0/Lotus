@@ -11,7 +11,7 @@ import { startServer } from '../src/server';
 
 const dirs: string[] = [];
 const tmp = (tag: string) => { const d = mkdtempSync(join(tmpdir(), `lotusd-${tag}-`)); dirs.push(d); return d; };
-afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+afterAll(() => dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows: a database may still be open */ } }));
 
 const TOKEN = 'x'.repeat(48);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
