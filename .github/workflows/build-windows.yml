@@ -173,8 +173,8 @@ jobs:
           want=$(cd core && bun -e "import { VERSION } from './src/server'; console.log(VERSION)")
           app=$(ls "$B"/appimage/*.AppImage | head -1)
           chmod +x "$app"
-          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$app" --appimage-extract usr/bin/lotusd >/dev/null)
-          got=$("$RUNNER_TEMP/squashfs-root/usr/bin/lotusd" --version)
+          (cd "$RUNNER_TEMP" && "$GITHUB_WORKSPACE/$app" --appimage-extract usr/share/lotus/lotusd >/dev/null)
+          got=$("$RUNNER_TEMP/squashfs-root/usr/share/lotus/lotusd" --version)
           echo "packaged lotusd: $got (expected $want)"
           [[ "$got" == "$want" ]] || { echo "::error::The AppImage's lotusd is not the Lotus core (got '$got', expected '$want')."; exit 1; }
 

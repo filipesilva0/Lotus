@@ -81,9 +81,23 @@ fn parse_ready(line: &str) -> Result<Ready, String> {
 }
 
 /// The sidecar sits next to the Lotus executable (Tauri copies `binaries/lotusd-<triple>` there as `lotusd`).
+/// Linux packages are the exception: linuxdeploy (AppImage) rewrites every binary in `usr/bin`, which
+/// breaks a Bun single-file executable, so the AppImage, .deb and .rpm carry it as a plain file in
+/// `usr/share/lotus/lotusd` (tauri.linux.conf.json) and it is looked up there next.
 fn sidecar_path() -> PathBuf {
+    sidecar_in(&crate::paths::exe_dir())
+}
+
+fn sidecar_in(exe_dir: &std::path::Path) -> PathBuf {
     let name = if cfg!(windows) { "lotusd.exe" } else { "lotusd" };
-    crate::paths::exe_dir().join(name)
+    let beside = exe_dir.join(name);
+    if cfg!(target_os = "linux") && !beside.exists() {
+        let shared = exe_dir.join("..").join("share").join("lotus").join(name);
+        if shared.exists() {
+            return shared;
+        }
+    }
+    beside
 }
 
 fn folders(app: &AppHandle) -> (PathBuf, PathBuf) {
@@ -303,6 +317,23 @@ mod tests {
         assert_eq!(a.len(), 64);
         assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
         assert_ne!(a, b);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn linux_packages_keep_the_core_in_share() {
+        let root = std::env::temp_dir().join(format!("lotusd-path-{}", std::process::id()));
+        let bin = root.join("usr").join("bin");
+        let share = root.join("usr").join("share").join("lotus");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::create_dir_all(&share).unwrap();
+        // Nothing beside the app: falls back to usr/share/lotus.
+        std::fs::write(share.join("lotusd"), b"x").unwrap();
+        assert!(sidecar_in(&bin).ends_with("share/lotus/lotusd"));
+        // A copy beside the app (dev builds, tarballs) wins.
+        std::fs::write(bin.join("lotusd"), b"x").unwrap();
+        assert_eq!(sidecar_in(&bin), bin.join("lotusd"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

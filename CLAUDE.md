@@ -75,6 +75,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - Modules that read saved state at import time are fine only because `main.tsx`/`island/main.tsx` await `initStore()` before importing App/Island; keep it that way.
 - `lib/core.ts` must not import `lib/http.ts` (import cycle through engineConfig → store).
 - `tauri build`/`cargo check` need `src-tauri/binaries/lotusd-<triple>` to exist (externalBin); build it first.
+- Linux packages carry lotusd at `/usr/share/lotus/lotusd`, not as a sidecar (`tauri.linux.conf.json`): linuxdeploy rewrites anything in `usr/bin` and breaks Bun executables. Never `strip` or `patchelf` lotusd.
 
 ## Session 13 map (Apple HIG pass, all OSes)
 - Menus live in App's `menus`: `shortcut` is the Windows/Linux key (one handler runs them all), `mac` is the Mac key equivalent. On the Mac only the native menu handles keys. Page commands (File › New Image…) go through `lib/commands.ts` (`runCommand` / `useCommand`).
