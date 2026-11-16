@@ -31,14 +31,14 @@ type TxtToImageInput = GraphInput;
 export class GraphError extends Error {}
 
 /** Common aspect ratios → pixel sizes. SD 1.x checkpoints get the smaller 512-based set. */
-export function dimensionsFor(aspect: string, checkpoint: string): { width: number; height: number } {
+export function dimensionsFor(aspect: string, checkpoint: string, resolution?: number): { width: number; height: number } {
   const r64 = (n: number) => Math.max(64, Math.round(n / 64) * 64);
   const custom = /^(\d{2,5})\s*[x×]\s*(\d{2,5})$/.exec(aspect);
   if (custom) return { width: r64(+custom[1]), height: r64(+custom[2]) };
   const small = /sd[_-]?1\.?5|v1-5|sd15/i.test(checkpoint);
   const [a, b] = aspect.split(':').map(Number);
   const ratio = a > 0 && b > 0 ? a / b : 1;
-  const area = (recipeFor(checkpoint)?.base ?? (small ? 512 : 1024)) ** 2;
+  const area = (resolution || recipeFor(checkpoint)?.base || (small ? 512 : 1024)) ** 2;
   return { width: r64(Math.sqrt(area * ratio)), height: r64(Math.sqrt(area / ratio)) };
 }
 

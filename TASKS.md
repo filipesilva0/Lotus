@@ -3,6 +3,11 @@
 > Bug/limitation IDs (B1…B17) refer to `CURRENT_STATE.md`. Evidence legend: ✅ confirmed · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > Priorities: **P0** unblocks everything · **P1** correctness against real services · **P2** quality/polish · **P3** ideas.
 
+## 0.9.6 follow-ups
+- **T60** Try a real voice call on Filipe's PC (pt-PT voice + Whisper Turbo): latency, whether the silence threshold cuts him off, whether Lotus hears itself; then check that something said on a call is recalled in a new chat.
+- **T61** Transcribe the pt-PT lecture again (Auto) and translate it; confirm Whisper keeps Portuguese.
+- **T62** Settings additions, waiting for Filipe's choice (proposed: real export/import of chats, memory and settings; Storage pane with Lotus Studio sizes; startup options; shortcuts list; default image setup/voice per page).
+
 ## Next three recommended tasks (in order)
 
 ### ✔ 1. T1: Resolve the Tauri version-mismatch CI failure (B1)  *DONE in session 2 (user-reported CI passes `check:tauri` and compiles)*

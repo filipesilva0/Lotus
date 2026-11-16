@@ -23,6 +23,8 @@ export interface ImageParams {
   loras?: LoraUse[];
   /** Built-in engine (session 17): the image setup to use (models/imageProfiles.ts). */
   profile?: string;
+  /** Resolution next to the aspect ratio (0.9.6): side of a square of the same area; 0 or missing = the model's own. */
+  resolution?: number;
 }
 
 export const DEFAULT_PARAMS: ImageParams = {
@@ -225,7 +227,7 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   }, [patch]);
 
   const input = (prompt: string, p: ImageParams, o: { width?: number; height?: number } = {}): TxtToImageInput => {
-    const d = dimensionsFor(p.aspect, p.checkpoint);
+    const d = dimensionsFor(p.aspect, p.checkpoint, p.resolution);
     const width = o.width ?? d.width, height = o.height ?? d.height;
     setInfo({ width, height, checkpoint: p.checkpoint, steps: p.steps, sampler: p.sampler });
     return { prompt, negativePrompt: p.negative, checkpoint: p.checkpoint, steps: p.steps, cfg: p.cfg, width, height, seed: p.seed ?? undefined, sampler: p.sampler, scheduler: p.scheduler, count: p.count, loras: p.loras?.filter((l) => l.name) };
@@ -238,7 +240,7 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
     const prof = profileFor(p);
     if (!prof) { setError('No image model is ready. Get one in Settings → Models, or finish its setup there.'); return Promise.resolve(); }
     const st = settingsFor(prof);
-    const size = o.width && o.height ? { width: o.width, height: o.height } : sizeFor(p.aspect, prof);
+    const size = o.width && o.height ? { width: o.width, height: o.height } : sizeFor(p.aspect, prof, p.resolution);
     const steps = st.locked ? st.steps : p.steps, cfg = st.locked ? st.cfg : p.cfg;
     setInfo({ width: size.width, height: size.height, checkpoint: prof.name, steps, sampler: st.locked ? st.sampler : p.sampler });
     return run(what, title, { prompt, negativePrompt: p.negative, steps, cfg, dimensions: `${size.width}×${size.height}`, checkpoint: prof.name, profile: prof.id, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined, denoise: o.reference || o.references?.length ? (o.strength ?? p.denoise) : undefined },

@@ -1,3 +1,5 @@
+import { Starters } from '../common/Starters';
+import { CHAT_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { offerUndo, flushUndo } from '../common/Alerts';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
@@ -33,13 +35,6 @@ interface Props {
   research: ResearchApi; onOpenEngines: () => void;
 }
 
-/** Starter prompts for an empty chat (HIG Generative AI: show what works). A click fills the box; nothing is sent. */
-const STARTERS = [
-  { label: 'Summarize Text', text: 'Summarize this text in five short bullet points:\n\n' },
-  { label: 'Draft an Email', text: 'Help me write a short, friendly email that ' },
-  { label: 'Explain Simply', text: 'Explain, in simple terms and with one example, how ' },
-  { label: 'Plan Something', text: 'Make a step-by-step plan for ' },
-];
 
 export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary, research, onOpenEngines }) => {
   const [starter, setStarter] = useState<{ text: string; nonce: number } | null>(null);
@@ -174,7 +169,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
         {session.messages.length === 0 ? (
           <div className="flex-1 flex"><Empty icon={<Sparkles className="w-5 h-5" />} title="What can I help with?" className="flex-1"
             body={`Chatting with ${settings.selectedModel || 'a local model'} on this computer. Local models can make mistakes, so check important facts. Type / for commands or @ to mention a model or file.`}
-            action={<div className="flex flex-wrap justify-center gap-2 max-w-[520px]">{STARTERS.map((p) => <Btn key={p.label} onClick={() => setStarter({ text: p.text, nonce: Date.now() })}>{p.label}</Btn>)}</div>} /></div>
+            action={<Starters id="chat" groups={CHAT_STARTERS} className="max-w-[640px]" onPick={(text) => setStarter({ text, nonce: Date.now() })} />} /></div>
         ) : (
           <ChatStream session={session} isStreaming={chat.isStreaming} autoScroll={settings.autoScroll} reasoningMode={settings.reasoningBlockMode}
             onEdit={chat.editMessage} onRegenerate={chat.regenerate} onSwitch={chat.switchTo} onMemory={chat.rateMemory} onFeedback={chat.rateReply}

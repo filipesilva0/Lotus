@@ -2,8 +2,8 @@
 // arrange lines on four tracks (overlaps allowed), play them together and export one WAV.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, Download, ListPlus, Play, RefreshCw, Square, Trash2, Wand2 } from 'lucide-react';
-import { Banner, Btn, Empty, IconBtn, Select, TextArea, cx } from '../../common/ui';
+import { ArrowDown, ArrowUp, Download, FileText, ListPlus, Play, RefreshCw, Square, Trash2, Wand2 } from 'lucide-react';
+import { Banner, Btn, Empty, IconBtn, Segmented, Select, TextArea, cx } from '../../common/ui';
 import { SliderField } from '../../common/Pane';
 import { ClipAudio } from './parts';
 import { deleteMedia, loadMedia, saveMedia } from '../../../lib/core';
@@ -11,16 +11,23 @@ import { uid } from '../../../lib/persist';
 import { downloadBlob } from '../../../lib/audio';
 import { mixStory, playTogether } from '../../../voice/render';
 import { Story, StoryItem, layoutStory, parseScript, scriptSpeakers, storyLength } from '../../../voice/studio';
+import { kv } from '../../../lib/store';
 import { Studio, speakWith } from '../../../voice/useStudio';
 
 const TRACKS = 4;
 const SAMPLE = 'Narrator: It was a quiet night in the village.\nAna: Did you hear that?\nLeo: Just the wind. Go back to sleep.\nNarrator: But it was not the wind.';
+const SAMPLE_TEXT = 'The lighthouse keeper had not seen a ship in eleven years. Every evening he climbed the hundred and twelve steps anyway, lit the lamp, and wrote one line in the logbook: nothing on the horizon.\n\nThen, on a grey Tuesday in March, a light answered his.\n\nIt blinked three times, paused, and blinked three times again. He knew that signal. He had taught it to someone, a long time ago.';
+const SPEEDS = [0.8, 0.9, 1, 1.1, 1.25];
+type By = 'line' | 'paragraph';
 
 export const newStory = (): Story => ({ id: uid('story'), name: 'Untitled Story', items: [], gap: 0.4, created: Date.now(), updated: Date.now() });
 
 export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onStory: (id: string) => void }> = ({ studio, storyId, onStory }) => {
   const story = studio.stories.find((s) => s.id === storyId) ?? null;
   const [script, setScript] = useState('');
+  const [by, setByRaw] = useState<By>(() => (kv.getItem('lotus.voice.storyBy') as By) || 'paragraph');
+  const setBy = (b: By) => { setByRaw(b); kv.setItem('lotus.voice.storyBy', b); };
+  const textFile = useRef<HTMLInputElement>(null);
   const [cast, setCast] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -32,7 +39,7 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
 
   const ready = studio.options.filter((o) => o.ready);
   const fallback = studio.voice?.id ?? ready[0]?.id ?? '';
-  const speakers = useMemo(() => scriptSpeakers(script), [script]);
+  const speakers = useMemo(() => scriptSpeakers(script, by), [script, by]);
   // Every new speaker gets a different voice to start with.
   useEffect(() => {
     setCast((c) => { const n = { ...c }; speakers.forEach((s, i) => { if (!n[s]) n[s] = ready[(i + 1) % Math.max(1, ready.length)]?.id ?? fallback; }); return n; });
@@ -48,16 +55,16 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
   const missing = story.items.filter((it) => !it.clip);
 
   const addLines = () => {
-    const lines = parseScript(script, cast, fallback);
+    const lines = parseScript(script, cast, fallback, by);
     if (!lines.length) return;
-    save((s) => ({ ...s, items: [...s.items, ...lines.map((l): StoryItem => ({ id: uid('line'), voice: l.voice, text: l.text, track: 0, start: null, gain: 1 }))] }));
+    save((s) => ({ ...s, name: s.items.length || s.name !== 'Untitled Story' ? s.name : lines[0].text.slice(0, 40).replace(/[.,;:!?…]+$/, '').trim() || s.name, items: [...s.items, ...lines.map((l): StoryItem => ({ id: uid('line'), voice: l.voice, text: l.text, track: 0, start: null, gain: 1 }))] }));
     setScript('');
   };
 
   const make = async (it: StoryItem) => {
     const v = studio.options.find((o) => o.id === it.voice);
     if (!v?.ready) throw new Error(`“${it.text.slice(0, 30)}…”: ${v?.why ?? 'its voice is missing. Pick another.'}`);
-    const r = await speakWith(v, it.text);
+    const r = await speakWith(v, it.text, it.speed && it.speed !== 1 && !studio.models.find((m) => m.id === v.model)?.clones ? { speed: it.speed } : undefined);
     if (it.clip) void deleteMedia(it.clip).catch(() => undefined);
     patchItem(it.id, { clip: r.path, duration: r.seconds });
   };
@@ -129,6 +136,7 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
               <span className="text-[12px] tabular-nums text-[var(--color-text-muted)] w-5">{i + 1}</span>
               <div className="w-[200px]"><Select aria-label="Voice for this line" value={it.voice} onChange={(e) => patchItem(it.id, { voice: e.target.value, clip: undefined, duration: undefined })}>{studio.options.map((o) => <option key={o.id} value={o.id} disabled={!o.ready}>{o.name}</option>)}</Select></div>
               <div className="w-[90px]"><Select aria-label="Track" value={it.track} onChange={(e) => patchItem(it.id, { track: Number(e.target.value) })}>{Array.from({ length: TRACKS }, (_, t) => <option key={t} value={t}>Track {t + 1}</option>)}</Select></div>
+              <div className="w-[82px]"><Select aria-label="Speed for this line" value={it.speed ?? 1} onChange={(e) => patchItem(it.id, { speed: Number(e.target.value), clip: undefined, duration: undefined })}>{SPEEDS.map((x) => <option key={x} value={x}>{x === 1 ? 'Normal' : `${x}×`}</option>)}</Select></div>
               <label className="text-[12px] text-[var(--color-text-muted)] inline-flex items-center gap-1">Start
                 <input type="number" min={0} step={0.1} value={it.start ?? ''} placeholder="auto" onChange={(e) => patchItem(it.id, { start: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
                   className="w-16 h-7 px-1.5 rounded-[6px] bg-[var(--hover)] text-[12px] text-[var(--color-text-main)] focus:outline-none" aria-label="Start time in seconds (empty: after the previous line)" />s</label>
@@ -147,8 +155,18 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
 
       {/* Script → lines */}
       <section aria-label="Add lines" className="rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] p-3 space-y-3">
-        <div className="flex items-center justify-between"><h3 className="text-[13px] font-semibold">Add Lines</h3>{!script && <Btn size="sm" variant="ghost" onClick={() => setScript(SAMPLE)}>Use an Example</Btn>}</div>
-        <TextArea rows={4} value={script} onChange={(e) => setScript(e.target.value)} aria-label="Script" placeholder={'One line per sentence. Start with a name to change who speaks:\nAna: Hello!\nLeo: Hi, Ana.'} />
+        <div className="flex items-center gap-2">
+          <h3 className="text-[13px] font-semibold flex-1">Add Lines</h3>
+          <Segmented label="How to split the text" value={by} onChange={setBy} options={[{ id: 'paragraph', label: 'Whole Text' }, { id: 'line', label: 'Script' }]} />
+          <input ref={textFile} type="file" accept=".txt,.md,text/plain,text/markdown" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setScript(await f.text()); e.target.value = ''; }} />
+          <Btn size="sm" variant="ghost" icon={<FileText className="w-3.5 h-3.5" />} onClick={() => textFile.current?.click()}>Open Text</Btn>
+          {!script && <Btn size="sm" variant="ghost" onClick={() => setScript(by === 'paragraph' ? SAMPLE_TEXT : SAMPLE)}>Use an Example</Btn>}
+        </div>
+        <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{by === 'paragraph'
+          ? 'Paste a whole text, a chapter or an article: every paragraph becomes its own line, ready to give its own voice, speed, track and volume. A paragraph that starts with “Name:” switches the speaker.'
+          : 'One line per sentence. Start a line with a name to change who speaks.'}</p>
+        <TextArea rows={by === 'paragraph' ? 8 : 4} value={script} onChange={(e) => setScript(e.target.value)} aria-label={by === 'paragraph' ? 'Text' : 'Script'}
+          placeholder={by === 'paragraph' ? 'Paste or type the whole text here. Leave an empty line between paragraphs.' : 'Ana: Hello!\nLeo: Hi, Ana.'} />
         {speakers.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {speakers.map((s) => (
@@ -159,7 +177,7 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
           </div>
         )}
         <div className="flex items-center gap-3">
-          <Btn variant="primary" disabled={!script.trim() || !fallback} icon={<ListPlus className="w-3.5 h-3.5" />} onClick={addLines}>Add {parseScript(script, cast, fallback).length || ''} Lines</Btn>
+          <Btn variant="primary" disabled={!script.trim() || !fallback} icon={<ListPlus className="w-3.5 h-3.5" />} onClick={addLines}>Add {parseScript(script, cast, fallback, by).length || ''} Lines</Btn>
           <div className="w-[200px]"><SliderField label="Pause between lines" value={story.gap} min={0} max={2} step={0.1} onChange={(g) => save((s) => ({ ...s, gap: g }))} format={(g) => `${g.toFixed(1)} s`} /></div>
         </div>
       </section>

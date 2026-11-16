@@ -30,7 +30,7 @@ export interface SttJob {
 let job: SttJob | null = null;
 let ctrl: AbortController | null = null;
 /** Recordings queued behind the one being written down. */
-let queue: { blob: Blob; o: { name: string; model?: string; modelTitle: string } }[] = [];
+let queue: { blob: Blob; o: { name: string; model?: string; modelTitle: string; language?: string } }[] = [];
 const waitingNames = () => queue.map((q) => q.o.name);
 const subs = new Set<() => void>();
 const set = (j: SttJob | null) => { job = j && { ...j, waiting: j.state === 'reading' || j.state === 'working' ? waitingNames() : [] }; subs.forEach((f) => f()); };
@@ -65,11 +65,11 @@ async function decodeMono(blob: Blob): Promise<Float32Array> {
 }
 
 /** Adds a finished transcript to the Voice page history. */
-function keep(j: SttJob, model: string) {
+function keep(j: SttJob, model: string, language?: string) {
   let h: { clips: unknown[]; transcripts: unknown[] } = { clips: [], transcripts: [] };
   try { h = { clips: [], transcripts: [], ...JSON.parse(kv.getItem('lotus.voice.builtin.v1') || '{}') }; } catch { /* fresh */ }
   const text = j.segments.map((s) => s.text.trim()).filter(Boolean).join(' ');
-  h.transcripts = [{ id: j.id, text, model, source: j.name, seconds: j.seconds, segments: j.segments, ts: Date.now() }, ...h.transcripts].slice(0, 300);
+  h.transcripts = [{ id: j.id, text, model, source: j.name, seconds: j.seconds, segments: j.segments, ts: Date.now(), ...(language ? { language } : {}) }, ...h.transcripts].slice(0, 300);
   kv.setItem('lotus.voice.builtin.v1', JSON.stringify(h));
   window.dispatchEvent(new Event(HISTORY_EVENT));
 }
@@ -78,7 +78,7 @@ function keep(j: SttJob, model: string) {
  * Transcribes a recording of any length. One at a time: while one is being written down, more are
  * queued and start on their own (returns 'queued').
  */
-export function transcribeLong(blob: Blob, o: { name: string; model?: string; modelTitle: string }): 'started' | 'queued' {
+export function transcribeLong(blob: Blob, o: { name: string; model?: string; modelTitle: string; language?: string }): 'started' | 'queued' {
   if (job && (job.state === 'reading' || job.state === 'working')) {
     queue.push({ blob, o });
     set({ ...job, waiting: waitingNames() });
@@ -93,7 +93,7 @@ function next() {
   if (n) start(n.blob, n.o);
 }
 
-function start(blob: Blob, o: { name: string; model?: string; modelTitle: string }) {
+function start(blob: Blob, o: { name: string; model?: string; modelTitle: string; language?: string }) {
   const c = new AbortController(); ctrl = c;
   const j: SttJob = { id: uid('vt'), name: o.name, state: 'reading', part: 0, parts: 0, seconds: 0, segments: [], started: Date.now(), waiting: waitingNames() };
   set(j);
@@ -121,14 +121,14 @@ function start(blob: Blob, o: { name: string; model?: string; modelTitle: string
       }
       const done = { ...sttJob()!, state: 'done' as const };
       set(done);
-      if (done.segments.some((s) => s.text)) keep(done, o.modelTitle);
+      if (done.segments.some((s) => s.text)) keep(done, o.modelTitle, o.language);
       else set({ ...done, state: 'error', error: `Lotus heard no speech in ${o.name}.` });
       reportActivity({ id: activity, kind: 'voice', label: 'Transcript ready', done: true });
     } catch (e) {
       const cur = sttJob() ?? j;
       const stopped = c.signal.aborted;
       // Whatever was already written down is kept when you stop.
-      if (stopped && cur.segments.some((s) => s.text)) keep({ ...cur, name: `${cur.name} (stopped)` }, o.modelTitle);
+      if (stopped && cur.segments.some((s) => s.text)) keep({ ...cur, name: `${cur.name} (stopped)` }, o.modelTitle, o.language);
       set({ ...cur, state: stopped ? 'stopped' : 'error', error: stopped ? undefined : (e as Error).message });
       reportActivity({ id: activity, kind: 'voice', label: 'Transcript', done: true });
     } finally {

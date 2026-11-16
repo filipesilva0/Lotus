@@ -191,6 +191,8 @@ try {
     // Voice page with the built-in engine.
     await page.keyboard.press('Control+4');
     await page.waitForSelector('text=Speech to Text', { timeout: 8000 });
+    // 0.9.6: Voice opens on Call; Speak is the second tab.
+    await page.click('nav[aria-label="Voice modes"] >> button:has-text("Speak")');
     if (!dark) {
       await page.fill('textarea[aria-label="Text to speak"]', 'Hello from Lotus');
       await page.click('button[aria-label="Speak"]');
@@ -222,6 +224,7 @@ try {
     await nav('Stories');
     await page.click('button:has-text("New Story")');
     if (!dark) {
+      await page.click('[role="tab"]:has-text("Script")'); // 0.9.6: Whole Text is the default
       await page.click('button:has-text("Use an Example")');
       await page.click('button:has-text("Add 4 Lines")');
       await page.click('button:has-text("Make All")');

@@ -84,7 +84,9 @@ const DEFAULT_SETTINGS: LotusSettings = {
   defaultTtsVoice: '',
   ttsRate: 10,
   autoReadResponses: false,
-  whisperLanguage: 'English',
+  // Auto: Whisper writes what it hears in the language it was spoken in (0.9.6; 'English' made it
+  // translate Portuguese speech into English).
+  whisperLanguage: 'Auto',
   density: 'comfortable',
   fontFamily: 'jakarta',
   fontSize: 'md',
@@ -126,6 +128,10 @@ function load<T>(key: string, fallback: T): T {
 function loadSettings(): LotusSettings {
   const raw = kv.getItem(SETTINGS_KEY);
   const { darkMode: _d, palette: _p, ...saved } = load<Partial<LotusSettings> & { darkMode?: boolean; palette?: string }>(SETTINGS_KEY, {});
+  // 0.9.6: the old default 'English' forced Whisper to write Portuguese (and every other language) in
+  // English. Move it to Auto once; a language picked after this stays.
+  if (saved.whisperLanguage === 'English' && !kv.getItem('lotus.whisperAuto.v1')) saved.whisperLanguage = 'Auto';
+  try { kv.setItem('lotus.whisperAuto.v1', '1'); } catch { /* memory only */ }
   // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
   // Settings → Engines switches them to the built-in ones.
   if (raw && saved.imageEngine === undefined) {

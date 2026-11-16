@@ -1,3 +1,5 @@
+import { Starters } from '../common/Starters';
+import { IMAGE_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { offerUndo, flushUndo } from '../common/Alerts';
 import { useCommand } from '../../lib/commands';
@@ -20,7 +22,7 @@ import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
 import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
-import { FAMILIES, sizeFor, type ImageProfile } from '../../models/imageProfiles';
+import { FAMILIES, RESOLUTIONS, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
@@ -89,7 +91,11 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   }, [comfyUp]);
 
   const cur = g.current;
-  const dims = useMemo(() => (profile ? sizeFor(params.aspect, profile) : dimensionsFor(params.aspect, params.checkpoint)), [params.aspect, params.checkpoint, profile]);
+  const dims = useMemo(() => (profile ? sizeFor(params.aspect, profile, params.resolution) : dimensionsFor(params.aspect, params.checkpoint, params.resolution)), [params.aspect, params.checkpoint, profile, params.resolution]);
+  /** What the model was trained at (side of a square), for the Resolution hint. */
+  const nativeRes = useMemo(() => (profile ? sizeFor('1:1', profile) : dimensionsFor('1:1', params.checkpoint)).width, [params.checkpoint, profile]);
+  const customSize = !ASPECTS.includes(params.aspect);
+  const resFit = resolutionFit(params.resolution ?? 0, nativeRes);
 
   // ── Prompt deck: / commands and @Style ────────────────────────────────────
   const slashQ = /^\/(\w*)$/.exec(prompt)?.[1];
@@ -197,7 +203,8 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
 
         {/* Canvas */}
         <div className="flex-1 min-h-0 p-5 flex flex-col items-center justify-center">
-          {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body={`Describe an image below and press Generate. ${builtin ? 'Lotus' : 'ComfyUI'} makes it on this computer.`} className="flex-1" />}
+          {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body={`Describe an image below and press Generate, or start from an example. ${builtin ? 'Lotus' : 'ComfyUI'} makes it on this computer.`} className="flex-1"
+            action={<Starters id="images" groups={IMAGE_STARTERS} className="max-w-[640px]" onPick={(t) => setPrompt(t)} />} />}
           {(cur || busyHere) && (
             <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
               {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!busyHere) setViewing(true); }}
@@ -383,6 +390,19 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 </div>
                 {!ASPECTS.includes(params.aspect) && <TextInput aria-label="Custom size, for example 768x1024" value={params.aspect} onChange={(e) => set({ aspect: e.target.value })} placeholder="768x1024" />}
                 <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">{dims.width}×{dims.height} px (rounded to multiples of 64)</p>
+              </Section>
+              <Section title="Resolution" hint={customSize ? 'A custom size sets the resolution itself.' : `How many pixels the image has. This model was made for about ${nativeRes}×${nativeRes}.`}>
+                <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Resolution">
+                  {RESOLUTIONS.map((r) => {
+                    const on = (params.resolution ?? 0) === r.id;
+                    return <button key={r.id} type="button" role="radio" aria-checked={on} disabled={customSize} onClick={() => set({ resolution: r.id })}
+                      className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums disabled:opacity-40', r.id === 0 && 'col-span-2', on && !customSize ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{r.id === 0 ? `${r.label} (${nativeRes})` : r.label}</button>;
+                  })}
+                </div>
+                {!customSize && resFit !== 'ok' && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug">{resFit === 'large'
+                  ? 'Much bigger than the model was made for: slower, needs more video memory, and subjects can repeat. For a sharp big image, make it at the default size and upscale it.'
+                  : 'Smaller than the model was made for: faster, but details get rough.'}</p>}
+                {!customSize && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] tabular-nums">{(dims.width * dims.height / 1e6).toFixed(1)} megapixels</p>}
               </Section>
               <Section title="Images per run">
                 <div className="grid grid-cols-4 gap-1.5">{[1, 2, 4, 8].map((n) => <button key={n} type="button" aria-pressed={params.count === n} onClick={() => set({ count: n })} className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums', params.count === n ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{n}</button>)}</div>

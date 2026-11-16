@@ -3,6 +3,8 @@
 // agent and its helpers took (each agent with its own face), and questions it asks you. Right: the
 // artifacts it made (documents, pages, tables, images, code), previewed and saved as real files.
 
+import { Starters } from '../common/Starters';
+import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AudioLines, Check, ChevronDown, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pin, PinOff, Plus, Search, Table2, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
@@ -28,12 +30,6 @@ import { revealPath } from '../../lib/open';
 import type { ModelOption } from './ChatWorkspace';
 import type { LotusSettings } from '../../types/lotus';
 
-const STARTERS = [
-  'Research the best budget mechanical keyboards and make a comparison table',
-  'Write a one-page landing page for a neighbourhood bakery',
-  'Plan a 5-day trip to Japan in spring with a day-by-day document',
-  'Read the files in my Lotus Studio folder and write a summary',
-];
 
 const KIND_ICON: Record<string, React.ReactNode> = {
   document: <FileText className="w-4 h-4" />, page: <Globe className="w-4 h-4" />, table: <Table2 className="w-4 h-4" />,
@@ -351,9 +347,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                 <div className="flex justify-center mb-2"><AgentFace size={44} /></div>
                 <h2 className="text-[22px] font-semibold tracking-[-0.01em]">What should Lotus work on?</h2>
                 <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Describe the result you want. Lotus plans it, works through it with helper agents, and hands you the finished files.</p>
-                <div className="mt-6 grid grid-cols-2 gap-2 text-left">
-                  {STARTERS.map((s) => <button key={s} type="button" onClick={() => setText(s)} className="p-3 rounded-[10px] text-[13px] leading-snug bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:shadow-[0_0_0_1px_var(--color-accent-fill)]">{s}</button>)}
-                </div>
+                <Starters id="work" groups={WORK_STARTERS} className="mt-6" onPick={setText} />
               </div>
             ) : (
               <>

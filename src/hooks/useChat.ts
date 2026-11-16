@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatFolder, ChatMessage, ChatSession, ChatSource, ChatToolCall, ContextItem, LotusSettings, MemoryItem } from '../types/lotus';
 import { ChatTurn, fileToBase64 } from '../services/ollamaService';
 import { llm } from '../services/llm';
-import { voicebox } from '../services/voicebox';
 import { searchRepo } from '../research/repos';
 import { RepoId } from '../research/types';
 import { reportActivity } from '../lib/bus';
@@ -335,9 +334,9 @@ export function useChat(settings: LotusSettings) {
 
     if (setRef.current.autoReadResponses && acc && !ctrl.signal.aborted) {
       try {
-        const q = await voicebox.speak(acc.replace(/```[\s\S]*?```/g, ' ').slice(0, 4000), { profile: kv.getItem('lotus.voice.profile') ?? undefined });
-        const done = await voicebox.waitFor(q.id);
-        await new Audio(await voicebox.audioUrl(done.id)).play();
+        // The voice in use on the Voice page (Lotus's engine), else Voicebox, else the system voice.
+        const { speak } = await import('../voice/voice');
+        void speak(acc);
       } catch { /* read-aloud is best effort */ }
     }
   }, [patchMsg, patchSession, afterReply, autoRename]);

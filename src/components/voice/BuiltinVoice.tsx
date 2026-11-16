@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AudioLines, BookOpen, Boxes, Copy, FileAudio, FileText, Film, Mic, Mic2, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, Volume2, ListPlus, ChevronDown } from 'lucide-react';
+import { AudioLines, BookOpen, Phone, Boxes, Copy, FileAudio, FileText, Film, Mic, Mic2, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, Volume2, ListPlus, ChevronDown } from 'lucide-react';
 import { Banner, Btn, Empty, IconBtn, Select, cx } from '../common/ui';
 import { InspectorPane, KV, MenuItem, Popover, Section, SidebarPane, SliderField, groupByDate } from '../common/Pane';
 import { PickerButton, PromptShell, SendButton, TrayButton, TrayNote, VramMeter } from '../common/PromptBox';
@@ -9,6 +9,8 @@ import { ClipAudio, EffectsButton, EffectsPanel, VoicePicker } from './studio/pa
 import { VoicesView } from './studio/VoicesView';
 import { StoriesView, newStory } from './studio/StoriesView';
 import { SttEmpty, SttProgress, TranscriptCard } from './studio/SttView';
+import { CallView, PastCall } from './studio/CallView';
+import { saveCalls, startCall, useCall, useSavedCalls } from '../../voice/call';
 import { transcribeLong, useSttJob } from '../../voice/stt';
 import { sortFiles, useFileIntake } from '../../lib/fileDrop';
 import { usePanels } from '../../lib/panels';
@@ -22,6 +24,7 @@ import type { LotusSettings } from '../../types/lotus';
 
 /*
  * The Voice page with Lotus's own voice engine (0.8.2): everything Voicebox did, without it.
+ *   Call     a voice call with the chat model that remembers across calls and chats (0.9.6)
  *   Speak    type, pick a voice (yours or built-in), optional effects, press Speak; long texts work
  *   Voices   make a voice from a few seconds of speech (cloning) or tune a built-in one
  *   Stories  a script with several speakers on four tracks, played together and exported as one file
@@ -29,7 +32,7 @@ import type { LotusSettings } from '../../types/lotus';
  * Same three panes and chat bar as the other pages. Data: voice/useStudio.ts; audio in Lotus Studio/Audio.
  */
 
-type Mode = 'speak' | 'voices' | 'stories' | 'dictate';
+type Mode = 'call' | 'speak' | 'voices' | 'stories' | 'dictate';
 const LANGS = ['Auto', 'English', 'Portuguese', 'Spanish', 'French', 'German', 'Italian', 'Dutch', 'Japanese', 'Chinese', 'Korean', 'Russian'];
 const STARTERS = ['Good morning! Here is your plan for today.', 'Once upon a time, in a quiet village by the sea, there lived a curious little fox.', 'Welcome to our podcast. Today we talk about local AI.'];
 
@@ -43,7 +46,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const voice = studio.voice;
   const voiceModel = studio.models.find((m) => m.id === voice?.model);
 
-  const [mode, setMode] = useState<Mode>(() => (kv.getItem('lotus.voice.builtin.mode') as Mode) || 'speak');
+  const [mode, setMode] = useState<Mode>(() => (kv.getItem('lotus.voice.builtin.mode') as Mode) || 'call');
   const [q, setQ] = useState('');
   const [text, setText] = useState('');
   const [speed, setSpeed] = useState(1);
@@ -58,6 +61,11 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const [rec, setRec] = useState<MicRecorder | null>(null);
   const [level, setLevel] = useState(0);
   const job = useSttJob();
+  const call = useCall();
+  const calls = useSavedCalls();
+  const [callSel, setCallSel] = useState<string | null>(null);
+  const [callMemory, setCallMemoryDefault] = useState(() => kv.getItem('lotus.voice.callMemory') !== '0');
+  const pastCall = !call.call && callSel ? calls.find((c) => c.id === callSel) ?? null : null;
   const transcribing = job?.state === 'reading' || job?.state === 'working';
   const scroller = useRef<HTMLDivElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
@@ -89,7 +97,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const startJob = (blob: Blob, name: string) => {
     setError(null);
     if (!dictModel || !engineOk) { setError('Speech to text needs Lotus’s voice engine and a Whisper model. Get them in Models.'); return; }
-    transcribeLong(blob, { name, model: dictModel.id, modelTitle: dictModel.title });
+    transcribeLong(blob, { name, model: dictModel.id, modelTitle: dictModel.title, language: settings.whisperLanguage && settings.whisperLanguage !== 'Auto' ? settings.whisperLanguage : undefined });
   };
   const toggleRecord = async () => {
     if (rec) {
@@ -143,9 +151,9 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const transcripts = allTranscripts.filter((t) => !hidden.has(t.id));
   const lastClip = clips[0]?.path ?? null;
 
-  const navBtn = (m: Mode, icon: React.ReactNode, label: string) => (
+  const navBtn = (m: Mode, icon: React.ReactNode, label: string, extra?: React.ReactNode) => (
     <button key={m} type="button" aria-current={mode === m ? 'page' : undefined} onClick={() => go(m)}
-      className={cx('w-full h-9 px-2.5 flex items-center gap-2.5 rounded-[8px] text-[13px] text-left', mode === m ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>{icon}{label}</button>
+      className={cx('w-full h-9 px-2.5 flex items-center gap-2.5 rounded-[8px] text-[13px] text-left', mode === m ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>{icon}{label}{extra}</button>
   );
   const row = (id: string, title: string, on: boolean, onClick: () => void, sub?: string, del?: () => void) => (
     <div key={id} role="button" tabIndex={0} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter') onClick(); }}
@@ -165,20 +173,28 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
     </>);
   };
 
-  const newLabel = { speak: 'New Speech', voices: 'New Voice', stories: 'New Story', dictate: 'New Transcript' }[mode];
+  const newLabel = { call: 'New Call', speak: 'New Speech', voices: 'New Voice', stories: 'New Story', dictate: 'New Transcript' }[mode];
   const onNew = () => {
-    if (mode === 'speak') { setText(''); setSelected(null); ta.current?.focus(); }
+    if (mode === 'call') { setCallSel(null); }
+    else if (mode === 'speak') { setText(''); setSelected(null); ta.current?.focus(); }
     else if (mode === 'voices') setVoiceSel(null);
     else if (mode === 'stories') { const s = newStory(); studio.saveStories((l) => [s, ...l]); setStorySel(s.id); }
     else audioFile.current?.click();
   };
-  const notice = !engineOk || (mode === 'dictate' ? !dictation.length : !studio.models.length);
+  const notice = mode !== 'call' && (!engineOk || (mode === 'dictate' ? !dictation.length : !studio.models.length));
+  const removeCall = (id: string) => {
+    const keep = calls.find((c) => c.id === id);
+    if (!keep) return;
+    saveCalls((l) => l.filter((c) => c.id !== id));
+    if (callSel === id) setCallSel(null);
+    offerUndo('Call deleted', () => saveCalls((l) => [keep, ...l].sort((a, b) => b.started - a.started)), () => undefined);
+  };
 
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Voice">
         <div className="p-3 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew} disabled={mode === 'dictate' && (!dictation.length || !engineOk || transcribing || !!rec)}>{newLabel}</Btn>
+          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew} disabled={(mode === 'dictate' && (!dictation.length || !engineOk || transcribing || !!rec)) || (mode === 'call' && !!call.call)}>{newLabel}</Btn>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
             <input type="search" data-page-search aria-label="Search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)}
@@ -186,12 +202,20 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
           </div>
         </div>
         <nav className="px-2 space-y-0.5" aria-label="Voice modes">
+          {navBtn('call', <Phone className="w-4 h-4" />, 'Call', call.call ? <span className="ml-auto w-2 h-2 rounded-full bg-[var(--c-green)]" aria-label="On a call" /> : null)}
           {navBtn('speak', <AudioLines className="w-4 h-4" />, 'Speak')}
           {navBtn('voices', <Mic2 className="w-4 h-4" />, 'Voices')}
           {navBtn('stories', <Film className="w-4 h-4" />, 'Stories')}
           {navBtn('dictate', <FileAudio className="w-4 h-4" />, 'Speech to Text')}
         </nav>
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3 mt-2 border-t border-[var(--sep)] space-y-3">
+          {mode === 'call' && (() => {
+            const shown = calls.filter((c) => !needle || c.title.toLowerCase().includes(needle) || c.turns.some((t) => t.text.toLowerCase().includes(needle)));
+            return (<>
+              {groupByDate(shown.map((c) => ({ ...c, ts: c.started }))).map((g) => <div key={g.label}>{head(g.label)}<div className="space-y-0.5">{g.items.map((c) => row(c.id, c.title, callSel === c.id && !call.call, () => setCallSel(c.id), `${new Date(c.started).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${c.turns.filter((t) => t.role === 'user').length} things said`, () => removeCall(c.id)))}</div></div>)}
+              {!shown.length && <p className="px-2.5 text-[13px] text-[var(--color-text-muted)]">{needle ? `Nothing matches “${q.trim()}”.` : 'No calls yet.'}</p>}
+            </>);
+          })()}
           {mode === 'speak' && dated(clips, (c) => c.voice, (c) => remove(c.id))}
           {mode === 'dictate' && dated(transcripts.map((t) => ({ ...t, text: t.source ?? t.text })), (t) => [t.seconds ? clock(t.seconds) : '', t.source ? (allTranscripts.find((x) => x.id === t.id)?.text ?? '').slice(0, 60) : ''].filter(Boolean).join(' · '), (t) => remove(t.id))}
           {mode === 'voices' && (<>
@@ -217,8 +241,11 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
       </SidebarPane>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto"
->
+        {mode === 'call' && (pastCall
+          ? <div className="flex-1 min-h-0 overflow-y-auto"><PastCall call={pastCall} onOpenInChat={onOpenInChat} onCallAgain={() => { setCallSel(null); startCall({ memory: callMemory }); }} /></div>
+          : <div className="flex-1 min-h-0"><CallView model={settings.selectedModel} dictation={!!dictation.length && engineOk} voice={voice?.ready ? voice.name : null}
+              memoryDefault={callMemory} onMemoryDefault={(on) => { setCallMemoryDefault(on); kv.setItem('lotus.voice.callMemory', on ? '1' : '0'); }} onOpenModels={onOpenModels} /></div>)}
+        <div ref={scroller} className={cx('flex-1 min-h-0 overflow-y-auto', mode === 'call' && 'hidden')}>
           {notice && <div className="max-w-[760px] mx-auto px-6 pt-4"><BuiltinNotice kind="voice" purpose={mode === 'dictate' ? 'to turn speech into text' : 'to speak'} /></div>}
           {mode === 'voices' && <VoicesView studio={studio} selected={voiceSel} onSelect={setVoiceSel} lastClip={lastClip} onOpenModels={onOpenModels} />}
           {mode === 'stories' && <StoriesView studio={studio} storyId={storySel} onStory={setStorySel} />}
@@ -258,6 +285,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                 ))}
                 {mode === 'dictate' && transcripts.map((t) => (
                   <TranscriptCard key={t.id} t={t} selected={selected === t.id} onOpenInChat={onOpenInChat}
+                    onTranslated={(lang, text) => studio.saveHistory((h) => ({ ...h, transcripts: h.transcripts.map((x) => (x.id === t.id ? { ...x, translations: [...(x.translations ?? []).filter((y) => y.lang !== lang), { lang, text, ts: Date.now() }] } : x)) }))}
                     onDelete={() => remove(t.id)} onSpeak={(x) => { setText(x); go('speak'); }}
                     onFav={() => studio.saveHistory((h) => ({ ...h, transcripts: h.transcripts.map((x) => (x.id === t.id ? { ...x, fav: !x.fav } : x)) }))} />
                 ))}
@@ -304,7 +332,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                       {rec ? <span className="h-1.5 w-full max-w-[260px] rounded-full bg-[var(--hover)] overflow-hidden" aria-hidden="true"><span className="block h-full bg-[var(--color-accent-fill)] transition-[width]" style={{ width: `${Math.min(100, level * 300)}%` }} /></span>
                         : <span className="text-[13px] text-[var(--color-text-muted)] truncate">{transcribing ? 'Writing it down… you can use other pages meanwhile' : 'Record with the mic, or drop a recording anywhere above'}</span>}
                     </div>
-                    <Popover up align="right" className="w-[220px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Language" text={settings.whisperLanguage && settings.whisperLanguage !== 'Auto' ? settings.whisperLanguage : 'Any Language'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
+                    <Popover up align="right" className="w-[220px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Language" text={settings.whisperLanguage && settings.whisperLanguage !== 'Auto' ? settings.whisperLanguage : 'Detect Language'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
                       {(close) => LANGS.map((l) => <MenuItem key={l} active={(settings.whisperLanguage || 'Auto') === l} onClick={() => { onSettings({ whisperLanguage: l }); close(); }}>{l === 'Auto' ? 'Detect Automatically' : l}</MenuItem>)}
                     </Popover>
                     {rec ? <SendButton stop onClick={() => void toggleRecord()} label="Stop and write it down" tip="Stop and write it down" />

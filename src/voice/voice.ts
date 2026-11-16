@@ -143,7 +143,7 @@ export async function speak(text: string, profile = voicePrefs().profile): Promi
  * Records until a pause after speech (or `maxSec`), then transcribes. Resolves '' when nothing was
  * said. Rejects with a plain message when the mic is blocked or Voicebox isn't running.
  */
-export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?: number; signal?: AbortSignal } = {}): Promise<string> {
+export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?: number; signal?: AbortSignal; /** Mic level 0…1 while listening (voice calls). */ onLevel?: (level: number) => void } = {}): Promise<string> {
   const maxSec = o.maxSec ?? 30, silenceMs = o.silenceMs ?? 1300, waitSec = o.waitSec ?? 8;
   const builtin = builtinVoicePrefs();
   const useBuiltin = builtin.on && builtinReady('sherpa') && !!builtin.dictation;
@@ -154,6 +154,7 @@ export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?:
   let resolveStop: () => void = () => undefined;
   const stopNow = new Promise<void>((r) => { resolveStop = r; });
   const rec = new MicRecorder((level, t) => {
+    o.onLevel?.(level);
     if (level > 0.09) { heard = true; quietSince = 0; } else if (heard && !quietSince) quietSince = performance.now();
     if ((heard && quietSince && performance.now() - quietSince > silenceMs) || t > maxSec || (!heard && t > waitSec)) resolveStop();
   });

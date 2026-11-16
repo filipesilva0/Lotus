@@ -21,7 +21,7 @@ export const STORIES_KEY = 'lotus.voice.stories.v1';
 export const HISTORY_KEY = 'lotus.voice.builtin.v1';
 
 export interface Clip { id: string; text: string; path: string; voice: string; voiceId?: string; seconds?: number; fav?: boolean; ts: number }
-export interface Transcript { id: string; text: string; model: string; source?: string; seconds?: number; segments?: Segment[]; fav?: boolean; ts: number }
+export interface Transcript { id: string; text: string; model: string; source?: string; seconds?: number; segments?: Segment[]; fav?: boolean; ts: number; /** Language Whisper heard or was told (0.9.6). */ language?: string; /** Translations made by the chat model (0.9.6). */ translations?: { lang: string; text: string; ts: number }[] }
 
 const read = <T,>(key: string, fallback: T): T => { try { const v = kv.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; } };
 const write = (key: string, v: unknown) => kv.setItem(key, JSON.stringify(v));

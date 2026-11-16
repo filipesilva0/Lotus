@@ -149,13 +149,13 @@ export function suggestFile(family: ImageFamily, slot: Slot, files: string[]): s
 }
 
 /** Aspect ratio → pixel size for a profile (multiples of 64, area of the model's native square). */
-export function sizeFor(aspect: string, p: ImageProfile): { width: number; height: number } {
+export function sizeFor(aspect: string, p: ImageProfile, resolution?: number): { width: number; height: number } {
   const r64 = (n: number) => Math.max(64, Math.round(n / 64) * 64);
   const custom = /^(\d{2,5})\s*[x×]\s*(\d{2,5})$/.exec(aspect);
   if (custom) return { width: r64(+custom[1]), height: r64(+custom[2]) };
   const [a, b] = aspect.split(':').map(Number);
   const ratio = a > 0 && b > 0 ? a / b : 1;
-  const area = FAMILIES[p.family].base ** 2;
+  const area = (resolution || FAMILIES[p.family].base) ** 2;
   return { width: r64(Math.sqrt(area * ratio)), height: r64(Math.sqrt(area / ratio)) };
 }
 
@@ -277,4 +277,20 @@ export function sdcppProgress(line: string): { step: number; total: number } | n
   if (!m) return null;
   const step = Number(m[1]), total = Number(m[2]);
   return total > 0 && step <= total ? { step, total } : null;
+}
+
+/**
+ * Resolutions offered next to the aspect ratio (0.9.6). The number is the side of a square with the
+ * same area; other shapes keep that area. 0 = the model's own size (what it was trained at).
+ */
+export const RESOLUTIONS: { id: number; label: string }[] = [
+  { id: 0, label: 'Model Default' }, { id: 512, label: '512' }, { id: 768, label: '768' }, { id: 1024, label: '1024' },
+  { id: 1280, label: '1280' }, { id: 1536, label: '1536' }, { id: 2048, label: '2048' },
+];
+
+/** How a resolution compares with what the model was trained at ('ok' within ±25 %). */
+export function resolutionFit(resolution: number, native: number): 'ok' | 'small' | 'large' {
+  if (!resolution || !native) return 'ok';
+  const r = resolution / native;
+  return r > 1.3 ? 'large' : r < 0.7 ? 'small' : 'ok';
 }

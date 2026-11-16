@@ -38,6 +38,7 @@ node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install car
 node handover/screenshots/shoot-s16.mjs           # session 16: Work end to end (fake model, real core), Tasks width, Hardware; 15 checks
 node handover/screenshots/shoot-s16-island.mjs    # session 16: the island compact / expanded / done
 cd core && bun install && bun test       # 83 core tests: 19 session 14 + 37 session 15 + 11 session 16 + 16 session 17 (built-in engines end to end with stand-ins, catalog, image setups, data move)
+node handover/screenshots/shoot-s20.mjs           # 0.9.6: Call tab, past call, Stories whole text, STT translation tabs, Images resolution + examples, Settings General/Chat; 8 checks
 node handover/screenshots/shoot-s17.mjs           # session 17: built-in engines in the app (stand-in llama-server/sd-cli/sherpa-onnx, real core): chat, image, Models, Image Setups, Voice, guide; 19 checks
 node handover/verification/agent-e2e.mjs  # 19 checks (session 15): Chat → agent → tools in Chromium against a real core and fake engines; screenshots /tmp/shots/s15-*
 node handover/verification/real-tasks.mjs --model <ollama model>   # 31 real tasks against a REAL model (needs Ollama; `--list`, `--only 1,2`, `--comfy URL`, `--lotusd path`); results in handover/real-tasks/
@@ -54,6 +55,12 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## 0.9.6 map (voice calls, translation, whole-text stories, resolution, examples, Settings)
+- Calls: `voice/call.ts` (state, loop, memory) + `components/voice/studio/CallView.tsx`; pure helpers (`takeSentences`, `callSystemPrompt`, `callTitle`, `cleanModelText`) in `voice/studio.ts`, tested in `core/test/s20.test.ts`. Calls must respect `call.memory` exactly like `memoryOnFor` in chat.
+- Whisper language defaults to Auto; never force a language by default. Translation goes through `voice/translate.ts` (chat model), not Whisper.
+- Example prompts live in `data/starters.ts`; render them with `Starters`.
+- Settings hold app-wide choices only; per-chat model settings stay in Chat's Model panel. Ask Filipe before adding Settings features.
 
 ## 0.9.5 map (paste/drop, references, Images folders)
 - Pages take files through `useFileIntake(onFiles)` (`lib/fileDrop.ts`); never read `dataTransfer.files[0]` or add another paste listener. Pure rules (`clipboardFiles`, `sortFiles`) live in `lib/fileKinds.ts` so the core's tests can import them.
