@@ -428,8 +428,8 @@ export default function App() {
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden mb-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
-        {/* Chat and Images have no toolbar row: their controls live in the prompt box (session 8). */}
-        <header className={currentView === 'chat' || currentView === 'images' || currentView === 'work' ? 'hidden' : 'h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]'} role="banner">
+        {/* Chat, Work, Images and Voice (with Lotus's own engine) have no toolbar row: their controls live in the prompt box. */}
+        <header className={currentView === 'chat' || currentView === 'images' || currentView === 'work' || (currentView === 'voice' && settings.voiceEngine === 'builtin') ? 'hidden' : 'h-14 shrink-0 flex items-center gap-3 px-3 border-b border-[var(--sep)]'} role="banner">
           <h1 className={currentView === 'voice' || currentView === 'engines' || currentView === 'chat' || currentView === 'images' || currentView === 'work' || currentView === 'tasks' ? 'sr-only' : 'text-[17px] font-semibold tracking-[-0.01em]'}>{VIEW_TITLES[currentView]}</h1>
           <div ref={setToolbarSlot} className="flex-1 min-w-0 self-stretch flex items-stretch gap-3 pr-2" />
         </header>

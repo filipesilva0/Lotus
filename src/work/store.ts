@@ -19,7 +19,24 @@ export interface WorkMsg {
   steps?: AgentStep[];
   error?: string;
   unverified?: string[];
+  /** Files attached to a request (names shown on the message). */
+  files?: { name: string; kind: 'image' | 'text' }[];
+  /** Text of attached text/code files, sent to the model with this message (kept for later turns). */
+  attached?: string;
   ts: number;
+}
+
+/** A file attached in the Work chat bar, already read: images as base64, text as UTF-8. */
+export interface WorkAttachment { name: string; kind: 'image' | 'text'; data: string }
+
+/** Attached text files, as the model sees them after the request (capped so one file can't fill the context). */
+export function attachedText(files: WorkAttachment[], cap = 60_000): string {
+  let left = cap;
+  return files.filter((f) => f.kind === 'text').map((f) => {
+    const body = f.data.length > left ? `${f.data.slice(0, Math.max(0, left))}\n[…cut: the file is longer]` : f.data;
+    left = Math.max(0, left - f.data.length);
+    return `Attached file "${f.name}":\n\`\`\`\n${body}\n\`\`\``;
+  }).join('\n\n');
 }
 export interface WorkItem { id: string; title: string; ts: number; pinned?: boolean; messages: WorkMsg[] }
 export interface PendingAsk { workId: string; runId: string; askId: string; question: string; options: string[] }
@@ -95,16 +112,20 @@ export function useWork(settings: LotusSettings) {
     if (activeId === id) setActiveId(next[0].id);
   }, [activeId, running]);
 
-  const send = useCallback(async (text: string, workId = activeId): Promise<string> => {
-    const t = text.trim();
+  const send = useCallback(async (text: string, workId = activeId, files: WorkAttachment[] = []): Promise<string> => {
+    const t = text.trim() || (files.length ? 'Look at the attached files.' : '');
     const item = ref.current.find((w) => w.id === workId);
     if (!t || !item || running[workId]) return '';
     if (!agentAvailable()) throw new Error('Work mode needs the Lotus core, which runs with the desktop app.');
     const s = settingsRef.current;
-    const user: WorkMsg = { id: uid('wm'), role: 'user', content: t, ts: Date.now() };
+    const attached = attachedText(files);
+    const images = files.filter((f) => f.kind === 'image').map((f) => f.data);
+    const user: WorkMsg = { id: uid('wm'), role: 'user', content: t, ts: Date.now(),
+      ...(files.length ? { files: files.map((f) => ({ name: f.name, kind: f.kind })) } : {}), ...(attached ? { attached } : {}) };
     const reply: WorkMsg = { id: uid('wm'), role: 'assistant', content: '', steps: [], ts: Date.now() };
     patch(workId, (w) => ({ ...w, ts: Date.now(), title: w.messages.length ? w.title : t.slice(0, 48), messages: [...w.messages, user, reply] }));
-    const history = [...item.messages, user].filter((m) => m.content.trim()).slice(-16).map((m) => ({ role: m.role, content: m.content }));
+    const history = [...item.messages, user].filter((m) => m.content.trim()).slice(-16)
+      .map((m) => ({ role: m.role, content: m.attached ? `${m.content}\n\n${m.attached}` : m.content, ...(m === user && images.length ? { images } : {}) }));
     const ctrl = new AbortController();
     const activity = `work-${workId}`;
     reportActivity({ id: activity, kind: 'build', label: 'Working' });

@@ -5,7 +5,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AudioLines, Check, ChevronDown, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pin, PinOff, Plus, Search, Table2, Trash2, X } from 'lucide-react';
-import { Work, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
+import { Work, WorkAttachment, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
+import { fileToBase64 } from '../../services/ollamaService';
+import { TEXT_EXT } from '../../chat/helpers';
 import type { ArtifactInfo, AgentStep } from '../../lib/agent';
 import { agentAvailable, workArtifact, workDir } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
@@ -13,7 +15,7 @@ import { AgentFace } from '../common/AgentFace';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { InspectorPane, MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
 import { Btn, IconBtn, Segmented, cx } from '../common/ui';
-import { ModeButton, PickerButton, PromptShell, SendButton } from '../common/PromptBox';
+import { ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, VramMeter } from '../common/PromptBox';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { Tip } from '../common/Tip';
 import { useCommand } from '../../lib/commands';
@@ -225,17 +227,45 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   const [talk, setTalk] = useState(false);
   const [vs, setVs] = useState<VoiceState>(voiceState.get());
   const [notice, setNotice] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [drag, setDrag] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => voiceState.on(setVs), []);
   const item = work.active;
   useEffect(() => { setOpenArtifact(null); }, [work.activeId]);
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }); }, [item.messages, work.asks.length]);
-  useCommand('new-work', () => { work.newWork(); setText(''); });
+  useCommand('new-work', () => { work.newWork(); setText(''); setFiles([]); });
 
-  const go = async (t = text) => {
-    if (!t.trim()) return;
+  const addFiles = (list: FileList | File[]) => {
+    const arr = Array.from(list);
+    setFiles((f) => [...f, ...arr]);
+    arr.filter((f) => f.type.startsWith('image/')).forEach((f) => setPreviews((p) => ({ ...p, [f.name + f.size]: URL.createObjectURL(f) })));
+  };
+  // Images go to the model as pictures; text and code files are read and sent with the request.
+  const readFiles = async (list: File[]): Promise<{ out: WorkAttachment[]; errors: string[] }> => {
+    const out: WorkAttachment[] = [], errors: string[] = [];
+    for (const f of list) {
+      if (f.type.startsWith('image/')) out.push({ name: f.name, kind: 'image', data: await fileToBase64(f) });
+      else if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') out.push({ name: f.name, kind: 'text', data: await f.text() });
+      else errors.push(`${f.name}: Lotus can read images and text or code files. PDFs and other formats can't be read yet.`);
+    }
+    return { out, errors };
+  };
+
+  const go = async (t = text, withFiles = true) => {
+    const list = withFiles ? files : [];
+    if (!t.trim() && !list.length) return;
     setText(''); setNotice(null);
-    try { return await work.send(t); } catch (e) { setNotice((e as Error).message); return ''; }
+    let attach: WorkAttachment[] = [];
+    if (list.length) {
+      const r = await readFiles(list);
+      attach = r.out; setFiles([]); setPreviews({});
+      if (r.errors.length) setNotice(r.errors.join(' '));
+      if (!t.trim() && !attach.length) return '';
+    }
+    try { return await work.send(t, work.activeId, attach); } catch (e) { setNotice((e as Error).message); return ''; }
   };
 
   // Talk: listen → send → read the reply → listen again, until you switch it off or say nothing.
@@ -250,7 +280,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
         try { said = await listen({ waitSec: 12 }); } catch (e) { setNotice((e as Error).message); setTalk(false); return; }
         if (!live || !talkRef.current) return;
         if (!said) { setTalk(false); setNotice('Talk ended: Lotus heard nothing for a while.'); return; }
-        const reply = await go(said);
+        const reply = await go(said, false);
         if (!live || !talkRef.current) return;
         if (reply) await speak(reply);
       }
@@ -274,14 +304,16 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
 
   const row = (w: WorkItem) => (
     <div key={w.id} role="button" tabIndex={0} onClick={() => work.setActiveId(w.id)} onKeyDown={(e) => { if (e.key === 'Enter') work.setActiveId(w.id); }}
-      className={cx('group flex items-center gap-2 h-8 px-2 rounded-[8px] cursor-default', w.id === work.activeId ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
+      className={cx('group relative flex items-center gap-2 px-2.5 h-9 rounded-[8px] cursor-default',
+        w.id === work.activeId ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
       {work.runningIds.includes(w.id) ? <AgentFace size={16} mood="thinking" /> : null}
-      <span className={cx('flex-1 truncate text-[13px]', w.id === work.activeId ? 'font-medium' : 'text-[var(--color-text-muted)]')}>{w.title}</span>
+      <span className="flex-1 min-w-0 truncate text-[13px]">{w.title}</span>
       {work.allAsks.some((a) => a.workId === w.id) && <span className="w-2 h-2 rounded-full bg-[var(--c-orange)]" title="Waiting for your answer" />}
-      <span className="hidden group-hover:flex items-center" onClick={(e) => e.stopPropagation()}>
+      <span className="hidden group-hover:flex group-focus-within:flex items-center shrink-0" onClick={(e) => e.stopPropagation()}>
         <IconBtn label={w.pinned ? 'Unpin' : 'Pin'} className="!w-6 !h-6" onClick={() => work.patch(w.id, (x) => ({ ...x, pinned: !x.pinned }))}>{w.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}</IconBtn>
-        <IconBtn label="Delete" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={() => deleteWork(w.id)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+        <IconBtn label="Delete work" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={() => deleteWork(w.id)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
       </span>
+      {w.pinned && <Pin className="w-3 h-3 shrink-0 group-hover:hidden opacity-60" aria-hidden="true" />}
     </div>
   );
 
@@ -292,14 +324,18 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   return (
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Work">
-        <div className="p-2 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-4 h-4" />} onClick={() => { work.newWork(); setText(''); }}>New Work</Btn>
-          <label className="relative block"><Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <input data-page-search value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search work" className="w-full h-7 pl-8 pr-2 rounded-[7px] bg-[var(--hover)] text-[13px] focus:outline-none" /></label>
+        <div className="p-3 space-y-2">
+          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => { work.newWork(); setText(''); setFiles([]); }}>New Work</Btn>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
+            <input type="search" data-page-search value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search work"
+              className="w-full h-7 pl-8 pr-2 rounded-[6px] bg-[var(--hover)] text-[13px] placeholder:text-[var(--color-text-muted)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" />
+          </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-2">
-          {list.some((w) => w.pinned) && <><p className="px-2 pt-2 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Pinned</p>{list.filter((w) => w.pinned).map(row)}</>}
-          {groups.map((g) => <React.Fragment key={g.label}><p className="px-2 pt-3 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{g.label}</p>{g.items.map(row)}</React.Fragment>)}
+        <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-3 space-y-3">
+          {list.some((w) => w.pinned) && <div><h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Pinned</h3><div className="space-y-0.5">{list.filter((w) => w.pinned).map(row)}</div></div>}
+          {groups.map((g) => <div key={g.label}><h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">{g.label}</h3><div className="space-y-0.5">{g.items.map(row)}</div></div>)}
+          {!list.length && <p className="px-2.5 py-3 text-[13px] text-[var(--color-text-muted)]">{needle ? `No work matches “${q.trim()}”.` : 'No work here yet.'}</p>}
         </div>
       </SidebarPane>
 
@@ -320,7 +356,10 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                 <Plan item={item} busy={work.busy} />
                 <div className="space-y-6">
                   {item.messages.map((m, i) => m.role === 'user'
-                    ? <div key={m.id} className="flex justify-end"><div className="max-w-[80%] px-3.5 py-2 rounded-[16px] bg-[var(--color-accent-pastel)] text-[14px] whitespace-pre-wrap">{m.content}</div></div>
+                    ? <div key={m.id} className="flex flex-col items-end gap-1.5">
+                        {m.files?.length ? <div className="flex flex-wrap justify-end gap-1.5">{m.files.map((f, k) => <span key={k} className="inline-flex items-center gap-1.5 h-7 px-2 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">{f.kind === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}<span className="truncate">{f.name}</span></span>)}</div> : null}
+                        <div className="max-w-[80%] px-3.5 py-2 rounded-[16px] bg-[var(--color-accent-pastel)] text-[14px] whitespace-pre-wrap">{m.content}</div>
+                      </div>
                     : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} onDecide={(s, allow) => void work.decide(s, allow)} onArtifact={setOpenArtifact} />)}
                 </div>
               </>
@@ -335,15 +374,36 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="to work" className="mb-2" />}
             {!agentAvailable() && <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">Work mode runs in the desktop app (it needs the Lotus core).</p>}
             {notice && <p role="status" className="mb-2 text-[12px] text-[var(--c-orange)]">{notice}</p>}
-            <PromptShell tray={<>
+            <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+              onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
+              tray={<>
               <span className="text-[12px] text-[var(--color-text-muted)] px-1 inline-flex items-center gap-1">Can use: files, web, tasks, images{tools.length ? `, ${tools.join(', ')}` : ''}<Tip text="What the agent can do in Work. Turn on browser and computer control in Settings → Tools. Steps that change your files or control your computer ask first unless you changed that there." /></span>
               <span className="flex-1" />
               <button type="button" onClick={onOpenSettings} className="h-7 px-2 inline-flex items-center gap-1.5 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)]"><MonitorSmartphone className="w-3.5 h-3.5" />Tools</button>
             </>}>
+              {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
+              <VramMeter />
+              {(files.length > 0 || drag) && (
+                <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
+                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them.</p>}
+                  {files.map((f, i) => {
+                    const url = previews[f.name + f.size];
+                    return (
+                      <span key={f.name + i} className="inline-flex items-center gap-1.5 h-8 pl-1.5 pr-1 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">
+                        {url ? <img src={url} alt="" className="w-6 h-6 rounded-[4px] object-cover" /> : <FileText className="w-3.5 h-3.5 ml-1" />}
+                        <span className="truncate">{f.name}</span>
+                        <IconBtn label={`Remove ${f.name}`} className="!w-5 !h-5" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))}><X className="w-3 h-3" /></IconBtn>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
               <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={talk ? (vs === 'listening' ? 'Listening… just talk' : vs === 'speaking' ? 'Lotus is speaking…' : 'Talk mode is on') : 'Describe the job, e.g. “Make a study plan for my exams as a document”'}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void go(); } }} aria-label="Describe the work"
-                className="w-full resize-none bg-transparent px-5 pt-4 pb-1 text-[14px] leading-relaxed focus:outline-none max-h-48" />
-              <div className="flex items-center gap-1 px-3 pb-2.5">
+                className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none max-h-48" />
+              <div className="flex items-center gap-1 px-2.5 pb-2.5">
+                <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
+                <RoundIcon label="Attach files" tip="Attach images, text or code" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
                 <ModeButton on={talk} onClick={() => setTalk((t) => !t)} icon={<AudioLines className="w-4 h-4" />} label={talk ? (vs === 'listening' ? 'Listening' : vs === 'speaking' ? 'Speaking' : 'Talk') : 'Talk'} title="Talk with Lotus hands-free: it listens, works, answers aloud and listens again (needs Voicebox for listening)" />
                 <span className="flex-1" />
                 <Popover up align="right" className="w-[280px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Model" text={model || 'No model'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
@@ -354,7 +414,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                     <MenuItem onClick={() => { close(); onOpenModels(); }}>Get more models…</MenuItem>
                   </>)}
                 </Popover>
-                {work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={!text.trim() || !model} onClick={() => void go()} label="Start" tip="Start (Enter)" />}
+                {work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={(!text.trim() && !files.length) || !model} onClick={() => void go()} label="Start" tip="Start (Enter)" />}
               </div>
             </PromptShell>
           </div>

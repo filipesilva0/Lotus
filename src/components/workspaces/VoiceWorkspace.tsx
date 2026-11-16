@@ -22,9 +22,7 @@ type Tab = VoiceMode;
 export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void }> = ({ onOpenEngines, settings, onSettings, onOpenModels }) => {
   if (settings?.voiceEngine === 'builtin' && onSettings) {
     return (
-      <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] overflow-y-auto">
-        <div className="flex-1 min-w-0"><BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} /></div>
-      </div>
+      <BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} />
     );
   }
   return <VoiceboxWorkspace onOpenEngines={onOpenEngines} />;

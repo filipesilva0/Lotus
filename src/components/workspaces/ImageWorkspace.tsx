@@ -9,7 +9,7 @@ import { DEFAULT_PARAMS, Gallery, ImageParams } from '../../hooks/useGallery';
 import { comfy, ComfyStats, dimensionsFor } from '../../services/comfyService';
 import { engineUrl } from '../../services/engineConfig';
 import { usePanels } from '../../lib/panels';
-import { EdgeMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
+import { VramMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
 import { usePersisted, uid } from '../../lib/persist';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
@@ -89,7 +89,6 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
 
   const cur = g.current;
   const dims = useMemo(() => (profile ? sizeFor(params.aspect, profile) : dimensionsFor(params.aspect, params.checkpoint)), [params.aspect, params.checkpoint, profile]);
-  const vramUsed = stats && stats.vramTotalGb ? 1 - stats.vramFreeGb / stats.vramTotalGb : 0;
 
   // ── Prompt deck: / commands and @Style ────────────────────────────────────
   const slashQ = /^\/(\w*)$/.exec(prompt)?.[1];
@@ -280,8 +279,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 <TrayNote>{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</TrayNote>
               </>}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
-              <EdgeMeter value={stats && stats.vramTotalGb ? vramUsed : null} label="Video memory in use"
-                title={stats && stats.vramTotalGb ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : builtin ? 'Video memory is shown in Models → Hardware & Runtime' : 'Start ComfyUI to see video memory'} />
+              <VramMeter fallback={stats && stats.vramTotalGb ? { device: stats.device ?? undefined, totalGb: stats.vramTotalGb, freeGb: stats.vramFreeGb } : null} />
               {(ref || drag) && (
                 <div className="flex items-center gap-2 px-3.5 pt-3">
                   {ref ? (

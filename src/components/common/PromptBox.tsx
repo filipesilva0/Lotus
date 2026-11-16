@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowUp, Square } from 'lucide-react';
 import { cx } from './ui';
+import { useHardware } from '../../hardware/monitor';
 
 /*
  * Prompt box (session 8): the one shape every place you type to a model uses (Chat, Images, the App
@@ -33,6 +34,20 @@ export const EdgeMeter: React.FC<{ value: number | null; label: string; title: s
       <div className="h-full rounded-b-full transition-[width] duration-300" style={{ width: `${v * 100}%`, background: tone }} />
     </div>
   );
+};
+
+/**
+ * Video memory in use along the box's top edge. Reads this computer's GPU through the hardware
+ * monitor (nvidia-smi, amdgpu, Windows counters), so it works with Lotus's own engines too;
+ * `fallback` (e.g. ComfyUI's own report) is used only when the computer gives no reading.
+ */
+export const VramMeter: React.FC<{ fallback?: { device?: string; totalGb: number; freeGb: number } | null; idleTitle?: string }> = ({ fallback, idleTitle }) => {
+  const g = useHardware().hw?.gpu ?? null;
+  const total = g ? g.totalMb / 1024 : fallback?.totalGb ?? 0;
+  const used = g ? g.usedMb / 1024 : fallback ? fallback.totalGb - fallback.freeGb : 0;
+  const name = g?.name || fallback?.device || 'GPU';
+  return <EdgeMeter value={total ? used / total : null} label="Video memory in use"
+    title={total ? `${name}: ${used.toFixed(1)} of ${total.toFixed(1)} GB video memory in use` : idleTitle ?? 'Lotus couldn’t read video memory on this computer'} />;
 };
 
 const focusRing = 'focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]';

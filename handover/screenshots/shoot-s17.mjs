@@ -164,10 +164,18 @@ try {
     await page.waitForSelector('text=Dictate', { timeout: 8000 });
     if (!dark) {
       await page.fill('textarea[aria-label="Text to speak"]', 'Hello from Lotus');
-      await page.click('button:has-text("Speak")');
-      ok('voice: a clip spoken by the built-in engine', await page.waitForSelector('audio', { timeout: 10000 }).then(() => true, () => false));
+      await page.click('button[aria-label="Speak"]');
+      ok('voice: a clip spoken by the built-in engine', await page.waitForSelector('[aria-label="Delete clip"]', { timeout: 10000 }).then(() => true, () => false));
+      ok('voice: laid out like the other pages (sidebar, chat bar, inspector)', await page.locator('aside[aria-label="Voice"]').isVisible() && await page.locator('[role="meter"][aria-label="Video memory in use"]').count() > 0);
     }
+    await page.waitForTimeout(700);
     await page.screenshot({ path: `${shots}/s17-voice-${tag}.png` });
+    // Work: same sidebar as Chat, attach button and video-memory bar in the chat bar (0.8.2).
+    await page.keyboard.press('Control+2');
+    await page.waitForSelector('text=What should Lotus work on?', { timeout: 8000 });
+    ok(`work: attach button and video-memory bar (${tag})`, await page.locator('button[aria-label="Attach files"]').isVisible() && await page.locator('[role="meter"][aria-label="Video memory in use"]').count() > 0);
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: `${shots}/s17-work-${tag}.png` });
     ok(`no page errors (${tag})`, errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
