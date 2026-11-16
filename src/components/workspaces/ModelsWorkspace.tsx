@@ -1,7 +1,7 @@
 import { confirmAlert } from '../common/Alerts';
 import { EngineNotice } from '../common/EngineNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Boxes, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
+import { Activity, Boxes, Layers, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
 import { ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
 import { comfy, ComfyStats } from '../../services/comfyService';
 import { voicebox, Health } from '../../services/voicebox';
@@ -14,14 +14,15 @@ import { CATALOG, CatalogModel, ModelTag, QUANTS, Quant, estimateVram, fmtGB, pa
 import { Banner, Btn, Card, Empty, Gauge, cx } from '../common/ui';
 import { ActiveDownloads } from '../models/ActiveDownloads';
 import { AddModelDialog, ModelKind } from '../models/AddModelDialog';
-import { ImageModelsHub } from '../models/ImageModelsHub';
-import { VoiceModelsHub } from '../models/VoiceModelsHub';
+import { ModelLibrary, type KindFilter } from '../models/ModelLibrary';
+import { ImageSetups } from '../models/ImageSetups';
+import { hasLiveSettings, liveSettings } from '../../lib/liveSettings';
 import { useFileDownloads } from '../models/useFileDownloads';
 import { findModelsDir, savedModelsDir, setSavedModelsDir } from '../../services/downloadService';
 import { InspectorPane, KV, Section, SidebarPane } from '../common/Pane';
 import { reportActivity } from '../../lib/bus';
 
-type Mode = 'hub' | 'arena' | 'monitor';
+type Mode = 'hub' | 'setups' | 'arena' | 'monitor';
 interface Props { engines: Record<EngineId, EngineState>; onOpenEngines: () => void }
 
 // ── Shared pull state (one download at a time) ──────────────────────────────
@@ -52,7 +53,7 @@ function usePull(onDone: () => void) {
 }
 
 // ── Hub ─────────────────────────────────────────────────────────────────────
-const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel[]; refresh: () => void; pull: ReturnType<typeof usePull>; vramGb: number | null; ollamaUp: boolean | null; selected: string | null; onSelect: (n: string | null) => void; onOpenEngines: () => void }> = ({ q, installed, running, refresh, pull, vramGb, ollamaUp, selected, onSelect, onOpenEngines }) => {
+const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel[]; refresh: () => void; pull: ReturnType<typeof usePull>; vramGb: number | null; ollamaUp: boolean | null; selected: string | null; onSelect: (n: string | null) => void; onOpenEngines: () => void; installedOnly?: boolean }> = ({ q, installed, running, refresh, pull, vramGb, ollamaUp, selected, onSelect, onOpenEngines, installedOnly }) => {
   const [filter, setFilter] = useState<ModelTag | 'Installed' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -66,14 +67,14 @@ const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel
     <div className="space-y-6">
       {ollamaUp === false && <EngineNotice id="ollama" purpose="" note="You can browse, but downloading and loading models need it." />}
       {err && <Banner tone="error">{err}</Banner>}
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
+      {!installedOnly && <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter">
         {(['Installed', 'Coding', 'Reasoning', 'Vision', 'Small'] as const).map((t) => (
           <button key={t} type="button" aria-pressed={filter === t} onClick={() => setFilter(filter === t ? null : t)} className={cx('h-7 px-3 rounded-full text-[12px] font-medium', filter === t ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{t}</button>
         ))}
-      </div>
+      </div>}
 
       <section>
-        <h2 className="text-[13px] font-semibold mb-2">Installed ({inst.length})</h2>
+        <h2 className="text-[13px] font-semibold mb-2">{installedOnly ? 'In Ollama' : 'Installed'} ({inst.length})</h2>
         {!inst.length && <p className="text-[13px] text-[var(--color-text-muted)]">{ollamaUp ? 'No installed models match.' : 'Start Ollama to list installed models.'}</p>}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
           {inst.map((m) => {
@@ -93,11 +94,11 @@ const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel
         </div>
       </section>
 
-      <section>
+      {!installedOnly && <section>
         <h2 className="text-[13px] font-semibold mb-2">Suggested to download</h2>
         {!cat.length && <p className="text-[13px] text-[var(--color-text-muted)]">Nothing matches. Use “Add model” to download any model by name.</p>}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-3">{cat.map((m) => <CatalogCard key={m.id} m={m} installed={installed} pull={pull} vramGb={vramGb} />)}</div>
-      </section>
+      </section>}
     </div>
   );
 };
@@ -293,32 +294,30 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
 };
 
 // ── Workspace ───────────────────────────────────────────────────────────────
-type LibKind = ModelKind;
-const KINDS: { id: LibKind; label: string; icon: React.ReactNode }[] = [
-  { id: 'language', label: 'Language models', icon: <MessageSquare className="w-4 h-4" /> },
-  { id: 'image', label: 'Image checkpoints', icon: <ImageIcon className="w-4 h-4" /> },
-  { id: 'lora', label: 'LoRAs', icon: <Sparkles className="w-4 h-4" /> },
-  { id: 'voice', label: 'Voice models', icon: <Mic className="w-4 h-4" /> },
+const KINDS: { id: KindFilter; label: string; icon: React.ReactNode }[] = [
+  { id: 'all', label: 'All models', icon: <Boxes className="w-4 h-4" /> },
+  { id: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" /> },
+  { id: 'image', label: 'Images', icon: <ImageIcon className="w-4 h-4" /> },
+  { id: 'voice', label: 'Voice', icon: <Mic className="w-4 h-4" /> },
+  { id: 'dictation', label: 'Dictation', icon: <Mic className="w-4 h-4" /> },
 ];
 
-/** Engines → Models: every model Lotus uses (language, image, LoRA, voice), plus Arena and Monitor. */
+/** Settings → Models: every model Lotus uses (chat, image, voice) in one list, image setups, Arena and Monitor. */
 export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => {
+  const settings = hasLiveSettings() ? liveSettings() : null;
   const [gpuTotalGb, setGpuTotalGb] = useState<number | null>(null);
   useEffect(() => { if (engines.comfyui.up) void comfy.stats().then((s) => setGpuTotalGb(s.vramTotalGb || null)).catch(() => undefined); }, [engines.comfyui.up]);
-  const [mode, setMode] = usePersisted<Mode>('lotus.models.mode.v1', 'hub');
-  const [kind, setKind] = usePersisted<LibKind>('lotus.models.kind.v1', 'language');
+  const [mode, setMode] = usePersisted<Mode>('lotus.models.mode.v2', 'hub');
+  const [kind, setKind] = usePersisted<KindFilter>('lotus.models.kind.v2', 'all');
   const [q, setQ] = useState('');
   const [installed, setInstalled] = useState<OllamaModel[]>([]);
   const [running, setRunning] = useState<RunningModel[]>([]);
-  const [checkpoints, setCheckpoints] = useState<string[]>([]);
-  const [loras, setLoras] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [voiceTick, setVoiceTick] = useState(0);
   const [modelsDir, setModelsDirState] = useState(savedModelsDir());
   const [history, setHistory] = usePersisted<ArenaRecord[]>('lotus.arena.history.v1', []);
   const up = engines.ollama.up;
-  const comfyUp = engines.comfyui.up;
+  const useOllama = settings?.llmBackend === 'ollama';
 
   const setModelsDir = (p: string) => { setSavedModelsDir(p); setModelsDirState(p); };
   useEffect(() => { if (!modelsDir) void findModelsDir().then((d) => d && setModelsDirState(d)); }, [modelsDir]);
@@ -331,22 +330,15 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
   }, [up]);
   useEffect(refresh, [refresh]);
 
-  const refreshImages = useCallback(() => {
-    if (!comfyUp) { setCheckpoints([]); setLoras([]); return; }
-    void comfy.checkpoints().then(setCheckpoints).catch(() => setCheckpoints([]));
-    void comfy.loras().then(setLoras);
-  }, [comfyUp]);
-  useEffect(refreshImages, [refreshImages]);
-  useEffect(() => { window.addEventListener('focus', refreshImages); return () => window.removeEventListener('focus', refreshImages); }, [refreshImages]);
-
   const pull = usePull(refresh);
-  const files = useFileDownloads(refreshImages);
+  const files = useFileDownloads(() => undefined);
 
   const sel = installed.find((m) => m.name === selected);
   const wins = useMemo(() => { const m = new Map<string, { w: number; n: number; tps: number[] }>(); history.forEach((h) => h.results.forEach((r) => { const e = m.get(r.model) ?? { w: 0, n: 0, tps: [] }; e.n++; if (h.winner === r.model) e.w++; if (r.tps) e.tps.push(r.tps); m.set(r.model, e); })); return [...m.entries()].sort((a, b) => b[1].w - a[1].w); }, [history]);
 
   const modes = [
-    { id: 'hub' as const, label: 'Browse & install', icon: <Boxes className="w-4 h-4" /> },
+    { id: 'hub' as const, label: 'Get Models', icon: <Boxes className="w-4 h-4" /> },
+    { id: 'setups' as const, label: 'Image Setups', icon: <Layers className="w-4 h-4" /> },
     { id: 'arena' as const, label: 'Arena & Benchmark', icon: <Swords className="w-4 h-4" /> },
     { id: 'monitor' as const, label: 'Hardware & Runtime', icon: <Activity className="w-4 h-4" /> },
   ];
@@ -356,7 +348,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Models">
         <div className="p-3 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setAddOpen(true)}>Add Model…</Btn>
+          {useOllama && <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setAddOpen(true)}>Add Ollama Model…</Btn>}
           <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
             <input type="search" aria-label="Search models and benchmark history" placeholder="Search models" value={q} onChange={(e) => setQ(e.target.value)} className="w-full h-7 pl-8 pr-2 rounded-[6px] bg-[var(--hover)] text-[13px] placeholder:text-[var(--color-text-muted)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" /></div>
         </div>
@@ -365,8 +357,8 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
         </nav>
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3">
           {mode === 'hub' && (<>
-            <h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Model type</h3>
-            <nav className="space-y-0.5" aria-label="Model type">
+            <h3 className="px-1.5 mb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Show</h3>
+            <nav className="space-y-0.5" aria-label="Kind of model">
               {KINDS.map((k) => <button key={k.id} type="button" aria-current={kind === k.id ? 'true' : undefined} onClick={() => setKind(k.id)} className={navBtn(kind === k.id)}>{k.icon}{k.label}</button>)}
             </nav>
           </>)}
@@ -378,21 +370,19 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
             {!history.length && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)]">Run a comparison and pick a winner to start a history.</p>}
           </>)}
           {mode === 'monitor' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">Readings update every two seconds while this page is open. Hover a chart to see a moment.</p>}
+          {mode === 'setups' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">A setup ties an image model to its own VAE, text encoders and settings.</p>}
         </div>
       </SidebarPane>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {mode === 'hub' && (
           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
-            <ActiveDownloads pull={pull} files={files} />
-            {kind === 'language' && <Hub q={q} installed={installed} running={running} refresh={refresh} pull={pull} vramGb={gpuTotalGb} ollamaUp={up} selected={selected} onSelect={setSelected} onOpenEngines={onOpenEngines} />}
-            {(kind === 'image' || kind === 'lora') && (
-              <ImageModelsHub folder={kind === 'image' ? 'checkpoints' : 'loras'} names={(kind === 'image' ? checkpoints : loras).filter((n) => !q.trim() || n.toLowerCase().includes(q.trim().toLowerCase()))}
-                comfyUp={comfyUp} modelsDir={modelsDir} onModelsDir={setModelsDir} onAdd={() => setAddOpen(true)} onOpenEngines={onOpenEngines} />
-            )}
-            {kind === 'voice' && <VoiceModelsHub up={engines.voicebox.up} refreshKey={voiceTick} onOpenEngines={onOpenEngines} onAdd={() => setAddOpen(true)} />}
+            {useOllama && <ActiveDownloads pull={pull} files={files} />}
+            {settings && <ModelLibrary kind={kind} q={q} settings={settings} ollamaUp={up} voiceboxUp={engines.voicebox.up} pullOllama={(t) => void pull.start(t)} pulling={pull.name} />}
+            {useOllama && (kind === 'all' || kind === 'chat') && <Hub q={q} installed={installed} running={running} refresh={refresh} pull={pull} vramGb={gpuTotalGb} ollamaUp={up} selected={selected} onSelect={setSelected} onOpenEngines={onOpenEngines} installedOnly />}
           </div>
         )}
+        {mode === 'setups' && <div className="flex-1 min-h-0 overflow-y-auto p-6"><ImageSetups q={q} /></div>}
         {mode === 'arena' && <Arena installed={installed} history={history} setHistory={setHistory} ollamaUp={up} />}
         {mode === 'monitor' && <Monitor engines={engines} />}
       </div>
@@ -406,7 +396,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
           </Section>
         </InspectorPane>
       )}
-      {mode === 'hub' && kind === 'language' && (
+      {mode === 'hub' && useOllama && kind === 'chat' && (
         <InspectorPane label="Model details">
           {sel ? (
             <Section title={sel.name}>
@@ -419,10 +409,10 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
         </InspectorPane>
       )}
 
-      <AddModelDialog open={addOpen} onClose={() => setAddOpen(false)} initialKind={mode === 'hub' ? kind : 'language'}
+      {useOllama && <AddModelDialog open={addOpen} onClose={() => setAddOpen(false)} initialKind="language"
         startPull={(n) => void pull.start(n)} pulling={!!pull.name} files={files} modelsDir={modelsDir} onModelsDir={setModelsDir}
-        onVoiceDownload={async (n) => { await voicebox.downloadModel(n); setVoiceTick((t) => t + 1); }}
-        onStarted={(k) => { setMode('hub'); setKind(k); }} />
+        onVoiceDownload={async (n) => { await voicebox.downloadModel(n); }}
+        onStarted={() => { setMode('hub'); setKind('chat'); }} />}
     </div>
   );
 };

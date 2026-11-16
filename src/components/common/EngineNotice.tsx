@@ -4,6 +4,7 @@ import { isRemote } from '../../services/engineConfig';
 import { savedExe } from '../../services/engineControl';
 import type { useEngines } from '../../hooks/useEngines';
 import { Btn, Spinner, cx } from './ui';
+import { useBuiltins, type BuiltinId } from '../../lib/builtins';
 
 /*
  * Engine status where it matters (session 13, HIG Feedback: "integrate status near the items it
@@ -12,7 +13,7 @@ import { Btn, Spinner, cx } from './ui';
  */
 
 type Engines = ReturnType<typeof useEngines>;
-interface Ctx { eng: Engines; openEngines: () => void }
+interface Ctx { eng: Engines; openEngines: () => void; openModels?: () => void }
 export const EnginesContext = createContext<Ctx | null>(null);
 
 export const ENGINE_NAMES: Record<EngineId, string> = { ollama: 'Ollama', comfyui: 'ComfyUI', voicebox: 'Voicebox' };
@@ -46,6 +47,32 @@ export const EngineNotice: React.FC<{
       {ctx && !starting && (startable && !problem
         ? <Btn size="sm" onClick={() => void ctx.eng.start(id)}>Start {name}</Btn>
         : <Btn size="sm" onClick={ctx.openEngines}>Open Engines</Btn>)}
+    </div>
+  );
+};
+
+/**
+ * The same line for Lotus's own engines (session 17): nothing to start, but the engine or a model
+ * may still need downloading. Shows the download's progress while it runs.
+ */
+export const BuiltinNotice: React.FC<{ kind: 'chat' | 'image' | 'voice'; purpose: string; className?: string }> = ({ kind, purpose, className }) => {
+  const ctx = useContext(EnginesContext);
+  const b = useBuiltins();
+  const engine: BuiltinId = kind === 'chat' ? 'llama' : kind === 'image' ? 'sd' : 'sherpa';
+  const word = kind === 'chat' ? 'chat' : kind === 'image' ? 'image' : 'voice';
+  const installed = b.engines.find((e) => e.id === engine)?.installed;
+  const job = b.jobs.find((j) => j.state === 'running' && (j.target === `engine:${engine}` || (j.kind === 'model' && b.loaded)));
+  const pct = job && job.total ? ` ${Math.round((job.done / job.total) * 100)}%` : '';
+  const text = job ? `Downloading ${job.label}…${pct}`
+    : !b.available ? `Lotus's own ${word} engine needs the Lotus core, which isn't running.`
+    : !installed ? `Lotus's ${word} engine isn't installed yet. Get it and a model ${purpose}.`
+    : kind === 'image' ? 'No image model is ready. Get one, or finish its setup, in Models.'
+    : `No ${word} model yet. Get one ${purpose}.`;
+  return (
+    <div role="status" className={cx('flex items-center gap-2 min-h-7 text-[12px] text-[var(--color-text-muted)]', className)}>
+      {job ? <Spinner className="w-3 h-3 shrink-0" /> : <span aria-hidden="true" className="w-2 h-2 rounded-full shrink-0 bg-[var(--color-text-muted)] opacity-60" />}
+      <span className="min-w-0">{text}</span>
+      {ctx?.openModels && !job && b.available && <Btn size="sm" onClick={ctx.openModels}>Get Models</Btn>}
     </div>
   );
 };

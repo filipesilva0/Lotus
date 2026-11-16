@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCommand } from '../../lib/commands';
-import { EngineNotice } from '../common/EngineNotice';
+import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { AlarmClock, BookOpen, Bot, Cpu, SquareKanban, Plus, X } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { tasks as store, useTasks } from '../../tasks/store';
@@ -83,6 +83,7 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
       </ToolbarContent>
 
       {ollamaUp === false && settings.llmBackend === 'ollama' && <EngineNotice id="ollama" purpose="" note="Lotus can't work on tasks or run routines until it starts. You can still plan on the board." className="px-4 pt-2" />}
+      {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="so Lotus can work on tasks" className="px-4 pt-2" />}
       {notice && <div className="px-4 pt-3"><Banner tone="warn" action={<Btn size="sm" onClick={store.clearNotice}>OK</Btn>}>{notice}</Banner></div>}
 
       {tab === 'board' && (

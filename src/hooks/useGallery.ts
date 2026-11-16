@@ -6,6 +6,8 @@ import { loadMedia, saveMedia } from '../lib/core';
 import { kv, storeMode } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
+import { builtinGenerate } from '../services/builtinImages';
+import { settingsFor, sizeFor, type ImageProfile } from '../models/imageProfiles';
 
 export interface GenSession {
   id: string; title: string; ts: number; pinned?: boolean; folderId?: string;
@@ -17,6 +19,8 @@ export interface ImageParams {
   sampler: string; scheduler: string; seed: number | null; denoise: number;
   /** LoRAs to apply (optional; saved settings from older versions have none). */
   loras?: LoraUse[];
+  /** Built-in engine (session 17): the image setup to use (models/imageProfiles.ts). */
+  profile?: string;
 }
 
 export const DEFAULT_PARAMS: ImageParams = {
@@ -61,7 +65,7 @@ const blank = (): GenSession => ({ id: uid('gen'), title: 'New generation', ts: 
 
 export type Gallery = ReturnType<typeof useGallery>;
 
-export function useGallery(comfyUp: boolean | null) {
+export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui' = 'comfyui', profiles: ImageProfile[] = []) {
   const [sessions, setSessions] = useState<GenSession[]>([blank()]);
   const [activeId, setActiveId] = useState<string>(sessions[0].id);
   const [loaded, setLoaded] = useState(false);
@@ -173,15 +177,17 @@ export function useGallery(comfyUp: boolean | null) {
   const removeVersion = useCallback((id: string, vid: string) => patch(id, (s) => { const versions = s.versions.filter((v) => v.id !== vid); return { ...s, versions, index: Math.min(s.index, Math.max(0, versions.length - 1)) }; }), [patch]);
 
   /** Runs one ComfyUI job and files the results into the active session as new versions. */
-  const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal) => Promise<ComfyBatch>) => {
+  const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal, onStep: (step: number, total: number) => void) => Promise<Omit<ComfyBatch, 'items'> & { items: { blob: Blob; url: string; file?: string }[] }>) => {
     const sid = activeRef.current;
     const c = new AbortController(); ctrl.current = c;
     setBusy(true); setBusyId(sid); setError(null); setLabel(title);
     const id = uid('img');
     reportActivity({ id, kind: 'image', label: 'Image' });
     try {
-      const r = await job((ms, q) => reportActivity({ id, kind: 'image', label: q ? 'Queued' : `${Math.floor(ms / 1000)}s` }), c.signal);
-      const made: GeneratedImage[] = r.items.map((it, k) => ({ ...meta, id: `${id}-${k}`, url: it.url, blob: it.blob, seed: r.seed, generationTimeSec: r.generationTimeSec, timestamp: stamp(), kind: what }));
+      const r = await job((ms, q) => reportActivity({ id, kind: 'image', label: q ? 'Queued' : `${Math.floor(ms / 1000)}s` }), c.signal,
+        (step, total) => { setLabel(`${title} · step ${step} of ${total}`); reportActivity({ id, kind: 'image', label: `${step}/${total}`, progress: step / total }); });
+      // Images from the built-in engine are already files in Lotus Studio/Images (`file`), so they are not saved twice.
+      const made: GeneratedImage[] = r.items.map((it, k) => ({ ...meta, id: `${id}-${k}`, url: it.url, blob: it.blob, file: it.file, seed: r.seed, generationTimeSec: r.generationTimeSec, timestamp: stamp(), kind: what }));
       patch(sid, (s) => ({
         ...s, ts: Date.now(), title: s.versions.length ? s.title : meta.prompt.slice(0, 40) || 'Untitled',
         versions: [...s.versions, ...made], index: s.versions.length,
@@ -203,7 +209,22 @@ export function useGallery(comfyUp: boolean | null) {
   };
   const metaOf = (prompt: string, p: ImageParams, w: number, h: number) => ({ prompt, negativePrompt: p.negative, steps: p.steps, cfg: p.cfg, dimensions: `${w}×${h}`, checkpoint: p.checkpoint, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined });
 
+  /** The image setup a run uses with the built-in engine (the picked one, else the first complete one). */
+  const profileFor = (p: ImageParams) => profiles.find((x) => x.id === p.profile) ?? profiles[0];
+  const builtinRun = (what: GeneratedImage['kind'], title: string, prompt: string, p: ImageParams, o: { reference?: Blob | string; strength?: number; width?: number; height?: number } = {}) => {
+    const prof = profileFor(p);
+    if (!prof) { setError('No image model is ready. Get one in Settings → Models, or finish its setup there.'); return Promise.resolve(); }
+    const st = settingsFor(prof);
+    const size = o.width && o.height ? { width: o.width, height: o.height } : sizeFor(p.aspect, prof);
+    const steps = st.locked ? st.steps : p.steps, cfg = st.locked ? st.cfg : p.cfg;
+    setInfo({ width: size.width, height: size.height, checkpoint: prof.name, steps, sampler: st.locked ? st.sampler : p.sampler });
+    return run(what, title, { prompt, negativePrompt: p.negative, steps, cfg, dimensions: `${size.width}×${size.height}`, checkpoint: prof.name, profile: prof.id, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined, denoise: o.reference ? (o.strength ?? p.denoise) : undefined },
+      (_tick, signal, onStep) => builtinGenerate(prof, { prompt, negative: p.negative, ...size, seed: p.seed ?? undefined, count: p.count, steps, cfg, sampler: p.sampler, scheduler: p.scheduler, loras: p.loras?.filter((l) => l.name), reference: o.reference, strength: o.strength }, { signal, onStep }));
+  };
+  const needsComfy = (what: string) => { setError(`${what} needs ComfyUI for now. Switch Images to ComfyUI in Settings → Engines, or use Variations.`); return Promise.resolve(); };
+
   const generate = (prompt: string, p: ImageParams, reference?: Blob) => {
+    if (engine === 'builtin') return builtinRun(reference ? 'img2img' : 'txt2img', 'Generating', prompt, p, { reference, strength: reference ? p.denoise : undefined });
     const inp = input(prompt, p);
     return run(reference ? 'img2img' : 'txt2img', 'Generating', { ...metaOf(prompt, p, inp.width, inp.height), denoise: reference ? p.denoise : undefined },
       (tick, signal) => (reference ? comfy.img2img({ ...inp, signal, onTick: tick }, reference, p.denoise) : comfy.txt2img({ ...inp, signal, onTick: tick })));
@@ -212,23 +233,27 @@ export function useGallery(comfyUp: boolean | null) {
   /** Same prompt, new seeds, nudged from the chosen image (img2img at moderate denoise). */
   const variation = (img: GeneratedImage, p: ImageParams) => {
     const [w, h] = img.dimensions.split('×').map(Number);
+    if (engine === 'builtin') return builtinRun('variation', 'Making variations', img.prompt, { ...p, seed: null, count: Math.min(p.count, 4), profile: img.profile ?? p.profile }, { reference: img.file ?? img.blob, strength: 0.55, width: w, height: h });
     const inp = { ...input(img.prompt, { ...p, seed: null, count: Math.min(p.count, 4), checkpoint: img.checkpoint }, { width: w, height: h }) };
     return run('variation', 'Making variations', { ...metaOf(img.prompt, p, w, h), checkpoint: img.checkpoint, denoise: 0.55 }, (tick, signal) => comfy.img2img({ ...inp, signal, onTick: tick }, img.blob!, 0.55));
   };
 
   const upscale = (img: GeneratedImage, factor: 2 | 4) => {
+    if (engine === 'builtin') return needsComfy('Upscaling');
     const [w, h] = img.dimensions.split('×').map(Number);
     return run('upscale', `Upscaling ×${factor}`, { prompt: img.prompt, negativePrompt: img.negativePrompt, steps: img.steps, cfg: img.cfg, dimensions: `${w * factor}×${h * factor}`, checkpoint: img.checkpoint },
       (tick, signal) => comfy.upscale(img.blob!, factor, signal, tick).then((r) => ({ ...r, seed: img.seed })));
   };
 
   const inpaint = (img: GeneratedImage, maskedPng: Blob, prompt: string, p: ImageParams) => {
+    if (engine === 'builtin') return needsComfy('Inpainting');
     const [w, h] = img.dimensions.split('×').map(Number);
     const inp = input(prompt, { ...p, checkpoint: img.checkpoint, count: 1 }, { width: w, height: h });
     return run('inpaint', 'Inpainting', { ...metaOf(prompt, p, w, h), checkpoint: img.checkpoint }, (tick, signal) => comfy.inpaint({ ...inp, signal, onTick: tick }, maskedPng));
   };
 
   const outpaint = (img: GeneratedImage, pad: { left: number; top: number; right: number; bottom: number }, prompt: string, p: ImageParams) => {
+    if (engine === 'builtin') return needsComfy('Extending the canvas');
     const [w, h] = img.dimensions.split('×').map(Number);
     const nw = w + pad.left + pad.right, nh = h + pad.top + pad.bottom;
     const inp = input(prompt, { ...p, checkpoint: img.checkpoint, count: 1 }, { width: nw, height: nh });
@@ -239,6 +264,6 @@ export function useGallery(comfyUp: boolean | null) {
   const stepVersion = (d: -1 | 1) => patch(active.id, (s) => ({ ...s, index: Math.min(s.versions.length - 1, Math.max(0, s.index + d)) }));
   const selectVersion = (i: number) => patch(active.id, (s) => ({ ...s, index: i }));
 
-  return { sessions, active, activeId: active.id, setActiveId, current, busy, busyId, label, elapsed, error: error ?? saveError, info, comfyUp,
+  return { sessions, active, activeId: active.id, setActiveId, current, busy, busyId, label, elapsed, error: error ?? saveError, info, comfyUp, engine,
     newSession, remove, removeVersion, patch, generate, variation, upscale, inpaint, outpaint, cancel, stepVersion, selectVersion, setError };
 }

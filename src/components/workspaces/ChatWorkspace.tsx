@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { offerUndo, flushUndo } from '../common/Alerts';
-import { EngineNotice } from '../common/EngineNotice';
+import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { BrainCircuit, EyeOff, Sparkles } from 'lucide-react';
 import { useProjectContext } from '../../context/discover';
 import { hardware, useHardware } from '../../hardware/monitor';
@@ -174,7 +174,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
             onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)}
             onStep={(id, step, allow) => chat.decideAgentStep(id, step, allow)} />
         )}
-        {offline && <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />}
+        {offline && (settings.llmBackend === 'builtin' ? <BuiltinNotice kind="chat" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" /> : <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />)}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
           models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels}
           onAttachFolder={attachFolder} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}

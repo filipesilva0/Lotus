@@ -140,8 +140,8 @@ async function tick(): Promise<void> {
   }
   let lp: LlamaCppProps | null = null;
   if (s.llmBackend === 'llamacpp') lp = await llamacpp.props().catch(() => null);
-  const plan = planScale({ hw, model, reserveMb: s.vramReserveMb, maxSubagents: s.maxSubagents, manualCtx: s.contextWindow, autoScale: s.autoScale, backend: s.llmBackend, llamacpp: lp });
-  const agentModel = s.llmBackend === 'llamacpp' ? s.selectedModel : pickAgentModel(plan, s.selectedModel, installed, hw, s.vramReserveMb);
+  const plan = planScale({ hw, model, reserveMb: s.vramReserveMb, maxSubagents: s.maxSubagents, manualCtx: s.contextWindow, autoScale: s.autoScale, backend: s.llmBackend === 'ollama' ? 'ollama' : 'llamacpp', llamacpp: lp });
+  const agentModel = s.llmBackend !== 'ollama' ? s.selectedModel : pickAgentModel(plan, s.selectedModel, installed, hw, s.vramReserveMb);
   set({ hw, model, llamacpp: lp, plan, agentModel, installed, caps, updatedAt: Date.now() });
 }
 

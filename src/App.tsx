@@ -48,6 +48,8 @@ import { isTauri } from './lib/http';
 import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
 import { kv } from './lib/store';
+import { engineReady, hasImageFile, useBuiltins, useProfiles } from './lib/builtins';
+import { missingFor } from './models/imageProfiles';
 
 import { DEFAULT_DENY } from './agents/toolDefaults';
 const SETTINGS_KEY = 'lotus.settings.v1';
@@ -84,7 +86,12 @@ const DEFAULT_SETTINGS: LotusSettings = {
   density: 'comfortable',
   fontFamily: 'jakarta',
   fontSize: 'md',
-  llmBackend: 'ollama',
+  llmBackend: 'builtin',
+  imageEngine: 'builtin',
+  voiceEngine: 'builtin',
+  builtinVoice: '',
+  builtinSpeaker: 0,
+  builtinDictation: '',
   llamacppUrl: 'http://127.0.0.1:8080',
   autoScale: true,
   vramReserveMb: 1024,
@@ -114,7 +121,13 @@ function load<T>(key: string, fallback: T): T {
 
 /** Saved settings from before session 8 carry `darkMode` / `palette`; drop them (appearance now defaults to Auto). */
 function loadSettings(): LotusSettings {
+  const raw = kv.getItem(SETTINGS_KEY);
   const { darkMode: _d, palette: _p, ...saved } = load<Partial<LotusSettings> & { darkMode?: boolean; palette?: string }>(SETTINGS_KEY, {});
+  // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
+  // Settings → Engines switches them to the built-in ones.
+  if (raw && saved.imageEngine === undefined) {
+    return { ...DEFAULT_SETTINGS, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox', ...saved };
+  }
   return { ...DEFAULT_SETTINGS, ...saved };
 }
 
@@ -212,8 +225,15 @@ export default function App() {
 
   const eng = useEngines();
   const updates = useUpdates();
-  const ollamaUp = eng.engines.ollama.up;
-  const comfyUp = eng.engines.comfyui.up;
+  const builtins = useBuiltins();
+  const [profiles] = useProfiles();
+  const builtinChat = settings.llmBackend === 'builtin';
+  const builtinImages = settings.imageEngine === 'builtin';
+  const builtinChatModels = builtins.models.filter((m) => m.kind === 'chat');
+  // "Up" means: ready to answer. For the built-in engines that is "installed, with a model".
+  const ollamaUp = builtinChat ? (builtins.loaded ? engineReady(builtins, 'llama') && builtinChatModels.length > 0 : null) : eng.engines.ollama.up;
+  const readyProfiles = profiles.filter((p) => !missingFor(p, hasImageFile(builtins.imageFiles)).length);
+  const comfyUp = builtinImages ? (builtins.loaded ? engineReady(builtins, 'sd') && readyProfiles.length > 0 : null) : eng.engines.comfyui.up;
 
   // Code outside React (agent pool, VRAM monitor, scheduler, learning) reads the current settings from here.
   setLiveSettings(settings);
@@ -221,7 +241,7 @@ export default function App() {
   // Deep research lives in Chat, but its runs belong to the app so they keep going on other pages.
   const research = useResearch({ model: settings.selectedModel });
   // Images too: a generation keeps running and lands in its row while you use other pages.
-  const gallery = useGallery(comfyUp);
+  const gallery = useGallery(comfyUp, builtinImages ? 'builtin' : 'comfyui', readyProfiles);
   // Work runs too (session 16), and spoken questions / permission prompts when voice is on.
   const work = useWork(settings);
   useEffect(() => { startVoiceController(); }, []);
@@ -258,17 +278,23 @@ export default function App() {
   const chatModelsDone = useSetupJobs().filter((j) => j.engine === 'ollama' && j.status === 'done').length;
   const imageFilesDone = useSetupJobs().filter((j) => j.engine === 'comfyui' && j.status === 'done').length;
   useEffect(() => {
-    if (!ollamaUp) return;
+    if (!builtinChat) return;
+    const list = builtinChatModels;
+    setModels(list.map((m) => ({ id: m.id, name: m.title, tag: m.custom ? 'Added by you' : 'Built in' })));
+    setSettings((s) => (list.length && !list.some((m) => m.id === s.selectedModel) ? { ...s, selectedModel: list[0].id } : s));
+  }, [builtinChat, builtinChatModels.map((m) => m.id).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!ollamaUp || builtinChat) return;
     ollamaClient.listModels().then((list) => {
       setModels(list.map((m) => ({ id: m.name, name: m.name, tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
       setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
     }).catch(() => undefined);
-  }, [ollamaUp, chatModelsDone]);
+  }, [ollamaUp, chatModelsDone, builtinChat]);
   useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp, imageFilesDone]);
 
   // ── Messages from other windows ───────────────────────────────────────────
   const openEngines = useCallback((tab: 'engines' | 'models' = 'engines') => { setEnginesTab(tab); setCurrentView('engines'); }, []);
-  const enginesCtx = useMemo(() => ({ eng, openEngines: () => openEngines('engines') }), [eng, openEngines]);
+  const enginesCtx = useMemo(() => ({ eng, openEngines: () => openEngines('engines'), openModels: () => openEngines('models') }), [eng, openEngines]);
 
   useEffect(() => {
     const offs: (() => void)[] = [];
@@ -414,9 +440,9 @@ export default function App() {
             research={research} onOpenEngines={() => openEngines('models')} />
         )}
 
-        {currentView === 'images' && <ImageWorkspace g={gallery} checkpoints={checkpoints} comfyUp={comfyUp} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
+        {currentView === 'images' && <ImageWorkspace g={gallery} checkpoints={checkpoints} comfyUp={comfyUp} builtin={builtinImages} profiles={readyProfiles} builtinLoras={builtins.imageFiles.loras.map((f) => f.file)} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
-        {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} />}
+        {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} onOpenModels={() => openEngines('models')} />}
 
 
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}

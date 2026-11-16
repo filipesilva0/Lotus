@@ -1,26 +1,41 @@
-// One door to the local language model, whichever server the user runs (Settings → Models):
-// Ollama (default) or llama.cpp's llama-server. Chat, Thinking mode, background agents, memory
-// learning, skills, tasks and routines all call through here.
+// One door to the local language model, whichever server the user runs (Settings → Engines):
+// Lotus's own llama.cpp (built in, session 17: the core starts llama-server with the chosen model),
+// Ollama, or a llama-server the user runs. Chat, Thinking mode, background agents, memory learning,
+// skills, tasks and routines all call through here.
 
 import { ChatOptions, ChatStats, ChatTurn, ollamaClient } from './ollamaService';
 import { LlamaCppService } from './llamacppService';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
+import { builtinsNow, ensureChat } from '../lib/builtins';
 
-export const llamacpp = new LlamaCppService(() => (hasLiveSettings() ? liveSettings().llamacppUrl : 'http://127.0.0.1:8080'));
+let builtinUrl = '';
+export const llamacpp = new LlamaCppService(() => (backend() === 'builtin' ? builtinUrl : hasLiveSettings() ? liveSettings().llamacppUrl : 'http://127.0.0.1:8080'));
 
-export const backend = (): 'ollama' | 'llamacpp' => (hasLiveSettings() ? liveSettings().llmBackend : 'ollama');
+export const backend = (): 'builtin' | 'ollama' | 'llamacpp' => (hasLiveSettings() ? liveSettings().llmBackend : 'ollama');
+
+/** The built-in engine loads the model on first use (and swaps when another model is asked for). */
+async function ready(model: string) {
+  if (backend() !== 'builtin') return;
+  builtinUrl = await ensureChat(model, (hasLiveSettings() && liveSettings().contextWindow) || undefined);
+}
 
 export const llm = {
-  name: () => (backend() === 'llamacpp' ? 'llama-server' : 'Ollama'),
+  name: () => (backend() === 'builtin' ? 'Lotus' : backend() === 'llamacpp' ? 'llama-server' : 'Ollama'),
   streamChat(turns: ChatTurn[], o: ChatOptions, onStats?: (s: ChatStats) => void): AsyncGenerator<string, void, unknown> {
-    if (backend() === 'llamacpp') { const { think: _t, ...rest } = o; return llamacpp.streamChat(turns, rest, onStats); }
+    if (backend() !== 'ollama') {
+      const { think: _t, ...rest } = o;
+      return (async function* () { await ready(o.model); yield* llamacpp.streamChat(turns, rest, onStats); })();
+    }
     return ollamaClient.streamChat(turns, o, onStats);
   },
-  chatOnce(turns: ChatTurn[], o: ChatOptions & { json?: boolean }) {
-    if (backend() === 'llamacpp') { const { think: _t, ...rest } = o; return llamacpp.chatOnce(turns, rest); }
+  async chatOnce(turns: ChatTurn[], o: ChatOptions & { json?: boolean }) {
+    if (backend() !== 'ollama') { const { think: _t, ...rest } = o; await ready(o.model); return llamacpp.chatOnce(turns, rest); }
     return ollamaClient.chatOnce(turns, o);
   },
-  checkHealth: () => (backend() === 'llamacpp' ? llamacpp.checkHealth() : ollamaClient.checkHealth()),
+  checkHealth: async () => {
+    if (backend() === 'builtin') { const s = builtinsNow(); return s.engines.some((e) => e.id === 'llama' && e.installed) && s.models.some((m) => m.kind === 'chat'); }
+    return backend() === 'llamacpp' ? llamacpp.checkHealth() : ollamaClient.checkHealth();
+  },
 };
 
 /** Pulls the first JSON object or array out of a model reply (tolerates prose and code fences around it). */

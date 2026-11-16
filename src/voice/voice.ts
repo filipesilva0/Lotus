@@ -1,9 +1,10 @@
 // Talking with Lotus (session 16).
 //
-//   speak(text)   Voicebox when it is running (your chosen voice), otherwise the system's own voice
-//                 (Windows/macOS speech through the web view). Resolves when it has finished.
-//   listen()      records until you stop talking (a short silence after speech), then transcribes
-//                 with Voicebox's Whisper. Lotus has no other speech-to-text, so this needs Voicebox.
+//   speak(text)   Lotus's own voice engine when Settings → Engines picks it (session 17: sherpa-onnx with a
+//                 Kokoro or Piper voice), else Voicebox when it is running, otherwise the system's own
+//                 voice (Windows/macOS speech through the web view). Resolves when it has finished.
+//   listen()      records until you stop talking (a short silence after speech), then transcribes with
+//                 the built-in Whisper (session 17) or Voicebox's.
 //   voiceState    'idle' | 'speaking' | 'listening' | 'transcribing', mirrored to the island.
 //
 // Settings (Settings → Voice): voiceNotify speaks agent questions and "done" notices; voiceAnswer
@@ -13,6 +14,57 @@ import { MicRecorder, micErrorMessage } from '../lib/audio';
 import { emitEvent } from '../lib/bus';
 import { kv } from '../lib/store';
 import { voicebox } from '../services/voicebox';
+import { deleteMedia, loadMedia, rpc, saveMedia, type SavedMedia } from '../lib/core';
+import { builtinsNow, refreshBuiltins } from '../lib/builtins';
+
+/** Settings → Engines → Voice, and the built-in voice and dictation models picked there. */
+export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: number; dictation: string; language: string } {
+  let s: Record<string, unknown> = {};
+  try { s = JSON.parse(kv.getItem('lotus.settings.v1') || '{}'); } catch { /* defaults */ }
+  const b = builtinsNow();
+  const voices = b.models.filter((m) => m.kind === 'voice');
+  const dict = b.models.filter((m) => m.kind === 'dictation');
+  const voice = voices.find((m) => m.id === s.builtinVoice)?.id ?? voices[0]?.id ?? '';
+  const dictation = dict.find((m) => m.id === s.builtinDictation)?.id ?? dict[0]?.id ?? '';
+  const LANG: Record<string, string> = { English: 'en', Portuguese: 'pt', Spanish: 'es', French: 'fr', German: 'de', Italian: 'it', Dutch: 'nl', Japanese: 'ja', Chinese: 'zh', Korean: 'ko', Russian: 'ru' };
+  return { on: s.voiceEngine === 'builtin', voice, speaker: typeof s.builtinSpeaker === 'number' ? s.builtinSpeaker : 0, dictation, language: LANG[String(s.whisperLanguage ?? '')] ?? '' };
+}
+
+const builtinReady = (engine: 'sherpa') => builtinsNow().engines.some((e) => e.id === engine && e.installed);
+
+/** Speaks with the built-in engine; returns the saved audio (the caller decides whether to keep it). */
+export async function builtinSpeech(text: string, o: { voice?: string; speaker?: number; speed?: number } = {}): Promise<SavedMedia> {
+  if (!builtinsNow().loaded) await refreshBuiltins();
+  const p = builtinVoicePrefs();
+  const voice = o.voice ?? p.voice;
+  if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
+  if (!voice) throw new Error('No voice is downloaded yet. Get one in Settings → Models.');
+  return rpc<SavedMedia>('tts_builtin', { voice, text, speaker: o.speaker ?? p.speaker, speed: o.speed ?? 1 });
+}
+
+async function viaBuiltin(text: string): Promise<boolean> {
+  if (!builtinVoicePrefs().on) return false;
+  try {
+    const m = await builtinSpeech(text);
+    const url = URL.createObjectURL(await loadMedia(m.path));
+    void deleteMedia(m.path).catch(() => undefined); // spoken notices aren't kept
+    const a = new Audio(url);
+    current = a;
+    await new Promise<void>((done) => { a.onended = () => done(); a.onerror = () => done(); void a.play().catch(() => done()); });
+    URL.revokeObjectURL(url);
+    return true;
+  } catch { return false; }
+}
+
+/** Turns a WAV recording into text with the built-in Whisper. */
+export async function builtinTranscribe(wav: Blob, model?: string): Promise<string> {
+  const p = builtinVoicePrefs();
+  const m = model ?? p.dictation;
+  if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
+  if (!m) throw new Error('No dictation model is downloaded yet. Get Whisper in Settings → Models.');
+  const saved = await saveMedia(wav, 'recording');
+  return (await rpc<{ text: string }>('stt_builtin', { model: m, path: saved.path, language: p.language || undefined })).text.trim();
+}
 
 export type VoiceState = 'idle' | 'speaking' | 'listening' | 'transcribing';
 let state: VoiceState = 'idle';
@@ -72,7 +124,7 @@ export async function speak(text: string, profile = voicePrefs().profile): Promi
   if (!t) return false;
   hush();
   setState('speaking');
-  try { return (await viaVoicebox(t, profile)) || (await viaSystem(t)); } finally { if (state === 'speaking') setState('idle'); }
+  try { return (await viaBuiltin(t)) || (await viaVoicebox(t, profile)) || (await viaSystem(t)); } finally { if (state === 'speaking') setState('idle'); }
 }
 
 /**
@@ -81,7 +133,11 @@ export async function speak(text: string, profile = voicePrefs().profile): Promi
  */
 export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?: number; signal?: AbortSignal } = {}): Promise<string> {
   const maxSec = o.maxSec ?? 30, silenceMs = o.silenceMs ?? 1300, waitSec = o.waitSec ?? 8;
-  if (!(await voicebox.health(1000).then(() => true).catch(() => false))) throw new Error('Spoken answers need Voicebox running (it turns speech into text). Start it in Engines, or type your answer.');
+  const builtin = builtinVoicePrefs();
+  const useBuiltin = builtin.on && builtinReady('sherpa') && !!builtin.dictation;
+  if (!useBuiltin && !(await voicebox.health(1000).then(() => true).catch(() => false))) {
+    throw new Error(builtin.on ? 'Spoken answers need a dictation model. Get Whisper in Settings → Models, or type your answer.' : 'Spoken answers need Voicebox running (it turns speech into text). Start it in Engines, or type your answer.');
+  }
   let heard = false, quietSince = 0;
   let resolveStop: () => void = () => undefined;
   const stopNow = new Promise<void>((r) => { resolveStop = r; });
@@ -101,7 +157,7 @@ export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?:
   setState('transcribing');
   try {
     const r = await rec.stop();
-    return (await voicebox.transcribe(r.wav)).text.trim();
+    return useBuiltin ? await builtinTranscribe(r.wav) : (await voicebox.transcribe(r.wav)).text.trim();
   } finally { setState('idle'); }
 }
 

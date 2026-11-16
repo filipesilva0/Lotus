@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { offerUndo, flushUndo } from '../common/Alerts';
 import { useCommand } from '../../lib/commands';
-import { EngineNotice } from '../common/EngineNotice';
+import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { SlidersHorizontal, Palette, Boxes, Plus, ArrowUp, Check, ChevronDown, Sparkles, ChevronLeft, ChevronRight, Copy, Download, Dices, ImageIcon, Layers, Paintbrush, Shuffle, Square, Trash2, X, ZoomIn, MoveDiagonal, Maximize2 } from 'lucide-react';
 import { GeneratedImage } from '../../types/lotus';
 import { ChatFolder } from '../../types/lotus';
@@ -19,10 +19,13 @@ import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
 import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
+import { FAMILIES, sizeFor, type ImageProfile } from '../../models/imageProfiles';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
-interface Props { g: Gallery; comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void; onOpenModels: () => void }
+interface Props { g: Gallery; comfyUp: boolean | null; checkpoints: string[]; onOpenEngines: () => void; onOpenModels: () => void;
+  /** Session 17: Lotus's own engine makes the images; `profiles` are the complete image setups, `builtinLoras` the LoRA files. */
+  builtin?: boolean; profiles?: ImageProfile[]; builtinLoras?: string[] }
 
 const SLASH = [
   { name: 'ar', args: '<16:9 | 1024x768>', help: 'Aspect ratio or size' },
@@ -33,7 +36,7 @@ const SLASH = [
   { name: 'neg', args: '<text>', help: 'Negative prompt' },
 ];
 
-export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpenEngines, onOpenModels }) => {
+export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpenEngines, onOpenModels, builtin = false, profiles = [], builtinLoras = [] }) => {
   // The gallery lives in App, so a run keeps going (and lands in its row) when you open another page.
   // Its progress shows only on the generation it belongs to; other rows look normal meanwhile.
   const busyHere = g.busy && g.busyId === g.activeId;
@@ -58,22 +61,26 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   const [lists, setLists] = useState<{ samplers: string[]; schedulers: string[] }>({ samplers: [], schedulers: [] });
   const set = (p: Partial<ImageParams>) => setParams((x) => ({ ...x, ...p }));
 
-  useEffect(() => { if (checkpoints.length && !checkpoints.includes(params.checkpoint)) set({ checkpoint: checkpoints[0] }); }, [checkpoints]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!comfyUp) { setStats(null); return; } void comfy.samplers().then(setLists); }, [comfyUp]);
+  useEffect(() => { if (!builtin && checkpoints.length && !checkpoints.includes(params.checkpoint)) set({ checkpoint: checkpoints[0] }); }, [checkpoints, builtin]); // eslint-disable-line react-hooks/exhaustive-deps
+  const profile = builtin ? (profiles.find((p) => p.id === params.profile) ?? profiles[0]) : undefined;
+  useEffect(() => { if (builtin && profiles.length && !profiles.some((p) => p.id === params.profile)) set({ profile: profiles[0].id }); }, [builtin, profiles.map((p) => p.id).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (builtin) setLoraList(builtinLoras); }, [builtin, builtinLoras.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!comfyUp || builtin) { setStats(null); return; } void comfy.samplers().then(setLists); }, [comfyUp, builtin]);
   // LoRAs: read when ComfyUI is up and again whenever the window regains focus (after a download in Models).
   useEffect(() => {
+    if (builtin) return;
     if (!comfyUp) { setLoraList([]); return; }
     const load = () => { void comfy.loras().then(setLoraList); };
     load();
     window.addEventListener('focus', load);
     return () => window.removeEventListener('focus', load);
-  }, [comfyUp]);
+  }, [comfyUp, builtin]);
   // A LoRA that was deleted from disk is dropped from the selection once the list has loaded.
   useEffect(() => {
     if (loraList.length && loras.some((l) => !loraList.includes(l.name))) setParams((x) => ({ ...x, loras: (x.loras ?? []).filter((l) => loraList.includes(l.name)) }));
   }, [loraList]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!comfyUp) return;
+    if (!comfyUp || builtin) return;
     let off = false;
     const tick = () => comfy.stats().then((s) => { if (!off) setStats(s); }).catch(() => undefined);
     void tick(); const t = setInterval(tick, 4000);
@@ -81,7 +88,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   }, [comfyUp]);
 
   const cur = g.current;
-  const dims = useMemo(() => dimensionsFor(params.aspect, params.checkpoint), [params.aspect, params.checkpoint]);
+  const dims = useMemo(() => (profile ? sizeFor(params.aspect, profile) : dimensionsFor(params.aspect, params.checkpoint)), [params.aspect, params.checkpoint, profile]);
   const vramUsed = stats && stats.vramTotalGb ? 1 - stats.vramFreeGb / stats.vramTotalGb : 0;
 
   // ── Prompt deck: / commands and @Style ────────────────────────────────────
@@ -262,7 +269,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 ))}
               </div>
             )}
-            {comfyUp === false && <EngineNotice id="comfyui" purpose="to generate images" className="mb-1.5 px-1" />}
+            {comfyUp === false && (builtin ? <BuiltinNotice kind="image" purpose="to generate images" className="mb-1.5 px-1" /> : <EngineNotice id="comfyui" purpose="to generate images" className="mb-1.5 px-1" />)}
             {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
             <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
               tray={<>
@@ -274,7 +281,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
               </>}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
               <EdgeMeter value={stats && stats.vramTotalGb ? vramUsed : null} label="Video memory in use"
-                title={stats && stats.vramTotalGb ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : 'Start ComfyUI to see video memory'} />
+                title={stats && stats.vramTotalGb ? `${stats.device ?? 'GPU'}: ${(stats.vramTotalGb - stats.vramFreeGb).toFixed(1)} of ${stats.vramTotalGb.toFixed(1)} GB video memory in use` : builtin ? 'Video memory is shown in Models → Hardware & Runtime' : 'Start ComfyUI to see video memory'} />
               {(ref || drag) && (
                 <div className="flex items-center gap-2 px-3.5 pt-3">
                   {ref ? (
@@ -300,6 +307,19 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                   {() => <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />}
                 </Popover>
                 <div className="flex-1" />
+                {builtin ? (
+                  <Popover up align="right" className="w-[300px]" trigger={(o, t) => (
+                    <PickerButton open={o} onClick={t} title="Image model" text={profile?.name || 'No image model'}
+                      chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
+                  )}>
+                    {(close) => (<>
+                      {!profiles.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No image model is ready yet.</p>}
+                      {profiles.map((p) => <MenuItem key={p.id} active={p.id === profile?.id} onClick={() => { set({ profile: p.id }); close(); }}><span className="truncate">{p.name}</span><span className="ml-auto pl-2 text-[12px] opacity-70 shrink-0">{FAMILIES[p.family].label}</span></MenuItem>)}
+                      <div className="my-1 border-t border-[var(--sep)]" />
+                      <MenuItem onClick={() => { close(); onOpenModels(); }}><Boxes className="w-3.5 h-3.5" />Get or Set Up Models…</MenuItem>
+                    </>)}
+                  </Popover>
+                ) : (
                 <Popover up align="right" className="w-[300px]" trigger={(o, t) => (
                   <PickerButton open={o} onClick={t} title="Checkpoint (image model)" text={params.checkpoint || (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}
                     chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
@@ -311,9 +331,10 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                     <MenuItem onClick={() => { close(); onOpenModels(); }}><Boxes className="w-3.5 h-3.5" />Get more models…</MenuItem>
                   </>)}
                 </Popover>
+                )}
                 {g.busy
                   ? <SendButton stop onClick={g.cancel} label="Stop generating" />
-                  : <SendButton disabled={!prompt.trim() || !params.checkpoint || !comfyUp} onClick={go} label="Generate" tip="Generate (Enter)" />}
+                  : <SendButton disabled={!prompt.trim() || (builtin ? !profile : !params.checkpoint) || !comfyUp} onClick={go} label="Generate" tip="Generate (Enter)" />}
               </div>
             </PromptShell>
           </div>

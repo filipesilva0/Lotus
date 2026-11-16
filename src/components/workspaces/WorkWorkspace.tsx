@@ -14,7 +14,7 @@ import { MarkdownLite } from '../../lib/markdownLite';
 import { InspectorPane, MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
 import { Btn, IconBtn, Segmented, cx } from '../common/ui';
 import { ModeButton, PickerButton, PromptShell, SendButton } from '../common/PromptBox';
-import { EngineNotice } from '../common/EngineNotice';
+import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { Tip } from '../common/Tip';
 import { useCommand } from '../../lib/commands';
 import { offerUndo } from '../common/Alerts';
@@ -332,6 +332,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
           <div className="max-w-[760px] mx-auto">
             <AskCard work={work} />
             {ollamaUp === false && settings.llmBackend === 'ollama' && <EngineNotice id="ollama" purpose="to work" className="mb-2" />}
+            {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="to work" className="mb-2" />}
             {!agentAvailable() && <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">Work mode runs in the desktop app (it needs the Lotus core).</p>}
             {notice && <p role="status" className="mb-2 text-[12px] text-[var(--c-orange)]">{notice}</p>}
             <PromptShell tray={<>

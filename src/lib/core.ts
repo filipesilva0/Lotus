@@ -14,7 +14,10 @@ export type CoreEvent =
   | { type: 'hello'; version: string }
   /** Agent run events (lib/agent.ts) and "memory changed" (memory/store.ts). */
   | { type: 'agent'; runId: string; kind: string }
-  | { type: 'memory' };
+  | { type: 'memory' }
+  /** Built-in engines (session 17): download jobs and the chat server; image progress. */
+  | { type: 'builtin'; jobs: unknown[]; chat: unknown }
+  | { type: 'builtin-image'; genId: string; step: number; total: number };
 
 let info: CoreInfo | null = null;
 let lastError: string | null = null;

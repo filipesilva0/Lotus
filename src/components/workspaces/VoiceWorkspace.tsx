@@ -14,10 +14,23 @@ import { startEngine, browseForExe, NeedsExecutable } from '../../services/engin
 import { onEvent } from '../../lib/bus';
 import { voicebox } from '../../services/voicebox';
 import { kv } from '../../lib/store';
+import { BuiltinVoice } from '../voice/BuiltinVoice';
+import type { LotusSettings } from '../../types/lotus';
 
 type Tab = VoiceMode;
 
-export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngines }) => {
+export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void }> = ({ onOpenEngines, settings, onSettings, onOpenModels }) => {
+  if (settings?.voiceEngine === 'builtin' && onSettings) {
+    return (
+      <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] overflow-y-auto">
+        <div className="flex-1 min-w-0"><BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} /></div>
+      </div>
+    );
+  }
+  return <VoiceboxWorkspace onOpenEngines={onOpenEngines} />;
+};
+
+const VoiceboxWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngines }) => {
   const data = useVoiceData();
   const [profile, selectProfile] = useSelectedProfile(data.profiles);
   const [tab, setTab] = useState<Tab>(() => (kv.getItem('lotus.voice.tab') as Tab) || 'speak');

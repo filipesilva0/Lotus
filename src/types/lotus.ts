@@ -137,8 +137,17 @@ export interface LotusSettings {
   fontFamily: FontFamily;
   fontSize: FontSize;
   // ── Local execution layer (session 5) ──
-  /** Which local server answers chat: Ollama, or a llama.cpp `llama-server`. */
-  llmBackend: 'ollama' | 'llamacpp';
+  /** Which local server answers chat: Lotus's own (built in, session 17), Ollama, or a llama.cpp `llama-server` you run. */
+  llmBackend: 'builtin' | 'ollama' | 'llamacpp';
+  /** Which engine makes images: Lotus's own (stable-diffusion.cpp) or ComfyUI. */
+  imageEngine: 'builtin' | 'comfyui';
+  /** Which engine speaks and listens: Lotus's own (sherpa-onnx) or Voicebox. */
+  voiceEngine: 'builtin' | 'voicebox';
+  /** Built-in voice: the voice model id and speaker number. */
+  builtinVoice: string;
+  builtinSpeaker: number;
+  /** Built-in dictation (speech to text) model id. */
+  builtinDictation: string;
   llamacppUrl: string;
   /** Scale context size, chunking and background-agent count to free video memory. */
   autoScale: boolean;
@@ -188,6 +197,8 @@ export interface GeneratedImage {
   /** The image data itself; `url` is an object URL made from it each launch. */
   blob?: Blob;
   /** Where the image is saved, relative to the Lotus Studio folder (`Images/2026-11/….png`). Session 14. */
+  /** Built-in engine: the image setup that made it (session 17). */
+  profile?: string;
   file?: string;
   sampler?: string;
   /** LoRAs used for this image. */
