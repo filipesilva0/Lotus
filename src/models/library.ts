@@ -28,7 +28,11 @@ export interface LibFile { url: string; path: string; gb: number; /** Unpack thi
 export interface HfGguf { repo: string; quant: string; mmproj?: string }
 
 export interface VoiceSpec {
-  engine: 'kokoro' | 'piper' | 'whisper';
+  engine: 'kokoro' | 'piper' | 'whisper' | 'pocket' | 'zipvoice';
+  /** Copies the voice in a reference recording (voice cloning); no speakers of its own. */
+  clones?: boolean;
+  /** Also needs the words spoken in the reference recording (ZipVoice). */
+  needsReferenceText?: boolean;
   /** Speakers in a TTS model (Kokoro has many voices, Piper one or a few). */
   speakers?: { id: number; name: string }[];
   languages: string[];
@@ -122,7 +126,7 @@ export const IMAGE_MODELS: LibEntry[] = [
 
 // ── Voice ──────────────────────────────────────────────────────────────────
 
-const SHERPA = (tag: 'tts-models' | 'asr-models', file: string) => `https://github.com/k2-fsa/sherpa-onnx/releases/download/${tag}/${file}`;
+const SHERPA = (tag: 'tts-models' | 'asr-models' | 'vocoder-models', file: string) => `https://github.com/k2-fsa/sherpa-onnx/releases/download/${tag}/${file}`;
 const voicePick = (id: string) => [...VOICE_PICKS, DICTATION_PICK].find((p) => p.id === id);
 const KOKORO_EN = ['af_alloy', 'af_aoede', 'af_bella', 'af_heart', 'af_jessica', 'af_kore', 'af_nicole', 'af_nova', 'af_river', 'af_sarah', 'af_sky', 'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael', 'am_onyx', 'am_puck', 'am_santa', 'bf_alice', 'bf_emma', 'bf_isabella', 'bf_lily', 'bm_daniel', 'bm_fable', 'bm_george', 'bm_lewis'];
 
@@ -147,6 +151,19 @@ export const VOICE_MODELS: LibEntry[] = [
     blurb: 'A tiny voice for Brazilian Portuguese.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-pt_BR-faber-medium.tar.bz2'), path: 'voice/piper-pt-br-faber', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['pt'] } },
+  // Voice cloning with Lotus's own engine (0.8.2): a few seconds of someone speaking → that voice.
+  // No tier: they can't speak without a recording, so the first-run guide never suggests them.
+  { id: 'pocket-tts', kind: 'voice', title: 'PocketTTS (voice cloning)', maker: 'Kyutai', licence: 'MIT code, CC-BY-4.0 weights', tags: ['Cloning', 'Small'], vramGb: 0, diskGb: 0.2,
+    blurb: 'Copies any voice from a few seconds of clear speech. Small and fast on the processor; English.',
+    builtin: { files: [{ url: SHERPA('tts-models', 'sherpa-onnx-pocket-tts-int8-2026-01-26.tar.bz2'), path: 'voice/pocket-tts', gb: 0.2, archive: true }] },
+    voice: { engine: 'pocket', languages: ['en'], clones: true } },
+  { id: 'zipvoice', kind: 'voice', title: 'ZipVoice (voice cloning)', maker: 'k2-fsa', licence: 'Apache-2.0', tags: ['Cloning', 'Chinese'], vramGb: 0, diskGb: 0.2,
+    blurb: 'Copies a voice from a recording plus its words (Lotus writes them with Whisper). English and Chinese.',
+    builtin: { files: [
+      { url: SHERPA('tts-models', 'sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2'), path: 'voice/zipvoice', gb: 0.15, archive: true },
+      { url: SHERPA('vocoder-models', 'vocos_24khz.onnx'), path: 'voice/zipvoice/vocos_24khz.onnx', gb: 0.05 },
+    ] },
+    voice: { engine: 'zipvoice', languages: ['en', 'zh'], clones: true, needsReferenceText: true } },
   // Voicebox-only voices (cloning) stay listed so the page shows every option in one place.
   ...VOICE_PICKS.filter((p) => p.id !== 'kokoro').map((p): LibEntry => ({ id: p.id, kind: 'voice', tier: p.tier, title: p.title, maker: p.maker, licence: p.licence, blurb: p.blurb, tags: p.clones ? ['Cloning'] : [], vramGb: p.vramGb, diskGb: p.diskGb, voicebox: p.match })),
 ];

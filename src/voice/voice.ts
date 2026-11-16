@@ -33,19 +33,22 @@ export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: numb
 const builtinReady = (engine: 'sherpa') => builtinsNow().engines.some((e) => e.id === engine && e.installed);
 
 /** Speaks with the built-in engine; returns the saved audio (the caller decides whether to keep it). */
-export async function builtinSpeech(text: string, o: { voice?: string; speaker?: number; speed?: number } = {}): Promise<SavedMedia> {
+export async function builtinSpeech(text: string, o: { voice?: string; speaker?: number; speed?: number; reference?: string; referenceText?: string; steps?: number } = {}): Promise<SavedMedia> {
   if (!builtinsNow().loaded) await refreshBuiltins();
   const p = builtinVoicePrefs();
   const voice = o.voice ?? p.voice;
   if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
   if (!voice) throw new Error('No voice is downloaded yet. Get one in Settings → Models.');
-  return rpc<SavedMedia>('tts_builtin', { voice, text, speaker: o.speaker ?? p.speaker, speed: o.speed ?? 1 });
+  return rpc<SavedMedia>('tts_builtin', { voice, text, speaker: o.speaker ?? p.speaker, speed: o.speed ?? 1, reference: o.reference, referenceText: o.referenceText, steps: o.steps });
 }
 
 async function viaBuiltin(text: string): Promise<boolean> {
   if (!builtinVoicePrefs().on) return false;
   try {
-    const m = await builtinSpeech(text);
+    // The voice picked on the Voice page (yours or a built-in speaker, with its effects).
+    const studio = await import('./useStudio');
+    const v = studio.currentVoice();
+    const m = v ? await studio.speakWith(v, text) : await builtinSpeech(text);
     const url = URL.createObjectURL(await loadMedia(m.path));
     void deleteMedia(m.path).catch(() => undefined); // spoken notices aren't kept
     const a = new Audio(url);
@@ -64,6 +67,15 @@ export async function builtinTranscribe(wav: Blob, model?: string): Promise<stri
   if (!m) throw new Error('No dictation model is downloaded yet. Get Whisper in Settings → Models.');
   const saved = await saveMedia(wav, 'recording');
   return (await rpc<{ text: string }>('stt_builtin', { model: m, path: saved.path, language: p.language || undefined })).text.trim();
+}
+
+/** Transcribes audio already saved in Lotus Studio (a voice's reference recording, an uploaded file) and keeps it. */
+export async function builtinTranscribePath(path: string, o: { model?: string; language?: string } = {}): Promise<string> {
+  const p = builtinVoicePrefs();
+  const m = o.model ?? p.dictation;
+  if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
+  if (!m) throw new Error('No dictation model is downloaded yet. Get Whisper in Settings → Models.');
+  return (await rpc<{ text: string }>('stt_builtin', { model: m, path, language: (o.language ?? p.language) || undefined, keep: true })).text.trim();
 }
 
 export type VoiceState = 'idle' | 'speaking' | 'listening' | 'transcribing';

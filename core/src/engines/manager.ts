@@ -571,35 +571,65 @@ export class Builtins {
     return dir;
   }
 
-  /** Arguments for sherpa-onnx-offline-tts for a downloaded Kokoro or Piper voice. */
-  ttsArgs(dir: string, text: string, out: string, speaker = 0, speed = 1): string[] {
+  /**
+   * Arguments for sherpa-onnx-offline-tts for a downloaded voice model:
+   *   Kokoro (voices.bin) and Piper (VITS) speak with their own speakers;
+   *   PocketTTS (lm_main*.onnx) and ZipVoice (lexicon.txt + a Vocos vocoder) copy the voice in a
+   *   reference recording (voice cloning; ZipVoice also needs what is said in it).
+   */
+  ttsArgs(dir: string, text: string, out: string, speaker = 0, speed = 1, ref?: { audio: string; text?: string; steps?: number }): string[] {
     const data = (() => { const f = findFile(dir, ['phontab'], 4); return f ? dirname(f) : ''; })();
     const tokens = findFile(dir, ['tokens.txt'], 3);
     const voices = findFile(dir, ['voices.bin'], 3);
     const scale = String(Math.round((1 / Math.max(0.5, Math.min(2, speed))) * 100) / 100);
+    const onnx = (re: RegExp) => { const all = listFiles(dir, re, 3); return all.find((f) => /int8/i.test(f)) ?? all[0]; };
+    const tail = ['--num-threads=4', `--output-filename=${out}`, text];
+    const pocketMain = onnx(/lm_main.*\.onnx$/i);
+    if (pocketMain) {
+      if (!ref?.audio) throw new Error('PocketTTS copies a voice from a recording. Pick one of your voices, or make one in Voice → Voices.');
+      const need = { flow: onnx(/lm_flow.*\.onnx$/i), enc: onnx(/(^|[\\/])encoder.*\.onnx$/i), dec: onnx(/(^|[\\/])decoder.*\.onnx$/i), cond: onnx(/text_conditioner.*\.onnx$/i), vocab: listFiles(dir, /vocab\.json$/i, 3)[0], scores: listFiles(dir, /token_scores\.json$/i, 3)[0] };
+      if (Object.values(need).some((v) => !v)) throw new Error('That PocketTTS download is incomplete. Remove it in Settings → Models and download it again.');
+      return [`--pocket-lm-flow=${need.flow}`, `--pocket-lm-main=${pocketMain}`, `--pocket-encoder=${need.enc}`, `--pocket-decoder=${need.dec}`, `--pocket-text-conditioner=${need.cond}`,
+        `--pocket-vocab-json=${need.vocab}`, `--pocket-token-scores-json=${need.scores}`, `--reference-audio=${ref.audio}`, `--num-steps=${Math.max(1, Math.min(8, ref.steps ?? 2))}`, ...tail];
+    }
+    const lexicon = listFiles(dir, /lexicon\.txt$/i, 3)[0];
+    const vocoder = listFiles(dir, /vocos.*\.onnx$/i, 3)[0];
+    if (lexicon && vocoder) {
+      if (!ref?.audio) throw new Error('ZipVoice copies a voice from a recording. Pick one of your voices, or make one in Voice → Voices.');
+      if (!ref.text?.trim()) throw new Error('ZipVoice needs the words spoken in the voice\'s recording. Add them in Voice → Voices (Lotus can transcribe them with Whisper).');
+      const enc = onnx(/encoder.*\.onnx$/i), dec = onnx(/decoder.*\.onnx$/i);
+      if (!enc || !dec || !tokens) throw new Error('That ZipVoice download is incomplete. Remove it in Settings → Models and download it again.');
+      return [`--zipvoice-encoder=${enc}`, `--zipvoice-decoder=${dec}`, ...(data ? [`--zipvoice-data-dir=${data}`] : []), `--zipvoice-lexicon=${lexicon}`, `--zipvoice-tokens=${tokens}`,
+        `--zipvoice-vocoder=${vocoder}`, `--reference-audio=${ref.audio}`, `--reference-text=${ref.text.replace(/\s+/g, ' ').trim()}`, `--num-steps=${Math.max(1, Math.min(16, ref.steps ?? 4))}`, ...tail];
+    }
     if (voices) {
       const model = listFiles(dir, /^model.*\.onnx$/i, 3)[0] ?? listFiles(dir, /\.onnx$/i, 3)[0];
       if (!model || !tokens) throw new Error('That Kokoro download is incomplete. Remove it in Settings → Models and download it again.');
-      return [`--kokoro-model=${model}`, `--kokoro-voices=${voices}`, `--kokoro-tokens=${tokens}`, ...(data ? [`--kokoro-data-dir=${data}`] : []), `--kokoro-length-scale=${scale}`, `--sid=${speaker}`, '--num-threads=4', `--output-filename=${out}`, text];
+      return [`--kokoro-model=${model}`, `--kokoro-voices=${voices}`, `--kokoro-tokens=${tokens}`, ...(data ? [`--kokoro-data-dir=${data}`] : []), `--kokoro-length-scale=${scale}`, `--sid=${speaker}`, ...tail];
     }
     const model = listFiles(dir, /\.onnx$/i, 3).find((f) => !/encoder|decoder/i.test(f));
     if (!model || !tokens) throw new Error('That voice download is incomplete. Remove it in Settings → Models and download it again.');
-    return [`--vits-model=${model}`, `--vits-tokens=${tokens}`, ...(data ? [`--vits-data-dir=${data}`] : []), `--vits-length-scale=${scale}`, `--sid=${speaker}`, '--num-threads=4', `--output-filename=${out}`, text];
+    return [`--vits-model=${model}`, `--vits-tokens=${tokens}`, ...(data ? [`--vits-data-dir=${data}`] : []), `--vits-length-scale=${scale}`, `--sid=${speaker}`, ...tail];
   }
 
-  /** Speaks text with a built-in voice; returns the WAV file's path. */
-  async speak(voiceId: string, text: string, o: { speaker?: number; speed?: number; signal?: AbortSignal } = {}): Promise<string> {
+  /** Speaks text with a built-in voice; returns the WAV file's path. `ref` = a reference recording for cloning models. */
+  async speak(voiceId: string, text: string, o: { speaker?: number; speed?: number; signal?: AbortSignal; ref?: { audio: string; text?: string; steps?: number } } = {}): Promise<string> {
     const exe = this.exe('sherpa', 'sherpa-onnx-offline-tts');
     const dir = this.voiceDir(voiceId);
     const out = join(this.enginesDir, ENGINE_DIR.sherpa, 'out', `${now().toString(36)}.wav`);
     mkdirSync(dirname(out), { recursive: true });
     const clean = text.replace(/\s+/g, ' ').trim().slice(0, 4000);
     if (!clean) throw new Error('There is nothing to say.');
-    const args = this.ttsArgs(dir, clean, out, o.speaker ?? 0, o.speed ?? 1);
+    const args = this.ttsArgs(dir, clean, out, o.speaker ?? 0, o.speed ?? 1, o.ref);
     // sherpa-onnx's programs read their arguments as bytes in the system code page on Windows, then
-    // treat them as UTF-8, so "olá" arrived broken (seen on 0.8.0). Pass the text so that the code
-    // page conversion yields its UTF-8 bytes.
-    if (process.platform === 'win32') args[args.length - 1] = argForAnsi(args[args.length - 1], await windowsAnsiCodePage());
+    // treat them as UTF-8, so "olá" arrived broken (seen on 0.8.0). Pass the text (and a reference
+    // transcript) so that the code page conversion yields its UTF-8 bytes.
+    if (process.platform === 'win32') {
+      const cp = await windowsAnsiCodePage();
+      args[args.length - 1] = argForAnsi(args[args.length - 1], cp);
+      const i = args.findIndex((x) => x.startsWith('--reference-text='));
+      if (i >= 0) args[i] = `--reference-text=${argForAnsi(args[i].slice('--reference-text='.length), cp)}`;
+    }
     await this.runTool(exe, args, o.signal);
     if (!existsSync(out)) throw new Error('The built-in voice engine finished without making any audio.');
     return out;

@@ -55,6 +55,11 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
 
+## 0.8.2 map (voice studio with Lotus's own engine)
+- Map: `CURRENT_STATE.md` §0n-voice. Pure logic `voice/studio.ts` (tested in `core/test/s18.test.ts`), Web Audio `voice/render.ts`, state `voice/useStudio.ts`, UI `components/voice/BuiltinVoice.tsx` + `components/voice/studio/*`.
+- Speak through `speakWith(option, text)` (chunks, cloning reference, effects, saving); never call `builtinSpeech` from new UI. New TTS model families need a branch in `manager.ttsArgs` + a catalog entry with `voice.engine` (and `clones` if it needs a recording) + a test in s18.
+- Cloning models have no `tier` (the guide must never suggest a voice that can't speak alone).
+
 ## Session 17 map (built-in engines, one catalog, image setups, Lotus Studio)
 - Map: `CURRENT_STATE.md` §0n. Core: `core/src/engines/*` (`Builtins` in `manager.ts`, RPC in `rpc.ts`). Web: `lib/builtins.ts` (live state, `useBuiltins`, `useProfiles`), `components/models/ModelLibrary.tsx` + `ImageSetups.tsx`, `components/voice/BuiltinVoice.tsx`, `services/builtinImages.ts`.
 - **Every downloadable model goes in `models/library.ts`** with a source per engine; never add another catalog. New image families go in `models/imageProfiles.ts FAMILIES` with their slots, and need both `comfyWiring` and `sdcppArgs` cases plus tests.

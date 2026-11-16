@@ -39,7 +39,7 @@ Lotus's Voice workspace talks to the Voicebox server over its local REST API
 Downloaded from each project's GitHub releases into `Lotus Studio/Engines` when the user installs them (Models page or the first-run guide). Lotus finds the release through `api.github.com` and downloads from `github.com`.
 - **llama.cpp** (llama-server, chat): MIT. https://github.com/ggml-org/llama.cpp (NVIDIA builds come with NVIDIA's CUDA runtime libraries, under NVIDIA's own licence terms, as published by the project).
 - **stable-diffusion.cpp** (sd-cli, images): MIT. https://github.com/leejet/stable-diffusion.cpp
-- **sherpa-onnx** (speech and dictation): Apache-2.0. https://github.com/k2-fsa/sherpa-onnx; its voice and Whisper model archives come from the same project's `tts-models` and `asr-models` releases (Kokoro: Apache-2.0; Piper voices: MIT, each voice with its own dataset licence; Whisper: MIT).
+- **sherpa-onnx** (speech and dictation): Apache-2.0. https://github.com/k2-fsa/sherpa-onnx; its voice and Whisper model archives come from the same project's `tts-models` and `asr-models` releases (Kokoro: Apache-2.0; Piper voices: MIT, each voice with its own dataset licence; Whisper: MIT). Voice cloning (0.8.2): PocketTTS by Kyutai (code MIT, weights CC-BY-4.0, `tts-models`), ZipVoice by k2-fsa (Apache-2.0, `tts-models`) with the Vocos 24 kHz vocoder (MIT, `vocoder-models`).
 - Chat models in GGUF from Hugging Face (unsloth repositories, each model under its maker's licence, shown on the Models page), image models from huggingface.co (Comfy-Org, stabilityai, stable-diffusion-v1-5, madebyollin).
 
 ## Coucou (inspiration for the floating island)

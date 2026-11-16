@@ -14,7 +14,7 @@
 //   comfy_link_models { root? }                 → { files }   (ComfyUI reads Lotus Studio/Models/image)
 //   image_builtin { profile, prompt, … genId }  → { images: MediaRow[], … }   events { type: 'builtin-image', genId, step, total }
 //   image_cancel { genId }
-//   tts_builtin { voice, text, speaker?, speed? } → MediaRow (audio)
+//   tts_builtin { voice, text, speaker?, speed?, reference?, referenceText?, steps? } → MediaRow (audio)   (reference: a media path, for cloning voices)
 //   stt_builtin { model, path, language? }      → { text }      (path: a media file, e.g. Audio/2026-11/x.wav)
 
 import { readFileSync, rmSync } from 'node:fs';
@@ -97,7 +97,13 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
     }
     case 'image_cancel': { imageRuns.get(str(a.genId))?.abort(); return { found: true, value: true }; }
     case 'tts_builtin': {
-      const wav = await b.speak(str(a.voice), str(a.text), { speaker: num(a.speaker, 0), speed: num(a.speed, 1) });
+      let ref: { audio: string; text?: string; steps?: number } | undefined;
+      if (str(a.reference)) {
+        const audio = resolveMedia(studio, str(a.reference));
+        if (!audio) throw new Error('That voice\'s recording is outside the Lotus Studio folder.');
+        ref = { audio, text: str(a.referenceText) || undefined, steps: a.steps === undefined ? undefined : num(a.steps, 0) || undefined };
+      }
+      const wav = await b.speak(str(a.voice), str(a.text), { speaker: num(a.speaker, 0), speed: num(a.speed, 1), ref });
       try { return { found: true, value: await saveMedia(db, studio, readFileSync(wav), 'audio/wav', str(a.text).slice(0, 30) || 'speech') }; }
       finally { try { rmSync(wav, { force: true }); } catch { /* temp */ } }
     }

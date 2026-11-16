@@ -170,6 +170,41 @@ try {
     }
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${shots}/s17-voice-${tag}.png` });
+    // Voice studio (0.8.2): Voices, Stories and Dictate without Voicebox.
+    const nav = (name) => page.click(`nav[aria-label="Voice modes"] >> button:has-text("${name}")`);
+    await nav('Voices');
+    await page.waitForSelector('text=Make a Voice', { timeout: 5000 });
+    ok(`voice studio: cloning offers PocketTTS when no cloning model is there (${tag})`, await page.locator('button:has-text("Get PocketTTS")').isVisible());
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${shots}/s18-voices-new-${tag}.png` });
+    if (!dark) {
+      await page.click('[role="radio"]:has-text("Tune a Built-in Voice")');
+      await page.fill('input[aria-label="Voice name"]', 'Calm Narrator');
+      await page.click('button:has-text("Create Voice")');
+      await page.waitForSelector('text=Try It', { timeout: 5000 });
+      await page.click('button[aria-pressed="false"]:has-text("Warm Narrator")');
+      await page.click('button:has-text("Test")');
+      ok('voice studio: a tuned voice speaks with its effects', await page.waitForSelector('text=0:00', { timeout: 10000 }).then(() => true, () => false));
+      const mine = JSON.parse((await api('/v1/kv')).items['lotus.voice.mine.v1'] ?? '[]');
+      ok('voice studio: the voice and its effects are saved', mine[0]?.name === 'Calm Narrator' && mine[0]?.effects?.bass === 4, JSON.stringify(mine[0]));
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${shots}/s18-voice-detail-${tag}.png` });
+    }
+    await nav('Stories');
+    await page.click('button:has-text("New Story")');
+    if (!dark) {
+      await page.click('button:has-text("Use an Example")');
+      await page.click('button:has-text("Add 4 Lines")');
+      await page.click('button:has-text("Make All")');
+      ok('voice studio: a story makes every line', await page.waitForFunction(() => document.querySelectorAll('[aria-label="Timeline"] button.text-white').length === 4, null, { timeout: 15000 }).then(() => true, () => false));
+    }
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${shots}/s18-story-${tag}.png` });
+    await nav('Dictate');
+    ok(`voice studio: dictate can transcribe a file (${tag})`, await page.locator('button:has-text("Transcribe a File")').isVisible());
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: `${shots}/s18-dictate-${tag}.png` });
+    await nav('Speak');
     // Work: same sidebar as Chat, attach button and video-memory bar in the chat bar (0.8.2).
     await page.keyboard.press('Control+2');
     await page.waitForSelector('text=What should Lotus work on?', { timeout: 8000 });
