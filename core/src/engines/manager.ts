@@ -94,6 +94,39 @@ export function windowsAnsiCodePage(): Promise<number> {
   return acp;
 }
 
+const shortPaths = new Map<string, Promise<string>>();
+/**
+ * Windows: the 8.3 short form of a folder (no spaces or accents, e.g. C:\Users\Ana\DOCUME~1\LOTUSS~1\…),
+ * for programs that mishandle such paths (espeak-ng inside sherpa-onnx, 0.9.1). Falls back to the
+ * path itself when short names are turned off on that drive.
+ */
+export function windowsShortPath(path: string): Promise<string> {
+  if (!needsShortPath(path)) return Promise.resolve(path);
+  let hit = shortPaths.get(path);
+  if (!hit) {
+    hit = (async () => {
+      try {
+        const ps = `(New-Object -ComObject Scripting.FileSystemObject).GetFolder('${path.replace(/'/g, "''")}').ShortPath`;
+        const p = Bun.spawn(['powershell', '-NoProfile', '-NonInteractive', '-Command', ps], { stdout: 'pipe', stderr: 'ignore', windowsHide: true });
+        const out = (await new Response(p.stdout).text()).trim();
+        return out && !needsShortPath(out) ? out : path;
+      } catch { return path; }
+    })();
+    shortPaths.set(path, hit);
+  }
+  return hit;
+}
+export const needsShortPath = (p: string) => /[^\x21-\x7e]/.test(p);
+
+/** The lines of a tool's output that say what went wrong (sherpa-onnx prints the cause before its last line). */
+export function failureLines(output: string, max = 4): string {
+  const lines = output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const useful = lines.filter((l) => /error|fail|unable|cannot|can't|not found|invalid|espeak|unknown|skip/i.test(l));
+  const pick = [...new Set((useful.length ? useful : lines).slice(-max))];
+  // sherpa-onnx prefixes its messages with the build machine's source path; keep only the message.
+  return pick.map((l) => l.replace(/^[A-Z]:\\a\\sherpa-onnx\\\S+?:\w+:\d+\s*/, '').replace(/^\/\S+\/sherpa-onnx\/csrc\/\S+?:\w+:\d+\s*/, '')).join(' ').slice(0, 500);
+}
+
 /**
  * Text for a command-line argument that a Windows program reads as bytes in code page `cp` and then
  * decodes as UTF-8: the UTF-8 bytes, read as that single-byte code page. With the UTF-8 code page
@@ -629,6 +662,12 @@ export class Builtins {
       args[args.length - 1] = argForAnsi(args[args.length - 1], cp);
       const i = args.findIndex((x) => x.startsWith('--reference-text='));
       if (i >= 0) args[i] = `--reference-text=${argForAnsi(args[i].slice('--reference-text='.length), cp)}`;
+      // espeak-ng (Piper, Kokoro and ZipVoice pronunciations) couldn't read a data folder whose path has a
+      // space or an accent on some PCs ("Failed to convert … to token IDs", 0.9.0): give it the short path.
+      for (let k = 0; k < args.length; k++) {
+        const m = /^(--(?:vits|kokoro|zipvoice)-data-dir=)(.+)$/.exec(args[k]);
+        if (m) args[k] = m[1] + await windowsShortPath(m[2]);
+      }
     }
     await this.runTool(exe, args, o.signal);
     if (!existsSync(out)) throw new Error('The built-in voice engine finished without making any audio.');
@@ -659,7 +698,7 @@ export class Builtins {
     const code = await proc.exited;
     signal?.removeEventListener('abort', onAbort);
     if (signal?.aborted) throw new DOMException('Stopped', 'AbortError');
-    if (code !== 0) throw new Error(`${basename(exe)} failed: ${(err || out).trim().split('\n').slice(-2).join(' ').slice(0, 300)}`);
+    if (code !== 0) throw new Error(`${basename(exe)} failed: ${failureLines(`${out}\n${err}`)}`);
     return `${out}\n${err}`;
   }
 

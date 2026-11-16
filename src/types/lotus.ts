@@ -148,6 +148,8 @@ export interface LotusSettings {
   builtinSpeaker: number;
   /** Built-in dictation (speech to text) model id. */
   builtinDictation: string;
+  /** Thinking budget for models trained to follow one (Nemotron): -1 no limit, 0 off, N tokens (chat/thinkingBudget.ts). */
+  thinkingBudget: number;
   /** Ollama and Voicebox keep their models in Lotus Studio/Models when Lotus starts them (session 17). */
   engineModelsInStudio?: boolean;
   llamacppUrl: string;

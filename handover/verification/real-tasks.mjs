@@ -40,6 +40,7 @@ if (!MODELS.length) { console.error('Give at least one --model (see --list).'); 
 const done = (s, tool) => s.filter((x) => x.tool === tool && x.status === 'done');
 const has = (re) => (c) => re.test(c.reply) || `reply doesn't mention ${re}`;
 const all = (...fs) => (c) => { for (const f of fs) { const r = f(c); if (r !== true) return r; } return true; };
+const either = (...fs) => (c) => { let last; for (const f of fs) { const r = f(c); if (r === true) return true; last = r; } return last; };
 const step = (tool, n = 1) => (c) => done(c.steps, tool).length >= n || `no successful ${tool}${n > 1 ? ` ×${n}` : ''} step`;
 const noStep = (tool) => (c) => !done(c.steps, tool).length || `${tool} ran but shouldn't have`;
 const task = (re, f = () => true) => (c) => c.tasks.some((t) => re.test(t.title) && f(t)) || `no task matching ${re}${f.toString() !== '() => true' ? ' with the right fields' : ''}`;
@@ -52,7 +53,7 @@ const TASKS = [
   { n: 3, group: 'files', prompt: 'Which of my files mentions the dentist?', check: all((c) => done(c.steps, 'files.search').length + done(c.steps, 'files.read').length > 0 || 'no search or read', has(/appointments/i)) },
   { n: 4, group: 'files', prompt: 'Summarise the notes in my projects folder.', check: all(step('files.read'), has(/thesis|garden|physio/i)) },
   { n: 5, group: 'files', prompt: 'Save a note called ideas.md with three ideas for a birthday party.', check: all(step('files.write'), (c) => (c.file('ideas.md')?.split('\n').filter((l) => l.trim()).length ?? 0) >= 3 || 'ideas.md missing or too short') },
-  { n: 6, group: 'files', prompt: 'Add bread to the end of groceries.txt.', check: all(step('files.write'), (c) => (/bread/i.test(c.file('groceries.txt') ?? '') && /oat milk/i.test(c.file('groceries.txt') ?? '')) || 'groceries.txt lost its items or has no bread') },
+  { n: 6, group: 'files', prompt: 'Add bread to the end of groceries.txt.', check: all(either(step('files.write'), step('files.edit')), (c) => (/bread/i.test(c.file('groceries.txt') ?? '') && /oat milk/i.test(c.file('groceries.txt') ?? '')) || 'groceries.txt lost its items or has no bread') },
   { n: 7, group: 'files', prompt: 'Make a file called board.md that lists everything on my task board.', check: all(step('task.list'), step('files.write'), (c) => /pay rent/i.test(c.file('board.md') ?? '') || 'board.md missing the board') },
   // tasks
   { n: 8, group: 'tasks', prompt: 'Add a task to buy oat milk.', check: all(step('task.add'), task(/oat milk/i)) },
@@ -84,6 +85,8 @@ const TASKS = [
   // several steps
   { n: 29, group: 'multi', prompt: 'Read groceries.txt and add a task for each item on it.', check: all(step('files.read'), step('task.add', 3), task(/oat milk/i), task(/apple/i)) },
   { n: 30, group: 'multi', prompt: 'Add a task to buy flowers, then tell me everything on my task board.', check: all(step('task.add'), step('task.list'), task(/flower/i), has(/pay rent/i)) },
+  // 0.9.1: change part of a file in place (files.edit) without losing the rest.
+  { n: 32, group: 'files', prompt: 'In groceries.txt, change apples to pears.', check: all(either(step('files.edit'), step('files.write')), (c) => { const g = c.file('groceries.txt') ?? ''; return (/pears/i.test(g) && !/apples/i.test(g) && /oat milk/i.test(g) && /spinach/i.test(g)) || 'groceries.txt not changed right or lost items'; }) },
   { n: 31, group: 'multi', prompt: 'Save a file plan.md with a 3-step plan for learning Portuguese, and add a task to start step 1.', check: all(step('files.write'), step('task.add'), (c) => existsSync(join(c.studio, 'plan.md')) || 'no plan.md') },
 ];
 

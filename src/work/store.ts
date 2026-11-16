@@ -9,6 +9,7 @@ import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
 import type { LotusSettings } from '../types/lotus';
 import { speak, voicePrefs } from '../voice/voice';
+import { budgetFor } from '../chat/thinkingBudget';
 
 export const WORK_KEY = 'lotus.work.v1';
 
@@ -38,7 +39,7 @@ export function attachedText(files: WorkAttachment[], cap = 60_000): string {
     return `Attached file "${f.name}":\n\`\`\`\n${body}\n\`\`\``;
   }).join('\n\n');
 }
-export interface WorkItem { id: string; title: string; ts: number; pinned?: boolean; messages: WorkMsg[] }
+export interface WorkItem { id: string; title: string; ts: number; pinned?: boolean; messages: WorkMsg[]; /** A folder the agent may read and edit for this work (0.9.1). */ folder?: string }
 export interface PendingAsk { workId: string; runId: string; askId: string; question: string; options: string[] }
 
 const blank = (): WorkItem => ({ id: uid('work'), title: 'New work', ts: Date.now(), messages: [] });
@@ -133,8 +134,8 @@ export function useWork(settings: LotusSettings) {
     try {
       setRunning((r) => ({ ...r, [workId]: { runId: '', ctrl } }));
       const done = await runAgent({
-        model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: s.agentFolders,
-        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow },
+        model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: [...(item.folder ? [item.folder] : []), ...(s.agentFolders ?? [])],
+        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow, thinkBudget: budgetFor(s.selectedModel, s.thinkingBudget) },
         messages: [{ role: 'system', content: s.systemPrompt }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;

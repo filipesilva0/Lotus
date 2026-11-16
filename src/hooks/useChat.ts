@@ -11,6 +11,7 @@ import { addBranch, switchBranch } from '../chat/branching';
 import { contextItemFromText, contextPayload, detectMemory, estimateTokens, newSession, TEXT_EXT } from '../chat/helpers';
 import { queryFromMessage, readPage, searchWeb, webContextBlock, WebResult } from '../chat/webSearch';
 import { STAGES, thinkingStream } from '../chat/thinking';
+import { budgetFor } from '../chat/thinkingBudget';
 import { effectiveNumCtx, hardware, modelCapabilities } from '../hardware/monitor';
 import { agentPool } from '../agents/pool';
 import { loadMemory, memoryStore, useMemoryStore } from '../memory/store';
@@ -260,7 +261,7 @@ export function useChat(settings: LotusSettings) {
         const done = await runAgent({
           model: o.model, prompt: o.query ?? '', chatId: sid,
           messages: turns.map((t) => ({ role: t.role as 'system' | 'user' | 'assistant', content: t.content, images: t.images })),
-          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences },
+          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences, thinkBudget: budgetFor(o.model, s.thinkingBudget) },
           memoryOn: memOn, web: !!o.web, folders: session0.folder ? [session0.folder] : [],
         }, (e) => {
           if (e.kind === 'token') { acc += e.text; patchMsg(sid, aiId, { content: acc }); }

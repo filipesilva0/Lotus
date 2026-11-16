@@ -15,7 +15,7 @@ import { ChatInspector, InspectorTab } from '../chat/ChatInspector';
 import { contextItemFromText, estimateTokens, contextTokens, TEXT_EXT } from '../../chat/helpers';
 import { usePersisted } from '../../lib/persist';
 import { engineUrl } from '../../services/engineConfig';
-import { folderSummary, folderToContext, pickAndReadFolder, readPickedFiles } from '../../chat/folder';
+import { folderSummary, folderToContext, pickFolderPath, readPickedFiles } from '../../chat/folder';
 import { expandCommand, pluginCommands, usePlugins } from '../../plugins/store';
 import type { LibraryTab } from '../library/LibrarySheet';
 import type { ResearchApi } from '../../research/store';
@@ -125,9 +125,18 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
 
   const offline = ollamaUp === false;
 
-  /** + → Attach a folder: desktop reads it in Rust; the browser preview passes the picked files. */
+  /**
+   * Choose Folder. Desktop (0.9.1): the folder becomes this chat's folder, and the agent reads, searches
+   * and edits what it needs there with its file tools; nothing is pasted into the conversation.
+   * The browser preview has no real paths, so it still reads the picked files into the context.
+   */
   const attachFolder = async (list?: FileList): Promise<string | void> => {
-    const r = list ? await readPickedFiles(list) : await pickAndReadFolder();
+    if (!list) {
+      const path = await pickFolderPath();
+      if (path) chat.patchSession(session.id, (s) => ({ ...s, folder: path, folderOff: [] }));
+      return;
+    }
+    const r = await readPickedFiles(list);
     if (!r) return;
     folderToContext(r, hardware.get().plan.chunkChars).forEach((item) => chat.addContext(item));
     if (r.files.length) { setTab('context'); setShowInspector(true); }
@@ -177,7 +186,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
         {offline && (settings.llmBackend === 'builtin' ? <BuiltinNotice kind="chat" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" /> : <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />)}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}
           models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels}
-          onAttachFolder={attachFolder} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}
+          onAttachFolder={attachFolder} folder={session.folder ?? null} onClearFolder={() => chat.patchSession(session.id, (x) => ({ ...x, folder: undefined, folderOff: [] }))} extraCommands={pluginCmds.map((c) => ({ name: c.name, args: c.args || undefined, help: c.help }))}
           thinkingOn={!!session.thinking} onToggleThinking={() => chat.patchSession(session.id, (s) => ({ ...s, thinking: !s.thinking }))}
           webOn={!!session.webSearch} onToggleWeb={() => chat.patchSession(session.id, (s) => ({ ...s, webSearch: !s.webSearch }))}
           memoryOn={memOn} incognito={!!session.incognito} onToggleMemory={toggleMemory}

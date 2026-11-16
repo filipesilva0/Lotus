@@ -220,4 +220,38 @@ export const filesWrite: Tool = {
   },
 };
 
-export const FILE_TOOLS = [filesList, filesRead, filesSearch, filesWrite];
+/**
+ * Changes part of a file: replaces an exact passage (0.9.1). Safer than rewriting a whole file with
+ * files.write, which small models get wrong on long files (dropped sections).
+ */
+export const filesEdit: Tool = {
+  name: 'files.edit', label: 'Editing a file', risk: 'risky',
+  description: 'Change part of an existing text file: replace an exact passage with new text. Read the file first and copy the passage exactly (spaces and line breaks included). The passage must appear once, unless all is true.',
+  parameters: { type: 'object', properties: {
+    path: { type: 'string', description: 'File path (absolute, or relative to the first allowed folder).' },
+    find: { type: 'string', description: 'The exact text to replace, copied from the file.' },
+    replace: { type: 'string', description: 'The new text (empty to delete the passage).' },
+    all: { type: 'boolean', description: 'Replace every place it appears (default false).' },
+  }, required: ['path', 'find', 'replace'] },
+  describe: (a) => `Change ${String(a.path)}: replace “${String(a.find ?? '').replace(/\s+/g, ' ').slice(0, 60)}${String(a.find ?? '').length > 60 ? '…' : ''}”`,
+  async run(a, ctx) {
+    const r = resolveInFolders(ctx.folders, a.path, true);
+    if ('error' in r) return { ok: false, text: r.error, summary: r.error };
+    if (!existsSync(r.path) || statSync(r.path).isDirectory()) return { ok: false, text: `${r.path} isn't a file. Use files.list to find it, or files.write to create it.`, summary: 'No such file' };
+    const find = String(a.find ?? ''), repl = String(a.replace ?? '');
+    if (!find) return { ok: false, text: 'Give the exact text to replace in "find" (read the file first).', summary: 'Nothing to find' };
+    const before = readFileSync(r.path, 'utf8');
+    // Files saved on Windows use CRLF; let a passage written with \n match it.
+    const crlf = !before.includes(find) && before.includes('\r\n') && before.includes(find.replace(/\r?\n/g, '\r\n'));
+    const f = crlf ? find.replace(/\r?\n/g, '\r\n') : find, rp = crlf ? repl.replace(/\r?\n/g, '\r\n') : repl;
+    const count = before.split(f).length - 1;
+    if (!count) return { ok: false, text: `That passage isn't in ${basename(r.path)}. Read the file again with files.read and copy the passage exactly.`, summary: 'Passage not found' };
+    if (count > 1 && a.all !== true) return { ok: false, text: `That passage appears ${count} times in ${basename(r.path)}. Include more of the surrounding text so it is unique, or set all to true.`, summary: `Passage appears ${count} times` };
+    const after = a.all === true ? before.split(f).join(rp) : before.replace(f, () => rp);
+    writeFileSync(r.path, after);
+    const n = a.all === true ? count : 1;
+    return { ok: true, text: `Changed ${n} place${n > 1 ? 's' : ''} in ${r.path} (${fmtSize(statSync(r.path).size)}).`, summary: `Edited ${basename(r.path)}`, data: { path: r.path } };
+  },
+};
+
+export const FILE_TOOLS = [filesList, filesRead, filesSearch, filesWrite, filesEdit];

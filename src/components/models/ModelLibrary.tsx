@@ -33,7 +33,7 @@ const ENGINE_LABEL = { builtin: 'Lotus', ollama: 'Ollama', comfyui: 'ComfyUI', v
 const Progress: React.FC<{ job: Job; onCancel?: () => void }> = ({ job, onCancel }) => {
   const pct = job.total ? Math.min(100, Math.round((job.done / job.total) * 100)) : null;
   return (
-    <div className="space-y-1" role="status">
+    <div className="space-y-1 min-w-0 w-full" role="status">
       <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-muted)]">
         <span className="flex-1 min-w-0 truncate">{job.step}{pct !== null ? ` · ${pct}%` : ''}{job.total ? ` of ${fmtSize(job.total)}` : ''}</span>
         {onCancel && <button type="button" className="tip shrink-0 w-5 h-5 inline-flex items-center justify-center rounded hover:bg-[var(--hover)]" data-tip="Stop" aria-label={`Stop downloading ${job.label}`} onClick={onCancel}><X className="w-3 h-3" /></button>}
@@ -119,7 +119,7 @@ export const ModelLibrary: React.FC<{
       {running.length > 0 && (
         <section aria-label="Downloads">
           <h2 className="text-[13px] font-semibold mb-2">Downloading</h2>
-          <div className="space-y-3">{running.map((j) => <div key={j.id}><p className="text-[13px] font-medium mb-1">{j.label}</p><Progress job={j} onCancel={() => void cancelJob(j.id)} /></div>)}</div>
+          <div className="space-y-3">{running.map((j) => <div key={j.id} className="min-w-0"><p className="text-[13px] font-medium mb-1 truncate">{j.label}</p><Progress job={j} onCancel={() => void cancelJob(j.id)} /></div>)}</div>
         </section>
       )}
 
@@ -152,7 +152,7 @@ export const ModelLibrary: React.FC<{
             const fit = b.machine ? fitOf(e, vram, unified) : null;
             const offline = (eng === 'ollama' && ollamaUp === false) || (eng === 'voicebox' && voiceboxUp === false) || ((eng === 'builtin' || eng === 'comfyui') && !b.available);
             return (
-              <Card key={e.id} className="p-3.5 flex flex-col">
+              <Card key={e.id} className="p-3.5 flex flex-col min-w-0 overflow-hidden">
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0"><p className="text-[14px] font-semibold truncate">{e.title}</p><p className="text-[12px] text-[var(--color-text-muted)] truncate">{e.maker} · {e.licence}</p></div>
                   <span className="shrink-0 px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--hover)] text-[12px] font-medium">{KIND_LABEL[e.kind]}</span>
@@ -163,11 +163,11 @@ export const ModelLibrary: React.FC<{
                   {e.image ? ` · includes its ${e.image.files.vae ? 'VAE' : ''}${e.image.files.llm ? ' and text encoder' : ''}` : ''}
                   {fit && <span className={cx('ml-2 font-medium', fit === 'fits' ? 'text-[var(--c-green)]' : fit === 'tight' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>{FIT_LABEL[fit]}</span>}
                 </p>
-                <div className="mt-2.5 flex items-center gap-2">
+                <div className="mt-2.5 flex items-center gap-2 min-w-0">
                   {have ? <span className="inline-flex items-center gap-1 text-[12px] text-[var(--c-green)] font-medium"><Check className="w-3.5 h-3.5" />Installed</span>
-                    : busy && job ? <div className="flex-1"><Progress job={job} onCancel={() => void cancelJob(job.id)} /></div>
+                    : busy && job ? <div className="flex-1 min-w-0"><Progress job={job} onCancel={() => void cancelJob(job.id)} /></div>
                     : <Btn size="sm" variant="primary" loading={busy} disabled={offline} icon={<Download className="w-3 h-3" />} onClick={() => void get(e)}>Get</Btn>}
-                  <span className="ml-auto text-[12px] text-[var(--color-text-muted)]">{ENGINE_LABEL[eng]}</span>
+                  <span className="ml-auto shrink-0 text-[12px] text-[var(--color-text-muted)]">{ENGINE_LABEL[eng]}</span>
                 </div>
               </Card>
             );
@@ -201,7 +201,7 @@ export const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }>
               <span className="w-[72px] shrink-0 text-[12px] text-[var(--color-text-muted)]">{e.role.split(' ')[0]}</span>
               <span className="flex-1 min-w-0"><span className="text-[13px] font-medium">{e.name}</span>
                 <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{e.installed ? `${e.version} · ${e.flavour}` : job?.state === 'error' ? job.error : 'Not installed'}</span></span>
-              {job?.state === 'running' ? <div className="w-[220px]"><Progress job={job} onCancel={() => void cancelJob(job.id)} /></div>
+              {job?.state === 'running' ? <div className="w-[220px] shrink-0 min-w-0"><Progress job={job} onCancel={() => void cancelJob(job.id)} /></div>
                 : e.installed ? <Btn size="sm" variant="ghost" icon={<Trash2 className="w-3 h-3" />} onClick={() => void confirmAlert({ title: `Remove ${e.name}?`, message: 'Your models stay in Lotus Studio/Models. You can install the engine again at any time.', confirm: 'Remove' }).then((ok) => { if (ok) void removeEngine(e.id); })}>Remove</Btn>
                 : <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => void installEngine(e.id)}>Install</Btn>}
             </li>

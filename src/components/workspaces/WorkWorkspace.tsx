@@ -8,6 +8,8 @@ import { AudioLines, Check, ChevronDown, Code2, Copy, Download, FileText, Folder
 import { Work, WorkAttachment, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
 import { fileToBase64 } from '../../services/ollamaService';
 import { TEXT_EXT } from '../../chat/helpers';
+import { folderName, pickFolderPath } from '../../chat/folder';
+import { isTauri } from '../../lib/http';
 import type { ArtifactInfo, AgentStep } from '../../lib/agent';
 import { agentAvailable, workArtifact, workDir } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
@@ -377,6 +379,16 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
               onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
               tray={<>
+              {item.folder ? (
+                <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`Lotus can read and edit files in ${item.folder} (saving asks first)`}>
+                  <FolderOpen className="w-4 h-4 shrink-0" /><span className="truncate">{folderName(item.folder)}</span>
+                  <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => work.patch(item.id, (x) => ({ ...x, folder: undefined }))}><X className="w-3 h-3" /></IconBtn>
+                </span>
+              ) : isTauri && (
+                <button type="button" title="Let Lotus work in a folder: it opens, searches and edits the files it needs (saving asks first)"
+                  onClick={async () => { const p = await pickFolderPath('Give Lotus a folder for this work'); if (p) work.patch(item.id, (x) => ({ ...x, folder: p })); }}
+                  className="h-7 px-2 inline-flex items-center gap-1.5 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]"><FolderOpen className="w-4 h-4" />Choose Folder</button>
+              )}
               <span className="text-[12px] text-[var(--color-text-muted)] px-1 inline-flex items-center gap-1">Can use: files, web, tasks, images{tools.length ? `, ${tools.join(', ')}` : ''}<Tip text="What the agent can do in Work. Turn on browser and computer control in Settings → Tools. Steps that change your files or control your computer ask first unless you changed that there." /></span>
               <span className="flex-1" />
               <button type="button" onClick={onOpenSettings} className="h-7 px-2 inline-flex items-center gap-1.5 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)]"><MonitorSmartphone className="w-3.5 h-3.5" />Tools</button>

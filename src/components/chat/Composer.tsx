@@ -5,6 +5,7 @@ import { EdgeMeter, ModeButton, SendButton, TrayButton, TrayToggle } from '../co
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { voicebox } from '../../services/voicebox';
 import { isTauri } from '../../lib/http';
+import { folderName } from '../../chat/folder';
 
 export interface SlashCommand { name: string; args?: string; help: string }
 export const SLASH: SlashCommand[] = [
@@ -35,6 +36,8 @@ interface Props {
   models: ComposerModel[]; onModel: (id: string) => void; onOpenModels: () => void;
   /** Desktop: opens the folder dialog; returns a notice to show. Browser: the composer reads the picked files itself. */
   onAttachFolder: (files?: FileList) => Promise<string | void>;
+  /** The folder Lotus may read and edit for this chat (desktop), and how to take it away. */
+  folder?: string | null; onClearFolder?: () => void;
   extraCommands?: ExtraCommand[];
   thinkingOn: boolean; onToggleThinking: () => void;
   webOn: boolean; onToggleWeb: () => void;
@@ -52,7 +55,7 @@ interface Props {
   onStop: () => void;
 }
 
-export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, models, onModel, onOpenModels, onAttachFolder, extraCommands = [], thinkingOn, onToggleThinking, webOn, onToggleWeb, memoryOn, incognito, onToggleMemory, onToggleIncognito, contextUsed, contextTitle, onOpenLibrary, onResearch, mentions, prefill, onSend, onCommand, onStop }) => {
+export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, models, onModel, onOpenModels, onAttachFolder, folder, onClearFolder, extraCommands = [], thinkingOn, onToggleThinking, webOn, onToggleWeb, memoryOn, incognito, onToggleMemory, onToggleIncognito, contextUsed, contextTitle, onOpenLibrary, onResearch, mentions, prefill, onSend, onCommand, onStop }) => {
   const [text, setText] = useState('');
   const [modelOpen, setModelOpen] = useState(false);
   const [researchMode, setResearchMode] = useState(false);
@@ -271,7 +274,12 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
           </div>
 
           <div className="h-10 flex items-center gap-0.5 px-3">
-            {trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', "Attach a folder: its text and code files join this chat's context")}
+            {folder ? (
+              <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`Lotus can read and edit files in ${folder} (saving asks first)`}>
+                <FolderOpen className="w-4 h-4 shrink-0" /><span className="truncate">{folderName(folder)}</span>
+                <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => onClearFolder?.()}><X className="w-3 h-3" /></IconBtn>
+              </span>
+            ) : trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', isTauri ? 'Let Lotus work in a folder: it opens, searches and edits the files it needs (saving asks first)' : "Attach a folder: its text and code files join this chat's context")}
             {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Library', 'The skills, memory and soul Lotus uses')}
             {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
             <div className="flex-1" />

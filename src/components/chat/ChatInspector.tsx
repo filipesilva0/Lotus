@@ -1,3 +1,4 @@
+import { BUDGET_PRESETS, describeBudget, hasThinkingBudget } from '../../chat/thinkingBudget';
 import React, { useEffect, useState } from 'react';
 import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, FolderOpen, RefreshCw, Sparkles } from 'lucide-react';
 import type { ContextFile } from '../../context/discover';
@@ -225,12 +226,32 @@ const CodeBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }
   );
 };
 
+/** How long a Nemotron model may think before answering (chat/thinkingBudget.ts). */
+const ThinkingBudgetSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {
+  const b = s.thinkingBudget ?? -1;
+  const preset = BUDGET_PRESETS.find((p) => p.tokens === b)?.id ?? 'custom';
+  return (
+    <Section title="Thinking budget" hint="How long the model may think before it answers. Less thinking answers sooner; more thinking helps with hard questions.">
+      <div className="flex flex-wrap gap-1.5 mb-2.5" role="radiogroup" aria-label="Thinking budget">
+        {BUDGET_PRESETS.map((p) => (
+          <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} onClick={() => set({ thinkingBudget: p.tokens })}
+            className={cx('h-7 px-2.5 rounded-full text-[12px]', preset === p.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-medium' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{p.label}</button>
+        ))}
+      </div>
+      {b > 0 && <SliderField label="Thinking tokens" value={b} min={128} max={16384} step={128} onChange={(v) => set({ thinkingBudget: v })} format={(v) => v.toLocaleString()} />}
+      <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{describeBudget(b)}.</p>
+      {s.llmBackend === 'ollama' && b > 0 && <p className="mt-1 text-[12px] text-[var(--c-orange)] leading-snug">Ollama can only turn thinking on or off, so the limit is not applied there. Lotus’s own engine (Settings → Engines) follows it.</p>}
+    </Section>
+  );
+};
+
 const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ settings: s, onSettings: set, raw }) => {
   const hw = useHardware();
   const [stopDraft, setStopDraft] = useState('');
   const addStop = () => { const v = stopDraft.replace(/\\n/g, '\n'); if (v && !s.stopSequences.includes(v)) set({ stopSequences: [...s.stopSequences, v] }); setStopDraft(''); };
   return (
     <div className="overflow-y-auto flex-1">
+      {hasThinkingBudget(s.selectedModel) && <ThinkingBudgetSection settings={s} onSettings={set} />}
       <Section title="Sampling">
         <SliderField label="Temperature" value={s.temperature} min={0} max={2} step={0.05} onChange={(v) => set({ temperature: v })} format={(v) => v.toFixed(2)} />
         <SliderField label="Top-P" value={s.topP} min={0.05} max={1} step={0.01} onChange={(v) => set({ topP: v })} format={(v) => v.toFixed(2)} />

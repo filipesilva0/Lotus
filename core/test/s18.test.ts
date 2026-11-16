@@ -5,7 +5,11 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Builtins } from '../src/engines/manager';
+import { Builtins, failureLines, needsShortPath } from '../src/engines/manager';
+import { filesEdit } from '../src/tools/files';
+import { chatTurn } from '../src/agent/llm';
+import { BUDGET_PRESETS, budgetFor, describeBudget, hasThinkingBudget, llamaThinkingFields, ollamaThink } from '../../src/chat/thinkingBudget';
+import { readFileSync } from 'node:fs';
 import { entryById } from '../../src/models/library';
 import {
   EFFECT_PRESETS, NO_EFFECTS, TRANSCRIPT_ACTIONS, chunkText, clock, splitPoints, toSrt, transcriptText, effectsNeutral, layoutStory, parseScript, pickVoice, pitchRate, presetOf, scriptSpeakers, storyLength, voiceOptions, withEffects,
@@ -169,5 +173,88 @@ describe('speech to text for long recordings', () => {
   });
   test('every Open in Chat action asks something, except Ask About It', () => {
     expect(TRANSCRIPT_ACTIONS.filter((a) => !a.prompt).map((a) => a.id)).toEqual(['ask']);
+  });
+});
+
+describe('sherpa-onnx errors and Windows paths (0.9.1)', () => {
+  test('the cause is shown, not only the last line', () => {
+    const out = [
+      'D:\\a\\sherpa-onnx\\sherpa-onnx\\sherpa-onnx/csrc/piper-phonemize-lexicon.cc:ConvertTextToTokenIdsVits:77 Failed to phonemize with espeak-ng voice \'pt\': voice not found',
+      'D:\\a\\sherpa-onnx\\sherpa-onnx\\sherpa-onnx/csrc/offline-tts-vits-impl.h:Generate:112 Failed to convert \'bom dia\' to token IDs',
+      'Error in generating audio. Please read previous error messages.',
+      'num threads: 4',
+    ].join('\n');
+    const msg = failureLines(out);
+    expect(msg).toContain("Failed to phonemize with espeak-ng voice 'pt': voice not found");
+    expect(msg).not.toContain('D:\\a\\sherpa-onnx');
+    expect(msg).not.toContain('num threads');
+    expect(failureLines('just one line')).toBe('just one line');
+  });
+  test('short paths only for folders with spaces or accents', () => {
+    expect(needsShortPath('C:\\Users\\Ana\\Documents\\Lotus Studio\\Models')).toBe(true);
+    expect(needsShortPath('C:\\Users\\João\\Documents')).toBe(true);
+    expect(needsShortPath('C:\\Users\\ANA~1\\DOCUME~1\\LOTUSS~1')).toBe(false);
+  });
+});
+
+describe('files.edit (0.9.1)', () => {
+  const root = tmp();
+  const ctx = { folders: [root] } as never;
+  test('changes one exact passage and keeps the rest', async () => {
+    writeFileSync(join(root, 'g.txt'), 'oat milk\napples\neggs\n');
+    const r = await filesEdit.run({ path: 'g.txt', find: 'apples', replace: 'pears' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(readFileSync(join(root, 'g.txt'), 'utf8')).toBe('oat milk\npears\neggs\n');
+  });
+  test('Windows line endings still match a passage written with \\n', async () => {
+    writeFileSync(join(root, 'w.md'), '# Title\r\nline one\r\nline two\r\n');
+    expect((await filesEdit.run({ path: 'w.md', find: 'line one\nline two', replace: 'only line' }, ctx)).ok).toBe(true);
+    expect(readFileSync(join(root, 'w.md'), 'utf8')).toBe('# Title\r\nonly line\r\n');
+  });
+  test('refuses missing, repeated or outside passages with a way forward', async () => {
+    writeFileSync(join(root, 'r.txt'), 'a b a');
+    expect((await filesEdit.run({ path: 'r.txt', find: 'zzz', replace: 'x' }, ctx)).text).toMatch(/isn't in r.txt/);
+    expect((await filesEdit.run({ path: 'r.txt', find: 'a', replace: 'x' }, ctx)).text).toMatch(/appears 2 times/);
+    expect((await filesEdit.run({ path: 'r.txt', find: 'a', replace: 'x', all: true }, ctx)).ok).toBe(true);
+    expect(readFileSync(join(root, 'r.txt'), 'utf8')).toBe('x b x');
+    expect((await filesEdit.run({ path: '/etc/hostname', find: 'a', replace: 'b' }, ctx)).ok).toBe(false);
+    expect((await filesEdit.run({ path: 'nope.txt', find: 'a', replace: 'b' }, ctx)).text).toMatch(/isn't a file/);
+  });
+  test('replacement text with $ signs is kept as written', async () => {
+    writeFileSync(join(root, 'p.txt'), 'price: X');
+    await filesEdit.run({ path: 'p.txt', find: 'X', replace: '$& $1 $$' }, ctx);
+    expect(readFileSync(join(root, 'p.txt'), 'utf8')).toBe('price: $& $1 $$');
+  });
+});
+
+describe('thinking budget for Nemotron (0.9.1)', () => {
+  test('only Nemotron models get it, "no limit" sends nothing', () => {
+    expect(hasThinkingBudget('nemotron-3-nano-4b')).toBe(true);
+    expect(hasThinkingBudget('qwen3-8b')).toBe(false);
+    expect(budgetFor('qwen3-8b', 512)).toBeUndefined();
+    expect(budgetFor('Nemotron 3 Nano', -1)).toBeUndefined();
+    expect(budgetFor('nemotron', 2048)).toBe(2048);
+    expect(budgetFor('nemotron', 0)).toBe(0);
+    expect(BUDGET_PRESETS.map((p) => p.tokens)).toEqual([0, 512, 2048, 8192, -1]);
+    expect(describeBudget(512)).toBe('Short · up to 512 thinking tokens');
+  });
+  test('llama-server gets a token budget, or thinking off; Ollama only on/off', () => {
+    expect(llamaThinkingFields(2048)).toEqual({ reasoning_budget_tokens: 2048 });
+    expect(llamaThinkingFields(0)).toEqual({ chat_template_kwargs: { enable_thinking: false } });
+    expect(llamaThinkingFields(undefined)).toEqual({});
+    expect(llamaThinkingFields(undefined, false)).toEqual({ chat_template_kwargs: { enable_thinking: false } });
+    expect(ollamaThink(0)).toBe(false);
+    expect(ollamaThink(2048)).toBeUndefined();
+    expect(ollamaThink(undefined, true)).toBe(true);
+  });
+  test('the request the engine actually receives', async () => {
+    let sent: Record<string, unknown> = {};
+    const fakeFetch = async (_u: string, init?: RequestInit) => { sent = JSON.parse(String(init?.body)); return new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n', { headers: { 'content-type': 'text/event-stream' } }); };
+    const base = { backend: 'llamacpp' as const, url: 'http://x', model: 'nemotron', signal: new AbortController().signal, fetch: fakeFetch };
+    const r = await chatTurn({ ...base, thinkBudget: 1024 }, [{ role: 'user', content: 'q' }], null, { token: () => undefined, thinking: () => undefined });
+    expect(r.content).toBe('hi');
+    expect(sent.reasoning_budget_tokens).toBe(1024);
+    await chatTurn({ ...base, thinkBudget: 0 }, [{ role: 'user', content: 'q' }], null, { token: () => undefined, thinking: () => undefined });
+    expect(sent.chat_template_kwargs).toEqual({ enable_thinking: false });
   });
 });

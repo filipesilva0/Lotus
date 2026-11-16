@@ -37,6 +37,21 @@ export function folderSummary(r: FolderRead): string {
   return extra ? `${base} ${extra[0].toUpperCase()}${extra.slice(1)}.` : base;
 }
 
+/**
+ * Desktop: asks for a folder and returns its path, without reading it (0.9.1). The agent then opens
+ * what it needs with its file tools (read, search, write) inside that folder, instead of the whole
+ * folder being pasted into the conversation.
+ */
+export async function pickFolderPath(title = 'Give Lotus a folder to work in'): Promise<string | null> {
+  if (!isTauri) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const p = await open({ title, directory: true, multiple: false });
+  return typeof p === 'string' ? p : null;
+}
+
+/** The last part of a folder path ("C:\\Notes\\Thesis" → "Thesis"). */
+export const folderName = (p: string) => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
+
 /** Desktop: asks for a folder with the system dialog and reads it in Rust. Returns null if cancelled. */
 export async function pickAndReadFolder(): Promise<FolderRead | null> {
   if (!isTauri) return null;

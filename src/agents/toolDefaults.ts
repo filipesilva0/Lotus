@@ -3,4 +3,4 @@
 export type ApprovalMode = 'ask' | 'risky' | 'auto';
 
 /** Deny rules every install starts with: secrets are never read, scripts and programs never written. */
-export const DEFAULT_DENY = ['files.read:*.env', 'files.read:*id_rsa*', 'files.read:*.pem', 'files.write:*.exe', 'files.write:*.bat', 'files.write:*.ps1', 'files.write:*.sh'];
+export const DEFAULT_DENY = ['files.read:*.env', 'files.read:*id_rsa*', 'files.read:*.pem', 'files.write:*.exe', 'files.write:*.bat', 'files.write:*.ps1', 'files.write:*.sh', 'files.edit:*.exe', 'files.edit:*.bat', 'files.edit:*.ps1', 'files.edit:*.sh'];

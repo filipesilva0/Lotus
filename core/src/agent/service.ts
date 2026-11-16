@@ -71,7 +71,7 @@ export interface StartArgs {
   messages: WireMsg[];
   prompt: string;
   chatId?: string;
-  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean };
+  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean; thinkBudget?: number };
   memoryOn?: boolean;
   web?: boolean;
   /** Extra folders for this run (the chat's attached folder). */
@@ -182,7 +182,11 @@ export class AgentService {
       emit({ kind: 'ask', askId, question, options });
     });
     if (tools.some((t) => t.name.startsWith('files.')) && messages[0]?.role === 'system') {
-      messages[0] = { ...messages[0], content: `${messages[0].content}\n\nFolders you can use with the file tools: ${folders.join(', ')} (the last one is the Lotus Studio folder; save new notes there unless the user names another place).` };
+      // The user's attached folder (Chat's or Work's Choose Folder) comes first: open files there with the
+      // tools as needed instead of expecting them in the conversation (0.9.1).
+      const attached = (a.folders ?? []).map((f) => resolve(String(f))).find((f) => folders.includes(f));
+      const note = attached ? ` The user attached ${attached} to this conversation: when they mention "the folder", "my files" or files by name, they mean files there. Look with files.list and files.search, read with files.read, change part of a file with files.edit, and create or replace whole files with files.write.` : '';
+      messages[0] = { ...messages[0], content: `${messages[0].content}\n\nFolders you can use with the file tools: ${folders.join(', ')} (the last one is the Lotus Studio folder; save new notes there unless the user names another place).${note}` };
     }
 
     const llm: { backend: 'ollama' | 'llamacpp'; nativeTools?: boolean; url: string; auth: string | null; fetch: typeof fetchFn } & NonNullable<StartArgs['options']> = {

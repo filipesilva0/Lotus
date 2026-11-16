@@ -14,7 +14,7 @@ export interface Claim { kind: ClaimKind; sentence: string }
 export const CLAIM_TOOLS: Record<ClaimKind, string[]> = {
   task: ['task.add', 'task.move'],
   image: ['image.generate'],
-  file: ['files.write'],
+  file: ['files.write', 'files.edit'],
   memory: ['memory.save'],
   folder: ['files.list', 'files.read', 'files.search'],
   web: ['web.search', 'web.read'],

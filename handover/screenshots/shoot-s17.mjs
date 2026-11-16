@@ -46,6 +46,7 @@ writeFileSync(join(studio, 'Engines/builtin.json'), JSON.stringify({
   sherpa: { tag: 'v1.13.7', flavour: 'Processor', dir: join(studio, 'Engines/sherpa-onnx/v1.13.7'), exes: { 'sherpa-onnx-offline-tts': exes.tts, 'sherpa-onnx-offline': exes.stt }, installedAt: Date.now() },
 }));
 file('Models/chat/qwen3-8b/Qwen3-8B-Q4_K_M.gguf', 'g'.repeat(5000));
+file('Models/chat/nemotron-3-nano-4b/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf', 'n'.repeat(3000));
 file('Models/image/checkpoints/sd_xl_base_1.0.safetensors', 'c'.repeat(7000));
 file('Models/image/vae/sdxl.vae.safetensors', 'v');
 file('Models/image/checkpoints/juggernautXL_v9.safetensors', 'j'.repeat(6000));
@@ -56,6 +57,7 @@ file('Models/voice/kokoro/kokoro-en-v0_19/model.onnx', 'm'); file('Models/voice/
 file('Models/voice/whisper-small/sherpa-onnx-whisper-small/small-encoder.int8.onnx', 'e'); file('Models/voice/whisper-small/sherpa-onnx-whisper-small/small-decoder.int8.onnx', 'd'); file('Models/voice/whisper-small/sherpa-onnx-whisper-small/small-tokens.txt', 't');
 writeFileSync(join(studio, 'Models/models.json'), JSON.stringify({ version: 1, installed: {
   'qwen3-8b': { id: 'qwen3-8b', kind: 'chat', title: 'Qwen 3 8B', files: ['chat/qwen3-8b/Qwen3-8B-Q4_K_M.gguf'], gguf: 'chat/qwen3-8b/Qwen3-8B-Q4_K_M.gguf', entryId: 'qwen3-8b', source: 'unsloth/Qwen3-8B-GGUF', bytes: 5.03e9, at: Date.now() },
+  'nemotron-3-nano-4b': { id: 'nemotron-3-nano-4b', kind: 'chat', title: 'Nemotron 3 Nano 4B', files: ['chat/nemotron-3-nano-4b/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf'], gguf: 'chat/nemotron-3-nano-4b/NVIDIA-Nemotron-3-Nano-4B-Q4_K_M.gguf', entryId: 'nemotron-3-nano-4b', bytes: 2.8e9, at: Date.now() },
   'sdxl-base': { id: 'sdxl-base', kind: 'image', title: 'Stable Diffusion XL', files: ['image/checkpoints/sd_xl_base_1.0.safetensors', 'image/vae/sdxl.vae.safetensors'], entryId: 'sdxl-base', bytes: 7.2e9, at: Date.now() },
   kokoro: { id: 'kokoro', kind: 'voice', title: 'Kokoro', files: ['voice/kokoro'], dir: 'voice/kokoro', entryId: 'kokoro', bytes: 3.4e8, at: Date.now() },
   'whisper-small': { id: 'whisper-small', kind: 'dictation', title: 'Whisper Small', files: ['voice/whisper-small'], dir: 'voice/whisper-small', entryId: 'whisper-small', bytes: 3.6e8, at: Date.now() },
@@ -133,7 +135,21 @@ try {
     await page.click('nav[aria-label="Modes"] >> text=Get Models');
     await page.waitForSelector('text=Lotus Engines', { timeout: 8000 });
     await page.waitForTimeout(500);
-    ok(`models (${tag}): installed list has chat, image, voice and dictation`, await page.locator('text=In Lotus Studio (4)').isVisible());
+    ok(`models (${tag}): installed list has the two chat models, image, voice and dictation`, await page.locator('text=In Lotus Studio (5)').isVisible());
+    if (!dark) {
+      // A real download (a small Piper voice from GitHub): its progress must stay inside its card (0.9.1).
+      const card = page.locator('div:has(> div > div > p:text-is("Piper · Alba (British English)"))').first();
+      await card.scrollIntoViewIfNeeded().catch(() => undefined);
+      await card.locator('button:has-text("Get")').click().catch(() => undefined);
+      const started = await card.locator('[role="status"]').waitFor({ timeout: 8000 }).then(() => true, () => false);
+      if (started) {
+        await page.waitForTimeout(700);
+        const m = await card.evaluate((c) => { const r = c.getBoundingClientRect(); const inner = Math.max(...[...c.querySelectorAll('*')].map((e) => e.getBoundingClientRect().right)); return { right: Math.round(r.right), inner: Math.round(inner) }; });
+        await page.screenshot({ path: `${shots}/s19-download-${tag}.png` });
+        ok('models: a download in progress stays inside its card', m.inner <= m.right, JSON.stringify(m));
+        await card.locator('button[aria-label^="Stop downloading"]').click().catch(() => undefined);
+      } else console.log('note: the test download did not start (no network?); overflow not checked');
+    }
     ok(`models (${tag}): engines listed`, await page.locator('text=stable-diffusion.cpp').first().isVisible());
     await page.screenshot({ path: `${shots}/s17-models-${tag}.png`, fullPage: false });
     await page.locator('main, body').first().evaluate(() => { const el = [...document.querySelectorAll('div')].find((d) => d.scrollHeight > d.clientHeight + 200 && getComputedStyle(d).overflowY === 'auto'); if (el) el.scrollTop = 900; });
@@ -242,6 +258,26 @@ try {
     ok(`work: attach button and video-memory bar (${tag})`, await page.locator('button[aria-label="Attach files"]').isVisible() && await page.locator('[role="meter"][aria-label="Video memory in use"]').count() > 0);
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${shots}/s17-work-${tag}.png` });
+    // Thinking budget (0.9.1): the right panel offers it for a Nemotron model.
+    await page.keyboard.press('Control+1');
+    await page.waitForSelector('textarea[aria-label="Message"]', { timeout: 8000 });
+    await page.click('button[title="Model for this chat"]');
+    await page.click('[role="option"]:has-text("Nemotron")');
+    if (!(await page.locator('aside >> text=Model').first().isVisible().catch(() => false))) await page.keyboard.press('Control+Alt+i').catch(() => undefined);
+    const rightBtn = page.locator('button[aria-label*="right panel" i]').first();
+    if (!(await page.locator('[role="radiogroup"][aria-label="Thinking budget"]').isVisible().catch(() => false))) {
+      if (await rightBtn.count() && /show/i.test((await rightBtn.getAttribute('aria-label')) ?? '')) await rightBtn.click();
+      await page.locator('button:has-text("Model")').last().click();
+    }
+    ok(`thinking budget: offered for Nemotron (${tag})`, await page.waitForSelector('[role="radiogroup"][aria-label="Thinking budget"]', { timeout: 5000 }).then(() => true, () => false));
+    if (!dark) {
+      await page.click('[role="radiogroup"][aria-label="Thinking budget"] >> text=Short');
+      let saved;
+      for (let i = 0; i < 30 && saved !== 512; i++) { saved = JSON.parse((await api('/v1/kv')).items['lotus.settings.v1'] ?? '{}').thinkingBudget; if (saved !== 512) await page.waitForTimeout(100); }
+      ok('thinking budget: Short is saved as 512 tokens', saved === 512, String(saved));
+    }
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${shots}/s19-thinking-${tag}.png` });
     ok(`no page errors (${tag})`, errors.length === 0, errors.join(' | '));
     await ctx.close();
   }
