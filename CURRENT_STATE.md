@@ -3,6 +3,10 @@
 > Snapshot taken at the end of session 1. Evidence legend: ✅ confirmed (command/test output seen) · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
+## 0.9.0 release (16 Nov)
+- Tag `v0.9.0` on top of the voice studio, speech to text, Work and Images changes (§0n-voice, §0n-ui). Release text from `release-notes/v0.9.0.md`: the publish job now uses `release-notes/<tag>.md` for the GitHub release and its first paragraph for the in-app update notes, when the file exists (else the old generated notes).
+- CI result: see the Actions run for `v0.9.0`; nothing in this release was run on Windows/macOS before tagging.
+
 ## 0n-voice. Voice studio with Lotus's own engine: everything Voicebox did (16 Nov, 0.8.2) (⚠️ cloning not run with real models)
 - **Voice page** (`components/voice/BuiltinVoice.tsx` + `components/voice/studio/*`): Speak · Voices · Stories · Dictate in the sidebar, the shared chat bar, a Settings inspector.
   - **Speak**: any voice (yours or a built-in speaker), long texts in parts (`chunkText`, joined), effects (button with presets in the bar, every knob in the inspector), Open Text (.txt/.md), favourites, add a clip to a story, starter lines for a low start.

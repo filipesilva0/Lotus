@@ -165,6 +165,9 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - UI changes: regenerate screenshots and **look at them** (light, dark, and the Tauri-sized desktop layout).
 - A failing test must be explained as either a real bug or a stale expectation, with evidence.
 
+## Releases
+- A release is a pushed `v<version>` tag (CI stamps the version; the version fields in the files stay 0.1.0). Write `release-notes/v<version>.md` first: its first paragraph is the in-app update note, the whole file the GitHub release text.
+
 ## When you finish a session
 - **Auto commit (user's choice):** when a session's changes pass the testing requirements, commit them straight to `main` and push to `origin` (github.com/filipesilva0/Lotus). End the message with the session's attribution lines. If the push is refused, say so and give the user the commands to push from their own folder.
 Update `CURRENT_STATE.md` (statuses, bug table, CI history), `TASKS.md`, and `DECISIONS.md` for any new decision/assumption; keep the README "Status" section consistent; rebuild the zip excluding `node_modules/ dist/ src-tauri/target/ src-tauri/gen/`.

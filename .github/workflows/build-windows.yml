@@ -258,6 +258,12 @@ jobs:
           path: out
           merge-multiple: true
 
+      # Hand-written notes for this version, if there are any (release-notes/<tag>.md).
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: release-notes
+
       - name: Write latest.json
         shell: python
         run: |
@@ -272,7 +278,7 @@ jobs:
           lin = entry("Lotus-linux-x86_64.AppImage")
           manifest = {
               "version": ver,
-              "notes": f"Lotus {ver}. See the release page for what changed.",
+              "notes": (open(f"src/release-notes/{tag}.md").read().split("\n\n")[0].strip() if os.path.exists(f"src/release-notes/{tag}.md") else f"Lotus {ver}. See the release page for what changed."),
               "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "platforms": {
                   "windows-x86_64": win, "windows-x86_64-msi": win,
@@ -289,6 +295,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -la out
-          gh release create "$TAG" out/* --target "${{ github.sha }}" --draft --title "Lotus $VERSION" --generate-notes
+          if [[ -f "src/release-notes/$TAG.md" ]]; then notes=(--notes-file "src/release-notes/$TAG.md"); else notes=(--generate-notes); fi
+          gh release create "$TAG" out/* --target "${{ github.sha }}" --draft --title "Lotus $VERSION" "${notes[@]}"
           gh release edit "$TAG" --draft=false --latest
           echo "Published https://github.com/$GH_REPO/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"
