@@ -21,6 +21,11 @@ export interface ChatOpts {
   think?: boolean;
   signal: AbortSignal;
   fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  /**
+   * Built-in engine: restart llama-server with room for at least `tokens` and return its new address.
+   * Called when a request is longer than the running context (a long chat, many tool results).
+   */
+  growCtx?: (tokens: number) => Promise<string>;
 }
 
 export interface TurnResult { content: string; calls: WireCall[]; promptTokens?: number; evalTokens?: number; tokensPerSec?: number; durationMs: number }
@@ -147,6 +152,14 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     if (!res.ok) {
       const text = (await res.text()).slice(0, 300);
       if (native && (res.status === 400 || res.status === 500) && /tool|template|jinja/i.test(text)) throw new ToolsUnsupported(text);
+      const need = /exceed_context_size|exceeds the available context/i.test(text) ? Number(/"n_prompt_tokens"\s*:\s*(\d+)/.exec(text)?.[1]) || 0 : 0;
+      if (need && o.growCtx) {
+        // Room for the prompt plus a reply, rounded up to a whole 4K.
+        const ctx = Math.ceil((need + Math.max(2048, o.numPredict ?? 0)) / 4096) * 4096;
+        const url = await o.growCtx(ctx);
+        return chatTurn({ ...o, url, growCtx: undefined }, messages, tools, on);
+      }
+      if (need) throw new Error(`This conversation (${need} tokens) is longer than the model's context window. Raise Context Window in Settings, or start a new chat.`);
       throw new Error(`The llama.cpp server answered ${res.status}: ${text.slice(0, 200)}`);
     }
     let content = '';

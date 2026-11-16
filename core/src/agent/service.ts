@@ -193,7 +193,7 @@ export class AgentService {
       messages[0] = { ...messages[0], content: `${messages[0].content}\n\nFolders you can use with the file tools: ${folders.join(', ')} (the last one is the Lotus Studio folder; save new notes there unless the user names another place).${note}` };
     }
 
-    const llm: { backend: 'ollama' | 'llamacpp'; nativeTools?: boolean; url: string; auth: string | null; fetch: typeof fetchFn } & NonNullable<StartArgs['options']> = {
+    const llm: { backend: 'ollama' | 'llamacpp'; nativeTools?: boolean; url: string; auth: string | null; fetch: typeof fetchFn; growCtx?: (tokens: number) => Promise<string> } & NonNullable<StartArgs['options']> = {
       backend: s.backend === 'ollama' ? 'ollama' : 'llamacpp', nativeTools: s.backend === 'builtin',
       url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options,
     };
@@ -203,7 +203,9 @@ export class AgentService {
         if (s.backend === 'builtin') {
           // The built-in engine loads the chosen model on first use (and swaps models when asked).
           if (!this.o.builtins) throw new Error('The built-in chat engine is not available in this build.');
-          llm.url = await this.o.builtins.ensureChat(a.model, { ctx: a.options?.numCtx || s.contextWindow || undefined });
+          const b = this.o.builtins;
+          llm.url = await b.ensureChat(a.model, { ctx: a.options?.numCtx || s.contextWindow || undefined });
+          llm.growCtx = async (tokens) => { const url = await b.ensureChat(a.model, { ctx: tokens }); llm.url = url; return url; };
         }
         const out = await runAgent({
           runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined,

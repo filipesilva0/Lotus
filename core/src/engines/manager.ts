@@ -43,7 +43,14 @@ export interface InstalledModel {
 export type JobState = 'running' | 'done' | 'error' | 'stopped';
 export interface Job { id: string; kind: 'engine' | 'model'; target: string; label: string; state: JobState; done: number; total: number; step: string; error?: string; started: number }
 
-export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string; port?: number }
+export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string; port?: number; ctx?: number }
+
+/**
+ * Smallest context the built-in chat engine starts with: Lotus's system prompt and tool list alone are
+ * about 5,000 tokens, so 4,096 (what the scaler picked on a 16 GB Mac) failed every message (0.10.5).
+ */
+export const MIN_CHAT_CTX = 8192;
+export const MAX_CHAT_CTX = 65536;
 
 interface Deps {
   studio: string;
@@ -124,7 +131,7 @@ export const needsShortPath = (p: string) => /[^\x21-\x7e]/.test(p);
  * "failed to allocate" and gave no numbers, so a wrong setting looked like a too-small card.)
  */
 export function sdcppMemoryError(log: string, vramGb = 0): string | null {
-  if (!/cannot make enough memory available|out of memory|failed to allocate/i.test(log)) return null;
+  if (!/cannot make enough memory available|out of memory|outofmemory|insufficient memory|failed to allocate/i.test(log)) return null;
   const gb = (mb: number) => `${(mb / 1024).toFixed(1)} GB`;
   const need = [...log.matchAll(/need ([\d.]+) MB device[^\n]*?available ([\d.]+) MB device/gi)].pop();
   const total = Number(/total ([\d.]+) MB/i.exec(log)?.[1]) || vramGb * 1024;
@@ -133,6 +140,7 @@ export function sdcppMemoryError(log: string, vramGb = 0): string | null {
     if (free < 1) return 'The graphics card had no free memory left, so no image was made. Another program is holding it (Ollama, ComfyUI, a game or a browser tab). Close it, or wait a few minutes for Ollama to unload its model, and try again.';
     return `The image needed ${gb(want)} of video memory to work in, but only ${gb(free)}${total ? ` of the card's ${gb(total)}` : ''} was free. Close programs that use the graphics card, or try a smaller size or one image at a time.`;
   }
+  if (/kIOGPU|ggml_metal|insufficient memory/i.test(log)) return 'The Mac ran out of graphics memory making this image, even with the chat model unloaded and the image decoded in tiles. Close other heavy apps, or try a smaller size, one image at a time, or a smaller model.';
   return 'The graphics card ran out of memory making this image. Try a smaller size, one image at a time, or a smaller model.';
 }
 
@@ -507,7 +515,9 @@ export class Builtins {
 
   /** Starts llama-server with this model (or reuses the running one) and returns its address. */
   ensureChat(modelId: string, o: { ctx?: number } = {}): Promise<string> {
-    if (this.chat.state === 'ready' && this.chat.model === modelId && this.chatProc && this.chatProc.exitCode === null && this.chat.url) return Promise.resolve(this.chat.url);
+    // Reuse the running server unless it was started with a smaller context than this asks for.
+    const want = Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
+    if (this.chat.state === 'ready' && this.chat.model === modelId && this.chatProc && this.chatProc.exitCode === null && this.chat.url && (this.chat.ctx ?? 0) >= want) return Promise.resolve(this.chat.url);
     if (this.chatStarting && this.chat.model === modelId) return this.chatStarting;
     this.chatStarting = this.startChat(modelId, o).finally(() => { this.chatStarting = null; });
     return this.chatStarting;
@@ -519,12 +529,12 @@ export class Builtins {
     if (!m?.gguf) throw new Error(`${modelId} isn't downloaded for the built-in engine. Get it in Settings → Models.`);
     const exe = this.exe('llama', 'llama-server');
     const port = await freePort();
-    const ctx = o.ctx && o.ctx >= 2048 ? o.ctx : 8192;
+    const ctx = Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
     const args = ['-m', join(this.modelsDir, m.gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
     if (m.mmproj) args.push('--mmproj', join(this.modelsDir, m.mmproj));
     const logPath = join(this.enginesDir, ENGINE_DIR.llama, 'server.log');
     mkdirSync(dirname(logPath), { recursive: true });
-    this.chat = { state: 'starting', model: modelId, port };
+    this.chat = { state: 'starting', model: modelId, port, ctx };
     this.emit();
     this.d.log?.(`llama-server: ${m.gguf} on ${port}`);
     const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: Bun.file(logPath), stderr: Bun.file(logPath), stdin: 'ignore', windowsHide: true });
@@ -539,7 +549,7 @@ export class Builtins {
         if (this.chatProc === proc) { this.chat = { state: 'error', model: modelId, error: msg }; this.chatProc = null; this.emit(); }
         throw new Error(msg);
       }
-      try { const r = await f(`${url}/health`, { signal: AbortSignal.timeout(2000) }); if (r.ok) { this.chat = { state: 'ready', model: modelId, url, port }; this.emit(); return url; } } catch { /* loading */ }
+      try { const r = await f(`${url}/health`, { signal: AbortSignal.timeout(2000) }); if (r.ok) { this.chat = { state: 'ready', model: modelId, url, port, ctx }; this.emit(); return url; } } catch { /* loading */ }
       await Bun.sleep(400);
     }
     this.stopChat();
@@ -601,16 +611,21 @@ export class Builtins {
     this.imageBusy = true;
     const m = await this.machine();
     // A chat model holding the GPU's memory makes big image models fail or crawl: unload it first on
-    // GPUs under 16 GB (it loads again on the next message).
-    if (this.chat.state !== 'stopped' && m.vramGb > 0 && m.vramGb < 16 && !m.unified) await this.stopChatAndWait();
+    // GPUs under 16 GB, and on Macs up to 32 GB, where chat and images share the same memory (Metal
+    // ran out with both loaded, 0.10.5). It loads again on the next message.
+    if (this.chat.state !== 'stopped' && m.vramGb > 0 && (m.unified ? m.vramGb <= 32 : m.vramGb < 16)) await this.stopChatAndWait();
     const outDir = join(this.enginesDir, ENGINE_DIR.sd, 'out', `${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
     mkdirSync(outDir, { recursive: true });
-    const lowVram = m.gpu === 'none' || (!m.unified && m.vramGb > 0 && m.vramGb < 12);
+    let lowVram = m.gpu === 'none' || (!m.unified && m.vramGb > 0 && m.vramGb < 12);
+    const vaeTiling = m.unified && m.vramGb <= 32;
     const autoFit = (await this.sdcppHelp(exe)).includes('--auto-fit');
-    const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram, autoFit }, this.imagePath, o.loras ?? []);
     const logPath = join(this.enginesDir, ENGINE_DIR.sd, 'last-run.log');
     let log = '';
     try {
+     // Ran out of memory with the normal switches: try once more with the low-memory ones.
+     for (let attempt = 0; ; attempt++) {
+      const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram, autoFit, vaeTiling: vaeTiling || attempt > 0 }, this.imagePath, o.loras ?? []);
+      log = '';
       const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
       const onAbort = () => { try { proc.kill(); } catch { /* gone */ } };
       o.signal?.addEventListener('abort', onAbort, { once: true });
@@ -631,11 +646,13 @@ export class Builtins {
       const made = readdirSync(outDir).filter((f) => /\.png$/i.test(f)).sort().map((f) => join(outDir, f));
       if (code !== 0 || !made.length) {
         const oom = sdcppMemoryError(log, m.vramGb);
+        if (oom && attempt === 0 && !lowVram) { lowVram = true; this.d.log?.('sd-cli ran out of memory; retrying with low-memory switches'); continue; }
         if (oom) throw new Error(`${oom} The full log is in ${logPath}.`);
         const why = log.split(/[\r\n]+/).filter((l) => /error|fail|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
         throw new Error(`The built-in image engine didn't make an image${why ? `: ${why}` : ''}. The full log is in ${logPath}.`);
       }
       return made;
+     }
     } finally { this.imageBusy = false; }
   }
 

@@ -205,6 +205,11 @@ export interface SdRun {
    * first use, which left no room to compute on an 8 GB card (SDXL, 0.9.1).
    */
   autoFit?: boolean;
+  /**
+   * Decode the image in tiles only (Apple silicon: the GPU shares the Mac's memory, so moving weights
+   * to the CPU gains nothing, but a full-size VAE decode is the step that ran out of Metal memory).
+   */
+  vaeTiling?: boolean;
   /** Image to image. */
   init?: string; strength?: number;
   /** Reference images for models that take several (FLUX.2), passed as --ref-image each. */
@@ -266,7 +271,7 @@ export function sdcppArgs(p: ImageProfile, run: SdRun, path: (folder: ImageFolde
     // sd.cpp leave the rest of the weights in RAM; older builds only have --offload-to-cpu.
     if (run.autoFit) args.push('--max-vram', '-1', '--vae-tiling');
     else args.push('--offload-to-cpu', '--vae-tiling');
-  }
+  } else if (run.vaeTiling) args.push('--vae-tiling');
   add('-o', run.output);
   return args;
 }
