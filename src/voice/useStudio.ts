@@ -12,7 +12,8 @@ import { builtinsNow, InstalledModel, useBuiltins } from '../lib/builtins';
 import { entryById } from '../models/library';
 import { builtinSpeech } from './voice';
 import { applyEffects, clipSeconds, joinClips } from './render';
-import { chunkText, effectsNeutral, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
+import { HISTORY_EVENT } from './stt';
+import { chunkText, effectsNeutral, Segment, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
 
 export const MINE_KEY = 'lotus.voice.mine.v1';
 export const SELECTED_KEY = 'lotus.voice.selected.v1';
@@ -20,7 +21,7 @@ export const STORIES_KEY = 'lotus.voice.stories.v1';
 export const HISTORY_KEY = 'lotus.voice.builtin.v1';
 
 export interface Clip { id: string; text: string; path: string; voice: string; voiceId?: string; seconds?: number; fav?: boolean; ts: number }
-export interface Transcript { id: string; text: string; model: string; source?: string; ts: number }
+export interface Transcript { id: string; text: string; model: string; source?: string; seconds?: number; segments?: Segment[]; fav?: boolean; ts: number }
 
 const read = <T,>(key: string, fallback: T): T => { try { const v = kv.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; } };
 const write = (key: string, v: unknown) => kv.setItem(key, JSON.stringify(v));
@@ -80,8 +81,11 @@ export function useStudio() {
       if (e.key === STORIES_KEY) setStories(read(STORIES_KEY, []));
       if (e.key === SELECTED_KEY) setSelectedRaw(kv.getItem(SELECTED_KEY));
     };
+    // Long transcriptions finish in the background (voice/stt.ts) and add to the history.
+    const reload = () => setHistory(() => ({ clips: [], transcripts: [], ...read(HISTORY_KEY, {}) }));
     window.addEventListener('storage', on);
-    return () => window.removeEventListener('storage', on);
+    window.addEventListener(HISTORY_EVENT, reload);
+    return () => { window.removeEventListener('storage', on); window.removeEventListener(HISTORY_EVENT, reload); };
   }, []);
 
   const options = useMemo(() => voiceOptions(models, mine), [models, mine]);

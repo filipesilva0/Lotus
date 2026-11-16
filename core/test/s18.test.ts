@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { Builtins } from '../src/engines/manager';
 import { entryById } from '../../src/models/library';
 import {
-  EFFECT_PRESETS, NO_EFFECTS, chunkText, effectsNeutral, layoutStory, parseScript, pickVoice, pitchRate, presetOf, scriptSpeakers, storyLength, voiceOptions, withEffects,
+  EFFECT_PRESETS, NO_EFFECTS, TRANSCRIPT_ACTIONS, chunkText, clock, splitPoints, toSrt, transcriptText, effectsNeutral, layoutStory, parseScript, pickVoice, pitchRate, presetOf, scriptSpeakers, storyLength, voiceOptions, withEffects,
   type MyVoice, type VoiceModel,
 } from '../../src/voice/studio';
 
@@ -138,5 +138,36 @@ describe('long texts', () => {
     expect(parts.join(' ').replace(/\s+/g, '')).toBe(t.replace(/\s+/g, ''));
     expect(chunkText('  short  ')).toEqual(['short']);
     expect(chunkText('   ')).toEqual([]);
+  });
+});
+
+describe('speech to text for long recordings', () => {
+  // 70 s at 1 kHz: speech everywhere except short silences at 22 s and 47 s.
+  const rate = 1000, n = 70 * rate;
+  const samples = new Float32Array(n).map((_, i) => (Math.abs(i / rate - 22) < 0.3 || Math.abs(i / rate - 47) < 0.3 ? 0 : Math.sin(i) * 0.5));
+  test('cuts at the quiet moments, never longer than Whisper can hear', () => {
+    const cuts = splitPoints(samples, rate);
+    expect(cuts.at(-1)).toBe(n);
+    expect(Math.abs(cuts[0] / rate - 22)).toBeLessThan(0.35);
+    expect(Math.abs(cuts[1] / rate - 47)).toBeLessThan(0.35);
+    let prev = 0;
+    for (const c of cuts) { expect((c - prev) / rate).toBeLessThanOrEqual(28); prev = c; }
+  });
+  test('short audio is one part; silence everywhere still splits under the limit', () => {
+    expect(splitPoints(new Float32Array(20 * rate), rate)).toEqual([20 * rate]);
+    const cuts = splitPoints(new Float32Array(100 * rate), rate);
+    let prev = 0;
+    for (const c of cuts) { expect((c - prev) / rate).toBeLessThanOrEqual(28); expect((c - prev) / rate).toBeGreaterThan(0); prev = c; }
+  });
+  test('times, plain text and subtitles', () => {
+    const segs = [{ start: 0, end: 21.5, text: ' Hello there. ' }, { start: 21.5, end: 3725.25, text: 'Bye.' }, { start: 3725.25, end: 3726, text: '' }];
+    expect(clock(75.9)).toBe('1:15');
+    expect(clock(3725)).toBe('1:02:05');
+    expect(transcriptText(segs)).toBe('Hello there. Bye.');
+    expect(transcriptText(segs, true)).toBe('[0:00] Hello there.\n[0:21] Bye.');
+    expect(toSrt(segs)).toBe('1\n00:00:00,000 --> 00:00:21,500\nHello there.\n\n2\n00:00:21,500 --> 01:02:05,250\nBye.\n');
+  });
+  test('every Open in Chat action asks something, except Ask About It', () => {
+    expect(TRANSCRIPT_ACTIONS.filter((a) => !a.prompt).map((a) => a.id)).toEqual(['ask']);
   });
 });

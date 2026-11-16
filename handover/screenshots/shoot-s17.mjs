@@ -161,7 +161,7 @@ try {
 
     // Voice page with the built-in engine.
     await page.keyboard.press('Control+4');
-    await page.waitForSelector('text=Dictate', { timeout: 8000 });
+    await page.waitForSelector('text=Speech to Text', { timeout: 8000 });
     if (!dark) {
       await page.fill('textarea[aria-label="Text to speak"]', 'Hello from Lotus');
       await page.click('button[aria-label="Speak"]');
@@ -200,10 +200,41 @@ try {
     }
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${shots}/s18-story-${tag}.png` });
-    await nav('Dictate');
-    ok(`voice studio: dictate can transcribe a file (${tag})`, await page.locator('button:has-text("Transcribe a File")').isVisible());
+    await nav('Speech to Text');
+    // The dark pass shares the light pass's data, so it may already have a transcript (no empty drop zone).
+    ok(`speech to text: drop zone or file picker (${tag})`, await page.locator('text=Turn a recording into text').isVisible() || await page.locator('button:has-text("Choose a File")').first().isVisible());
     await page.waitForTimeout(300);
-    await page.screenshot({ path: `${shots}/s18-dictate-${tag}.png` });
+    await page.screenshot({ path: `${shots}/s18-stt-empty-${tag}.png` });
+    if (!dark) {
+      // A 60 s recording (16 kHz tone with two short silences) → three parts, each written down by the stand-in Whisper.
+      const rate = 16000, secs = 60, n = rate * secs, wav = Buffer.alloc(44 + n * 2);
+      wav.write('RIFF', 0); wav.writeUInt32LE(36 + n * 2, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+      wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate * 2, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(n * 2, 40);
+      for (let i = 0; i < n; i++) { const t = i / rate; const quiet = Math.abs(t - 21) < 0.4 || Math.abs(t - 43) < 0.4; wav.writeInt16LE(quiet ? 0 : Math.round(Math.sin(t * 2 * Math.PI * 220) * 8000), 44 + i * 2); }
+      const lecture = '/tmp/s18-lecture.wav';
+      (await import('node:fs')).writeFileSync(lecture, wav);
+      await page.setInputFiles('input[type="file"][accept="audio/*,video/*"]', lecture);
+      ok('speech to text: a long recording is written down in parts', await page.waitForSelector('text=1:00 · 6 words', { timeout: 20000 }).then(() => true, () => false));
+      // kv writes reach the core a moment later; wait for the transcript to be saved.
+      let segs = [];
+      for (let i = 0; i < 30 && !segs.length; i++) { segs = JSON.parse((await api('/v1/kv')).items['lotus.voice.builtin.v1'] ?? '{}').transcripts?.[0]?.segments ?? []; if (!segs.length) await page.waitForTimeout(100); }
+      ok('speech to text: cut at the quiet moments (3 parts, ≤ 28 s each)', segs.length === 3 && segs.every((x) => x.end - x.start <= 28) && Math.abs(segs[0].end - 21) < 0.5, JSON.stringify(segs.map((x) => [x.start.toFixed(1), x.end.toFixed(1)])));
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${shots}/s18-stt-${tag}.png` });
+      await page.click('button:has-text("Open in Chat")');
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: `${shots}/s18-stt-menu-${tag}.png` });
+      await page.click('[role="menuitem"]:has-text("Summarize")');
+      ok('speech to text: Summarize opens a new chat with the transcript and sends the request', await page.waitForSelector('text=Summarize the attached transcript', { timeout: 8000 }).then(() => true, () => false));
+      const attached = (sess) => sess.some((x) => (x.context ?? []).some((c) => /transcript/.test(c.name) && c.chunks.some((k) => k.text.includes('Olá, mundo'))));
+      let found = false;
+      for (let i = 0; i < 40 && !found; i++) { found = attached(JSON.parse((await api('/v1/kv')).items['lotus.sessions.v1'] ?? '[]')); if (!found) await page.waitForTimeout(100); }
+      ok('speech to text: the transcript is attached to that chat', found);
+      await page.waitForTimeout(800);
+      await page.screenshot({ path: `${shots}/s18-stt-chat-${tag}.png` });
+      await page.keyboard.press('Control+4');
+      await page.waitForSelector('nav[aria-label="Voice modes"]', { timeout: 5000 });
+    }
     await nav('Speak');
     // Work: same sidebar as Chat, attach button and video-memory bar in the chat bar (0.8.2).
     await page.keyboard.press('Control+2');

@@ -186,3 +186,59 @@ export function chunkText(text: string, max = 600): string[] {
   if (cur.trim()) out.push(cur.trim());
   return out;
 }
+
+// ── Speech to text (long recordings) ───────────────────────────────────────
+// Whisper hears at most 30 seconds at a time, so long audio is cut at quiet moments into parts.
+
+export interface Segment { start: number; end: number; text: string }
+
+/**
+ * Where to cut mono samples into parts of about `target` seconds (never over `max`): in each
+ * window [min, max] after the last cut, the quietest 0.2 s is chosen, so cuts fall between words.
+ * Returns the cut positions in samples, ending with the total length.
+ */
+export function splitPoints(samples: Float32Array, rate: number, target = 25, min = 15, max = 28): number[] {
+  const total = samples.length;
+  const frame = Math.max(1, Math.floor(rate * 0.2));
+  const cuts: number[] = [];
+  let last = 0;
+  while (total - last > max * rate) {
+    const from = last + Math.floor(min * rate), to = last + Math.floor(max * rate) - frame;
+    let best = last + Math.floor(target * rate), bestE = Infinity;
+    for (let i = from; i <= to; i += Math.floor(frame / 2)) {
+      let e = 0;
+      for (let j = i; j < i + frame; j++) e += samples[j] * samples[j];
+      // Prefer quiet spots near the target length.
+      const score = e / frame + Math.abs(i - (last + target * rate)) / rate * 1e-6;
+      if (score < bestE) { bestE = score; best = i + Math.floor(frame / 2); }
+    }
+    cuts.push(best);
+    last = best;
+  }
+  cuts.push(total);
+  return cuts;
+}
+
+/** 75.5 → "1:15", 3725 → "1:02:05". */
+export function clock(sec: number): string {
+  const s = Math.max(0, Math.floor(sec)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+/** Plain transcript, optionally with a [m:ss] time before each part. */
+export const transcriptText = (segs: Segment[], times = false) => segs.filter((s) => s.text.trim()).map((s) => (times ? `[${clock(s.start)}] ${s.text.trim()}` : s.text.trim())).join(times ? '\n' : ' ');
+
+/** Subtitles (.srt). */
+export function toSrt(segs: Segment[]): string {
+  const t = (x: number) => { const ms = Math.round(x * 1000); const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000); return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms % 1000).padStart(3, '0')}`; };
+  return segs.filter((s) => s.text.trim()).map((s, i) => `${i + 1}\n${t(s.start)} --> ${t(s.end)}\n${s.text.trim()}\n`).join('\n');
+}
+
+/** What Chat is asked to do with a transcript. `prompt` empty = open the chat and let you ask. */
+export const TRANSCRIPT_ACTIONS: { id: string; label: string; prompt: string }[] = [
+  { id: 'summary', label: 'Summarize', prompt: 'Summarize the attached transcript: a short overview first, then the main points as bullets.' },
+  { id: 'points', label: 'Key Points and Action Items', prompt: 'From the attached transcript, list the key points, any decisions, and every action item (who does what, by when, if said).' },
+  { id: 'notes', label: 'Meeting Notes', prompt: 'Turn the attached transcript into clean meeting notes with headings: topics discussed, decisions, open questions, next steps.' },
+  { id: 'clean', label: 'Clean Up the Text', prompt: 'Rewrite the attached transcript as clean, readable text: fix punctuation and paragraphs, remove filler words, keep the meaning and the speaker’s words.' },
+  { id: 'ask', label: 'Ask About It…', prompt: '' },
+];

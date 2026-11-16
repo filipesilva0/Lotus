@@ -59,6 +59,7 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - Map: `CURRENT_STATE.md` §0n-voice. Pure logic `voice/studio.ts` (tested in `core/test/s18.test.ts`), Web Audio `voice/render.ts`, state `voice/useStudio.ts`, UI `components/voice/BuiltinVoice.tsx` + `components/voice/studio/*`.
 - Speak through `speakWith(option, text)` (chunks, cloning reference, effects, saving); never call `builtinSpeech` from new UI. New TTS model families need a branch in `manager.ttsArgs` + a catalog entry with `voice.engine` (and `clones` if it needs a recording) + a test in s18.
 - Cloning models have no `tier` (the guide must never suggest a voice that can't speak alone).
+- Long audio goes through `voice/stt.ts transcribeLong` (Whisper hears ≤ 30 s; never send a longer WAV to `stt_builtin`). Text for Chat goes through App's `openInChat` (new chat, text attached as context, optional request).
 
 ## Session 17 map (built-in engines, one catalog, image setups, Lotus Studio)
 - Map: `CURRENT_STATE.md` §0n. Core: `core/src/engines/*` (`Builtins` in `manager.ts`, RPC in `rpc.ts`). Web: `lib/builtins.ts` (live state, `useBuiltins`, `useProfiles`), `components/models/ModelLibrary.tsx` + `ImageSetups.tsx`, `components/voice/BuiltinVoice.tsx`, `services/builtinImages.ts`.

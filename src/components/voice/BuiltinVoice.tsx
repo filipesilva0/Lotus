@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AudioLines, BookOpen, Boxes, Copy, FileText, Film, Mic, Mic2, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, Volume2, ListPlus, ChevronDown } from 'lucide-react';
+import { AudioLines, BookOpen, Boxes, Copy, FileAudio, FileText, Film, Mic, Mic2, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, Volume2, ListPlus, ChevronDown } from 'lucide-react';
 import { Banner, Btn, Empty, IconBtn, Select, cx } from '../common/ui';
 import { InspectorPane, KV, MenuItem, Popover, Section, SidebarPane, SliderField, groupByDate } from '../common/Pane';
 import { PickerButton, PromptShell, SendButton, TrayButton, TrayNote, VramMeter } from '../common/PromptBox';
@@ -8,13 +8,14 @@ import { offerUndo } from '../common/Alerts';
 import { ClipAudio, EffectsButton, EffectsPanel, VoicePicker } from './studio/parts';
 import { VoicesView } from './studio/VoicesView';
 import { StoriesView, newStory } from './studio/StoriesView';
+import { SttEmpty, SttProgress, TranscriptCard } from './studio/SttView';
+import { transcribeLong, useSttJob } from '../../voice/stt';
 import { usePanels } from '../../lib/panels';
 import { deleteMedia } from '../../lib/core';
 import { kv } from '../../lib/store';
 import { uid } from '../../lib/persist';
-import { MicRecorder, micErrorMessage, toWav } from '../../lib/audio';
-import { builtinTranscribe } from '../../voice/voice';
-import { Effects, effectsNeutral, withEffects } from '../../voice/studio';
+import { MicRecorder, micErrorMessage } from '../../lib/audio';
+import { Effects, clock, effectsNeutral, withEffects } from '../../voice/studio';
 import { speakWith, useStudio, Clip } from '../../voice/useStudio';
 import type { LotusSettings } from '../../types/lotus';
 
@@ -23,7 +24,7 @@ import type { LotusSettings } from '../../types/lotus';
  *   Speak    type, pick a voice (yours or built-in), optional effects, press Speak; long texts work
  *   Voices   make a voice from a few seconds of speech (cloning) or tune a built-in one
  *   Stories  a script with several speakers on four tracks, played together and exported as one file
- *   Dictate  talk or drop an audio file; Whisper writes it down
+ *   Speech to Text  long recordings (any length, audio or video) → transcript → Open in Chat (summary…)
  * Same three panes and chat bar as the other pages. Data: voice/useStudio.ts; audio in Lotus Studio/Audio.
  */
 
@@ -31,7 +32,7 @@ type Mode = 'speak' | 'voices' | 'stories' | 'dictate';
 const LANGS = ['Auto', 'English', 'Portuguese', 'Spanish', 'French', 'German', 'Italian', 'Dutch', 'Japanese', 'Chinese', 'Korean', 'Russian'];
 const STARTERS = ['Good morning! Here is your plan for today.', 'Once upon a time, in a quiet village by the sea, there lived a curious little fox.', 'Welcome to our podcast. Today we talk about local AI.'];
 
-export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; onOpenModels: () => void }> = ({ settings, onSettings, onOpenModels }) => {
+export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; onOpenModels: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ settings, onSettings, onOpenModels, onOpenInChat }) => {
   const studio = useStudio();
   const b = studio.builtins;
   const { setRight } = usePanels();
@@ -55,7 +56,9 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<MicRecorder | null>(null);
   const [level, setLevel] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
+  const job = useSttJob();
+  const transcribing = job?.state === 'reading' || job?.state === 'working';
+  const [drag, setDrag] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const textFile = useRef<HTMLInputElement>(null);
@@ -67,7 +70,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const go = (m: Mode) => { setMode(m); kv.setItem('lotus.voice.builtin.mode', m); setSelected(null); setError(null); };
   const setEffects = (f: Effects) => { setFx(f); kv.setItem('lotus.voice.fx.v1', JSON.stringify(f)); };
   const { clips: allClips, transcripts: allTranscripts } = studio.history;
-  useEffect(() => { if (mode === 'speak' || mode === 'dictate') scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }); }, [allClips.length, allTranscripts.length, mode]);
+  useEffect(() => { if (mode === 'speak') scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }); }, [allClips.length, allTranscripts.length, mode]);
   useEffect(() => { const el = ta.current; if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 200)}px`; } }, [text]);
   useEffect(() => { if (selected) document.getElementById(`v-${selected}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [selected]);
 
@@ -83,26 +86,23 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   };
 
-  const addTranscript = (t: string, source?: string) => studio.saveHistory((h) => ({ ...h, transcripts: [{ id: uid('vt'), text: t, model: dictModel?.title ?? 'Whisper', source, ts: Date.now() }, ...h.transcripts] }));
+  const startJob = (blob: Blob, name: string) => {
+    setError(null);
+    if (!dictModel || !engineOk) { setError('Speech to text needs Lotus’s voice engine and a Whisper model. Get them in Models.'); return; }
+    if (!transcribeLong(blob, { name, model: dictModel.id, modelTitle: dictModel.title })) setError('Lotus is already writing down a recording. Wait for it or press Stop.');
+  };
   const toggleRecord = async () => {
     if (rec) {
-      setRec(null); setTranscribing(true);
-      try { const r = await rec.stop(); const t = (await builtinTranscribe(r.wav, dictModel?.id)).trim(); if (t) addTranscript(t); else setError('Heard nothing. Try again a little closer to the mic.'); }
-      catch (e) { setError((e as Error).message); } finally { setTranscribing(false); setLevel(0); }
+      setRec(null); setLevel(0);
+      try { const r = await rec.stop(); startJob(r.wav, `Recording ${new Date().toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`); }
+      catch (e) { setError((e as Error).message); }
       return;
     }
     setError(null);
     const r = new MicRecorder((l) => setLevel(l));
     try { await r.start(); setRec(r); } catch (e) { setError(micErrorMessage(e)); }
   };
-  const transcribeFile = async (f?: File) => {
-    if (!f) return;
-    setError(null); setTranscribing(true);
-    let wav: Blob;
-    try { wav = await toWav(f); } catch { setError('Lotus couldn’t read that file. Try a WAV, MP3, M4A or OGG recording.'); setTranscribing(false); return; }
-    try { const t = (await builtinTranscribe(wav, dictModel?.id)).trim(); if (t) addTranscript(t, f.name); else setError(`Lotus heard no speech in ${f.name}.`); }
-    catch (e) { setError((e as Error).message); } finally { setTranscribing(false); }
-  };
+  const transcribeFile = (f?: File) => { if (f) startJob(f, f.name); };
 
   const remove = (id: string) => {
     const clip = allClips.find((c) => c.id === id);
@@ -148,12 +148,12 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
     </>);
   };
 
-  const newLabel = { speak: 'New Speech', voices: 'New Voice', stories: 'New Story', dictate: rec ? 'Stop Dictation' : 'New Dictation' }[mode];
+  const newLabel = { speak: 'New Speech', voices: 'New Voice', stories: 'New Story', dictate: 'New Transcript' }[mode];
   const onNew = () => {
     if (mode === 'speak') { setText(''); setSelected(null); ta.current?.focus(); }
     else if (mode === 'voices') setVoiceSel(null);
     else if (mode === 'stories') { const s = newStory(); studio.saveStories((l) => [s, ...l]); setStorySel(s.id); }
-    else void toggleRecord();
+    else audioFile.current?.click();
   };
   const notice = !engineOk || (mode === 'dictate' ? !dictation.length : !studio.models.length);
 
@@ -161,7 +161,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Voice">
         <div className="p-3 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew} disabled={mode === 'dictate' && (!dictation.length || !engineOk || transcribing)}>{newLabel}</Btn>
+          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={onNew} disabled={mode === 'dictate' && (!dictation.length || !engineOk || transcribing || !!rec)}>{newLabel}</Btn>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
             <input type="search" data-page-search aria-label="Search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)}
@@ -172,11 +172,11 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
           {navBtn('speak', <AudioLines className="w-4 h-4" />, 'Speak')}
           {navBtn('voices', <Mic2 className="w-4 h-4" />, 'Voices')}
           {navBtn('stories', <Film className="w-4 h-4" />, 'Stories')}
-          {navBtn('dictate', <Mic className="w-4 h-4" />, 'Dictate')}
+          {navBtn('dictate', <FileAudio className="w-4 h-4" />, 'Speech to Text')}
         </nav>
         <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3 mt-2 border-t border-[var(--sep)] space-y-3">
           {mode === 'speak' && dated(clips, (c) => c.voice, (c) => remove(c.id))}
-          {mode === 'dictate' && dated(transcripts, (t) => t.source, (t) => remove(t.id))}
+          {mode === 'dictate' && dated(transcripts.map((t) => ({ ...t, text: t.source ?? t.text })), (t) => [t.seconds ? clock(t.seconds) : '', t.source ? (allTranscripts.find((x) => x.id === t.id)?.text ?? '').slice(0, 60) : ''].filter(Boolean).join(' · '), (t) => remove(t.id))}
           {mode === 'voices' && (<>
             <div>{head('Your Voices')}<div className="space-y-0.5">
               {studio.options.filter((o) => o.mine && (!needle || o.name.toLowerCase().includes(needle))).map((o) => row(o.id, o.name, voiceSel === o.id, () => setVoiceSel(o.id), o.ready ? (studio.voice?.id === o.id ? 'In use' : o.detail) : o.why))}
@@ -200,8 +200,10 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
       </SidebarPane>
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
-        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto">
-          {notice && <div className="max-w-[760px] mx-auto px-6 pt-4"><BuiltinNotice kind="voice" purpose={mode === 'dictate' ? 'to dictate' : 'to speak'} /></div>}
+        <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto"
+          onDragOver={(e) => { if (mode === 'dictate') { e.preventDefault(); setDrag(true); } }} onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { if (mode !== 'dictate') return; e.preventDefault(); setDrag(false); transcribeFile(e.dataTransfer.files[0]); }}>
+          {notice && <div className="max-w-[760px] mx-auto px-6 pt-4"><BuiltinNotice kind="voice" purpose={mode === 'dictate' ? 'to turn speech into text' : 'to speak'} /></div>}
           {mode === 'voices' && <VoicesView studio={studio} selected={voiceSel} onSelect={setVoiceSel} lastClip={lastClip} onOpenModels={onOpenModels} />}
           {mode === 'stories' && <StoriesView studio={studio} storyId={storySel} onStory={setStorySel} />}
           {(mode === 'speak' || mode === 'dictate') && (
@@ -214,8 +216,9 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                     <Btn variant="ghost" icon={<Mic2 className="w-3.5 h-3.5" />} onClick={() => { go('voices'); setVoiceSel(null); }}>Make Your Own Voice</Btn>
                   </div>} />
               )}
-              {mode === 'dictate' && !transcripts.length && (
-                <Empty className="flex-1" icon={<Mic />} title="Turn speech into text" body="Press the mic and talk, or transcribe a recording. Whisper writes it down on this computer." />
+              {mode === 'dictate' && job && <SttProgress job={job} />}
+              {mode === 'dictate' && !transcripts.length && !transcribing && (
+                <SttEmpty drag={drag} onPick={() => audioFile.current?.click()} onRecord={() => void toggleRecord()} disabled={!dictation.length || !engineOk || !!rec} />
               )}
               <div className="space-y-5">
                 {mode === 'speak' && [...clips].reverse().map((c) => (
@@ -237,17 +240,10 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                     </p>
                   </div>
                 ))}
-                {mode === 'dictate' && [...transcripts].reverse().map((t) => (
-                  <div key={t.id} id={`v-${t.id}`} className={cx('rounded-[12px] p-3 -mx-3', selected === t.id && 'bg-[var(--hover)]')}>
-                    <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{t.text}</p>
-                    <p className="mt-1 flex items-center gap-1 text-[12px] text-[var(--color-text-muted)]">
-                      <span className="truncate">{t.source ? `${t.source} · ` : ''}{t.model} · {new Date(t.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      <span className="flex-1" />
-                      <IconBtn label="Copy" className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(t.text)}><Copy className="w-3.5 h-3.5" /></IconBtn>
-                      <IconBtn label="Speak this" className="!w-6 !h-6" onClick={() => { setText(t.text); go('speak'); }}><Volume2 className="w-3.5 h-3.5" /></IconBtn>
-                      <IconBtn label="Delete transcript" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={() => remove(t.id)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
-                    </p>
-                  </div>
+                {mode === 'dictate' && transcripts.map((t) => (
+                  <TranscriptCard key={t.id} t={t} selected={selected === t.id} onOpenInChat={onOpenInChat}
+                    onDelete={() => remove(t.id)} onSpeak={(x) => { setText(x); go('speak'); }}
+                    onFav={() => studio.saveHistory((h) => ({ ...h, transcripts: h.transcripts.map((x) => (x.id === t.id ? { ...x, fav: !x.fav } : x)) }))} />
                 ))}
               </div>
             </div>
@@ -260,7 +256,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
             <div className="max-w-[760px] mx-auto">
               {error && <Banner tone="error" className="mb-2">{error}</Banner>}
               <input ref={textFile} type="file" accept=".txt,.md,text/plain,text/markdown" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setText(await f.text()); e.target.value = ''; }} />
-              <input ref={audioFile} type="file" accept="audio/*,video/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { void transcribeFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <input ref={audioFile} type="file" accept="audio/*,video/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { transcribeFile(e.target.files?.[0]); e.target.value = ''; }} />
               <PromptShell tray={mode === 'speak' ? <>
                 <TrayButton onClick={() => setRight(true)} icon={<SlidersHorizontal className="w-4 h-4" />} label="Settings" title="Voice, speed and every effect" />
                 <TrayButton onClick={() => textFile.current?.click()} icon={<FileText className="w-4 h-4" />} label="Open Text" title="Read a .txt or .md file aloud" />
@@ -268,7 +264,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                 <div className="flex-1" />
                 <TrayNote>{text.trim() ? `${text.length.toLocaleString()} characters · about ${Math.max(1, Math.round(text.trim().split(/\s+/).length / 2.5))} s` : voiceModel?.clones ? 'Copied voice' : `${speed.toFixed(2)}× speed`}</TrayNote>
               </> : <>
-                <TrayButton onClick={() => audioFile.current?.click()} icon={<Upload className="w-4 h-4" />} label="Transcribe a File" title="Write down a recording, voice memo or a video's speech" disabled={!dictation.length || !engineOk || transcribing} />
+                <TrayButton onClick={() => audioFile.current?.click()} icon={<Upload className="w-4 h-4" />} label="Choose a File" title="Any length: lectures, meetings, interviews, voice memos, videos" disabled={!dictation.length || !engineOk || transcribing} />
                 <TrayButton onClick={onOpenModels} icon={<Boxes className="w-4 h-4" />} label="Models" title="Get Whisper models" />
                 <div className="flex-1" />
                 <TrayNote>{dictModel?.title ?? 'No dictation model'}</TrayNote>
@@ -290,7 +286,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                   <div className="flex items-center gap-2 px-2.5 pt-3 pb-2.5">
                     <div className="flex-1 flex items-center gap-3 min-w-0 pl-2">
                       {rec ? <span className="h-1.5 w-full max-w-[260px] rounded-full bg-[var(--hover)] overflow-hidden" aria-hidden="true"><span className="block h-full bg-[var(--color-accent-fill)] transition-[width]" style={{ width: `${Math.min(100, level * 300)}%` }} /></span>
-                        : <span className="text-[13px] text-[var(--color-text-muted)] truncate">{transcribing ? 'Writing it down…' : 'Press the mic and start talking'}</span>}
+                        : <span className="text-[13px] text-[var(--color-text-muted)] truncate">{transcribing ? 'Writing it down… you can use other pages meanwhile' : 'Record with the mic, or drop a recording anywhere above'}</span>}
                     </div>
                     <Popover up align="right" className="w-[220px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Language" text={settings.whisperLanguage && settings.whisperLanguage !== 'Auto' ? settings.whisperLanguage : 'Any Language'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
                       {(close) => LANGS.map((l) => <MenuItem key={l} active={(settings.whisperLanguage || 'Auto') === l} onClick={() => { onSettings({ whisperLanguage: l }); close(); }}>{l === 'Auto' ? 'Detect Automatically' : l}</MenuItem>)}
@@ -325,12 +321,12 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
             <EffectsPanel value={fx} onChange={setEffects} sample={lastClip} />
             {!effectsNeutral(voice?.effects) && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">{voice?.name} has its own effects too; these are added on top.</p>}
           </Section>
-          <Section title="Dictation">
+          <Section title="Speech to Text">
             {dictation.length ? (
               <Select aria-label="Dictation model" value={dictModel?.id ?? ''} onChange={(e) => onSettings({ builtinDictation: e.target.value })}>
                 {dictation.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
               </Select>
-            ) : <p className="text-[12px] text-[var(--color-text-muted)]">Get Whisper in <button type="button" className="underline" onClick={onOpenModels}>Models</button> to dictate.</p>}
+            ) : <p className="text-[12px] text-[var(--color-text-muted)]">Get Whisper in <button type="button" className="underline" onClick={onOpenModels}>Models</button> to turn speech into text.</p>}
           </Section>
           <Section title="Engine">
             <KV k="Engine" v={engineOk ? 'Lotus (sherpa-onnx)' : 'Not installed'} />

@@ -20,7 +20,8 @@ import { startVoiceController } from './voice/controller';
 import { useResearch } from './research/store';
 import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
 import { setLiveSettings } from './lib/liveSettings';
-import { startHardwareMonitor } from './hardware/monitor';
+import { hardware, startHardwareMonitor } from './hardware/monitor';
+import { contextItemFromText } from './chat/helpers';
 import { startScheduler } from './tasks/store';
 import { loadMemory } from './memory/store';
 import { SettingsModal, type SettingsTab } from './components/modals/SettingsModal';
@@ -239,6 +240,18 @@ export default function App() {
   // Code outside React (agent pool, VRAM monitor, scheduler, learning) reads the current settings from here.
   setLiveSettings(settings);
   const chat = useChat(settings);
+  // A transcript (or other text) opened in a new chat as an attached reference, with an optional request sent at once.
+  const [pendingSend, setPendingSend] = useState<{ sid: string; text: string } | null>(null);
+  const openInChat = useCallback((a: { name: string; text: string; prompt: string }) => {
+    const s = chat.newChat({ title: a.name.slice(0, 40), context: [contextItemFromText(a.name, a.text, hardware.get().plan.chunkChars)] });
+    setCurrentView('chat');
+    if (a.prompt) setPendingSend({ sid: s.id, text: a.prompt });
+  }, [chat.newChat]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!pendingSend || chat.active.id !== pendingSend.sid) return;
+    setPendingSend(null);
+    void chat.send(pendingSend.text);
+  }, [pendingSend, chat.active.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Deep research lives in Chat, but its runs belong to the app so they keep going on other pages.
   const research = useResearch({ model: settings.selectedModel });
   // Images too: a generation keeps running and lands in its row while you use other pages.
@@ -445,7 +458,7 @@ export default function App() {
 
         {currentView === 'images' && <ImageWorkspace g={gallery} checkpoints={checkpoints} comfyUp={comfyUp} builtin={builtinImages} profiles={readyProfiles} builtinLoras={builtins.imageFiles.loras.map((f) => f.file)} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
-        {currentView === 'voice' && <VoiceWorkspace onOpenEngines={() => openEngines('models')} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} onOpenModels={() => openEngines('models')} />}
+        {currentView === 'voice' && <VoiceWorkspace onOpenInChat={openInChat} onOpenEngines={() => openEngines('models')} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} onOpenModels={() => openEngines('models')} />}
 
 
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}

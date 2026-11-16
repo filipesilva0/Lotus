@@ -19,10 +19,10 @@ import type { LotusSettings } from '../../types/lotus';
 
 type Tab = VoiceMode;
 
-export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void }> = ({ onOpenEngines, settings, onSettings, onOpenModels }) => {
+export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ onOpenEngines, settings, onSettings, onOpenModels, onOpenInChat }) => {
   if (settings?.voiceEngine === 'builtin' && onSettings) {
     return (
-      <BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} />
+      <BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} onOpenInChat={onOpenInChat} />
     );
   }
   return <VoiceboxWorkspace onOpenEngines={onOpenEngines} />;
