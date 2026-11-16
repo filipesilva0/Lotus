@@ -11,6 +11,7 @@
 // Events: { type: 'agent', runId, kind: 'token' | 'thinking' | 'reset' | 'step' | 'stats' | 'done' | 'error', … }
 
 import { ROUTINE_TOOLS } from '../tools/routines';
+import { SOUL_TOOLS } from '../tools/soul';
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Db } from '../db';
@@ -34,7 +35,7 @@ import { avatarCreate } from '../tools/avatar';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
+export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
 const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate']);
@@ -115,6 +116,8 @@ export class AgentService {
     return ALL_TOOLS.filter((t) => {
       if (a.only && !a.only.includes(t.name)) return false;
       if (t.name.startsWith('memory.') && !a.memoryOn) return false;
+      // Incognito and memory-off chats leave nothing lasting behind, the soul included (0.10.5).
+      if (t.name === 'soul.update' && !a.memoryOn) return false;
       if (t.name.startsWith('web.') && !a.web && !a.workId) return false;
       if (WORK_ONLY.has(t.name) && !a.workId) return false;
       if (t.name.startsWith('computer.') && !s.computerUse) return false;

@@ -3,7 +3,7 @@
 > Bug/limitation IDs (B1…B17) refer to `CURRENT_STATE.md`. Evidence legend: ✅ confirmed · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > Priorities: **P0** unblocks everything · **P1** correctness against real services · **P2** quality/polish · **P3** ideas.
 
-## 0.10.1 follow-ups
+## 0.10.5 follow-ups
 - **T63** Confirm the microphone on Filipe's PC (Voice → Settings → Check Microphone; if it fails, the message and the console line `[lotus] microphone attempt failed` give the error name). Linux: enable WebKitGTK media streams if mics fail there.
 - **T64** Real tasks 33/34 and an image proposal with a real model (does it add the block, pick sensible settings?).
 

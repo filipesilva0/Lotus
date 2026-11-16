@@ -293,6 +293,17 @@ export default function App() {
   useEffect(() => { startVoiceController(); }, []);
   useEffect(() => { startHardwareMonitor(); void loadMemory(); startScheduler(); }, []);
 
+  // The chat model can change its soul (system prompt) with soul.update (0.10.5); the core saves it in
+  // the settings, so take that one field from there.
+  useEffect(() => {
+    const h = (e: StorageEvent) => {
+      if (e.key !== SETTINGS_KEY || !e.newValue) return;
+      try { const sp = (JSON.parse(e.newValue) as Partial<LotusSettings>).systemPrompt; if (typeof sp === 'string') setSettings((s) => (s.systemPrompt === sp ? s : { ...s, systemPrompt: sp })); } catch { /* ignore */ }
+    };
+    window.addEventListener('storage', h);
+    return () => window.removeEventListener('storage', h);
+  }, []);
+
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => { kv.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
 

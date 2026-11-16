@@ -56,9 +56,10 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
 
-## 0.10.1 map (microphones, routines/to-dos, images from Chat)
+## 0.10.5 map (microphones, routines/to-dos, images from Chat, soul)
 - Open microphones only through `openMic` / `MicRecorder` (`lib/audio.ts`); never call getUserMedia with an exact device id directly. Errors through `micErrorMessage`.
 - Chat proposes images with a ```image block (`chat/imageProposal.ts`, card `ImageProposalCard`); App's `createImage` turns Yes into Images settings + a run. Keep `imageInstructions` in step with `FAMILIES`.
+- The soul is `settings.systemPrompt`; only `tools/soul.ts` changes it from the core (history in `lotus.soul.history.v1`).
 - Routines and to-do lists are core tools (`tools/routines.ts`, `todo.create` in `tools/tasks.ts`); tests in `core/test/s21.test.ts`.
 
 ## 0.9.6 map (voice calls, translation, whole-text stories, resolution, examples, Settings)

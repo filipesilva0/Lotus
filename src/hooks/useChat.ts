@@ -214,7 +214,7 @@ export function useChat(settings: LotusSettings) {
       system += CHOICES_INSTRUCTIONS;
       system += installInstructions();
       system += imageInstructions(imageChoices());
-      if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added.';
+      if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added. Your soul (this system prompt\'s persona) can change too: when the user asks you to be different from now on (name, personality, tone, standing rules), use soul.update; for facts about the user use memory.save.';
       system += pluginSystemBlock(o.query ?? '');
       system += recall.system;
       system += contextPayload(session0.context, o.force, Math.max(2000, budget - system.length - sourceText.length));

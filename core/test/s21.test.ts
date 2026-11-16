@@ -129,3 +129,33 @@ describe('images proposed in chat', () => {
     expect(imageInstructions([])).toContain('none is ready');
   });
 });
+
+// ── 0.10.5: the model can change its soul (system prompt) ──
+import { nextSoul, soulRead, soulUpdate, SOUL_HISTORY_KEY } from '../src/tools/soul';
+
+describe('the soul', () => {
+  test('append, edit, remove, replace, undo', () => {
+    expect(nextSoul('You are Lotus.', { text: 'Be direct.' })).toEqual({ text: 'You are Lotus.\n\nBe direct.' });
+    expect(nextSoul('You are Lotus. Be kind.', { mode: 'edit', find: 'Lotus', text: 'Ana' })).toEqual({ text: 'You are Ana. Be kind.' });
+    expect(nextSoul('A.\n\nB.\n\nC.', { mode: 'remove', find: 'B.' })).toEqual({ text: 'A.\n\nC.' });
+    expect(nextSoul('x', { mode: 'replace', text: 'New soul.' })).toEqual({ text: 'New soul.' });
+    expect(nextSoul('x', { mode: 'undo' }, 'old')).toEqual({ text: 'old' });
+    expect('error' in nextSoul('x', { mode: 'undo' })).toBe(true);
+    expect('error' in nextSoul('aa aa', { mode: 'edit', find: 'aa', text: 'b' })).toBe(true);
+    expect('error' in nextSoul('x', { mode: 'remove', find: 'x' })).toBe(true);
+    expect('error' in nextSoul('x', { mode: 'append', text: 'y'.repeat(7000) })).toBe(true);
+  });
+  test('the tool changes the settings, keeps the old version and can undo', async () => {
+    const c = ctx();
+    c.kvSet('lotus.settings.v1', JSON.stringify({ systemPrompt: 'You are Lotus.', appearance: 'dark' }));
+    expect(soulUpdate.risk).toBe('risky');
+    expect((await soulUpdate.run({ text: 'Always answer in European Portuguese.' }, c)).ok).toBe(true);
+    const s = JSON.parse(c.kvGet('lotus.settings.v1')!);
+    expect(s).toMatchObject({ appearance: 'dark', systemPrompt: 'You are Lotus.\n\nAlways answer in European Portuguese.' });
+    expect(JSON.parse(c.kvGet(SOUL_HISTORY_KEY)!)[0].text).toBe('You are Lotus.');
+    expect((await soulRead.run({}, c)).text).toContain('European Portuguese');
+    await soulUpdate.run({ mode: 'undo' }, c);
+    expect(JSON.parse(c.kvGet('lotus.settings.v1')!).systemPrompt).toBe('You are Lotus.');
+    expect(unbackedClaims("I've updated my memory.", ['soul.update'])).toEqual([]);
+  });
+});

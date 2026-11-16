@@ -15,7 +15,7 @@ export const CLAIM_TOOLS: Record<ClaimKind, string[]> = {
   task: ['task.add', 'task.move', 'todo.create', 'routine.add'],
   image: ['image.generate'],
   file: ['files.write', 'files.edit'],
-  memory: ['memory.save'],
+  memory: ['memory.save', 'soul.update'],
   folder: ['files.list', 'files.read', 'files.search'],
   web: ['web.search', 'web.read'],
 };
