@@ -10,6 +10,17 @@ setTimeout(() => { loaded = true; }, 300);
 Bun.serve({
   hostname: '127.0.0.1', port,
   async fetch(req) {
+    // The desktop app reaches llama-server through its own HTTP layer (no browser cross-origin rules);
+    // the browser test harness calls it directly, so answer like a server that allows that.
+    const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    const res = await handle(req);
+    for (const [k, v] of Object.entries(cors)) res.headers.set(k, v);
+    return res;
+  },
+});
+
+async function handle(req: Request): Promise<Response> {
     const u = new URL(req.url);
     if (u.pathname === '/health') return loaded ? Response.json({ status: 'ok' }) : Response.json({ error: { code: 503, message: 'Loading model' } }, { status: 503 });
     if (u.pathname !== '/v1/chat/completions') return new Response('nf', { status: 404 });
@@ -21,8 +32,11 @@ Bun.serve({
     if (body.tools?.length && last.role === 'user') {
       chunks.push({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'x', function: { name: 'task_add', arguments: '{"title":"Buy ' } }] } }] });
       chunks.push({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'milk"}' } }] } }] });
-    } else chunks.push({ choices: [{ delta: { content: last.role === 'tool' ? 'I added the task “Buy milk”.' : 'Hello from the built-in engine.' } }] });
+    } else {
+      const text = String(last.content ?? '');
+      const review = /^Rethink your answer above \(review (\d+) of (\d+)\)/.exec(text);
+      chunks.push({ choices: [{ delta: { content: review ? `Improved answer, version ${Number(review[1]) + 1}.` : last.role === 'tool' ? 'I added the task “Buy milk”.' : 'Hello from the built-in engine.' } }] });
+    }
     const stream = new ReadableStream({ start(c) { for (const ch of chunks) c.enqueue(enc.encode(`data: ${JSON.stringify(ch)}\n\n`)); c.enqueue(enc.encode('data: [DONE]\n\n')); c.close(); } });
     return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
-  },
-});
+}

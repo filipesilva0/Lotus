@@ -94,7 +94,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
   builtinVoice: '',
   builtinSpeaker: 0,
   builtinDictation: '',
-  thinkingBudget: -1,
+  rethink: 1,
   llamacppUrl: 'http://127.0.0.1:8080',
   autoScale: true,
   vramReserveMb: 1024,

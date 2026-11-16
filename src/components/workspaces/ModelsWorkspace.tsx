@@ -2,7 +2,9 @@ import { confirmAlert } from '../common/Alerts';
 import { EngineNotice } from '../common/EngineNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, Boxes, Layers, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
-import { ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
+import { ChatStats, ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
+import { llm } from '../../services/llm';
+import { ensureChat, useBuiltins } from '../../lib/builtins';
 import { comfy, ComfyStats } from '../../services/comfyService';
 import { voicebox, Health } from '../../services/voicebox';
 import { requestLog, RequestLogEntry } from '../../lib/http';
@@ -129,10 +131,15 @@ const CatalogCard: React.FC<{ m: CatalogModel; installed: OllamaModel[]; pull: R
 };
 
 // ── Arena ───────────────────────────────────────────────────────────────────
-interface ArenaCol { model: string; text: string; ttft: number | null; tps: number | null; total: number | null; tokens: number; state: 'idle' | 'running' | 'done' | 'error'; error?: string }
+interface ArenaCol { model: string; text: string; ttft: number | null; tps: number | null; total: number | null; tokens: number; state: 'idle' | 'waiting' | 'running' | 'done' | 'error'; loading?: boolean; error?: string }
 interface ArenaRecord { id: string; ts: number; prompt: string; winner: string | null; results: { model: string; ttft: number | null; tps: number | null; total: number | null }[] }
 
-const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHistory: React.Dispatch<React.SetStateAction<ArenaRecord[]>>; ollamaUp: boolean | null }> = ({ installed, history, setHistory, ollamaUp }) => {
+/**
+ * Arena (0.9.1: every engine). Ollama: the models run together. Lotus's own engine runs one chat model
+ * at a time, so they run one after another, each loaded before its clock starts. A llama-server you run
+ * yourself serves a single model, so there is nothing to compare there.
+ */
+const Arena: React.FC<{ names: string[]; engine: 'builtin' | 'ollama' | 'llamacpp'; ready: boolean | null; history: ArenaRecord[]; setHistory: React.Dispatch<React.SetStateAction<ArenaRecord[]>> }> = ({ names, engine, ready, history, setHistory }) => {
   const [picked, setPicked] = usePersisted<string[]>('lotus.arena.models.v1', []);
   const [prompt, setPrompt] = useState('');
   const [blind, setBlind] = useState(false);
@@ -140,7 +147,7 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
   const [voted, setVoted] = useState<string | null>(null);
   const [rec, setRec] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
-  const names = installed.map((m) => m.name);
+  const together = engine === 'ollama';
   const valid = picked.filter((p) => names.includes(p));
   const running = cols.some((c) => c.state === 'running');
   const order = useMemo(() => cols.map((_, i) => i).sort(() => Math.random() - 0.5), [rec]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -152,24 +159,31 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
     if (!prompt.trim() || valid.length < 2 || running) return;
     const c = new AbortController(); ctrl.current = c;
     setVoted(null); const id = uid('arena'); setRec(id);
-    const init: ArenaCol[] = valid.map((model) => ({ model, text: '', ttft: null, tps: null, total: null, tokens: 0, state: 'running' }));
+    const init: ArenaCol[] = valid.map((model, i) => ({ model, text: '', ttft: null, tps: null, total: null, tokens: 0, state: together || i === 0 ? 'running' : 'waiting' }));
     setCols(init);
     const upd = (i: number, p: Partial<ArenaCol>) => setCols((cs) => cs.map((c2, j) => (j === i ? { ...c2, ...p } : c2)));
-    await Promise.all(valid.map(async (model, i) => {
-      const t0 = performance.now(); let first = 0, acc = '', toks = 0;
+    const one = async (model: string, i: number) => {
+      if (c.signal.aborted) { upd(i, { state: 'done' }); return; }
+      upd(i, { state: 'running' });
       try {
-        let final: any = null;
-        const stream = ollamaClient.streamChat([{ role: 'user', content: prompt }], { model, signal: c.signal, temperature: 0.7, onFinal: (f) => { final = f; } });
+        // Lotus's engine: load (or swap to) this model first, so the times measure answering, not loading.
+        if (engine === 'builtin') { upd(i, { loading: true }); await ensureChat(model); upd(i, { loading: false }); }
+        const t0 = performance.now(); let first = 0, acc = '', toks = 0;
+        let stats: ChatStats | null = null;
+        const stream = llm.streamChat([{ role: 'user', content: prompt }], { model, signal: c.signal, temperature: 0.7 }, (st) => { stats = st; });
         for await (const t of stream) {
           if (!first) { first = performance.now(); upd(i, { ttft: Math.round(first - t0) }); }
           acc += t; toks++;
           upd(i, { text: acc, tokens: toks });
         }
         const total = Math.round(performance.now() - t0);
-        const tps = final?.eval_count && final?.eval_duration ? Math.round((final.eval_count / (final.eval_duration / 1e9)) * 10) / 10 : Math.round((toks / Math.max(0.001, (performance.now() - first) / 1000)) * 10) / 10;
-        upd(i, { state: 'done', total, tps, tokens: final?.eval_count ?? toks });
-      } catch (e) { upd(i, { state: c.signal.aborted ? 'done' : 'error', error: c.signal.aborted ? undefined : (e as Error).message }); }
-    }));
+        const st = stats as ChatStats | null;
+        const tps = st?.tokensPerSec ? Math.round(st.tokensPerSec * 10) / 10 : Math.round((toks / Math.max(0.001, (performance.now() - first) / 1000)) * 10) / 10;
+        upd(i, { state: 'done', total, tps, tokens: st?.totalTokens || toks });
+      } catch (e) { upd(i, { state: c.signal.aborted ? 'done' : 'error', loading: false, error: c.signal.aborted ? undefined : (e as Error).message }); }
+    };
+    if (together) await Promise.all(valid.map(one));
+    else for (let i = 0; i < valid.length; i++) await one(valid[i], i);
     ctrl.current = null;
   };
 
@@ -182,7 +196,8 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="p-4 border-b border-[var(--sep)] space-y-3">
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Models to compare (pick 2 or 3)">
-          {!names.length && <span className="text-[13px] text-[var(--color-text-muted)]">{ollamaUp ? 'Install at least two models in the Hub first.' : 'Start Ollama to list installed models.'}</span>}
+          {engine === 'llamacpp' ? <span className="text-[13px] text-[var(--color-text-muted)]">A llama-server you run serves one model, so there is nothing to compare. Use Lotus’s engine or Ollama in Settings → Engines.</span>
+            : !names.length && <span className="text-[13px] text-[var(--color-text-muted)]">{ready === false ? (engine === 'ollama' ? 'Start Ollama to list installed models.' : 'Install Lotus’s chat engine in Models to compare models.') : 'Get at least two chat models first.'}</span>}
           {names.map((n) => <button key={n} type="button" aria-pressed={valid.includes(n)} onClick={() => toggle(n)} className={cx('h-7 px-3 rounded-full text-[12px] font-medium', valid.includes(n) ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{n}</button>)}
         </div>
         <div className="flex gap-2 items-end">
@@ -191,10 +206,10 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
           <div className="flex flex-col gap-1.5">
             <label className="inline-flex items-center gap-1.5 text-[12px]"><input type="checkbox" checked={blind} onChange={(e) => setBlind(e.target.checked)} />{blind ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}Blind test</label>
             {running ? <Btn icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={() => ctrl.current?.abort()}>Stop</Btn>
-              : <Btn variant="primary" icon={<Play className="w-3 h-3" />} disabled={!prompt.trim() || valid.length < 2 || !ollamaUp} onClick={() => void run()}>Run</Btn>}
+              : <Btn variant="primary" icon={<Play className="w-3 h-3" />} disabled={!prompt.trim() || valid.length < 2 || ready === false || engine === 'llamacpp'} onClick={() => void run()}>Run</Btn>}
           </div>
         </div>
-        <p className="text-[12px] text-[var(--color-text-muted)]">Requests go out together. If the models don't all fit in video memory at once, Ollama loads them in turn and the first-token time includes that load.</p>
+        <p className="text-[12px] text-[var(--color-text-muted)]">{together ? 'Requests go out together. If the models don’t all fit in video memory at once, Ollama loads them in turn and the first-token time includes that load.' : 'Lotus’s engine runs one model at a time, so they answer one after another. Each model is loaded before its clock starts, so the times compare answering, not loading.'}</p>
       </div>
       {!cols.length ? <Empty icon={<Swords className="w-5 h-5" />} title="Compare models side by side" body="Pick two or three installed models, enter a prompt and press Run." className="flex-1" /> : (
         <div className="flex-1 min-h-0 grid gap-px bg-[var(--sep)]" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` }}>
@@ -202,7 +217,7 @@ const Arena: React.FC<{ installed: OllamaModel[]; history: ArenaRecord[]; setHis
             const hide = blind && !voted;
             return (
               <div key={c.model} className="bg-[var(--color-bg-panel)] min-w-0 flex flex-col min-h-0">
-                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : c.model}</span>{c.state === 'running' && <span className="text-[12px] text-[var(--color-text-muted)] animate-pulse">Generating…</span>}</div>
+                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : c.model}</span>{c.state === 'running' && <span className="text-[12px] text-[var(--color-text-muted)] animate-pulse">{c.loading ? 'Loading model…' : 'Generating…'}</span>}{c.state === 'waiting' && <span className="text-[12px] text-[var(--color-text-muted)]">Next</span>}</div>
                 <div className="grid grid-cols-3 gap-2 px-3 py-2 text-center border-b border-[var(--sep)]">
                   {[['First token', c.ttft !== null ? `${c.ttft} ms` : '—'], ['Speed', c.tps !== null ? `${c.tps} tok/s` : c.state === 'running' && c.tokens ? '…' : '—'], ['Total', c.total !== null ? `${(c.total / 1000).toFixed(1)} s` : '—']].map(([k, v]) => (
                     <div key={k}><p className="text-[12px] text-[var(--color-text-muted)]">{k}</p><p className="text-[13px] font-semibold tabular-nums">{v}</p></div>
@@ -331,6 +346,11 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
   useEffect(refresh, [refresh]);
 
   const pull = usePull(refresh);
+  // Arena models from the engine chat uses (Settings → Engines), not only Ollama's.
+  const bState = useBuiltins();
+  const arenaEngine: 'builtin' | 'ollama' | 'llamacpp' = settings?.llmBackend ?? 'ollama';
+  const arenaNames = arenaEngine === 'builtin' ? bState.models.filter((m) => m.kind === 'chat').map((m) => m.id) : arenaEngine === 'ollama' ? installed.map((m) => m.name) : [];
+  const arenaReady: boolean | null = arenaEngine === 'builtin' ? (bState.loaded ? bState.engines.some((e) => e.id === 'llama' && e.installed) : null) : arenaEngine === 'ollama' ? up : true;
   const files = useFileDownloads(() => undefined);
 
   const sel = installed.find((m) => m.name === selected);
@@ -383,7 +403,7 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
           </div>
         )}
         {mode === 'setups' && <div className="flex-1 min-h-0 overflow-y-auto p-6"><ImageSetups q={q} /></div>}
-        {mode === 'arena' && <Arena installed={installed} history={history} setHistory={setHistory} ollamaUp={up} />}
+        {mode === 'arena' && <Arena names={arenaNames} engine={arenaEngine} ready={arenaReady} history={history} setHistory={setHistory} />}
         {mode === 'monitor' && <Monitor engines={engines} />}
       </div>
 

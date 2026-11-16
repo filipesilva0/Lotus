@@ -9,6 +9,7 @@ import { ChoiceCard } from './ChoiceCard';
 import { parseInstall, type InstallTarget } from '../../chat/install';
 import { InstallCard } from './InstallCard';
 import { AgentSteps, UnverifiedNote } from './AgentSteps';
+import { draftLabel } from '../../chat/rethink';
 import type { ChatToolCall } from '../../types/lotus';
 
 interface Props {
@@ -109,6 +110,19 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
                     {m.interrupted && <p className="mt-1.5 text-[12px] opacity-70">Stopped here.</p>}
                     {!!m.unverified?.length && !m.isStreaming && <UnverifiedNote items={m.unverified} />}
+                    {!!m.drafts?.length && !m.isStreaming && (
+                      <details className="group mt-2 text-[12px]">
+                        <summary className="cursor-default list-none inline-flex items-center gap-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]"><span className="transition-transform group-open:rotate-90">›</span>Rethought {m.drafts.length} time{m.drafts.length > 1 ? 's' : ''}: earlier versions</summary>
+                        <div className="mt-1.5 space-y-2">
+                          {m.drafts.map((d, i) => (
+                            <div key={i} className="pl-3 border-l-2 border-[var(--sep)]">
+                              <p className="font-semibold text-[var(--color-text-muted)] mb-0.5">{draftLabel(i, m.drafts!.length + 1)}</p>
+                              <div className="text-[13px] text-[var(--color-text-muted)] leading-relaxed"><MarkdownLite text={d} onDark={false} /></div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
 

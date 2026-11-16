@@ -1,4 +1,4 @@
-import { BUDGET_PRESETS, describeBudget, hasThinkingBudget } from '../../chat/thinkingBudget';
+import { RETHINK_CHOICES, canRethink } from '../../chat/rethink';
 import React, { useEffect, useState } from 'react';
 import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, FolderOpen, RefreshCw, Sparkles } from 'lucide-react';
 import type { ContextFile } from '../../context/discover';
@@ -226,21 +226,18 @@ const CodeBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }
   );
 };
 
-/** How long a Nemotron model may think before answering (chat/thinkingBudget.ts). */
-const ThinkingBudgetSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {
-  const b = s.thinkingBudget ?? -1;
-  const preset = BUDGET_PRESETS.find((p) => p.tokens === b)?.id ?? 'custom';
+/** Rethink (Nemotron): the model reviews its own answer and writes it again (chat/rethink.ts). */
+const RethinkSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {
+  const n = s.rethink || 1;
   return (
-    <Section title="Thinking budget" hint="How long the model may think before it answers. Less thinking answers sooner; more thinking helps with hard questions.">
-      <div className="flex flex-wrap gap-1.5 mb-2.5" role="radiogroup" aria-label="Thinking budget">
-        {BUDGET_PRESETS.map((p) => (
-          <button key={p.id} type="button" role="radio" aria-checked={preset === p.id} onClick={() => set({ thinkingBudget: p.tokens })}
-            className={cx('h-7 px-2.5 rounded-full text-[12px]', preset === p.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-medium' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{p.label}</button>
+    <Section title="Rethink" hint="After answering, the model reads its own answer again, checks it for mistakes and gaps, and writes a better version. More times give more careful answers but take longer.">
+      <div className="flex flex-wrap gap-1.5 mb-2" role="radiogroup" aria-label="Rethink">
+        {RETHINK_CHOICES.map((c) => (
+          <button key={c.rounds} type="button" role="radio" aria-checked={n === c.rounds} onClick={() => set({ rethink: c.rounds })}
+            className={cx('h-7 px-2.5 rounded-full text-[12px]', n === c.rounds ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-medium' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{c.label}</button>
         ))}
       </div>
-      {b > 0 && <SliderField label="Thinking tokens" value={b} min={128} max={16384} step={128} onChange={(v) => set({ thinkingBudget: v })} format={(v) => v.toLocaleString()} />}
-      <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{describeBudget(b)}.</p>
-      {s.llmBackend === 'ollama' && b > 0 && <p className="mt-1 text-[12px] text-[var(--c-orange)] leading-snug">Ollama can only turn thinking on or off, so the limit is not applied there. Lotus’s own engine (Settings → Engines) follows it.</p>}
+      <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{n === 1 ? 'Answers once, as usual.' : `Writes ${n} versions and shows the last; the earlier ones stay under the reply. Each reply takes about ${n} times as long.`}</p>
     </Section>
   );
 };
@@ -251,7 +248,7 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
   const addStop = () => { const v = stopDraft.replace(/\\n/g, '\n'); if (v && !s.stopSequences.includes(v)) set({ stopSequences: [...s.stopSequences, v] }); setStopDraft(''); };
   return (
     <div className="overflow-y-auto flex-1">
-      {hasThinkingBudget(s.selectedModel) && <ThinkingBudgetSection settings={s} onSettings={set} />}
+      {canRethink(s.selectedModel) && <RethinkSection settings={s} onSettings={set} />}
       <Section title="Sampling">
         <SliderField label="Temperature" value={s.temperature} min={0} max={2} step={0.05} onChange={(v) => set({ temperature: v })} format={(v) => v.toFixed(2)} />
         <SliderField label="Top-P" value={s.topP} min={0.05} max={1} step={0.01} onChange={(v) => set({ topP: v })} format={(v) => v.toFixed(2)} />

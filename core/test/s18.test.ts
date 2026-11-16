@@ -7,8 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Builtins, failureLines, needsShortPath } from '../src/engines/manager';
 import { filesEdit } from '../src/tools/files';
-import { chatTurn } from '../src/agent/llm';
-import { BUDGET_PRESETS, budgetFor, describeBudget, hasThinkingBudget, llamaThinkingFields, ollamaThink } from '../../src/chat/thinkingBudget';
+import { RETHINK_CHOICES, canRethink, draftLabel, rethinkRequest, rethinkRounds } from '../../src/chat/rethink';
 import { readFileSync } from 'node:fs';
 import { entryById } from '../../src/models/library';
 import {
@@ -227,34 +226,23 @@ describe('files.edit (0.9.1)', () => {
   });
 });
 
-describe('thinking budget for Nemotron (0.9.1)', () => {
-  test('only Nemotron models get it, "no limit" sends nothing', () => {
-    expect(hasThinkingBudget('nemotron-3-nano-4b')).toBe(true);
-    expect(hasThinkingBudget('qwen3-8b')).toBe(false);
-    expect(budgetFor('qwen3-8b', 512)).toBeUndefined();
-    expect(budgetFor('Nemotron 3 Nano', -1)).toBeUndefined();
-    expect(budgetFor('nemotron', 2048)).toBe(2048);
-    expect(budgetFor('nemotron', 0)).toBe(0);
-    expect(BUDGET_PRESETS.map((p) => p.tokens)).toEqual([0, 512, 2048, 8192, -1]);
-    expect(describeBudget(512)).toBe('Short · up to 512 thinking tokens');
+describe('rethink for Nemotron (0.9.1)', () => {
+  test('only Nemotron models rethink, 1 to 4 answers', () => {
+    expect(canRethink('nemotron-3-nano-4b')).toBe(true);
+    expect(canRethink('qwen3-8b')).toBe(false);
+    expect(rethinkRounds('qwen3-8b', 3)).toBe(1);
+    expect(rethinkRounds('Nemotron 3 Nano', 3)).toBe(3);
+    expect(rethinkRounds('nemotron', 9)).toBe(4);
+    expect(rethinkRounds('nemotron', undefined)).toBe(1);
+    expect(RETHINK_CHOICES.map((c) => c.rounds)).toEqual([1, 2, 3, 4]);
   });
-  test('llama-server gets a token budget, or thinking off; Ollama only on/off', () => {
-    expect(llamaThinkingFields(2048)).toEqual({ reasoning_budget_tokens: 2048 });
-    expect(llamaThinkingFields(0)).toEqual({ chat_template_kwargs: { enable_thinking: false } });
-    expect(llamaThinkingFields(undefined)).toEqual({});
-    expect(llamaThinkingFields(undefined, false)).toEqual({ chat_template_kwargs: { enable_thinking: false } });
-    expect(ollamaThink(0)).toBe(false);
-    expect(ollamaThink(2048)).toBeUndefined();
-    expect(ollamaThink(undefined, true)).toBe(true);
+  test('each request says which review it is, and the last is final', () => {
+    expect(rethinkRequest(2, 4)).toMatch(/review 1 of 3/);
+    expect(rethinkRequest(2, 4)).not.toMatch(/final version/);
+    expect(rethinkRequest(4, 4)).toMatch(/review 3 of 3.*final version/);
+    expect(rethinkRequest(3, 3)).toMatch(/do not mention this review/);
   });
-  test('the request the engine actually receives', async () => {
-    let sent: Record<string, unknown> = {};
-    const fakeFetch = async (_u: string, init?: RequestInit) => { sent = JSON.parse(String(init?.body)); return new Response('data: {"choices":[{"delta":{"content":"hi"}}]}\n\ndata: [DONE]\n', { headers: { 'content-type': 'text/event-stream' } }); };
-    const base = { backend: 'llamacpp' as const, url: 'http://x', model: 'nemotron', signal: new AbortController().signal, fetch: fakeFetch };
-    const r = await chatTurn({ ...base, thinkBudget: 1024 }, [{ role: 'user', content: 'q' }], null, { token: () => undefined, thinking: () => undefined });
-    expect(r.content).toBe('hi');
-    expect(sent.reasoning_budget_tokens).toBe(1024);
-    await chatTurn({ ...base, thinkBudget: 0 }, [{ role: 'user', content: 'q' }], null, { token: () => undefined, thinking: () => undefined });
-    expect(sent.chat_template_kwargs).toEqual({ enable_thinking: false });
+  test('earlier versions are labelled', () => {
+    expect([0, 1, 2].map((i) => draftLabel(i, 4))).toEqual(['First answer', 'Rethink 1 of 3', 'Rethink 2 of 3']);
   });
 });

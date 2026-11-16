@@ -137,6 +137,19 @@ try {
     await page.waitForTimeout(500);
     ok(`models (${tag}): installed list has the two chat models, image, voice and dictation`, await page.locator('text=In Lotus Studio (5)').isVisible());
     if (!dark) {
+      // Arena with Lotus's own engine (0.9.1): two chat models answer one after the other.
+      await page.click('nav[aria-label="Modes"] >> text=Arena & Benchmark');
+      await page.click('[aria-label="Models to compare (pick 2 or 3)"] >> text=qwen3-8b');
+      await page.click('[aria-label="Models to compare (pick 2 or 3)"] >> text=nemotron-3-nano-4b');
+      await page.fill('textarea[aria-label="Prompt to test"]', 'Say hello');
+      await page.click('button:text-is("Run")');
+      ok('arena: both models answer with Lotus’s own engine (no Ollama)', await page.waitForFunction(() => document.querySelectorAll('button').length && [...document.querySelectorAll('button')].filter((b) => /This one is better/.test(b.textContent ?? '') && !b.disabled).length === 2, null, { timeout: 20000 }).then(() => true, () => false));
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: `${shots}/s19-arena-${tag}.png` });
+      await page.click('nav[aria-label="Modes"] >> text=Get Models');
+      await page.waitForSelector('text=Lotus Engines', { timeout: 8000 });
+    }
+    if (!dark) {
       // A real download (a small Piper voice from GitHub): its progress must stay inside its card (0.9.1).
       const card = page.locator('div:has(> div > div > p:text-is("Piper · Alba (British English)"))').first();
       await card.scrollIntoViewIfNeeded().catch(() => undefined);
@@ -258,26 +271,27 @@ try {
     ok(`work: attach button and video-memory bar (${tag})`, await page.locator('button[aria-label="Attach files"]').isVisible() && await page.locator('[role="meter"][aria-label="Video memory in use"]').count() > 0);
     await page.waitForTimeout(700);
     await page.screenshot({ path: `${shots}/s17-work-${tag}.png` });
-    // Thinking budget (0.9.1): the right panel offers it for a Nemotron model.
+    // Rethink (0.9.1): the right panel offers it for a Nemotron model; the answer is written again.
     await page.keyboard.press('Control+1');
     await page.waitForSelector('textarea[aria-label="Message"]', { timeout: 8000 });
     await page.click('button[title="Model for this chat"]');
     await page.click('[role="option"]:has-text("Nemotron")');
-    if (!(await page.locator('aside >> text=Model').first().isVisible().catch(() => false))) await page.keyboard.press('Control+Alt+i').catch(() => undefined);
-    const rightBtn = page.locator('button[aria-label*="right panel" i]').first();
-    if (!(await page.locator('[role="radiogroup"][aria-label="Thinking budget"]').isVisible().catch(() => false))) {
-      if (await rightBtn.count() && /show/i.test((await rightBtn.getAttribute('aria-label')) ?? '')) await rightBtn.click();
+    if (!(await page.locator('[role="radiogroup"][aria-label="Rethink"]').isVisible().catch(() => false))) {
+      const rightBtn = page.locator('button[aria-label="Show inspector"]').first();
+      if (await rightBtn.count()) await rightBtn.click();
       await page.locator('button:has-text("Model")').last().click();
     }
-    ok(`thinking budget: offered for Nemotron (${tag})`, await page.waitForSelector('[role="radiogroup"][aria-label="Thinking budget"]', { timeout: 5000 }).then(() => true, () => false));
+    ok(`rethink: offered for Nemotron (${tag})`, await page.waitForSelector('[role="radiogroup"][aria-label="Rethink"]', { timeout: 5000 }).then(() => true, () => false));
     if (!dark) {
-      await page.click('[role="radiogroup"][aria-label="Thinking budget"] >> text=Short');
-      let saved;
-      for (let i = 0; i < 30 && saved !== 512; i++) { saved = JSON.parse((await api('/v1/kv')).items['lotus.settings.v1'] ?? '{}').thinkingBudget; if (saved !== 512) await page.waitForTimeout(100); }
-      ok('thinking budget: Short is saved as 512 tokens', saved === 512, String(saved));
+      await page.click('[role="radiogroup"][aria-label="Rethink"] >> text=3 Times');
+      await page.click('button:has-text("New Chat")');
+      await page.fill('textarea[aria-label="Message"]', 'What is 2 + 2?');
+      await page.keyboard.press('Enter');
+      ok('rethink: the reply was written 3 times (2 earlier versions kept)', await page.waitForSelector('text=Rethought 2 times', { timeout: 20000 }).then(() => true, () => false));
+      await page.click('text=Rethought 2 times').catch(() => undefined);
     }
     await page.waitForTimeout(400);
-    await page.screenshot({ path: `${shots}/s19-thinking-${tag}.png` });
+    await page.screenshot({ path: `${shots}/s19-rethink-${tag}.png` });
     ok(`no page errors (${tag})`, errors.length === 0, errors.join(' | '));
     await ctx.close();
   }

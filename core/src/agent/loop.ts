@@ -61,8 +61,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     mode = caps.length === 0 || caps.includes('tools') ? 'native' : 'tags';
     // Thinking models answer tool requests without a long think first, and some (seen: an abliterated
     // qwen3 8B on an RTX 4060) think for minutes and never call the tool. Thinking mode stays on the Think button.
-    // A thinking budget set by the user (Nemotron, right panel) means they want it to think.
-    if (caps.includes('thinking') && d.llm.think === undefined && !((d.llm.thinkBudget ?? 0) > 0)) think = false;
+    if (caps.includes('thinking') && d.llm.think === undefined) think = false;
   }
 
   const messages: WireMsg[] = req.messages.map((m) => ({ ...m }));
@@ -98,7 +97,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
 
     let result;
     try {
-      result = await chatTurn({ ...d.llm, think, numPredict: d.llm.numPredict ?? TURN_TOKENS + Math.max(0, d.llm.thinkBudget ?? 0), model: req.model, signal: d.signal }, messages, mode === 'native' ? wireTools(req.tools) : null, {
+      result = await chatTurn({ ...d.llm, think, numPredict: d.llm.numPredict ?? TURN_TOKENS, model: req.model, signal: d.signal }, messages, mode === 'native' ? wireTools(req.tools) : null, {
         token: (t) => show(filter ? filter.push(t) : t),
         thinking: (t) => d.emit({ kind: 'thinking', text: t }),
       });

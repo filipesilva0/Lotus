@@ -1,8 +1,6 @@
 // Chat model access for the agent: Ollama's /api/chat (with native tool calling when the model
 // supports it) and llama.cpp's OpenAI-compatible server (text only; tools go through tags).
 
-import { llamaThinkingFields, ollamaThink } from '../../../src/chat/thinkingBudget';
-
 export interface WireCall { name: string; args: Record<string, unknown> }
 export type WireMsg =
   | { role: 'system' | 'user'; content: string; images?: string[] }
@@ -21,8 +19,6 @@ export interface ChatOpts {
   temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[];
   /** Ollama: ask a thinking model to think (true) or not (false); undefined leaves the model's default. */
   think?: boolean;
-  /** Thinking budget for models trained to follow one (chat/thinkingBudget.ts): 0 = off, N = at most N tokens. */
-  thinkBudget?: number;
   signal: AbortSignal;
   fetch: (url: string, init?: RequestInit) => Promise<Response>;
 }
@@ -145,7 +141,6 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
       temperature: o.temperature, top_p: o.topP, top_k: o.topK, seed: o.seed, max_tokens: o.numPredict, stop: o.stop?.length ? o.stop : undefined,
     };
     if (native) body.tools = tools;
-    Object.assign(body, llamaThinkingFields(o.thinkBudget, o.think));
     let res: Response;
     try { res = await firstByte(o, `${o.url}/v1/chat/completions`, { method: 'POST', headers: headers(o), body: JSON.stringify(body) }); }
     catch (e) { throw reachError(o, e); }
@@ -190,8 +185,7 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     options: { temperature: o.temperature, top_p: o.topP, top_k: o.topK, num_ctx: o.numCtx, seed: o.seed, num_predict: o.numPredict, stop: o.stop?.length ? o.stop : undefined },
   };
   if (tools?.length) body.tools = tools;
-  const think = ollamaThink(o.thinkBudget, o.think);
-  if (think !== undefined) body.think = think;
+  if (o.think !== undefined) body.think = o.think;
   let res: Response;
   try { res = await firstByte(o, `${o.url}/api/chat`, { method: 'POST', headers: headers(o), body: JSON.stringify(body) }); }
   catch (e) { throw reachError(o, e); }

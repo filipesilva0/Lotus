@@ -11,7 +11,7 @@ import { addBranch, switchBranch } from '../chat/branching';
 import { contextItemFromText, contextPayload, detectMemory, estimateTokens, newSession, TEXT_EXT } from '../chat/helpers';
 import { queryFromMessage, readPage, searchWeb, webContextBlock, WebResult } from '../chat/webSearch';
 import { STAGES, thinkingStream } from '../chat/thinking';
-import { budgetFor } from '../chat/thinkingBudget';
+import { rethinkRequest, rethinkRounds } from '../chat/rethink';
 import { effectiveNumCtx, hardware, modelCapabilities } from '../hardware/monitor';
 import { agentPool } from '../agents/pool';
 import { loadMemory, memoryStore, useMemoryStore } from '../memory/store';
@@ -261,7 +261,7 @@ export function useChat(settings: LotusSettings) {
         const done = await runAgent({
           model: o.model, prompt: o.query ?? '', chatId: sid,
           messages: turns.map((t) => ({ role: t.role as 'system' | 'user' | 'assistant', content: t.content, images: t.images })),
-          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences, thinkBudget: budgetFor(o.model, s.thinkingBudget) },
+          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences },
           memoryOn: memOn, web: !!o.web, folders: session0.folder ? [session0.folder] : [],
         }, (e) => {
           if (e.kind === 'token') { acc += e.text; patchMsg(sid, aiId, { content: acc }); }
@@ -295,6 +295,27 @@ export function useChat(settings: LotusSettings) {
           }, onStats)
           : llm.streamChat(turns, opts, onStats);
         for await (const token of stream) { acc += token; patchMsg(sid, aiId, { content: acc }); }
+      }
+
+      // 4. Rethink (Nemotron, right panel): the model reviews its own answer and writes it again, keeping
+      //    the earlier versions under the reply. Each round sees the conversation, its last answer and the request.
+      const rounds = rethinkRounds(o.model, s.rethink);
+      const drafts: string[] = [];
+      for (let r = 2; r <= rounds && acc.trim() && !ctrl.signal.aborted; r++) {
+        drafts.push(acc);
+        const step = tool(`Rethinking (${r - 1} of ${rounds - 1})`);
+        patchMsg(sid, aiId, { drafts: [...drafts] });
+        let next = '';
+        const again = llm.streamChat([...turns, { role: 'assistant', content: acc }, { role: 'user', content: rethinkRequest(r, rounds) }], opts, onStats);
+        try { for await (const token of again) { next += token; patchMsg(sid, aiId, { content: next }); } }
+        catch (e) {
+          // Stopped or failed half-way: keep the last complete answer.
+          patchMsg(sid, aiId, { content: acc, drafts: drafts.slice(0, -1).length ? drafts.slice(0, -1) : undefined });
+          toolDone(step, ctrl.signal.aborted ? 'done' : 'error', ctrl.signal.aborted ? 'stopped; kept the previous answer' : (e as Error).message);
+          break;
+        }
+        if (next.trim()) acc = next.trim(); else patchMsg(sid, aiId, { content: acc });
+        toolDone(step, 'done', next.trim() ? undefined : 'kept the previous answer');
       }
     } catch (e) {
       if (!ctrl.signal.aborted) {

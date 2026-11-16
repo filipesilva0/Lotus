@@ -26,6 +26,8 @@ export interface ChatMessage {
   files?: ChatFileRef[];
   /** The user's answer to an install the model proposed (session 11). */
   install?: { status: 'allowed' | 'denied' | 'failed'; error?: string };
+  /** Earlier versions when the model rethought its answer (Rethink, 0.9.1), oldest first. */
+  drafts?: string[];
   /** The reply was cut short because the user steered or pressed Stop. */
   interrupted?: boolean;
   /** Set on the first message of a tail that has alternatives: `< 1 / 3 >`. Each list entry is a full tail. */
@@ -148,8 +150,8 @@ export interface LotusSettings {
   builtinSpeaker: number;
   /** Built-in dictation (speech to text) model id. */
   builtinDictation: string;
-  /** Thinking budget for models trained to follow one (Nemotron): -1 no limit, 0 off, N tokens (chat/thinkingBudget.ts). */
-  thinkingBudget: number;
+  /** Rethink (Nemotron, Chat → right panel): answers written in total, 1 = no rethinking (chat/rethink.ts). */
+  rethink: number;
   /** Ollama and Voicebox keep their models in Lotus Studio/Models when Lotus starts them (session 17). */
   engineModelsInStudio?: boolean;
   llamacppUrl: string;

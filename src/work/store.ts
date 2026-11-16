@@ -9,7 +9,6 @@ import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
 import type { LotusSettings } from '../types/lotus';
 import { speak, voicePrefs } from '../voice/voice';
-import { budgetFor } from '../chat/thinkingBudget';
 
 export const WORK_KEY = 'lotus.work.v1';
 
@@ -135,7 +134,7 @@ export function useWork(settings: LotusSettings) {
       setRunning((r) => ({ ...r, [workId]: { runId: '', ctrl } }));
       const done = await runAgent({
         model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: [...(item.folder ? [item.folder] : []), ...(s.agentFolders ?? [])],
-        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow, thinkBudget: budgetFor(s.selectedModel, s.thinkingBudget) },
+        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow },
         messages: [{ role: 'system', content: s.systemPrompt }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;

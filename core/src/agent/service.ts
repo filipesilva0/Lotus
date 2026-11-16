@@ -71,7 +71,7 @@ export interface StartArgs {
   messages: WireMsg[];
   prompt: string;
   chatId?: string;
-  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean; thinkBudget?: number };
+  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean };
   memoryOn?: boolean;
   web?: boolean;
   /** Extra folders for this run (the chat's attached folder). */
