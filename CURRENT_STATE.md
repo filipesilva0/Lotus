@@ -3,7 +3,10 @@
 > Snapshot taken at the end of session 1. Evidence legend: ✅ confirmed (command/test output seen) · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
-## 0.9.1 work (16 Nov, after 0.9.0)
+## 0.9.1 release (16 Nov)
+- Released from `main` with `release-notes/v0.9.1.md` (manual workflow run with version 0.9.1; tag pushes don't get through the sandbox's connection).
+
+### 0.9.1 changes
 - **Voice on Windows: "Failed to convert … to token IDs"** (Piper, Lotus's own engine). The real Piper archive is complete (checked: pt_dict, lang/roa/pt, voice "pt"), so espeak-ng loaded but couldn't load the voice from the data folder on that PC. Suspected: a space or accent in the Lotus Studio path. Now: (1) on Windows the `--vits/kokoro/zipvoice-data-dir` gets the 8.3 short path when the path has a space or non-ASCII character (`windowsShortPath`); (2) tool errors show sherpa-onnx's cause lines, not just the last two (`failureLines`). **Not verified on Windows**; if it still fails, the new message names the cause.
 - **Rethink for Nemotron** (Chat → right panel → Model, only when a Nemotron model is selected): Once / 2 / 3 / 4 Times. After the answer, the model gets its answer back with a review request (`chat/rethink.ts rethinkRequest`) and writes a complete improved version, that many times in total; the last is shown, earlier ones fold under the reply ("Rethought N times"), each round a step. Stop or an error keeps the last complete answer. Works on every engine (`llm.streamChat`), after the agent or plain reply. `settings.rethink` (1 default). (A thinking-budget control was added first by mistake and removed: Filipe meant rethinking, not shorter thinking.)
 - **Arena & Benchmark without Ollama**: models come from the engine Chat uses. Lotus's engine runs them one after another (one llama-server), loading each before its clock starts; Ollama still runs them together; a user-run llama-server (one model) says there's nothing to compare.
