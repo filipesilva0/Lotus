@@ -3,6 +3,7 @@
     "windows": [
       {
         "label": "main",
+        "dragDropEnabled": false,
         "title": "Lotus",
         "url": "index.html",
         "width": 1280,
@@ -17,6 +18,7 @@
       },
       {
         "label": "island",
+        "dragDropEnabled": false,
         "title": "Lotus Island",
         "url": "island.html",
         "width": 420,

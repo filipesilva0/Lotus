@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GeneratedImage } from '../types/lotus';
 import { comfy, ComfyBatch, dimensionsFor, LoraUse, TxtToImageInput } from '../services/comfyService';
 import { idbGet, idbGetLocal, idbSet } from '../lib/idb';
-import { loadMedia, saveMedia } from '../lib/core';
+import { loadMedia, rpc, saveMedia } from '../lib/core';
 import { kv, storeMode } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
@@ -12,6 +12,8 @@ import { settingsFor, sizeFor, type ImageProfile } from '../models/imageProfiles
 export interface GenSession {
   id: string; title: string; ts: number; pinned?: boolean; folderId?: string;
   versions: GeneratedImage[]; index: number;
+  /** This generation's folder under Lotus Studio/Images (0.9.5): Reference N and Output N files. */
+  dir?: string;
 }
 
 export interface ImageParams {
@@ -85,6 +87,19 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   // Load the saved gallery once. With the core the images are files in the Lotus Studio folder;
   // a gallery saved by an older Lotus (blobs in IndexedDB) is read once and then saved as files.
   const core = storeMode() === 'core';
+  // Each generation's own folder under Images/, made once when it first saves something (0.9.5).
+  const dirs = useRef(new Map<string, Promise<string>>());
+  const dirFor = (sid: string, name: string): Promise<string> => {
+    const known = ref.current.find((x) => x.id === sid)?.dir;
+    if (known) return Promise.resolve(known);
+    let p = dirs.current.get(sid);
+    if (!p) {
+      p = rpc<{ dir: string }>('media_folder', { name }).then((r) => { setSessions((l) => l.map((x) => (x.id === sid ? { ...x, dir: r.dir } : x))); return r.dir; });
+      p.catch(() => dirs.current.delete(sid));
+      dirs.current.set(sid, p);
+    }
+    return p;
+  };
   useEffect(() => {
     const show = (list: GenSession[]) => {
       if (list.length) { const fresh = blank(); setSessions([fresh, ...list]); setActiveId(fresh.id); }
@@ -141,7 +156,10 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
       void (async () => {
         const files = new Map<string, string>();
         for (const { s, v } of unsaved) {
-          try { files.set(v.id, (await saveMedia(v.blob!, `${s.title || v.prompt || 'image'} ${v.id.slice(-5)}`)).path); }
+          try {
+            const dir = await dirFor(s.id, v.prompt || s.title || 'image');
+            files.set(v.id, (await saveMedia(v.blob!, 'Output', { dir, numbered: true })).path);
+          }
           catch (e) { setSaveError(`An image could not be saved to the Lotus Studio folder: ${(e as Error).message}`); }
           finally { uploading.current.delete(v.id); }
         }
@@ -179,7 +197,7 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   const removeVersion = useCallback((id: string, vid: string) => patch(id, (s) => { const versions = s.versions.filter((v) => v.id !== vid); return { ...s, versions, index: Math.min(s.index, Math.max(0, versions.length - 1)) }; }), [patch]);
 
   /** Runs one ComfyUI job and files the results into the active session as new versions. */
-  const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal, onStep: (step: number, total: number) => void) => Promise<Omit<ComfyBatch, 'items'> & { items: { blob: Blob; url: string; file?: string }[] }>) => {
+  const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal, onStep: (step: number, total: number) => void) => Promise<Omit<ComfyBatch, 'items'> & { items: { blob: Blob; url: string; file?: string }[]; dir?: string }>) => {
     const sid = activeRef.current;
     const c = new AbortController(); ctrl.current = c;
     setBusy(true); setBusyId(sid); setError(null); setLabel(title); setStep(null);
@@ -194,7 +212,7 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
       // Images from the built-in engine are already files in Lotus Studio/Images (`file`), so they are not saved twice.
       const made: GeneratedImage[] = r.items.map((it, k) => ({ ...meta, id: `${id}-${k}`, url: it.url, blob: it.blob, file: it.file, seed: r.seed, generationTimeSec: r.generationTimeSec, timestamp: stamp(), kind: what }));
       patch(sid, (s) => ({
-        ...s, ts: Date.now(), title: s.versions.length ? s.title : meta.prompt.slice(0, 40) || 'Untitled',
+        ...s, ts: Date.now(), title: s.versions.length ? s.title : meta.prompt.slice(0, 40) || 'Untitled', dir: r.dir ?? s.dir,
         versions: [...s.versions, ...made], index: s.versions.length,
       }));
       // If that row was a blank "New generation" that got hidden meanwhile, make sure it is still listed.
@@ -216,20 +234,29 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
 
   /** The image setup a run uses with the built-in engine (the picked one, else the first complete one). */
   const profileFor = (p: ImageParams) => profiles.find((x) => x.id === p.profile) ?? profiles[0];
-  const builtinRun = (what: GeneratedImage['kind'], title: string, prompt: string, p: ImageParams, o: { reference?: Blob | string; strength?: number; width?: number; height?: number } = {}) => {
+  const builtinRun = (what: GeneratedImage['kind'], title: string, prompt: string, p: ImageParams, o: { reference?: Blob | string; references?: Blob[]; strength?: number; width?: number; height?: number } = {}) => {
     const prof = profileFor(p);
     if (!prof) { setError('No image model is ready. Get one in Settings → Models, or finish its setup there.'); return Promise.resolve(); }
     const st = settingsFor(prof);
     const size = o.width && o.height ? { width: o.width, height: o.height } : sizeFor(p.aspect, prof);
     const steps = st.locked ? st.steps : p.steps, cfg = st.locked ? st.cfg : p.cfg;
     setInfo({ width: size.width, height: size.height, checkpoint: prof.name, steps, sampler: st.locked ? st.sampler : p.sampler });
-    return run(what, title, { prompt, negativePrompt: p.negative, steps, cfg, dimensions: `${size.width}×${size.height}`, checkpoint: prof.name, profile: prof.id, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined, denoise: o.reference ? (o.strength ?? p.denoise) : undefined },
-      (_tick, signal, onStep) => builtinGenerate(prof, { prompt, negative: p.negative, ...size, seed: p.seed ?? undefined, count: p.count, steps, cfg, sampler: p.sampler, scheduler: p.scheduler, loras: p.loras?.filter((l) => l.name), reference: o.reference, strength: o.strength }, { signal, onStep }));
+    return run(what, title, { prompt, negativePrompt: p.negative, steps, cfg, dimensions: `${size.width}×${size.height}`, checkpoint: prof.name, profile: prof.id, sampler: p.sampler, loras: p.loras?.length ? p.loras.filter((l) => l.name) : undefined, denoise: o.reference || o.references?.length ? (o.strength ?? p.denoise) : undefined },
+      (_tick, signal, onStep) => builtinGenerate(prof, { prompt, negative: p.negative, ...size, seed: p.seed ?? undefined, count: p.count, steps, cfg, sampler: p.sampler, scheduler: p.scheduler, loras: p.loras?.filter((l) => l.name), reference: o.reference, references: o.references, strength: o.strength, dir: ref.current.find((x) => x.id === activeRef.current)?.dir }, { signal, onStep }));
   };
   const needsComfy = (what: string) => { setError(`${what} needs ComfyUI for now. Switch Images to ComfyUI in Settings → Engines, or use Variations.`); return Promise.resolve(); };
 
-  const generate = (prompt: string, p: ImageParams, reference?: Blob) => {
-    if (engine === 'builtin') return builtinRun(reference ? 'img2img' : 'txt2img', 'Generating', prompt, p, { reference, strength: reference ? p.denoise : undefined });
+  /**
+   * Makes images from the prompt. With reference images: FLUX.2 (built-in engine) uses all of them;
+   * other models start from the first one (image to image). They are kept in the generation's folder.
+   */
+  const generate = (prompt: string, p: ImageParams, references: Blob[] = []) => {
+    const reference = references[0];
+    if (engine === 'builtin') return builtinRun(reference ? 'img2img' : 'txt2img', 'Generating', prompt, p, { references, strength: reference ? p.denoise : undefined });
+    if (reference && core) {
+      const sid = activeRef.current;
+      void dirFor(sid, prompt).then((dir) => saveMedia(reference, 'Reference', { dir, numbered: true, reuse: true })).catch(() => undefined);
+    }
     const inp = input(prompt, p);
     return run(reference ? 'img2img' : 'txt2img', 'Generating', { ...metaOf(prompt, p, inp.width, inp.height), denoise: reference ? p.denoise : undefined },
       (tick, signal) => (reference ? comfy.img2img({ ...inp, signal, onTick: tick }, reference, p.denoise) : comfy.txt2img({ ...inp, signal, onTick: tick })));

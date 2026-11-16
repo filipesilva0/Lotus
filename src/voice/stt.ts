@@ -23,12 +23,17 @@ export interface SttJob {
   segments: Segment[];
   started: number;
   error?: string;
+  /** Recordings waiting their turn (0.9.5: several can be dropped at once). */
+  waiting?: string[];
 }
 
 let job: SttJob | null = null;
 let ctrl: AbortController | null = null;
+/** Recordings queued behind the one being written down. */
+let queue: { blob: Blob; o: { name: string; model?: string; modelTitle: string } }[] = [];
+const waitingNames = () => queue.map((q) => q.o.name);
 const subs = new Set<() => void>();
-const set = (j: SttJob | null) => { job = j; subs.forEach((f) => f()); };
+const set = (j: SttJob | null) => { job = j && { ...j, waiting: j.state === 'reading' || j.state === 'working' ? waitingNames() : [] }; subs.forEach((f) => f()); };
 
 export const sttJob = () => job;
 export function useSttJob(): SttJob | null {
@@ -69,11 +74,28 @@ function keep(j: SttJob, model: string) {
   window.dispatchEvent(new Event(HISTORY_EVENT));
 }
 
-/** Transcribes a recording of any length. One job at a time; returns false if one is running. */
-export function transcribeLong(blob: Blob, o: { name: string; model?: string; modelTitle: string }): boolean {
-  if (job && (job.state === 'reading' || job.state === 'working')) return false;
+/**
+ * Transcribes a recording of any length. One at a time: while one is being written down, more are
+ * queued and start on their own (returns 'queued').
+ */
+export function transcribeLong(blob: Blob, o: { name: string; model?: string; modelTitle: string }): 'started' | 'queued' {
+  if (job && (job.state === 'reading' || job.state === 'working')) {
+    queue.push({ blob, o });
+    set({ ...job, waiting: waitingNames() });
+    return 'queued';
+  }
+  start(blob, o);
+  return 'started';
+}
+
+function next() {
+  const n = queue.shift();
+  if (n) start(n.blob, n.o);
+}
+
+function start(blob: Blob, o: { name: string; model?: string; modelTitle: string }) {
   const c = new AbortController(); ctrl = c;
-  const j: SttJob = { id: uid('vt'), name: o.name, state: 'reading', part: 0, parts: 0, seconds: 0, segments: [], started: Date.now() };
+  const j: SttJob = { id: uid('vt'), name: o.name, state: 'reading', part: 0, parts: 0, seconds: 0, segments: [], started: Date.now(), waiting: waitingNames() };
   set(j);
   const activity = `stt-${j.id}`;
   reportActivity({ id: activity, kind: 'voice', label: 'Reading audio' });
@@ -109,9 +131,12 @@ export function transcribeLong(blob: Blob, o: { name: string; model?: string; mo
       if (stopped && cur.segments.some((s) => s.text)) keep({ ...cur, name: `${cur.name} (stopped)` }, o.modelTitle);
       set({ ...cur, state: stopped ? 'stopped' : 'error', error: stopped ? undefined : (e as Error).message });
       reportActivity({ id: activity, kind: 'voice', label: 'Transcript', done: true });
-    } finally { if (ctrl === c) ctrl = null; }
+    } finally {
+      if (ctrl === c) ctrl = null;
+      // Stop also drops the ones waiting; otherwise the next recording starts.
+      if (c.signal.aborted) { queue = []; const cur = sttJob(); if (cur) set({ ...cur, waiting: [] }); } else next();
+    }
   })();
-  return true;
 }
 
 export const stopTranscribing = () => ctrl?.abort();

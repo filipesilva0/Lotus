@@ -29,6 +29,8 @@ export interface FamilySpec {
   clipType?: string;
   /** Fixed sampler settings (distilled models break with other values). */
   locked: boolean;
+  /** Takes several reference images (sd.cpp --ref-image; FLUX.2 edits from up to ~8). Others use one start image. */
+  refImages?: boolean;
 }
 
 const VAE_OPT: SlotSpec = { slot: 'vae', label: 'VAE', folder: 'vae', required: false, hint: 'Optional. A separate VAE often gives cleaner colours than the one inside the checkpoint.' };
@@ -56,7 +58,7 @@ export const FAMILIES: Record<ImageFamily, FamilySpec> = {
     ],
   },
   flux2: {
-    id: 'flux2', label: 'FLUX.2 Klein', mainFolder: 'diffusion_models', steps: 4, cfg: 1, sampler: 'euler', scheduler: 'simple', base: 1024, negative: 'zero', clipType: 'flux2', locked: true,
+    id: 'flux2', label: 'FLUX.2 Klein', mainFolder: 'diffusion_models', steps: 4, cfg: 1, sampler: 'euler', scheduler: 'simple', base: 1024, negative: 'zero', clipType: 'flux2', locked: true, refImages: true,
     slots: [LLM('qwen_3_4b (Qwen3 4B)'), VAE_REQ('flux2-vae.safetensors')],
   },
   zimage: {
@@ -205,6 +207,8 @@ export interface SdRun {
   autoFit?: boolean;
   /** Image to image. */
   init?: string; strength?: number;
+  /** Reference images for models that take several (FLUX.2), passed as --ref-image each. */
+  refs?: string[];
 }
 
 /** sd.cpp sampler names differ from ComfyUI's; unknown ones fall back to euler. */
@@ -253,6 +257,7 @@ export function sdcppArgs(p: ImageProfile, run: SdRun, path: (folder: ImageFolde
   add('-s', run.seed);
   add('-b', Math.max(1, Math.min(4, run.count)));
   if (run.init) { add('-i', run.init); add('--strength', run.strength ?? 0.65); }
+  if (FAMILIES[p.family].refImages) for (const r of (run.refs ?? []).slice(0, 8)) add('-r', r);
   // Split models are big: run the attention in flash mode, and on smaller GPUs keep weights in RAM
   // until each part is needed and decode the image in tiles.
   if (f.mainFolder === 'diffusion_models') args.push('--diffusion-fa');

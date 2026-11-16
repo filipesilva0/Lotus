@@ -6,6 +6,7 @@ import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { voicebox } from '../../services/voicebox';
 import { isTauri } from '../../lib/http';
 import { folderName } from '../../chat/folder';
+import { useFileIntake } from '../../lib/fileDrop';
 
 export interface SlashCommand { name: string; args?: string; help: string }
 export const SLASH: SlashCommand[] = [
@@ -66,7 +67,6 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [drag, setDrag] = useState(false);
   const [sel, setSel] = useState(0);
   const [rec, setRec] = useState(false);
   const [busyMic, setBusyMic] = useState(false);
@@ -105,6 +105,8 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     setFiles((f) => [...f, ...arr]);
     arr.filter((f) => f.type.startsWith('image/')).forEach((f) => setPreviews((p) => ({ ...p, [f.name + f.size]: URL.createObjectURL(f) })));
   };
+  // Drop files anywhere on the Chat page, or paste them (Ctrl/Cmd+V): all of them are attached.
+  const drag = useFileIntake(addFiles, { enabled: !disabled });
 
   const pick = (i: number) => {
     if (menu === 'slash') { const c = slashItems[i]; setText(`/${c.name}${c.args ? ' ' : ''}`); if (!c.args) { /* run on Enter */ } }
@@ -191,15 +193,13 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
 
         {/* The box sits on a tray: the tray holds per-chat context actions and the memory / incognito toggles. */}
         <div className="rounded-[24px] bg-[var(--composer-tray)]">
-          <div onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
-            onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
-            className={cx('relative rounded-[24px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_2px_8px_rgba(0,0,0,.06)] transition-shadow', drag && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
+          <div className={cx('relative rounded-[24px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_2px_8px_rgba(0,0,0,.06)] transition-shadow', drag && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
             {/* Context used, as a thin bar along the top edge (no text; the numbers are in the tip). */}
             <EdgeMeter value={contextUsed} label="Context used" title={contextTitle} />
 
             {(files.length > 0 || drag) && (
               <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them.</p>}
+                {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them. You can also paste them.</p>}
                 {files.map((f, i) => {
                   const url = previews[f.name + f.size];
                   return (
@@ -221,7 +221,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               <input ref={dirInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true"
                 {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                 onChange={(e) => { const l = e.target.files; if (l?.length) void attachFolder(l); e.target.value = ''; }} />
-              <button type="button" aria-label="Attach files" data-tip="Attach images, text or code" onClick={() => fileInput.current?.click()}
+              <button type="button" aria-label="Attach files" data-tip="Attach images, text or code (or paste or drop them)" onClick={() => fileInput.current?.click()}
                 className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]">
                 <Plus className="w-[18px] h-[18px]" />
               </button>

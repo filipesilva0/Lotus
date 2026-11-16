@@ -143,8 +143,16 @@ export async function rpc<T = unknown>(method: string, args: Record<string, unkn
 export interface SavedMedia { path: string; kind: 'image' | 'audio'; mime: string; bytes: number; created: number }
 
 /** Saves an image or audio blob into the Lotus Studio folder; returns its relative path. */
-export async function saveMedia(blob: Blob, name: string): Promise<SavedMedia> {
-  const res = await coreFetch(`/v1/media?name=${encodeURIComponent(name)}`, { method: 'POST', headers: { 'content-type': blob.type || 'application/octet-stream' }, body: blob });
+/**
+ * Saves an image or recording in Lotus Studio. `dir`: a folder under Images/ (from `rpc('media_folder')`);
+ * `numbered`: name it "<name> N" ("Output 3"); `reuse`: return an identical numbered file instead of a copy.
+ */
+export async function saveMedia(blob: Blob, name: string, o: { dir?: string; numbered?: boolean; reuse?: boolean } = {}): Promise<SavedMedia> {
+  const q = new URLSearchParams({ name });
+  if (o.dir) q.set('dir', o.dir);
+  if (o.numbered) q.set('numbered', '1');
+  if (o.reuse) q.set('reuse', '1');
+  const res = await coreFetch(`/v1/media?${q}`, { method: 'POST', headers: { 'content-type': blob.type || 'application/octet-stream' }, body: blob });
   return (await res.json()) as SavedMedia;
 }
 

@@ -10,6 +10,7 @@ import { VoicesView } from './studio/VoicesView';
 import { StoriesView, newStory } from './studio/StoriesView';
 import { SttEmpty, SttProgress, TranscriptCard } from './studio/SttView';
 import { transcribeLong, useSttJob } from '../../voice/stt';
+import { sortFiles, useFileIntake } from '../../lib/fileDrop';
 import { usePanels } from '../../lib/panels';
 import { deleteMedia } from '../../lib/core';
 import { kv } from '../../lib/store';
@@ -58,7 +59,6 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const [level, setLevel] = useState(0);
   const job = useSttJob();
   const transcribing = job?.state === 'reading' || job?.state === 'working';
-  const [drag, setDrag] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const textFile = useRef<HTMLInputElement>(null);
@@ -89,7 +89,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const startJob = (blob: Blob, name: string) => {
     setError(null);
     if (!dictModel || !engineOk) { setError('Speech to text needs Lotus’s voice engine and a Whisper model. Get them in Models.'); return; }
-    if (!transcribeLong(blob, { name, model: dictModel.id, modelTitle: dictModel.title })) setError('Lotus is already writing down a recording. Wait for it or press Stop.');
+    transcribeLong(blob, { name, model: dictModel.id, modelTitle: dictModel.title });
   };
   const toggleRecord = async () => {
     if (rec) {
@@ -103,6 +103,23 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
     try { await r.start(); setRec(r); } catch (e) { setError(micErrorMessage(e)); }
   };
   const transcribeFile = (f?: File) => { if (f) startJob(f, f.name); };
+  /**
+   * Files dropped or pasted on the Speak or Speech to Text page: recordings and videos are written
+   * down one after another; text files are put in the Speak box (0.9.5).
+   */
+  const takeFiles = async (files: File[]) => {
+    const { media, other } = sortFiles(files);
+    const texts = other.filter((f) => f.type.startsWith('text/') || /\.(txt|md|markdown|srt|vtt)$/i.test(f.name));
+    const skipped = files.length - media.length - texts.length;
+    if (media.length) { if (mode !== 'dictate') go('dictate'); media.forEach((f) => startJob(f, f.name)); }
+    else if (texts.length) {
+      const body = (await Promise.all(texts.map((f) => f.text()))).map((t) => t.trim()).filter(Boolean).join('\n\n');
+      if (mode !== 'speak') go('speak');
+      setText((t) => (t.trim() ? `${t.trim()}\n\n${body}` : body));
+    }
+    if (skipped) setError(`${skipped} file${skipped > 1 ? 's' : ''} skipped: Voice takes recordings, videos and text files.`);
+  };
+  const drag = useFileIntake((f) => void takeFiles(f), { enabled: mode === 'speak' || mode === 'dictate' });
 
   const remove = (id: string) => {
     const clip = allClips.find((c) => c.id === id);
@@ -201,8 +218,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
 
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto"
-          onDragOver={(e) => { if (mode === 'dictate') { e.preventDefault(); setDrag(true); } }} onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { if (mode !== 'dictate') return; e.preventDefault(); setDrag(false); transcribeFile(e.dataTransfer.files[0]); }}>
+>
           {notice && <div className="max-w-[760px] mx-auto px-6 pt-4"><BuiltinNotice kind="voice" purpose={mode === 'dictate' ? 'to turn speech into text' : 'to speak'} /></div>}
           {mode === 'voices' && <VoicesView studio={studio} selected={voiceSel} onSelect={setVoiceSel} lastClip={lastClip} onOpenModels={onOpenModels} />}
           {mode === 'stories' && <StoriesView studio={studio} storyId={storySel} onStory={setStorySel} />}
@@ -256,7 +272,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
             <div className="max-w-[760px] mx-auto">
               {error && <Banner tone="error" className="mb-2">{error}</Banner>}
               <input ref={textFile} type="file" accept=".txt,.md,text/plain,text/markdown" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setText(await f.text()); e.target.value = ''; }} />
-              <input ref={audioFile} type="file" accept="audio/*,video/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { transcribeFile(e.target.files?.[0]); e.target.value = ''; }} />
+              <input ref={audioFile} type="file" accept="audio/*,video/*" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { Array.from(e.target.files ?? []).forEach((f) => transcribeFile(f)); e.target.value = ''; }} />
               <PromptShell tray={mode === 'speak' ? <>
                 <TrayButton onClick={() => setRight(true)} icon={<SlidersHorizontal className="w-4 h-4" />} label="Settings" title="Voice, speed and every effect" />
                 <TrayButton onClick={() => textFile.current?.click()} icon={<FileText className="w-4 h-4" />} label="Open Text" title="Read a .txt or .md file aloud" />
@@ -264,7 +280,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                 <div className="flex-1" />
                 <TrayNote>{text.trim() ? `${text.length.toLocaleString()} characters · about ${Math.max(1, Math.round(text.trim().split(/\s+/).length / 2.5))} s` : voiceModel?.clones ? 'Copied voice' : `${speed.toFixed(2)}× speed`}</TrayNote>
               </> : <>
-                <TrayButton onClick={() => audioFile.current?.click()} icon={<Upload className="w-4 h-4" />} label="Choose a File" title="Any length: lectures, meetings, interviews, voice memos, videos" disabled={!dictation.length || !engineOk || transcribing} />
+                <TrayButton onClick={() => audioFile.current?.click()} icon={<Upload className="w-4 h-4" />} label="Choose a File" title="Any length: lectures, meetings, interviews, voice memos, videos" disabled={!dictation.length || !engineOk} />
                 <TrayButton onClick={onOpenModels} icon={<Boxes className="w-4 h-4" />} label="Models" title="Get Whisper models" />
                 <div className="flex-1" />
                 <TrayNote>{dictModel?.title ?? 'No dictation model'}</TrayNote>
@@ -292,7 +308,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                       {(close) => LANGS.map((l) => <MenuItem key={l} active={(settings.whisperLanguage || 'Auto') === l} onClick={() => { onSettings({ whisperLanguage: l }); close(); }}>{l === 'Auto' ? 'Detect Automatically' : l}</MenuItem>)}
                     </Popover>
                     {rec ? <SendButton stop onClick={() => void toggleRecord()} label="Stop and write it down" tip="Stop and write it down" />
-                      : <SendButton disabled={!dictation.length || !engineOk || transcribing} onClick={() => void toggleRecord()} label="Record" tip="Record" icon={<Mic className="w-4 h-4" />} />}
+                      : <SendButton disabled={!dictation.length || !engineOk} onClick={() => void toggleRecord()} label="Record" tip="Record" icon={<Mic className="w-4 h-4" />} />}
                   </div>
                 )}
               </PromptShell>

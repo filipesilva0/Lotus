@@ -340,7 +340,23 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
     expect(existsSync(join(studio, img.images[0].path))).toBe(true);
     const sdArgs = JSON.parse(readFileSync(join(work, 'sd.args'), 'utf8')) as string[];
     expect(sdArgs[sdArgs.indexOf('--vae') + 1]).toBe(join(studio, 'Models', 'image', 'vae', 'vae-ft-mse-840000-ema-pruned.safetensors'));
-    expect(sdArgs).toContain('--offload-to-cpu'); // no GPU
+    // No GPU: low-memory mode. This sd-cli has auto-fit, so it keeps 1 GiB spare instead of --offload-to-cpu (0.9.2).
+    expect(sdArgs).not.toContain('--offload-to-cpu');
+    expect(sdArgs[sdArgs.indexOf('--max-vram') + 1]).toBe('-1');
+    // 0.9.5: one folder per generation, named from the prompt, with numbered outputs.
+    expect(img.dir).toBe('A lotus flower');
+    expect(img.images.map((m: { path: string }) => m.path)).toEqual(['Images/A lotus flower/Output 1.png', 'Images/A lotus flower/Output 2.png']);
+    // The next run of the same generation keeps its folder and numbering; references are saved next to them.
+    const png = readFileSync(join(studio, img.images[0].path)).toString('base64');
+    const again = await rpc('image_builtin', { profile: profiles[0], prompt: 'a lotus flower', aspect: '1:1', count: 1, dir: img.dir, refs: [{ data: png, mime: 'image/png' }, { data: png, mime: 'image/png' }], strength: 0.5 });
+    expect(again.dir).toBe('A lotus flower');
+    expect(again.references).toEqual(['Images/A lotus flower/Reference 1.png']); // the same picture twice is saved once
+    expect(again.images[0].path).toBe('Images/A lotus flower/Output 3.png');
+    const sd2 = JSON.parse(readFileSync(join(work, 'sd.args'), 'utf8')) as string[];
+    expect(sd2[sd2.indexOf('-i') + 1]).toBe(join(studio, 'Images', 'A lotus flower', 'Reference 1.png'));
+    expect(sd2).not.toContain('-r'); // SD 1.5 starts from one image
+    // A new generation with the same prompt gets its own folder.
+    expect((await builtinImageVia(rpc, profiles[0])).dir).toBe('A lotus flower 2');
     void ticks;
     // A setup that is missing its VAE says so instead of making a wrong image.
     await expect(rpc('image_builtin', { profile: { id: 'x', name: 'Broken FLUX', family: 'flux1', files: { model: 'nope.safetensors' } }, prompt: 'x' })).rejects.toThrow(/missing the model file \(nope\.safetensors\), CLIP-L, T5-XXL, VAE/);

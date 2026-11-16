@@ -1,9 +1,10 @@
 // Images and audio as real files in the Lotus Studio folder (Documents/Lotus Studio by default):
-//   Images/2026-11/<name>.png      Audio/2026-11/<name>.wav
+//   Images/<generation>/Output 1.png, Reference 1.png   (0.9.5: one folder per generation)
+//   Audio/2026-11/<name>.wav                             (and images saved before 0.9.5: Images/2026-11/…)
 // They used to live only in the browser (IndexedDB blobs, or not at all), so they vanished with the
 // app profile and were invisible to the user (B9/B10). The `media` table indexes them.
 
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import { Db } from './db';
 
@@ -60,7 +61,45 @@ export function sniffMime(body: ArrayBuffer | Uint8Array): string | null {
   return null;
 }
 
-export async function saveMedia(db: Db, studio: string, body: ArrayBuffer | Uint8Array, mime: string, name: string, now = new Date()): Promise<MediaRow> {
+/** A folder name made from a prompt or title: readable, safe on every OS, at most ~48 characters. */
+export function folderNameFrom(text: string, now = new Date()): string {
+  const words = String(text ?? '').replace(/<lora:[^>]*>/gi, ' ').replace(/[\\/:*?"<>|#%&{}$!'`@=+^~\[\]();,.\u0000-\u001f]+/g, ' ').split(/\s+/).filter(Boolean);
+  let out = '';
+  for (const w of words) { if ((out + ' ' + w).trim().length > 48) break; out = (out + ' ' + w).trim(); }
+  if (!out && words[0]) out = words[0].slice(0, 48);
+  out = out.replace(/^[.\s]+|[.\s]+$/g, '');
+  if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(out)) out = `${out} image`;
+  if (!out) out = `Image ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+/** A checked folder name (one level, no separators), or null. */
+export function cleanDir(dir: unknown): string | null {
+  if (typeof dir !== 'string') return null;
+  const d = dir.trim();
+  if (!d || d.length > 80 || /[\\/:*?"<>|\u0000-\u001f]/.test(d) || d === '.' || d === '..' || /^[.\s]|[.\s]$/.test(d)) return null;
+  return d;
+}
+
+/** Creates a new, unused folder for one generation under Images/ ("Red fox", "Red fox 2", …). */
+export function newImageFolder(studio: string, text: string, now = new Date()): string {
+  const base = folderNameFrom(text, now);
+  let name = base;
+  for (let i = 2; existsSync(join(studio, FOLDER.image, name)); i++) name = `${base} ${i}`;
+  mkdirSync(join(studio, FOLDER.image, name), { recursive: true });
+  return name;
+}
+
+export interface SaveOpts {
+  /** Folder under Images/ or Audio/ (one level, from `newImageFolder`); default: the month. */
+  dir?: string;
+  /** Name the file "<name> N" with the next free N ("Output 3"). */
+  numbered?: boolean;
+  /** With `numbered`: if the folder already has a "<name> N" file with the same bytes, return it instead. */
+  reuse?: boolean;
+}
+
+export async function saveMedia(db: Db, studio: string, body: ArrayBuffer | Uint8Array, mime: string, name: string, now = new Date(), opts: SaveOpts = {}): Promise<MediaRow> {
   let type = mime.split(';')[0].trim().toLowerCase();
   if (!kindOf(type)) type = sniffMime(body) ?? type;
   const kind = kindOf(type);
@@ -69,11 +108,40 @@ export async function saveMedia(db: Db, studio: string, body: ArrayBuffer | Uint
   if (!bytes) throw new Error('The file is empty.');
   if (bytes > MAX_MEDIA) throw new Error('The file is larger than 200 MB.');
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const dirRel = `${FOLDER[kind]}/${month}`;
-  mkdirSync(join(studio, FOLDER[kind], month), { recursive: true });
-  const base = safeName(name);
-  let rel = `${dirRel}/${base}.${EXT[type]}`;
-  for (let i = 2; existsSync(join(studio, ...rel.split('/'))); i++) rel = `${dirRel}/${base}-${i}.${EXT[type]}`;
+  const sub = (opts.dir !== undefined ? cleanDir(opts.dir) : null) ?? month;
+  if (opts.dir !== undefined && sub === month) throw new Error('That folder name can\'t be used.');
+  const dirRel = `${FOLDER[kind]}/${sub}`;
+  const dirFull = join(studio, FOLDER[kind], sub);
+  mkdirSync(dirFull, { recursive: true });
+  let rel: string;
+  if (opts.numbered) {
+    // "Output 1.png", "Output 2.png", …: the next number after the highest one in the folder.
+    const label = String(name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').trim().slice(0, 40) || 'File';
+    const re = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} (\\d+)\\.[a-z0-9]+$`, 'i');
+    const taken = readdirSync(dirFull).map((f) => ({ f, m: re.exec(f) })).filter((x) => x.m);
+    if (opts.reuse) {
+      const mine = body instanceof Uint8Array ? body : new Uint8Array(body);
+      for (const { f } of taken) {
+        const full = join(dirFull, f);
+        try {
+          if (statSync(full).size !== bytes) continue;
+          const theirs = readFileSync(full);
+          if (theirs.length === mine.length && theirs.every((v, i) => v === mine[i])) {
+            const r = `${dirRel}/${f}`;
+            const row = db.sql.query<MediaRow, [string]>('SELECT * FROM media WHERE path = ?').get(r);
+            return row ?? { path: r, kind, mime: mimeFor(f), bytes, created: now.getTime() };
+          }
+        } catch { /* unreadable: ignore */ }
+      }
+    }
+    let n = taken.reduce((mx, x) => Math.max(mx, Number(x.m![1])), 0) + 1;
+    rel = `${dirRel}/${label} ${n}.${EXT[type]}`;
+    while (existsSync(join(studio, ...rel.split('/')))) rel = `${dirRel}/${label} ${++n}.${EXT[type]}`;
+  } else {
+    const base = safeName(name);
+    rel = `${dirRel}/${base}.${EXT[type]}`;
+    for (let i = 2; existsSync(join(studio, ...rel.split('/'))); i++) rel = `${dirRel}/${base}-${i}.${EXT[type]}`;
+  }
   await Bun.write(join(studio, ...rel.split('/')), body);
   const row: MediaRow = { path: rel, kind, mime: type, bytes, created: now.getTime() };
   db.sql.query('INSERT INTO media(path, kind, mime, bytes, created) VALUES (?, ?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET mime = excluded.mime, bytes = excluded.bytes, created = excluded.created')

@@ -6,7 +6,7 @@
 //   GET    /v1/kv                        every key → value
 //   PUT    /v1/kv                        { set: {k: v}, remove: [k], origin } (atomic; broadcast)
 //   POST   /v1/kv/migrate                { items: {k: v} } one-time import from browser storage
-//   POST   /v1/media?name=&type=         raw bytes → { path, ... } saved under Lotus Studio
+//   POST   /v1/media?name=&type=&dir=&numbered=1&reuse=1   raw bytes → { path, ... } saved under Lotus Studio
 //   GET    /v1/media/<path>              the file (token may be passed as ?t= for <img>/<audio>)
 //   DELETE /v1/media/<path>
 //   GET    /v1/media-list?kind=image
@@ -20,7 +20,7 @@ import type { Server, ServerWebSocket } from 'bun';
 import { Db, schemaVersion, SCHEMA_VERSION } from './db';
 import { KvChange, kvAll, kvApply, kvMigrate } from './kv';
 import * as mem from './memory';
-import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, resolveMedia, saveMedia } from './media';
+import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, newImageFolder, resolveMedia, saveMedia } from './media';
 import { AgentService, type StartArgs } from './agent/service';
 import { readHardware } from './hardware';
 import { Builtins } from './engines/manager';
@@ -91,6 +91,8 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
     case 'work_artifacts': return { found: true, value: agent.artifacts(str(a.workId)) };
     case 'work_artifact': return { found: true, value: agent.artifactText(str(a.workId), str(a.file)) };
     case 'work_dir': return { found: true, value: agent.workDir(str(a.workId)) };
+    // 0.9.5: a new folder under Images/ for one generation, named from its prompt or title.
+    case 'media_folder': return { found: true, value: { dir: newImageFolder(o.studio, str(a.name)) } };
     default: return { found: false };
   }
 }
@@ -193,7 +195,9 @@ export function startServer(o: CoreOptions): CoreServer {
         }
         if (url.pathname === '/v1/media' && req.method === 'POST') {
           const type = req.headers.get('content-type') ?? url.searchParams.get('type') ?? '';
-          const row = await saveMedia(o.db, o.studio, await req.arrayBuffer(), type, url.searchParams.get('name') ?? 'file');
+          const dir = url.searchParams.get('dir');
+          const row = await saveMedia(o.db, o.studio, await req.arrayBuffer(), type, url.searchParams.get('name') ?? 'file', new Date(),
+            { dir: dir ?? undefined, numbered: url.searchParams.get('numbered') === '1', reuse: url.searchParams.get('reuse') === '1' });
           return json(req, row);
         }
         if (url.pathname === '/v1/media-list' && req.method === 'GET') {

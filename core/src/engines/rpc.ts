@@ -12,18 +12,19 @@
 //   chat_ensure { model, ctx? }                 → { url }       (starts llama-server with that model)
 //   chat_stop
 //   comfy_link_models { root? }                 → { files }   (ComfyUI reads Lotus Studio/Models/image)
-//   image_builtin { profile, prompt, … genId }  → { images: MediaRow[], … }   events { type: 'builtin-image', genId, step, total }
+//   image_builtin { profile, prompt, … dir?, refs?, genId } → { images: MediaRow[], references, dir, … }   events { type: 'builtin-image', genId, step, total }
+//                                               (0.9.5: everything goes in Images/<dir>/ as Reference N and Output N)
 //   image_cancel { genId }
 //   tts_builtin { voice, text, speaker?, speed?, reference?, referenceText?, steps? } → MediaRow (audio)   (reference: a media path, for cloning voices)
 //   stt_builtin { model, path, language? }      → { text }      (path: a media file, e.g. Audio/2026-11/x.wav)
 
-import { readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import type { Db } from '../db';
-import { resolveMedia, saveMedia } from '../media';
+import { cleanDir, newImageFolder, resolveMedia, saveMedia } from '../media';
 import type { BuiltinId } from './assets';
 import type { Builtins } from './manager';
 import type { ImageFolder, ImageProfile, LoraUse } from '../../../src/models/imageProfiles';
-import { settingsFor, sizeFor } from '../../../src/models/imageProfiles';
+import { FAMILIES, settingsFor, sizeFor } from '../../../src/models/imageProfiles';
 import type { ModelKind } from '../../../src/models/library';
 import { comfyDesktopConfigDir, linkComfy } from './comfyLink';
 import { join } from 'node:path';
@@ -41,6 +42,25 @@ export interface ImageArgs {
   profile: ImageProfile; prompt: string; negative?: string; aspect?: string; width?: number; height?: number;
   seed?: number | null; count?: number; steps?: number; cfg?: number; sampler?: string; scheduler?: string;
   loras?: LoraUse[]; init?: string; strength?: number; genId?: string;
+  /** Folder under Images/ for this generation (from an earlier run); a new one is made when missing. */
+  dir?: string;
+  /** Reference images: a saved media path, or { data: base64, mime }. */
+  refs?: (string | { data: string; mime?: string })[];
+}
+
+/** Reference images as bytes, from saved files or uploads. */
+function refBytes(studio: string, refs: ImageArgs['refs']): { body: Uint8Array; mime: string }[] {
+  const out: { body: Uint8Array; mime: string }[] = [];
+  for (const r of (refs ?? []).slice(0, 8)) {
+    if (typeof r === 'string') {
+      const full = resolveMedia(studio, r);
+      if (!full || !existsSync(full)) throw new Error('A reference image is missing or outside the Lotus Studio folder.');
+      out.push({ body: readFileSync(full), mime: 'image/png' });
+    } else if (r && typeof r.data === 'string') {
+      out.push({ body: Buffer.from(r.data.replace(/^data:[^,]*,/, ''), 'base64'), mime: str(r.mime, 'image/png') });
+    }
+  }
+  return out;
 }
 
 /** Runs one built-in image job and saves the images as media files. Shared with image.generate. */
@@ -50,18 +70,30 @@ export async function builtinImage(b: Builtins, db: Db, studio: string, a: Image
   const s = settingsFor(p);
   const size = a.width && a.height ? { width: a.width, height: a.height } : sizeFor(a.aspect ?? '1:1', p);
   const seed = typeof a.seed === 'number' && a.seed >= 0 ? Math.floor(a.seed) : Math.floor(Math.random() * 2 ** 31);
-  let init: string | undefined;
-  if (a.init) { init = resolveMedia(studio, a.init) ?? undefined; if (!init) throw new Error('The reference image is outside the Lotus Studio folder.'); }
+  // One folder per generation: Images/<name from the prompt>/Reference N and Output N (0.9.5).
+  const want = cleanDir(a.dir);
+  const dir = want && existsSync(join(studio, 'Images', want)) ? want : newImageFolder(studio, a.prompt);
+  // FLUX.2 takes several reference images; other models start from the first one (image to image),
+  // so only the images the model really uses are kept as references.
+  const multi = !!FAMILIES[p.family]?.refImages;
+  const given = [...(a.init ? [a.init] : []), ...(a.refs ?? [])];
+  const references: string[] = [];
+  for (const r of refBytes(studio, multi ? given : given.slice(0, 1))) {
+    const path = (await saveMedia(db, studio, r.body, r.mime, 'Reference', new Date(), { dir, numbered: true, reuse: true })).path;
+    if (!references.includes(path)) references.push(path);
+  }
+  const refFiles = references.map((r) => resolveMedia(studio, r)!);
+  const init = !multi ? refFiles[0] : undefined;
   const t0 = Date.now();
   const files = await b.generateImage(p, {
     prompt: a.prompt, negative: a.negative, width: size.width, height: size.height, seed, count: Math.max(1, Math.min(4, a.count ?? 1)),
     steps: s.locked ? s.steps : (a.steps ?? s.steps), cfg: s.locked ? s.cfg : (a.cfg ?? s.cfg), sampler: s.locked ? s.sampler : (a.sampler ?? s.sampler), scheduler: s.locked ? s.scheduler : (a.scheduler ?? s.scheduler),
-    init, strength: a.strength,
+    init, strength: init ? a.strength : undefined, refs: multi ? refFiles : undefined,
   }, { signal: o.signal, onProgress: o.onProgress, loras: a.loras });
   const images = [];
-  for (const f of files) images.push(await saveMedia(db, studio, readFileSync(f), 'image/png', a.prompt.slice(0, 40) || 'image'));
+  for (const f of files) images.push(await saveMedia(db, studio, readFileSync(f), 'image/png', 'Output', new Date(), { dir, numbered: true }));
   b.cleanOutputs(files);
-  return { images, seed, width: size.width, height: size.height, sec: Math.round((Date.now() - t0) / 100) / 10, steps: s.locked ? s.steps : (a.steps ?? s.steps), cfg: s.locked ? s.cfg : (a.cfg ?? s.cfg) };
+  return { images, references, dir, seed, width: size.width, height: size.height, sec: Math.round((Date.now() - t0) / 100) / 10, steps: s.locked ? s.steps : (a.steps ?? s.steps), cfg: s.locked ? s.cfg : (a.cfg ?? s.cfg) };
 }
 
 export async function builtinRpc(b: Builtins, db: Db, studio: string, method: string, a: Json, broadcast: (e: Json) => void): Promise<{ found: boolean; value?: unknown }> {

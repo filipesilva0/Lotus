@@ -33,6 +33,7 @@ export const SttProgress: React.FC<{ job: SttJob }> = ({ job }) => {
       </div>
       {live && <Progress className="mt-2.5" label="Transcribing" value={job.parts ? job.part / job.parts : null} />}
       {job.error && <p className="mt-2 text-[13px] text-[var(--c-red)]">{job.error}</p>}
+      {live && !!job.waiting?.length && <p className="mt-2 text-[12px] text-[var(--color-text-muted)] truncate" title={job.waiting.join(', ')}>Next: {job.waiting.length === 1 ? job.waiting[0] : `${job.waiting.length} recordings (${job.waiting.join(', ')})`}. Stop also cancels these.</p>}
       {job.state === 'stopped' && job.segments.some((s) => s.text) && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">What was written down so far is kept below.</p>}
       {live && job.segments.length > 0 && (
         <p className="mt-2.5 text-[13px] leading-relaxed text-[var(--color-text-muted)] max-h-24 overflow-hidden [mask-image:linear-gradient(to_top,transparent,black_40%)]">{transcriptText(job.segments.slice(-4))}</p>
@@ -46,7 +47,7 @@ export const SttEmpty: React.FC<{ drag: boolean; onPick: () => void; onRecord: (
   <div className={cx('flex-1 flex flex-col items-center justify-center text-center rounded-[16px] border-2 border-dashed px-6 py-12 transition-colors', drag ? 'border-[var(--color-accent-fill)] bg-[var(--color-accent-pastel)]' : 'border-[var(--sep)]')}>
     <FileAudio className="w-9 h-9 text-[var(--color-text-muted)] stroke-[1.2] mb-3" />
     <h3 className="text-[15px] font-semibold">Turn a recording into text</h3>
-    <p className="text-[13px] text-[var(--color-text-muted)] mt-1 max-w-sm leading-relaxed">Drop a lecture, meeting, interview or voice memo here (audio or video, hours long is fine). Whisper writes it down on this computer, then you can summarize it in Chat.</p>
+    <p className="text-[13px] text-[var(--color-text-muted)] mt-1 max-w-sm leading-relaxed">Drop or paste lectures, meetings, interviews or voice memos here, as many as you like (audio or video, hours long is fine). Whisper writes it down on this computer, then you can summarize it in Chat.</p>
     <div className="mt-4 flex gap-2">
       <Btn variant="primary" icon={<Upload className="w-3.5 h-3.5" />} onClick={onPick} disabled={disabled}>Choose a File</Btn>
       <Btn icon={<Mic className="w-3.5 h-3.5" />} onClick={onRecord} disabled={disabled}>Record</Btn>

@@ -1,6 +1,8 @@
 // A stand-in for sd-cli: prints progress like the real one and writes a tiny PNG per image to -o.
 import { writeFileSync } from 'node:fs';
 const a = process.argv.slice(2);
+// Like current sd-cli builds (since July 2026), the help lists --auto-fit and --max-vram.
+if (a.includes('--help')) { process.stdout.write('usage: sd-cli [options]\n  --max-vram <string>\n  --auto-fit on|off\n  --offload-to-cpu\n'); process.exit(0); }
 const val = (n: string) => { const i = a.indexOf(n); return i >= 0 ? a[i + 1] : undefined; };
 const out = val('-o')!;
 const n = Number(val('-b') ?? 1);

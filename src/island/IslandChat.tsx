@@ -7,6 +7,7 @@ import { emitEvent, invokeNative } from '../lib/bus';
 import { MarkdownLite, toSpeakable } from '../lib/markdownLite';
 import { loadIsland, mainSettings, Mood } from './state';
 import { kv } from '../lib/store';
+import { useFileIntake } from '../lib/fileDrop';
 
 interface Msg { role: 'user' | 'assistant'; content: string; error?: boolean; files?: string[] }
 interface Attach { name: string; kind: 'text' | 'image'; data: string }
@@ -31,7 +32,6 @@ export const IslandChat = forwardRef<IslandChatHandle, {
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState(() => loadIsland().model || mainSettings().model);
 
@@ -101,6 +101,8 @@ export const IslandChat = forwardRef<IslandChatHandle, {
       } catch { flash(`Couldn't read ${f.name}.`); }
     }
   };
+  // Drop files on the island chat, or paste them (Ctrl/Cmd+V).
+  const dragOver = useFileIntake((f) => void addFiles(f));
 
   // ── Dictation ─────────────────────────────────────────────────────────────
   const toggleDictation = async () => {
@@ -142,8 +144,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
 
   return (
     <div className="flex flex-col h-full min-h-0"
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files); }}>
+>
       {/* Header */}
       <div className="flex items-center gap-1.5 pl-14 pr-3 pt-2.5 pb-1.5">
         <select aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)}

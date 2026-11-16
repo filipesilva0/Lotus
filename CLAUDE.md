@@ -55,6 +55,12 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
 
+## 0.9.5 map (paste/drop, references, Images folders)
+- Pages take files through `useFileIntake(onFiles)` (`lib/fileDrop.ts`); never read `dataTransfer.files[0]` or add another paste listener. Pure rules (`clipboardFiles`, `sortFiles`) live in `lib/fileKinds.ts` so the core's tests can import them.
+- Windows keep `dragDropEnabled: false` (all tauri confs) or drops never reach the page.
+- Images are saved as `Images/<generation>/Output N` and `Reference N` (`saveMedia(…, { dir, numbered, reuse })`, `newImageFolder`); a generation's folder is `GenSession.dir`. Multi-reference models set `FamilySpec.refImages`.
+- sherpa-onnx is pinned to 1.x (`RUNTIMES.sherpa.accepts`, D71); sd-cli flags depend on its `--help` (`--auto-fit`, D72).
+
 ## 0.8.2 map (voice studio with Lotus's own engine)
 - Map: `CURRENT_STATE.md` §0n-voice. Pure logic `voice/studio.ts` (tested in `core/test/s18.test.ts`), Web Audio `voice/render.ts`, state `voice/useStudio.ts`, UI `components/voice/BuiltinVoice.tsx` + `components/voice/studio/*`.
 - Speak through `speakWith(option, text)` (chunks, cloning reference, effects, saving); never call `builtinSpeech` from new UI. New TTS model families need a branch in `manager.ttsArgs` + a catalog entry with `voice.engine` (and `clones` if it needs a recording) + a test in s18.

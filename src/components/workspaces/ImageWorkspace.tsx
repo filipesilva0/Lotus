@@ -11,6 +11,7 @@ import { engineUrl } from '../../services/engineConfig';
 import { usePanels } from '../../lib/panels';
 import { VramMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
 import { usePersisted, uid } from '../../lib/persist';
+import { useFileIntake } from '../../lib/fileDrop';
 import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
 import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../common/Pane';
@@ -49,8 +50,8 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   const { right: showInspector, setRight: setShowInspector } = usePanels();
   const [tab, setTab] = usePersisted<'params' | 'styles' | 'details'>('lotus.image.tab.v1', 'params');
   const [prompt, setPrompt] = useState('');
-  const [ref, setRef] = useState<{ blob: Blob; url: string; name: string } | null>(null);
-  const [drag, setDrag] = useState(false);
+  // Reference images (0.9.5: several). FLUX.2 uses them all; other models start from the first.
+  const [refs, setRefs] = useState<{ id: string; blob: Blob; url: string; name: string }[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
@@ -124,7 +125,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
     if (!t || g.busy || (builtin ? !profile : !params.checkpoint)) return;
     setNotice(null);
     const { p, neg } = expand(t);
-    void g.generate(p, { ...params, negative: neg, profile: profile?.id ?? params.profile }, ref?.blob);
+    void g.generate(p, { ...params, negative: neg, profile: profile?.id ?? params.profile }, refs.map((r) => r.blob));
   };
 
   const pick = (i: number) => {
@@ -143,20 +144,33 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); }
   };
 
-  const takeRef = (f?: File | null) => {
-    if (!f) return;
-    if (!f.type.startsWith('image/')) { setNotice('A reference has to be an image.'); return; }
-    setRef({ blob: f, url: URL.createObjectURL(f), name: f.name });
+  const MAX_REFS = 8;
+  /** Adds reference images (dropped, pasted or chosen); anything that isn't an image is skipped with a note. */
+  const takeRefs = (list: File[] | FileList | null | undefined) => {
+    const files = Array.from(list ?? []);
+    if (!files.length) return;
+    const images = files.filter((f) => f.type.startsWith('image/'));
+    const skipped = files.length - images.length;
+    const room = Math.max(0, MAX_REFS - refs.length);
+    const add = images.slice(0, room).map((f) => ({ id: uid('ref'), blob: f as Blob, url: URL.createObjectURL(f), name: f.name }));
+    const over = images.length - add.length;
+    setNotice(skipped || over ? [skipped ? `${skipped} file${skipped > 1 ? 's' : ''} skipped: references have to be images.` : '', over ? `Up to ${MAX_REFS} reference images; ${over} not added.` : ''].filter(Boolean).join(' ') : null);
+    if (add.length) setRefs((cur) => [...cur, ...add]);
   };
+  const removeRef = (id: string) => setRefs((l) => l.filter((r) => r.id !== id));
+  const firstRef = (id: string) => setRefs((l) => { const r = l.find((x) => x.id === id); return r ? [r, ...l.filter((x) => x.id !== id)] : l; });
+  // Drop images anywhere on the Images page, or paste them.
+  const drag = useFileIntake(takeRefs, { enabled: !viewing && !maskOpen });
+  const multiRef = builtin && !!profile && !!FAMILIES[profile.family]?.refImages;
 
   const copyPrompt = () => { if (!cur) return; void navigator.clipboard.writeText(cur.prompt); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const download = () => { if (!cur) return; const a = document.createElement('a'); a.href = cur.url; a.download = `lotus-${cur.seed}-${cur.id}.png`; a.click(); };
-  const useAsReference = () => { if (cur?.blob) setRef({ blob: cur.blob, url: cur.url, name: 'Current image' }); };
+  const useAsReference = () => { if (cur?.blob && refs.length < MAX_REFS) setRefs((l) => [...l, { id: uid('ref'), blob: cur.blob!, url: cur.url, name: 'Current image' }]); };
   const reuse = (im: GeneratedImage) => { setPrompt(im.prompt); set({ negative: im.negativePrompt ?? params.negative, steps: im.steps, cfg: im.cfg, seed: im.seed, checkpoint: im.checkpoint, loras: im.loras ?? [], ...(im.sampler ? { sampler: im.sampler } : {}) }); };
 
   const actionBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-[7px] text-[12px] font-medium text-white hover:bg-white/20 disabled:opacity-40';
 
-  const newImage = () => { g.newSession(); setPrompt(''); set({ seed: null }); setRef(null); };
+  const newImage = () => { g.newSession(); setPrompt(''); set({ seed: null }); setRefs([]); };
   useCommand('new-image', newImage);
 
   // Deleting a generation hides it at once and offers Undo; it is removed when the Undo note closes.
@@ -274,7 +288,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
             )}
             {comfyUp === false && (builtin ? <BuiltinNotice kind="image" purpose="to generate images" className="mb-1.5 px-1" /> : <EngineNotice id="comfyui" purpose="to generate images" className="mb-1.5 px-1" />)}
             {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
-            <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); takeRef(e.dataTransfer.files[0]); }}
+            <PromptShell drag={drag}
               tray={<>
                 <TrayButton onClick={() => { setTab('params'); setShowInspector(true); }} icon={<SlidersHorizontal className="w-4 h-4" />} label="Parameters" title="Canvas, images per run, negative prompt, sampling" />
                 <TrayButton onClick={() => { setTab('styles'); setShowInspector(true); }} icon={<Palette className="w-4 h-4" />} label="Styles" title="Saved styles you can call with @ in the prompt" />
@@ -284,23 +298,31 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
               </>}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
               <VramMeter fallback={stats && stats.vramTotalGb ? { device: stats.device ?? undefined, totalGb: stats.vramTotalGb, freeGb: stats.vramFreeGb } : null} />
-              {(ref || drag) && (
-                <div className="flex items-center gap-2 px-3.5 pt-3">
-                  {ref ? (
-                    <span className="inline-flex items-center gap-2 h-10 pl-1 pr-1.5 rounded-[8px] bg-[var(--hover)] text-[12px]">
-                      <img src={ref.url} alt="" className="w-8 h-8 rounded-[5px] object-cover" /><span className="max-w-[140px] truncate">Reference: {ref.name}</span>
-                      <span className="text-[var(--color-text-muted)]">strength {Math.round(params.denoise * 100)}%</span>
-                      <IconBtn label="Remove reference" className="!w-5 !h-5" onClick={() => setRef(null)}><X className="w-3 h-3" /></IconBtn>
-                    </span>
-                  ) : <p className="text-[12px] text-[var(--color-text-muted)] py-2">Drop an image to use it as a reference (image-to-image).</p>}
+              {(refs.length > 0 || drag) && (
+                <div className="flex flex-wrap items-center gap-2 px-3.5 pt-3" aria-label="Reference images">
+                  {refs.map((r, i) => {
+                    const used = multiRef || i === 0;
+                    const label = multiRef ? `Reference ${i + 1}` : i === 0 ? 'Start image' : `Reference ${i + 1}`;
+                    return (
+                      <span key={r.id} className="inline-flex items-center gap-2 h-10 pl-1 pr-1 rounded-[8px] bg-[var(--hover)] text-[12px]"
+                        title={used ? undefined : 'This model starts from one image. Choose Use First to start from this one instead.'}>
+                        <img src={r.url} alt="" className={cx('w-8 h-8 rounded-[5px] object-cover', !used && 'opacity-50')} />
+                        <span className={cx('max-w-[120px] truncate', !used && 'text-[var(--color-text-muted)]')}>{label}</span>
+                        {!used && <button type="button" onClick={() => firstRef(r.id)} className="h-6 px-1.5 rounded-[6px] text-[12px] font-medium text-[var(--color-accent-vibrant)] hover:bg-[var(--hover)]">Use First</button>}
+                        <IconBtn label={`Remove ${label}`} className="!w-5 !h-5" onClick={() => removeRef(r.id)}><X className="w-3 h-3" /></IconBtn>
+                      </span>
+                    );
+                  })}
+                  {refs.length > 0 && <span className="text-[12px] text-[var(--color-text-muted)]">{multiRef ? `${profile!.name} uses all of them` : `strength ${Math.round(params.denoise * 100)}%`}</span>}
+                  {drag && !refs.length && <p className="text-[12px] text-[var(--color-text-muted)] py-2">Drop images to use them as references. You can also paste them.</p>}
                 </div>
               )}
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKey} rows={2} aria-label="Prompt"
                 placeholder="Describe the image… (/ for settings, @ for saved styles)"
                 className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
               <div className="flex items-center gap-1 px-2.5 pb-2.5">
-                <label className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] cursor-default" data-tip="Add a reference image">
-                  <input type="file" accept="image/*" className="sr-only" aria-label="Add a reference image" onChange={(e) => { takeRef(e.target.files?.[0]); e.target.value = ''; }} /><Plus className="w-[18px] h-[18px]" />
+                <label className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] cursor-default" data-tip="Add reference images (or paste or drop them)">
+                  <input type="file" accept="image/*" multiple className="sr-only" aria-label="Add reference images" onChange={(e) => { takeRefs(e.target.files); e.target.value = ''; }} /><Plus className="w-[18px] h-[18px]" />
                 </label>
                 {cur?.blob && <RoundIcon label="Use the current image as the reference" onClick={useAsReference}><MoveDiagonal className="w-4 h-4" /></RoundIcon>}
                 <Popover up trigger={(o, t) => (

@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AudioLines, Check, ChevronDown, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pin, PinOff, Plus, Search, Table2, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
+import { useFileIntake } from '../../lib/fileDrop';
 import { fileToBase64 } from '../../services/ollamaService';
 import { TEXT_EXT } from '../../chat/helpers';
 import { folderName, pickFolderPath } from '../../chat/folder';
@@ -231,7 +232,6 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   const [notice, setNotice] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
-  const [drag, setDrag] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => voiceState.on(setVs), []);
@@ -245,6 +245,8 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
     setFiles((f) => [...f, ...arr]);
     arr.filter((f) => f.type.startsWith('image/')).forEach((f) => setPreviews((p) => ({ ...p, [f.name + f.size]: URL.createObjectURL(f) })));
   };
+  // Drop files anywhere on the Work page, or paste them: all of them are attached.
+  const drag = useFileIntake(addFiles);
   // Images go to the model as pictures; text and code files are read and sent with the request.
   const readFiles = async (list: File[]): Promise<{ out: WorkAttachment[]; errors: string[] }> => {
     const out: WorkAttachment[] = [], errors: string[] = [];
@@ -376,8 +378,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="to work" className="mb-2" />}
             {!agentAvailable() && <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">Work mode runs in the desktop app (it needs the Lotus core).</p>}
             {notice && <p role="status" className="mb-2 text-[12px] text-[var(--c-orange)]">{notice}</p>}
-            <PromptShell drag={drag} onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
-              onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
+            <PromptShell drag={drag}
               tray={<>
               {item.folder ? (
                 <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`Lotus can read and edit files in ${item.folder} (saving asks first)`}>
@@ -397,7 +398,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
               <VramMeter />
               {(files.length > 0 || drag) && (
                 <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them.</p>}
+                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them. You can also paste them.</p>}
                   {files.map((f, i) => {
                     const url = previews[f.name + f.size];
                     return (
