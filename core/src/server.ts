@@ -23,6 +23,9 @@ import * as mem from './memory';
 import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, resolveMedia, saveMedia } from './media';
 import { AgentService, type StartArgs } from './agent/service';
 import { readHardware } from './hardware';
+import { Builtins } from './engines/manager';
+import { builtinRpc } from './engines/rpc';
+import { kvGet } from './kv';
 
 export const VERSION = '0.2.0';
 
@@ -36,6 +39,8 @@ export interface CoreOptions {
   log?: (msg: string) => void;
   /** Engine and web access for the agent (tests pass a fake). */
   fetch?: typeof fetch;
+  /** Tests: a fixed machine and fake GitHub / Hugging Face addresses for the built-in engines. */
+  builtins?: Partial<ConstructorParameters<typeof Builtins>[0]>;
 }
 
 const DEFAULT_ORIGINS = ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost', 'http://127.0.0.1:3000', 'http://localhost:3000'];
@@ -90,7 +95,7 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
   }
 }
 
-export type CoreServer = Server<{ id: number }> & { agent: AgentService };
+export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins };
 
 export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
@@ -126,7 +131,13 @@ export function startServer(o: CoreOptions): CoreServer {
   // Keeps idle streams from being cut by anything in between, and finds dead ones.
   const keepAlive = setInterval(() => { const l = enc.encode('{"type":"ping"}\n'); for (const c of streams) { try { c.enqueue(l); } catch { streams.delete(c); } } }, 5_000);
   (keepAlive as { unref?: () => void }).unref?.();
-  const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log });
+  const kvSetCore = (key: string, value: string) => {
+    const done = kvApply(o.db, { set: { [key]: value }, remove: [] });
+    broadcast({ type: 'kv', ...done, origin: 'core' });
+  };
+  const builtins = new Builtins({ studio: o.studio, broadcast, kvGet: (k) => kvGet(o.db, k), kvSet: kvSetCore, fetch: o.fetch, log, ...o.builtins });
+  try { builtins.ensureFolders(); } catch (e) { log(`could not create the Models folders: ${(e as Error).message}`); }
+  const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins });
 
   const server = Bun.serve<{ id: number }, never>({
     hostname: '127.0.0.1',
@@ -207,6 +218,8 @@ export function startServer(o: CoreOptions): CoreServer {
           const raw = (text ? JSON.parse(text) : {}) as Json;
           const args = raw && typeof raw === 'object' ? raw : {};
           if (!fn) {
+            const b = await builtinRpc(builtins, o.db, o.studio, method, args, broadcast);
+            if (b.found) return json(req, { result: b.value ?? null });
             const r = agentRpc(agent, o, method, args);
             if (!r.found) return fail(req, 404, `The core has no method called ${method}.`);
             return json(req, { result: r.value ?? null });
@@ -226,5 +239,5 @@ export function startServer(o: CoreOptions): CoreServer {
       message() { /* clients only listen */ },
     },
   });
-  return Object.assign(server, { agent });
+  return Object.assign(server, { agent, builtins });
 }

@@ -11,6 +11,8 @@ export interface WireTool { type: 'function'; function: { name: string; descript
 
 export interface ChatOpts {
   backend: 'ollama' | 'llamacpp';
+  /** llama.cpp only: send the tool list in OpenAI's format (the built-in server runs with --jinja). */
+  nativeTools?: boolean;
   url: string;
   auth?: string | null;
   model: string;
@@ -106,31 +108,76 @@ function reachError(o: ChatOpts, e: unknown): Error {
   return new Error(`Can't reach ${who} at ${o.url}. Start it from Settings → Engines (or the notice above the chat box), then send again.`);
 }
 
+/**
+ * Ollama-style messages → OpenAI's: tool calls get ids, and each tool result answers the matching
+ * call in order (Lotus runs a turn's calls in the order the model gave them).
+ */
+export function toOpenAi(messages: WireMsg[]): unknown[] {
+  const out: unknown[] = [];
+  let pending: string[] = [];
+  let n = 0;
+  for (const m of messages) {
+    if (m.role === 'assistant' && m.tool_calls?.length) {
+      const ids = m.tool_calls.map(() => `call_${++n}`);
+      pending = [...ids];
+      out.push({ role: 'assistant', content: m.content || null, tool_calls: m.tool_calls.map((c, i) => ({ id: ids[i], type: 'function', function: { name: c.function.name, arguments: JSON.stringify(c.function.arguments ?? {}) } })) });
+    } else if (m.role === 'tool') {
+      const id = pending.shift() ?? `call_${++n}`;
+      out.push({ role: 'tool', tool_call_id: id, content: m.content });
+    } else if ((m.role === 'user' || m.role === 'system') && m.images?.length) {
+      out.push({ role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((b) => ({ type: 'image_url', image_url: { url: `data:image/png;base64,${b}` } }))] });
+    } else out.push({ role: m.role, content: m.content });
+  }
+  return out;
+}
+
 /** One model turn. Streams text through onToken / onThinking; returns the text and any tool calls. */
 export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool[] | null, on: { token: (t: string) => void; thinking: (t: string) => void }): Promise<TurnResult> {
   const t0 = Date.now();
   if (o.backend === 'llamacpp') {
-    const body = {
-      model: o.model, stream: true, messages: messages.map((m) => (m.role === 'tool' ? { role: 'user', content: m.content } : { role: m.role, content: m.content })),
+    const native = !!(o.nativeTools && tools?.length);
+    const body: Record<string, unknown> = {
+      model: o.model, stream: true, messages: native ? toOpenAi(messages) : messages.map((m) => (m.role === 'tool' ? { role: 'user', content: m.content } : { role: m.role, content: m.content })),
       temperature: o.temperature, top_p: o.topP, top_k: o.topK, seed: o.seed, max_tokens: o.numPredict, stop: o.stop?.length ? o.stop : undefined,
     };
+    if (native) body.tools = tools;
     let res: Response;
     try { res = await firstByte(o, `${o.url}/v1/chat/completions`, { method: 'POST', headers: headers(o), body: JSON.stringify(body) }); }
     catch (e) { throw reachError(o, e); }
-    if (!res.ok) throw new Error(`The llama.cpp server answered ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) {
+      const text = (await res.text()).slice(0, 300);
+      if (native && (res.status === 400 || res.status === 500) && /tool|template|jinja/i.test(text)) throw new ToolsUnsupported(text);
+      throw new Error(`The llama.cpp server answered ${res.status}: ${text.slice(0, 200)}`);
+    }
     let content = '';
+    const parts = new Map<number, { name: string; args: string }>();
+    let promptTokens: number | undefined, evalTokens: number | undefined;
     for await (const l of lines(res, o.signal)) {
       if (!l.startsWith('data:')) continue;
       const d = l.slice(5).trim();
       if (d === '[DONE]') break;
       try {
-        const j = JSON.parse(d) as { choices?: { delta?: { content?: string; reasoning_content?: string } }[] };
+        const j = JSON.parse(d) as { choices?: { delta?: { content?: string | null; reasoning_content?: string; tool_calls?: { index?: number; function?: { name?: string; arguments?: string } }[] } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
         const delta = j.choices?.[0]?.delta;
         if (delta?.reasoning_content) on.thinking(delta.reasoning_content);
         if (delta?.content) { content += delta.content; on.token(delta.content); }
+        for (const tc of delta?.tool_calls ?? []) {
+          const k = tc.index ?? 0;
+          const cur = parts.get(k) ?? { name: '', args: '' };
+          if (tc.function?.name) cur.name += tc.function.name;
+          if (tc.function?.arguments) cur.args += tc.function.arguments;
+          parts.set(k, cur);
+        }
+        if (j.usage) { promptTokens = j.usage.prompt_tokens; evalTokens = j.usage.completion_tokens; }
       } catch { /* keep-alive */ }
     }
-    return { content, calls: [], durationMs: Date.now() - t0 };
+    const calls: WireCall[] = [...parts.values()].filter((p) => p.name).map((p) => {
+      let args: unknown = {};
+      try { args = p.args ? JSON.parse(p.args) : {}; } catch { args = {}; }
+      return { name: p.name, args: args && typeof args === 'object' ? (args as Record<string, unknown>) : {} };
+    });
+    const ms = Date.now() - t0;
+    return { content, calls, promptTokens, evalTokens, tokensPerSec: evalTokens && ms ? Math.round((evalTokens / (ms / 1000)) * 10) / 10 : undefined, durationMs: ms };
   }
 
   const body: Record<string, unknown> = {

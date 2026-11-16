@@ -3,6 +3,7 @@
 // (core/src/tools/image.ts), so both queue exactly the same workflow.
 
 import { recipeFor, ImageRecipe } from '../setup/catalog';
+import { comfyWiring, settingsFor, type ImageProfile } from '../models/imageProfiles';
 
 export interface LoraUse { name: string; strength: number }
 
@@ -21,6 +22,8 @@ export interface GraphInput {
   count?: number;
   /** LoRAs applied on top of the checkpoint, in order (at most 4). */
   loras?: LoraUse[];
+  /** Session 17: an image setup ties the model to its own VAE and text encoders (models/imageProfiles.ts). */
+  profile?: ImageProfile;
 }
 type TxtToImageInput = GraphInput;
 
@@ -39,16 +42,45 @@ export function dimensionsFor(aspect: string, checkpoint: string): { width: numb
   return { width: r64(Math.sqrt(area * ratio)), height: r64(Math.sqrt(area / ratio)) };
 }
 
+/** A profile's wiring as the recipe shape the graph builders already use (+ checkpoint/VAE override). */
+interface Spec extends Partial<ImageRecipe> { checkpoint?: boolean; vaeOverride?: string; clipNode?: 'CLIPLoader' | 'DualCLIPLoader' | 'TripleCLIPLoader'; clips?: string[] }
+function specOf(i: TxtToImageInput): Spec | undefined {
+  if (i.profile) {
+    const w = comfyWiring(i.profile);
+    const st = settingsFor(i.profile);
+    const common = { steps: st.steps, cfg: st.cfg, sampler: st.sampler, scheduler: st.scheduler, base: st.base, negative: w.negative, kind: w.kind } as const;
+    if (w.loader === 'checkpoint' && !w.clip) return st.locked ? { ...common, checkpoint: true, vaeOverride: w.vae } : { checkpoint: true, vaeOverride: w.vae, base: st.base };
+    if (w.loader === 'checkpoint' && w.clip?.node === 'TripleCLIPLoader') return { checkpoint: true, vaeOverride: w.vae, clipNode: 'TripleCLIPLoader', clips: [w.clip.a, w.clip.b, w.clip.c], latent: 'sd3', base: st.base };
+    const clip = w.clip!;
+    return {
+      ...(st.locked ? common : { base: st.base, negative: w.negative, kind: w.kind }), unet: w.model, vae: w.vae ?? '', shift: w.shift, latent: w.latent === 'flux2' ? 'flux2' : 'sd3',
+      ...(clip.node === 'CLIPLoader' ? { clip: clip.name, clipType: clip.type, clipNode: 'CLIPLoader' as const } : clip.node === 'DualCLIPLoader' ? { clipNode: 'DualCLIPLoader' as const, clips: [clip.a, clip.b], clipType: clip.type } : {}),
+    };
+  }
+  return recipeFor(i.checkpoint);
+}
+
 /**
- * The model, text encoder and VAE. A classic checkpoint is one node ('4'); a split model with a known
- * recipe (setup/catalog.ts) is UNETLoader '4' + CLIPLoader '40' + VAELoader '41' (+ ModelSamplingAuraFlow '42').
+ * The model, text encoder and VAE. A classic checkpoint is one node ('4') (+ VAELoader '41' when its
+ * setup names a separate VAE); a split model is UNETLoader '4' + text encoder loader '40' + VAELoader
+ * '41' (+ ModelSamplingAuraFlow '42').
  */
-function loaders(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [string, number]; clip: [string, number]; vae: [string, number]; recipe?: ImageRecipe } {
-  const r = recipeFor(i.checkpoint);
-  if (!r) return { nodes: { '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: i.checkpoint } } }, model: ['4', 0], clip: ['4', 1], vae: ['4', 2] };
+function loaders(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [string, number]; clip: [string, number]; vae: [string, number]; recipe?: Spec } {
+  const r = specOf(i);
+  const name = i.profile?.files.model ?? i.checkpoint;
+  if (!r || r.checkpoint) {
+    const nodes: Record<string, unknown> = { '4': { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: name } } };
+    let vae: [string, number] = ['4', 2];
+    let clip: [string, number] = ['4', 1];
+    if (r?.vaeOverride) { nodes['41'] = { class_type: 'VAELoader', inputs: { vae_name: r.vaeOverride } }; vae = ['41', 0]; }
+    if (r?.clipNode === 'TripleCLIPLoader' && r.clips) { nodes['40'] = { class_type: 'TripleCLIPLoader', inputs: { clip_name1: r.clips[0], clip_name2: r.clips[1], clip_name3: r.clips[2] } }; clip = ['40', 0]; }
+    return { nodes, model: ['4', 0], clip, vae, recipe: r && (r.steps !== undefined || r.clipNode) ? r : undefined };
+  }
   const nodes: Record<string, unknown> = {
-    '4': { class_type: 'UNETLoader', inputs: { unet_name: i.checkpoint, weight_dtype: 'default' } },
-    '40': { class_type: 'CLIPLoader', inputs: { clip_name: r.clip, type: r.clipType, device: 'default' } },
+    '4': { class_type: 'UNETLoader', inputs: { unet_name: r.unet ?? name, weight_dtype: 'default' } },
+    '40': r.clipNode === 'DualCLIPLoader' && r.clips
+      ? { class_type: 'DualCLIPLoader', inputs: { clip_name1: r.clips[0], clip_name2: r.clips[1], type: r.clipType ?? 'flux', device: 'default' } }
+      : { class_type: 'CLIPLoader', inputs: { clip_name: r.clip, type: r.clipType, device: 'default' } },
     '41': { class_type: 'VAELoader', inputs: { vae_name: r.vae } },
   };
   let model: [string, number] = ['4', 0];
@@ -77,7 +109,7 @@ function lora(i: TxtToImageInput): { nodes: Record<string, unknown>; model: [str
 
 /** Recipe models have fixed steps, guidance and sampler (distilled models break with other values). */
 function sampler(i: TxtToImageInput, seed: number, latent: [string, number], denoise: number) {
-  const r = recipeFor(i.checkpoint);
+  const r = specOf(i);
   return {
     class_type: 'KSampler',
     inputs: {
@@ -107,14 +139,14 @@ function base(i: TxtToImageInput) {
 
 /** FLUX.2 Klein is driven through the custom-sampler nodes, and Lotus wires text-to-image only. */
 function onlyTxt2Img(i: TxtToImageInput) {
-  if (recipeFor(i.checkpoint)?.kind === 'flux2') {
-    throw new GraphError(`${i.checkpoint} only does text to image in Lotus for now. Pick another model (Z-Image Turbo or a checkpoint) to edit, inpaint or extend images.`);
+  if (specOf(i)?.kind === 'flux2') {
+    throw new GraphError(`${i.profile?.name ?? i.checkpoint} only does text to image in Lotus for now. Pick another model (Z-Image Turbo or a checkpoint) to edit, inpaint or extend images.`);
   }
 }
 
 /** Text → image. */
 export function graphTxt2Img(i: TxtToImageInput, seed: number) {
-  const r = recipeFor(i.checkpoint);
+  const r = specOf(i);
   const size = { width: i.width, height: i.height, batch_size: i.count ?? 1 };
   if (r?.kind === 'flux2') {
     // Same wiring as ComfyUI's own FLUX.2 Klein template: noise + guider + sampler + sigmas.
@@ -122,16 +154,16 @@ export function graphTxt2Img(i: TxtToImageInput, seed: number) {
       ...base(i),
       '5': { class_type: 'EmptyFlux2LatentImage', inputs: size },
       '30': { class_type: 'RandomNoise', inputs: { noise_seed: seed } },
-      '31': { class_type: 'KSamplerSelect', inputs: { sampler_name: r.sampler } },
-      '32': { class_type: 'Flux2Scheduler', inputs: { steps: r.steps, width: i.width, height: i.height } },
-      '33': { class_type: 'CFGGuider', inputs: { model: lora(i).model, positive: ['6', 0], negative: ['7', 0], cfg: r.cfg } },
+      '31': { class_type: 'KSamplerSelect', inputs: { sampler_name: r.sampler ?? 'euler' } },
+      '32': { class_type: 'Flux2Scheduler', inputs: { steps: r.steps ?? 4, width: i.width, height: i.height } },
+      '33': { class_type: 'CFGGuider', inputs: { model: lora(i).model, positive: ['6', 0], negative: ['7', 0], cfg: r.cfg ?? 1 } },
       '3': { class_type: 'SamplerCustomAdvanced', inputs: { noise: ['30', 0], guider: ['33', 0], sampler: ['31', 0], sigmas: ['32', 0], latent_image: ['5', 0] } },
     };
   }
   return {
     ...base(i),
     '3': sampler(i, seed, ['5', 0], 1),
-    '5': { class_type: r ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: size },
+    '5': { class_type: r && !r.checkpoint ? 'EmptySD3LatentImage' : r?.latent === 'sd3' ? 'EmptySD3LatentImage' : 'EmptyLatentImage', inputs: size },
   };
 }
 

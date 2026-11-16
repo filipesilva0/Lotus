@@ -7,6 +7,40 @@ import { dimensionsFor, GraphError, graphTxt2Img, type GraphInput } from '../../
 import { recipeFor } from '../../../src/setup/catalog';
 import { saveMedia } from '../media';
 import { authHeader } from '../agent/llm';
+import { builtinImage } from '../engines/rpc';
+import type { ImageProfile } from '../../../src/models/imageProfiles';
+
+/** Settings → Engines: which engine makes images ('builtin' since session 17, or 'comfyui'). */
+export function imageEngine(ctx: Pick<ToolCtx, 'kvGet'>): 'builtin' | 'comfyui' {
+  try { return JSON.parse(ctx.kvGet('lotus.settings.v1') || '{}').imageEngine === 'builtin' ? 'builtin' : 'comfyui'; } catch { return 'comfyui'; }
+}
+
+/** The built-in engine's run: the setup picked on the Images page, else the first complete one. */
+async function runBuiltin(a: Record<string, unknown>, ctx: ToolCtx, saved: { profile?: string; negative?: string; aspect?: string }) {
+  const b = ctx.builtins!;
+  if (!b.engineInfo('sd').installed) return { ok: false, text: 'The built-in image engine is not installed yet, so no image was made. Tell the user to install it in Settings → Models (or switch Images to ComfyUI in Settings → Engines).', summary: 'Image engine not installed' };
+  const all: ImageProfile[] = b.profiles();
+  const ready = all.filter((p) => !b.missingFiles(p).length);
+  const profile = ready.find((p) => p.id === saved.profile) ?? ready[0];
+  if (!profile) return { ok: false, text: all.length ? `No image model is complete: ${all.map((p) => `${p.name} is missing ${b.missingFiles(p).join(', ')}`).join('; ')}. The user can fix it in Settings → Models → Image Setups.` : 'No image model is installed, so no image was made. The user can download one in Settings → Models.', summary: 'No image model ready' };
+  const prompt = String(a.prompt);
+  const negative = typeof a.negative === 'string' ? a.negative : saved.negative;
+  ctx.progress('Starting the image engine');
+  const r = await builtinImage(b, ctx.db, ctx.studio, { profile, prompt, negative, aspect: typeof a.aspect === 'string' ? a.aspect : (saved.aspect ?? '1:1'), count: Number(a.count) || 1 },
+    { signal: ctx.signal, onProgress: (step, total) => ctx.progress(`Step ${step} of ${total}`) });
+  const media = r.images.map((m) => m.path);
+  const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const versions = media.map((file, k) => ({ id: `img-${Date.now().toString(36)}-${k}`, file, prompt, negativePrompt: negative, seed: r.seed, steps: r.steps, cfg: r.cfg, dimensions: `${r.width}×${r.height}`, generationTimeSec: r.sec, timestamp: stamp, checkpoint: profile.name, profile: profile.id, kind: 'txt2img' }));
+  let gallery: unknown[] = [];
+  try { const g = JSON.parse(ctx.kvGet(GALLERY_KEY) || '[]'); if (Array.isArray(g)) gallery = g; } catch { /* start fresh */ }
+  ctx.kvSet(GALLERY_KEY, JSON.stringify([{ id: `gen-${Date.now().toString(36)}`, title: prompt.slice(0, 40) || 'Untitled', ts: Date.now(), versions, index: 0, source: 'chat' }, ...gallery]));
+  return {
+    ok: true,
+    text: `Made ${media.length} image${media.length === 1 ? '' : 's'} with ${profile.name} (${r.width}×${r.height}, ${r.sec} s). The user can see ${media.length === 1 ? 'it' : 'them'} in the chat and on the Images page. Files: ${media.join(', ')}`,
+    summary: `${media.length} image${media.length === 1 ? '' : 's'} · ${profile.name} · ${r.sec} s`,
+    media, data: { profile: profile.id, width: r.width, height: r.height, seed: r.seed },
+  };
+}
 
 export const GALLERY_KEY = 'lotus.gallery.v2';
 const PARAMS_KEY = 'lotus.image.params.v1';
@@ -30,7 +64,7 @@ async function comfyModels(ctx: ToolCtx, url: string, h: Record<string, string>)
 
 export const imageGenerate: Tool = {
   name: 'image.generate', label: 'Making an image', risk: 'write',
-  description: 'Make an image from a text description with the user\'s image model (ComfyUI). The image is shown in the chat and saved to the Images page. Write the prompt in English, describing subject, style and lighting.',
+  description: 'Make an image from a text description with the user\'s image model. The image is shown in the chat and saved to the Images page. Write the prompt in English, describing subject, style and lighting.',
   parameters: { type: 'object', properties: {
     prompt: { type: 'string', description: 'What the image should show, in detail.' },
     aspect: { type: 'string', description: 'Shape: 1:1 (default), 16:9, 9:16, 4:3 or 3:4.', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
@@ -39,6 +73,11 @@ export const imageGenerate: Tool = {
   }, required: ['prompt'] },
   describe: (a) => `Make ${Number(a.count) > 1 ? `${a.count} images` : 'an image'} of “${String(a.prompt).slice(0, 80)}”`,
   async run(a, ctx) {
+    if (imageEngine(ctx) === 'builtin' && ctx.builtins) {
+      let saved: { profile?: string; negative?: string; aspect?: string } = {};
+      try { saved = JSON.parse(ctx.kvGet(PARAMS_KEY) || '{}'); } catch { /* defaults */ }
+      return runBuiltin(a, ctx, saved);
+    }
     const { url, auth } = engine(ctx, 'comfyui', 'http://127.0.0.1:8188');
     const h: Record<string, string> = auth ? { authorization: auth } : {};
     let saved: Partial<typeof DEFAULTS> = {};

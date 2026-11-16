@@ -53,6 +53,7 @@ function stop(why: string) {
   if (stopping) return;
   stopping = true;
   log(`stopping (${why})`);
+  try { server.builtins.shutdown(); } catch { /* nothing running */ }
   try { server.stop(true); } catch { /* already stopped */ }
   try { db.sql.close(); } catch { /* already closed */ }
   process.exit(0);

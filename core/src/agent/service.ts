@@ -48,7 +48,7 @@ const WORK_PROMPT = `\n\nYou are working in Lotus's Work mode: the user hands yo
 - If you are blocked or a choice is the user's to make, use ask.user with short options instead of guessing.
 - Finish with a short summary of what you made and where it is.`;
 
-export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp'; llamacppUrl: string; enabled: boolean; computerUse: boolean; browserUse: boolean }
+export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp' | 'builtin'; llamacppUrl: string; contextWindow: number; enabled: boolean; computerUse: boolean; browserUse: boolean }
 
 export function readAgentSettings(db: Db): AgentSettings {
   let s: Record<string, unknown> = {};
@@ -57,7 +57,8 @@ export function readAgentSettings(db: Db): AgentSettings {
     approval: isApprovalMode(s.agentApproval) ? s.agentApproval : 'risky',
     deny: Array.isArray(s.agentDeny) ? s.agentDeny.map(String) : DEFAULT_DENY,
     folders: Array.isArray(s.agentFolders) ? s.agentFolders.map(String) : [],
-    backend: s.llmBackend === 'llamacpp' ? 'llamacpp' : 'ollama',
+    backend: s.llmBackend === 'llamacpp' ? 'llamacpp' : s.llmBackend === 'builtin' ? 'builtin' : 'ollama',
+    contextWindow: typeof s.contextWindow === 'number' ? s.contextWindow : 0,
     llamacppUrl: typeof s.llamacppUrl === 'string' && s.llamacppUrl ? s.llamacppUrl : 'http://127.0.0.1:8080',
     enabled: s.agentTools !== false,
     computerUse: s.computerUse === true,
@@ -91,7 +92,7 @@ export class AgentService {
   private asks = new Map<string, (answer: string) => void>();
   readonly registry = new Registry(ALL_TOOLS);
 
-  constructor(private o: { db: Db; studio: string; broadcast: (e: Record<string, unknown>) => void; fetch?: typeof fetch; log?: (m: string) => void }) {
+  constructor(private o: { db: Db; studio: string; broadcast: (e: Record<string, unknown>) => void; fetch?: typeof fetch; log?: (m: string) => void; builtins?: import('../engines/manager').Builtins }) {
     closeStaleRuns(o.db);
     pruneRuns(o.db);
   }
@@ -184,16 +185,24 @@ export class AgentService {
       messages[0] = { ...messages[0], content: `${messages[0].content}\n\nFolders you can use with the file tools: ${folders.join(', ')} (the last one is the Lotus Studio folder; save new notes there unless the user names another place).` };
     }
 
-    const llm = { backend: s.backend, url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options };
+    const llm: { backend: 'ollama' | 'llamacpp'; nativeTools?: boolean; url: string; auth: string | null; fetch: typeof fetchFn } & NonNullable<StartArgs['options']> = {
+      backend: s.backend === 'ollama' ? 'ollama' : 'llamacpp', nativeTools: s.backend === 'builtin',
+      url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options,
+    };
     let helperSeq = 0;
     void (async () => {
       try {
+        if (s.backend === 'builtin') {
+          // The built-in engine loads the chosen model on first use (and swaps models when asked).
+          if (!this.o.builtins) throw new Error('The built-in chat engine is not available in this build.');
+          llm.url = await this.o.builtins.ensureChat(a.model, { ctx: a.options?.numCtx || s.contextWindow || undefined });
+        }
         const out = await runAgent({
           runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined,
         }, {
           llm,
           registry: this.registry,
-          ctx: { db: this.o.db, studio: this.o.studio, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
+          ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
             delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { goal, context, name, model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'ask.user'), llm, s, workDir, folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st) => this.waitFor(runId, st, ctrl.signal) }) : undefined },
           signal: ctrl.signal,
           emit,

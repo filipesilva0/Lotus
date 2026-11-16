@@ -49,6 +49,8 @@ export interface ToolCtx {
   ask?: (question: string, options: string[]) => Promise<string>;
   /** Runs a helper agent on one part of the job and returns its final answer and step count. */
   delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean }>;
+  /** The built-in engines (session 17): image.generate uses them when Settings → Engines picks Built in. */
+  builtins?: import('../engines/manager').Builtins;
 }
 
 export interface Tool {

@@ -54,6 +54,8 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   const steps: Step[] = [];
   let mode: 'native' | 'tags' = 'tags';
   let think = d.llm.think;
+  // The built-in llama-server runs with --jinja, so it takes an OpenAI tool list (falls back to tags below).
+  if (d.llm.backend === 'llamacpp' && d.llm.nativeTools && req.tools.length) mode = 'native';
   if (d.llm.backend === 'ollama' && req.tools.length) {
     const caps = req.capabilities ?? (await ollamaCapabilities({ ...d.llm, model: req.model, signal: d.signal }));
     mode = caps.length === 0 || caps.includes('tools') ? 'native' : 'tags';
