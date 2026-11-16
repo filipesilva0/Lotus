@@ -7,6 +7,8 @@ import { Btn, IconBtn, TextArea, cx } from '../common/ui';
 import { parseChoices } from '../../chat/choices';
 import { ChoiceCard } from './ChoiceCard';
 import { parseInstall, type InstallTarget } from '../../chat/install';
+import { parseImageProposal, type ImageProposal } from '../../chat/imageProposal';
+import { ImageProposalCard } from './ImageProposalCard';
 import { InstallCard } from './InstallCard';
 import { AgentSteps, UnverifiedNote } from './AgentSteps';
 import { draftLabel } from '../../chat/rethink';
@@ -22,6 +24,8 @@ interface Props {
   onAnswer?: (msgId: string, text: string) => void;
   /** Allow / Deny on a model install the reply proposed. */
   onInstall?: (msgId: string, target: InstallTarget, allow: boolean) => void;
+  /** Yes / No on an image the reply proposed (0.10.1). */
+  onImage?: (msgId: string, proposal: ImageProposal, yes: boolean) => void;
   /** Allow / Deny on an agent step that needs permission. */
   onStep?: (msgId: string, step: ChatToolCall, allow: boolean) => void;
 }
@@ -56,7 +60,7 @@ const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' 
   );
 };
 
-export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall, onFeedback, onStep }) => {
+export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, reasoningMode, onEdit, onRegenerate, onSwitch, onMemory, onOpenArtifact, onAnswer, onInstall, onImage, onFeedback, onStep }) => {
   const modelName = session.model || 'The model';
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -72,7 +76,8 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
         {session.messages.map((m, mi) => {
           const user = m.role === 'user';
           const b = m.branch;
-          const inst = user ? null : parseInstall(m.content);
+          const img = user ? null : parseImageProposal(m.content);
+          const inst = user || !img ? null : parseInstall(img.text);
           const parsed = user || !inst ? null : parseChoices(inst.text);
           const body = parsed ? parsed.text : m.content;
           const next = session.messages[mi + 1];
@@ -106,6 +111,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                             <button type="button" onClick={() => onOpenArtifact(lang, code)} className="h-6 px-2 rounded-[5px] bg-black/50 text-white text-[12px] inline-flex items-center gap-1"><PanelRight className="w-3 h-3" />Open in Artifacts</button>
                           </>)} />
                       : m.isStreaming ? <span className="text-[var(--color-text-muted)] animate-pulse">{m.tools?.some((t) => t.status === 'waiting') ? 'Waiting for your answer above…' : m.tools?.find((t) => t.status === 'running')?.label.concat('…') ?? (m.thinking ? `${modelName} is reasoning before it answers…` : `${modelName} is reading your message…`)}</span> : null}
+                    {img?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Choosing the image settings…</p>}
                     {inst?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing an install request…</p>}
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
                     {m.interrupted && <p className="mt-1.5 text-[12px] opacity-70">Stopped here.</p>}
@@ -130,6 +136,12 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                   <ChoiceCard poll={parsed.poll} enabled={!!onAnswer && isLast && !isStreaming}
                     answered={m.pollAnswer ?? (next?.role === 'user' ? next.content : undefined)}
                     onAnswer={(text) => onAnswer?.(m.id, text)} />
+                )}
+
+                {img && (img.proposal || img.problem) && !m.isStreaming && (
+                  <ImageProposalCard proposal={img.proposal} problem={img.problem} decision={m.imageGen}
+                    enabled={!!onImage && !isStreaming && !m.imageGen}
+                    onDecide={(yes) => img.proposal && onImage?.(m.id, img.proposal, yes)} />
                 )}
 
                 {inst && (inst.target || inst.problem) && !m.isStreaming && (

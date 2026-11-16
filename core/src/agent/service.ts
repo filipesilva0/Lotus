@@ -10,6 +10,7 @@
 //   agent_runs   { limit? } → recent runs
 // Events: { type: 'agent', runId, kind: 'token' | 'thinking' | 'reset' | 'step' | 'stats' | 'done' | 'error', … }
 
+import { ROUTINE_TOOLS } from '../tools/routines';
 import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Db } from '../db';
@@ -33,7 +34,7 @@ import { avatarCreate } from '../tools/avatar';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
+export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
 const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate']);

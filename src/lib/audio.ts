@@ -1,5 +1,47 @@
 // Audio helpers: mic recording with a live level meter, WAV encoding, waveform peaks.
 
+import { kv } from './store';
+import { micAttempts, micErrorText, retryableMicError, type MicOs } from './micRules';
+
+/** The microphone picked in Voice → Settings ('' = the system's default). */
+export const MIC_KEY = 'lotus.mic.v1';
+export const preferredMic = (): string => { try { return kv.getItem(MIC_KEY) || ''; } catch { return ''; } };
+export const setPreferredMic = (id: string) => { try { kv.setItem(MIC_KEY, id); } catch { /* memory only */ } };
+
+const micOs = (): MicOs => { const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent; return /Mac/.test(ua) ? 'macos' : /Linux|X11/.test(ua) && !/Windows/.test(ua) ? 'linux' : 'windows'; };
+
+/** Microphones the window can see. Names appear only after the microphone was opened once. */
+export async function listMics(): Promise<{ id: string; label: string }[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  const all = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+  const mics = all.filter((d) => d.kind === 'audioinput');
+  return mics.map((d, i) => ({ id: d.deviceId, label: d.label || (d.deviceId === 'default' ? 'System Default' : `Microphone ${i + 1}`) }));
+}
+
+/** An error with the browser's error name kept, so micErrorMessage can explain it. */
+class MicError extends Error { constructor(public micName: string, public found: number, cause?: unknown) { super(micErrorText(micName, micOs(), found)); this.name = micName; this.cause = cause; } }
+
+/**
+ * Opens a microphone: the one picked in Settings, else the default, else any listed one (0.10.1).
+ * Throws a MicError whose message says what to do.
+ */
+export async function openMic(deviceId = preferredMic()): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getUserMedia) throw new MicError('NoMediaDevices', 0);
+  const ids = (await listMics()).map((m) => m.id);
+  let last: unknown = null;
+  for (const audio of micAttempts(deviceId, ids)) {
+    try { return await navigator.mediaDevices.getUserMedia({ audio }); }
+    catch (e) {
+      last = e;
+      const name = (e as DOMException)?.name ?? '';
+      console.warn('[lotus] microphone attempt failed', JSON.stringify(audio), name, (e as Error)?.message);
+      if (!retryableMicError(name)) break;
+    }
+  }
+  const found = (await listMics()).filter((m) => m.id !== 'default' && m.id !== 'communications').length;
+  throw new MicError((last as DOMException)?.name ?? '', found, last);
+}
+
 /** Encode a decoded AudioBuffer as 16-bit PCM WAV. */
 export function encodeWav(buf: AudioBuffer): Blob {
   const ch = buf.numberOfChannels;
@@ -56,9 +98,7 @@ export class MicRecorder {
   }
 
   async start(deviceId?: string) {
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: deviceId ? { deviceId: { exact: deviceId } } : { echoCancellation: true, noiseSuppression: true },
-    });
+    this.stream = await openMic(deviceId ?? preferredMic());
     const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : undefined;
     this.rec = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
     this.chunks = [];
@@ -113,14 +153,9 @@ export class MicRecorder {
 
 /** Friendly message for the ways getUserMedia fails. */
 export function micErrorMessage(e: unknown): string {
-  const name = (e as DOMException)?.name;
-  if (name === 'NotAllowedError') {
-    const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
-    const where = /Mac/.test(ua) ? 'System Settings → Privacy & Security → Microphone' : /Linux/.test(ua) ? "your desktop's privacy or sound settings" : 'Windows Settings → Privacy → Microphone';
-    return `Microphone access is blocked. Allow it in ${where}.`;
-  }
-  if (name === 'NotFoundError') return 'No microphone found. Plug one in or pick another input.';
-  return 'Could not start the microphone.';
+  if (e instanceof MicError) return e.message;
+  const name = (e as DOMException)?.name ?? '';
+  return micErrorText(name, micOs(), 0);
 }
 
 /** Downsampled absolute peaks (0..1) for drawing a waveform. */

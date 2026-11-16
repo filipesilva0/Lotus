@@ -86,6 +86,9 @@ const TASKS = [
   { n: 29, group: 'multi', prompt: 'Read groceries.txt and add a task for each item on it.', check: all(step('files.read'), step('task.add', 3), task(/oat milk/i), task(/apple/i)) },
   { n: 30, group: 'multi', prompt: 'Add a task to buy flowers, then tell me everything on my task board.', check: all(step('task.add'), step('task.list'), task(/flower/i), has(/pay rent/i)) },
   // 0.9.1: change part of a file in place (files.edit) without losing the rest.
+  // 0.10.1: routines (cron jobs) and to-do lists from chat.
+  { n: 33, group: 'tasks', prompt: 'Every weekday at 8:30, give me a short summary of the day ahead. Set that up.', check: all(step('routine.add'), (c) => c.routines.some((r) => /^30 8 \* \* (1-5|mon-fri)$/i.test(r.schedule)) || 'no weekday 8:30 routine') },
+  { n: 34, group: 'tasks', prompt: 'Make me a to-do list for moving house: book a van, pack the kitchen, change my address, clean the old flat.', check: all(either(step('todo.create'), step('task.add', 4)), (c) => c.tasks.some((t) => (t.steps ?? []).length >= 4) || c.tasks.filter((t) => /van|kitchen|address|clean/i.test(t.title)).length >= 4 || 'list not on the board') },
   { n: 32, group: 'files', prompt: 'In groceries.txt, change apples to pears.', check: all(either(step('files.edit'), step('files.write')), (c) => { const g = c.file('groceries.txt') ?? ''; return (/pears/i.test(g) && !/apples/i.test(g) && /oat milk/i.test(g) && /spinach/i.test(g)) || 'groceries.txt not changed right or lost items'; }) },
   { n: 31, group: 'multi', prompt: 'Save a file plan.md with a 3-step plan for learning Portuguese, and add a task to start step 1.', check: all(step('files.write'), step('task.add'), (c) => existsSync(join(c.studio, 'plan.md')) || 'no plan.md') },
 ];
@@ -219,6 +222,7 @@ async function runModel(model) {
           const ctx = {
             run, steps: run.steps, reply: r.reply, studio, comfy,
             tasks: JSON.parse(items['lotus.tasks.v1'] ?? '[]'),
+            routines: JSON.parse(items['lotus.routines.v1'] ?? '[]'),
             mems: await core.rpc('memories_list'),
             media: run.steps.flatMap((s) => (s.status === 'done' ? s.media ?? [] : [])),
             file: (rel) => { try { return readFileSync(join(studio, rel), 'utf8'); } catch { return null; } },

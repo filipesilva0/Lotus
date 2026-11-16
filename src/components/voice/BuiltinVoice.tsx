@@ -10,6 +10,7 @@ import { VoicesView } from './studio/VoicesView';
 import { StoriesView, newStory } from './studio/StoriesView';
 import { SttEmpty, SttProgress, TranscriptCard } from './studio/SttView';
 import { CallView, PastCall } from './studio/CallView';
+import { MicPicker } from '../common/MicPicker';
 import { saveCalls, startCall, useCall, useSavedCalls } from '../../voice/call';
 import { transcribeLong, useSttJob } from '../../voice/stt';
 import { sortFiles, useFileIntake } from '../../lib/fileDrop';
@@ -364,6 +365,9 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
           <Section title="Effects">
             <EffectsPanel value={fx} onChange={setEffects} sample={lastClip} />
             {!effectsNeutral(voice?.effects) && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">{voice?.name} has its own effects too; these are added on top.</p>}
+          </Section>
+          <Section title="Microphone">
+            <MicPicker />
           </Section>
           <Section title="Speech to Text">
             {dictation.length ? (

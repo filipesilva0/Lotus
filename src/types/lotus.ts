@@ -26,6 +26,8 @@ export interface ChatMessage {
   files?: ChatFileRef[];
   /** The user's answer to an install the model proposed (session 11). */
   install?: { status: 'allowed' | 'denied' | 'failed'; error?: string };
+  /** The user's answer to an image the model proposed (0.10.1): Yes started it in Images. */
+  imageGen?: { status: 'yes' | 'no' };
   /** Earlier versions when the model rethought its answer (Rethink, 0.9.1), oldest first. */
   drafts?: string[];
   /** The reply was cut short because the user steered or pressed Stop. */

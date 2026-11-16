@@ -106,4 +106,40 @@ export const taskMove: Tool = {
   },
 };
 
-export const TASK_TOOLS = [taskAdd, taskList, taskMove];
+/** A to-do list (0.10.1): one task with a checklist, or one task per item, on the board. */
+export const todoCreate: Tool = {
+  name: 'todo.create', label: 'Making a to-do list', risk: 'write',
+  description: 'Make a to-do list on the task board: by default one task named after the list with every item as a checklist step; with separate=true, one task per item (all labelled with the list name).',
+  parameters: { type: 'object', properties: {
+    title: { type: 'string', description: 'The list name, e.g. "Groceries" or "Before the trip".' },
+    items: { type: 'array', description: 'The to-dos, in order.', items: { type: 'string' } },
+    separate: { type: 'boolean', description: 'One task per item instead of one checklist (default false).' },
+    due: { type: 'string', description: 'Due date as YYYY-MM-DD (optional).' },
+    priority: { type: 'string', description: 'low, normal (default), high or urgent.', enum: ['low', 'normal', 'high', 'urgent'] },
+  }, required: ['title', 'items'] },
+  describe: (a) => `Make the to-do list “${String(a.title)}”${Array.isArray(a.items) ? ` (${a.items.length} items)` : ''}`,
+  async run(a, ctx) {
+    const title = String(a.title ?? '').trim().slice(0, 120);
+    const items = (Array.isArray(a.items) ? a.items : typeof a.items === 'string' ? String(a.items).split(/\n|;/) : []).map((x) => String(x).replace(/^\s*(?:[-*•]|\d+[.)]|\[ ?\])\s*/, '').trim()).filter(Boolean).slice(0, 40);
+    if (!title || !items.length) return { ok: false, text: 'A to-do list needs a name and at least one item.', summary: 'Empty list' };
+    const due = typeof a.due === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.due) ? a.due : undefined;
+    const priority = (a.priority as Priority) ?? 'normal';
+    let all = readTasks(ctx);
+    const made: Task[] = [];
+    const add = (p: Partial<Task> & { title: string }) => {
+      const t = newTask(uid('task'), { status: 'todo', assignee: 'me', priority, due, ...p }, all);
+      t.log = [{ at: Date.now(), text: 'Created by Lotus from a chat', kind: 'status' }];
+      all = [...all, t]; made.push(t);
+    };
+    if (a.separate === true) items.forEach((it) => add({ title: it.slice(0, 200), labels: [title] }));
+    else add({ title, steps: items.map((text, i) => ({ id: `${uid('st')}${i}`, text: text.slice(0, 300), done: false })) });
+    save(ctx, all);
+    return {
+      ok: true,
+      text: a.separate === true ? `Added ${made.length} tasks labelled “${title}” to To Do.` : `Added the to-do list “${title}” (${items.length} items) to To Do as task ${made[0].id}.`,
+      summary: `To-do list “${title}”: ${items.length} item${items.length === 1 ? '' : 's'}`, data: { taskIds: made.map((t) => t.id) },
+    };
+  },
+};
+
+export const TASK_TOOLS = [taskAdd, taskList, taskMove, todoCreate];

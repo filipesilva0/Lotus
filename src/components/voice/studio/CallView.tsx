@@ -5,6 +5,7 @@
 import React, { useEffect, useRef } from 'react';
 import { BrainCircuit, Hand, Mic, MicOff, MessageSquare, Phone, PhoneOff } from 'lucide-react';
 import { Banner, Btn, cx } from '../../common/ui';
+import { usePanels } from '../../../lib/panels';
 import { AgentFace } from '../../common/AgentFace';
 import { CallLog } from '../../../voice/studio';
 import { callBlocker, endCall, interrupt, setCallMemory, setMuted, startCall, useCall } from '../../../voice/call';
@@ -42,6 +43,7 @@ export const PastCall: React.FC<{ call: CallLog; onCallAgain: () => void; onOpen
 /** The call screen: face, status, what was said, and the controls. */
 export const CallView: React.FC<{ model: string; dictation: boolean; voice: string | null; memoryDefault: boolean; onMemoryDefault: (on: boolean) => void; onOpenModels: () => void }> = ({ model, dictation, voice, memoryDefault, onMemoryDefault, onOpenModels }) => {
   const c = useCall();
+  const { setRight } = usePanels();
   const live = !!c.call;
   const blocker = callBlocker({ model, dictation, voice: !!voice });
   const end = useRef<HTMLDivElement>(null);
@@ -78,7 +80,7 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
         </div>
       )}
 
-      {c.error && <Banner tone="error" className="mt-4">{c.error}</Banner>}
+      {c.error && <Banner tone="error" className="mt-4" action={/microphone/i.test(c.error) ? <Btn size="sm" onClick={() => setRight(true)}>Microphone Settings</Btn> : undefined}>{c.error}</Banner>}
       {!live && blocker && <Banner tone="info" className="mt-4" action={<Btn size="sm" onClick={onOpenModels}>Open Models</Btn>}>{blocker}</Banner>}
       </div>
       </div>

@@ -12,7 +12,7 @@ export interface Claim { kind: ClaimKind; sentence: string }
 
 /** Which tools back each kind of claim. */
 export const CLAIM_TOOLS: Record<ClaimKind, string[]> = {
-  task: ['task.add', 'task.move'],
+  task: ['task.add', 'task.move', 'todo.create', 'routine.add'],
   image: ['image.generate'],
   file: ['files.write', 'files.edit'],
   memory: ['memory.save'],
@@ -26,7 +26,7 @@ const NEGATION = /\b(not|never|unable|cannot|can't|can’t|couldn't|couldn’t|d
 const I_DID = String.raw`(?:i(?:'ve|’ve| have)?(?: just| now| also)?|eu)`;
 
 const PATTERNS: { kind: ClaimKind; re: RegExp }[] = [
-  { kind: 'task', re: new RegExp(String.raw`\b${I_DID}\s+(?:added|created|put|moved|scheduled|set up|made)\b[^.!\n]{0,80}\b(?:tasks?|to-?dos?|board|kanban|reminders?|backlog|review column)\b`, 'i') },
+  { kind: 'task', re: new RegExp(String.raw`\b${I_DID}\s+(?:added|created|put|moved|scheduled|set up|made)\b[^.!\n]{0,80}\b(?:tasks?|to-?dos?|board|kanban|reminders?|backlog|review column|routines?|cron(?: jobs?)?|schedules?)\b`, 'i') },
   { kind: 'task', re: /\b(?:tasks?|to-?dos?)\b[^.!\n]{0,40}\b(?:has been|have been|was|were|is now)\s+(?:added|created|moved)\b/i },
   { kind: 'task', re: /^(?:tasks?|to-?dos?|reminders?)\b[^.!\n]{0,10}\b(?:added|created)\b/i },
   { kind: 'task', re: /\b(?:adicionei|criei|movi)\b[^.!\n]{0,80}\b(?:tarefas?|quadro|lista)\b/i },

@@ -20,6 +20,8 @@ import { considerSkill, correction, isComplexExchange, positiveFeedback, recordU
 import type { ContextFile } from '../context/discover';
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
 import { installInstructions, type InstallTarget } from '../chat/install';
+import { imageInstructions } from '../chat/imageProposal';
+import { imageChoices } from '../chat/imageChoices';
 import { installTarget } from '../setup/jobs';
 import { shouldRename, suggestTitle } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
@@ -211,6 +213,8 @@ export function useChat(settings: LotusSettings) {
       let system = `${s.systemPrompt}\n\nToday's date is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Format replies with GitHub Flavored Markdown when it helps (tables, task lists, code blocks).`;
       system += CHOICES_INSTRUCTIONS;
       system += installInstructions();
+      system += imageInstructions(imageChoices());
+      if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added.';
       system += pluginSystemBlock(o.query ?? '');
       system += recall.system;
       system += contextPayload(session0.context, o.force, Math.max(2000, budget - system.length - sourceText.length));
@@ -448,6 +452,12 @@ export function useChat(settings: LotusSettings) {
     catch (e) { patchMsg(sid, msgId, { install: { status: 'failed', error: (e as Error).message } }); }
   }, [activeId, patchMsg]);
 
+  /** Yes / No on an image the model proposed; Yes is carried out by App (it opens Images). */
+  const decideImage = useCallback((msgId: string, yes: boolean) => {
+    const sid = ref.current.find((x) => x.messages.some((m) => m.id === msgId))?.id ?? activeId;
+    patchMsg(sid, msgId, { imageGen: { status: yes ? 'yes' : 'no' } });
+  }, [activeId, patchMsg]);
+
   /** Allow or Deny on an agent step that asked for permission. */
   const decideAgentStep = useCallback((msgId: string, step: ChatToolCall, allow: boolean) => {
     if (!step.runId) return;
@@ -529,7 +539,7 @@ export function useChat(settings: LotusSettings) {
 
   return {
     sessions, active, activeId: active?.id ?? '', setActiveId, folders, setFolders, memory, setMemory, isStreaming, raw,
-    send, answerPoll, decideInstall, decideAgentStep, stop, regenerate, editMessage, switchTo, rateMemory, rateReply, newChat, deleteChat, clearChat, importMessages,
+    send, answerPoll, decideInstall, decideImage, decideAgentStep, stop, regenerate, editMessage, switchTo, rateMemory, rateReply, newChat, deleteChat, clearChat, importMessages,
     patchSession, addContext, patchContext, estimateTokens, toggleMemory, setProjectContext,
   };
 }

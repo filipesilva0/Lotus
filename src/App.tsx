@@ -31,7 +31,9 @@ import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
 import { useEngines } from './hooks/useEngines';
-import { useGallery } from './hooks/useGallery';
+import { useGallery, DEFAULT_PARAMS, type ImageParams } from './hooks/useGallery';
+import { setImageChoices } from './chat/imageChoices';
+import { pickProfile, proposalParams, type ImageProposal } from './chat/imageProposal';
 import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
 import { emitEvent, invokeNative, onEvent } from './lib/bus';
@@ -265,6 +267,27 @@ export default function App() {
   // ComfyUI reads the image models in Lotus Studio/Models/image (it picks the link up when it next starts).
   useEffect(() => { if (!builtinImages && isTauri) void linkComfyModels().catch(() => undefined); }, [builtinImages]);
   const gallery = useGallery(comfyUp, builtinImages ? 'builtin' : 'comfyui', readyProfiles);
+  // Images Chat may propose (0.10.1): the ready setups (Lotus's engine) or ComfyUI's checkpoints.
+  setImageChoices(builtinImages ? readyProfiles.map((p) => ({ name: p.name, family: p.family })) : checkpoints.map((c) => ({ name: c })));
+  // Yes on an image the chat proposed: Images opens with its settings, in a new generation, and starts.
+  const [pendingImage, setPendingImage] = useState<{ proposal: ImageProposal; from: string } | null>(null);
+  const createImage = useCallback((proposal: ImageProposal) => {
+    const stored = load<Partial<ImageParams>>('lotus.image.params.v1', {});
+    const profile = builtinImages ? pickProfile(proposal, readyProfiles) : undefined;
+    const params = proposalParams({ ...DEFAULT_PARAMS, ...stored }, proposal, { profile, checkpoints: builtinImages ? undefined : checkpoints });
+    kv.setItem('lotus.image.params.v1', JSON.stringify(params));
+    setPendingImage({ proposal, from: gallery.activeId });
+    gallery.newSession();
+    setCurrentView('images');
+  }, [builtinImages, readyProfiles, checkpoints, gallery.activeId, gallery.newSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!pendingImage) return;
+    // Wait until the new (empty) generation is the active one, so the result lands in it.
+    if (gallery.active.versions.length && gallery.activeId === pendingImage.from) return;
+    const p = { ...DEFAULT_PARAMS, ...load<Partial<ImageParams>>('lotus.image.params.v1', {}) };
+    setPendingImage(null);
+    void gallery.generate(pendingImage.proposal.prompt, p);
+  }, [pendingImage, gallery.activeId, gallery.active.versions.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // Work runs too (session 16), and spoken questions / permission prompts when voice is on.
   const work = useWork(settings);
   useEffect(() => { startVoiceController(); }, []);
@@ -458,7 +481,7 @@ export default function App() {
         <PanelsProvider value={panelsApi}>
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {currentView === 'chat' && (
-          <ChatWorkspace chat={chat} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
+          <ChatWorkspace onCreateImage={createImage} chat={chat} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
             onOpenModels={() => openEngines('models')} prefill={prefill} onOpenLibrary={setLibrary}
             research={research} onOpenEngines={() => openEngines('models')} />
         )}

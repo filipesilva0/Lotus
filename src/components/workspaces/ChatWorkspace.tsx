@@ -1,3 +1,4 @@
+import type { ImageProposal } from '../../chat/imageProposal';
 import { Starters } from '../common/Starters';
 import { CHAT_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -33,10 +34,12 @@ interface Props {
   onOpenLibrary: (tab: LibraryTab) => void;
   /** Deep research (owned by App so runs keep going on other pages). */
   research: ResearchApi; onOpenEngines: () => void;
+  /** Yes on an image the chat proposed: App opens Images with its settings and starts it (0.10.1). */
+  onCreateImage?: (p: ImageProposal) => void;
 }
 
 
-export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary, research, onOpenEngines }) => {
+export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, models, ollamaUp, onOpenModels, prefill, onOpenLibrary, research, onOpenEngines, onCreateImage }) => {
   const [starter, setStarter] = useState<{ text: string; nonce: number } | null>(null);
   const installedPlugins = usePlugins();
   const pluginCmds = useMemo(() => pluginCommands(installedPlugins), [installedPlugins]);
@@ -176,6 +179,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
             onOpenArtifact={(_l, code) => { setTab('artifacts'); setShowInspector(true); setFocus({ code, nonce: Date.now() }); }}
             onAnswer={(id, text) => void chat.answerPoll(id, text)}
             onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)}
+            onImage={(id, proposal, yes) => { chat.decideImage(id, yes); if (yes) onCreateImage?.(proposal); }}
             onStep={(id, step, allow) => chat.decideAgentStep(id, step, allow)} />
         )}
         {offline && (settings.llmBackend === 'builtin' ? <BuiltinNotice kind="chat" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" /> : <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />)}

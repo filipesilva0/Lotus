@@ -62,6 +62,13 @@ function set(p: Partial<State>) {
 // without writing them back.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
+    // Routines the agent scheduled from a chat (0.10.1): keep the ones running here as running.
+    if (e.key === ROUTINES_KEY) {
+      const running = new Set(state.routines.filter((r) => r.running).map((r) => r.id));
+      state = { ...state, routines: read<Routine>(ROUTINES_KEY).map((r) => ({ ...r, running: running.has(r.id) })) };
+      subs.forEach((f) => f());
+      return;
+    }
     if (e.key !== TASKS_KEY) return;
     state = { ...state, tasks: read<Task>(TASKS_KEY) };
     subs.forEach((f) => f());
