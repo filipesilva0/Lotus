@@ -192,15 +192,19 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
 
               {busyHere && (
                 <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
-                  <div className="flex items-center justify-between text-[13px] mb-2"><span className="font-medium">{g.label}…</span><span className="tabular-nums text-[var(--color-text-muted)]">{Math.floor(g.elapsed)}s</span></div>
-                  <Progress label="Generating" />
+                  <div className="flex items-center justify-between text-[13px] mb-2">
+                    <span className="font-medium">{g.label}…</span>
+                    <span className="tabular-nums text-[var(--color-text-muted)]">{g.step ? `Step ${g.step.step} of ${g.step.total} · ` : ''}{Math.floor(g.elapsed)}s</span>
+                  </div>
+                  <Progress label="Generating" value={g.step && g.step.total ? g.step.step / g.step.total : null} />
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[12px] text-[var(--color-text-muted)]">
                     <div className="flex justify-between"><dt>Size</dt><dd className="tabular-nums">{g.info ? `${g.info.width}×${g.info.height}` : '—'}</dd></div>
                     <div className="flex justify-between"><dt>Steps</dt><dd className="tabular-nums">{g.info?.steps ?? '—'}</dd></div>
-                    <div className="flex justify-between col-span-2"><dt>Checkpoint</dt><dd className="truncate ml-3">{g.info?.checkpoint ?? '—'}</dd></div>
+                    <div className="flex justify-between col-span-2"><dt>{builtin ? 'Model' : 'Checkpoint'}</dt><dd className="truncate ml-3">{g.info?.checkpoint ?? '—'}</dd></div>
                   </dl>
                   <Btn size="sm" className="mt-2.5 w-full" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={g.cancel}>Cancel</Btn>
-                  <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">ComfyUI doesn't report step progress over the connection Lotus uses, so this shows elapsed time.</p>
+                  {!builtin && !g.step && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">ComfyUI doesn't report step progress over the connection Lotus uses, so this shows elapsed time.</p>}
+                  {builtin && !g.step && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Loading the model…</p>}
                 </div>
               )}
 

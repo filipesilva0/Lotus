@@ -74,6 +74,8 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   const [busyId, setBusyId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  /** Sampling progress, when the engine reports it (Lotus's own engine does; ComfyUI over HTTP doesn't). */
+  const [step, setStep] = useState<{ step: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<{ width: number; height: number; checkpoint: string; steps: number; sampler: string } | null>(null);
   const ctrl = useRef<AbortController | null>(null);
@@ -180,12 +182,15 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   const run = useCallback(async (what: GeneratedImage['kind'], title: string, meta: Omit<GeneratedImage, 'id' | 'url' | 'blob' | 'seed' | 'generationTimeSec' | 'timestamp' | 'kind'>, job: (onTick: (ms: number, q: boolean) => void, signal: AbortSignal, onStep: (step: number, total: number) => void) => Promise<Omit<ComfyBatch, 'items'> & { items: { blob: Blob; url: string; file?: string }[] }>) => {
     const sid = activeRef.current;
     const c = new AbortController(); ctrl.current = c;
-    setBusy(true); setBusyId(sid); setError(null); setLabel(title);
+    setBusy(true); setBusyId(sid); setError(null); setLabel(title); setStep(null);
     const id = uid('img');
     reportActivity({ id, kind: 'image', label: 'Image' });
     try {
       const r = await job((ms, q) => reportActivity({ id, kind: 'image', label: q ? 'Queued' : `${Math.floor(ms / 1000)}s` }), c.signal,
-        (step, total) => { setLabel(`${title} · step ${step} of ${total}`); reportActivity({ id, kind: 'image', label: `${step}/${total}`, progress: step / total }); });
+        (step, total) => {
+          // sd-cli also draws bars while it loads the model (hundreds of tensors); only sampling steps count.
+          if (total > 200) return;
+          setStep({ step, total }); reportActivity({ id, kind: 'image', label: `${step}/${total}`, progress: step / total }); });
       // Images from the built-in engine are already files in Lotus Studio/Images (`file`), so they are not saved twice.
       const made: GeneratedImage[] = r.items.map((it, k) => ({ ...meta, id: `${id}-${k}`, url: it.url, blob: it.blob, file: it.file, seed: r.seed, generationTimeSec: r.generationTimeSec, timestamp: stamp(), kind: what }));
       patch(sid, (s) => ({
@@ -198,7 +203,7 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
     } catch (e) {
       if (!c.signal.aborted) setError((e as Error).message);
       reportActivity({ id, kind: 'image', label: 'Image', done: true });
-    } finally { setBusy(false); setBusyId(null); ctrl.current = null; }
+    } finally { setBusy(false); setBusyId(null); setStep(null); ctrl.current = null; }
   }, [patch]);
 
   const input = (prompt: string, p: ImageParams, o: { width?: number; height?: number } = {}): TxtToImageInput => {
@@ -264,6 +269,6 @@ export function useGallery(comfyUp: boolean | null, engine: 'builtin' | 'comfyui
   const stepVersion = (d: -1 | 1) => patch(active.id, (s) => ({ ...s, index: Math.min(s.versions.length - 1, Math.max(0, s.index + d)) }));
   const selectVersion = (i: number) => patch(active.id, (s) => ({ ...s, index: i }));
 
-  return { sessions, active, activeId: active.id, setActiveId, current, busy, busyId, label, elapsed, error: error ?? saveError, info, comfyUp, engine,
+  return { sessions, active, activeId: active.id, setActiveId, current, busy, busyId, label, elapsed, step, error: error ?? saveError, info, comfyUp, engine,
     newSession, remove, removeVersion, patch, generate, variation, upscale, inpaint, outpaint, cancel, stepVersion, selectVersion, setError };
 }
