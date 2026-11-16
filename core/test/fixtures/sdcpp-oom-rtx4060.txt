@@ -1,0 +1,50 @@
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 8187 MiB):
+  Device 0: NVIDIA GeForce RTX 4060, compute capability 8.9, VMM: yes, VRAM: 8187 MiB
+load_backend: loaded CUDA backend from C:\Users\Filipe\Documents\Lotus Studio\Engines\stable-diffusion.cpp\master-1104-5dcfa79\ggml-cuda.dll
+load_backend: loaded CPU backend from C:\Users\Filipe\Documents\Lotus Studio\Engines\stable-diffusion.cpp\master-1104-5dcfa79\ggml-cpu-cascadelake.dll
+[I] loading model from 'C:\Users\Filipe\Documents\Lotus Studio\Models\image\checkpoints\sd_xl_base_1.0.safetensors' --- diffusion_engine.cpp:686
+[I] load C:\Users\Filipe\Documents\Lotus Studio\Models\image\checkpoints\sd_xl_base_1.0.safetensors using safetensors format --- model_loader.cpp:226
+[I] loading vae from 'C:\Users\Filipe\Documents\Lotus Studio\Models\image\vae\sdxl.vae.safetensors' --- diffusion_engine.cpp:764
+[I] load C:\Users\Filipe\Documents\Lotus Studio\Models\image\vae\sdxl.vae.safetensors using safetensors format --- model_loader.cpp:226
+[I] Version: SDXL  --- diffusion_engine.cpp:978
+[I] Weight type stat:                      f32: 249  |     f16: 2267 |     i32: 1     --- diffusion_engine.cpp:1556
+[I] Conditioner weight type stat:          f16: 587   --- diffusion_engine.cpp:1557
+[I] Diffusion model weight type stat:      f16: 1680  --- diffusion_engine.cpp:1558
+[I] VAE weight type stat:                  f32: 249  |     i32: 1     --- diffusion_engine.cpp:1559
+[I] using VAE for encoding / decoding --- model_builders.cpp:225
+[I] vae decoder: ch = 128 --- auto_encoder_kl.hpp:529
+[I] flash attention auto: CUDA0 -> on (CUDA MMA) --- flash_attn.cpp:74
+[I] conv2d direct auto: CUDA0 -> on (implicit GEMM) --- conv_direct.cpp:87
+[I] conv3d direct auto: CUDA0 -> on (implicit GEMM) --- conv_direct.cpp:87
+[I] total params memory size = 6624.11MB (VRAM 0.00MB, RAM 6624.11MB): text_encoders 1564.36MB(RAM), diffusion_model 4900.07MB(RAM), vae 159.68MB(RAM), controlnet 0.00MB(N/A), extensions 0.00MB(N/A) --- diffusion_engine.cpp:1441
+[I] running in eps-prediction mode --- diffusion_engine.cpp:1470
+[I] generate_image 768x1344 --- image.cpp:952
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1130
+[I] sampling using Euler method --- request.cpp:478
+[I] clip build cached graph cut plan done (taking 0 ms) --- ggml_graph_cut.cpp:1034
+  |##################################################| 178/178 -   1.03GB/s[K
+[I] loading tensors completed, taking 0.21s (read: 0.04s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1442
+[I] clip build cached graph cut plan done (taking 2 ms) --- ggml_graph_cut.cpp:1034
+  |##################################################| 374/374 -   6.09GB/s[K
+[I] loading tensors completed, taking 0.21s (read: 0.19s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1442
+[I] clip build cached graph cut plan done (taking 2 ms) --- ggml_graph_cut.cpp:1034
+  |##################################################| 15/15 - 193.63MB/s[K
+[I] loading tensors completed, taking 0.21s (read: 0.00s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1442
+[I] clip build cached graph cut plan done (taking 1 ms) --- ggml_graph_cut.cpp:1034
+[I] get_learned_condition completed, taking 1.07s --- image.cpp:662
+[I] generating image: 1/1 - seed 1784228476 --- image.cpp:1004
+[I] unet build cached graph cut plan done (taking 9 ms) --- ggml_graph_cut.cpp:1034
+  |#############                                     |  404/1680 -   4.35GB/s[K  |######################                            |  723/1680 -   4.69GB/s[K  |###############################                   | 1038/1680 -   4.86GB/s[K  |########################################          | 1332/1680 -   4.93GB/s[K  |##################################################| 1680/1680 -   4.69GB/s[K
+[I] loading tensors completed, taking 1.02s (read: 0.94s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1442
+  |=>                                                |  1/50 -   2.90s/it - ETA 02:21[K  |==>                                               |  2/50 -   1.19s/it - ETA 01:38[K[W] model manager memory on CUDA0: reported free 607.31 MB / total 8187.50 MB, tracked weights 4900.07 MB / other runtime 0.00 MB / current runtime 0.00 MB --- model_manager.cpp:1817
+[W] execution engine cannot make enough memory available on CUDA0: need 1508.06 MB device / 484.06 MB budget, available 607.31 MB device / unlimited budget --- execution_engine.cpp:947
+[E] unet segment 1/1 (graph) failed during workspace capacity check --- execution_engine.cpp:596
+[E] batched diffusion model compute failed --- diffusion_engine.cpp:2762
+[I] unet build cached graph cut plan done (taking 10 ms) --- ggml_graph_cut.cpp:1034
+[W] model manager memory on CUDA0: reported free 611.61 MB / total 8187.50 MB, tracked weights 4900.07 MB / other runtime 0.00 MB / current runtime 0.00 MB --- model_manager.cpp:1817
+[E] unet segment 1/1 (graph) failed during workspace capacity check --- execution_engine.cpp:596
+[W] execution engine cannot make enough memory available on CUDA0: need 1266.03 MB device / 242.03 MB budget, available 611.61 MB device / unlimited budget --- execution_engine.cpp:947
+[E] diffusion model compute failed --- diffusion_engine.cpp:2708
+[E] Diffusion model sampling failed --- diffusion_engine.cpp:2941
+[E] sampling for image 1/1 failed after 4.90s --- image.cpp:1045
+[E] generate failed --- main.cpp:1021

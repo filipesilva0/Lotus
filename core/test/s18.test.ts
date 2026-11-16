@@ -310,7 +310,7 @@ describe('0.9.2: voices on sherpa-onnx 1.x, images with auto-fit, honest errors'
   });
 
   test("the memory message gives sd-cli's real numbers (log from an RTX 4060, 0.9.1)", () => {
-    const log = readFileSync(join(import.meta.dir, 'fixtures/sdcpp-oom-rtx4060.log'), 'utf8');
+    const log = readFileSync(join(import.meta.dir, 'fixtures/sdcpp-oom-rtx4060.txt'), 'utf8');
     expect(sdcppMemoryError(log, 8)).toBe("The image needed 1.2 GB of video memory to work in, but only 0.6 GB of the card's 8.0 GB was free. Close programs that use the graphics card, or try a smaller size or one image at a time.");
     expect(sdcppMemoryError('cannot make enough memory available on CUDA0: need 900.00 MB device / 0 MB budget, available 0.00 MB device', 8)).toContain('no free memory left');
     expect(sdcppMemoryError('[E] generate failed: unknown model version', 8)).toBeNull();
