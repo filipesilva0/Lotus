@@ -161,3 +161,15 @@ T5 ──► T7, T12            T6, T8, T9, T13: independent (T13 needs the user
 | T53 | Hardware: Windows CPU temperature without admin (LibreHardwareMonitor's driver needs admin too; maybe a Lotus-installed helper service), AMD/Intel GPUs on Windows (PDH counters for load). | P2 | |
 | T54 | Chat: show steps' helper faces and artifacts like Work (Chat runs don't get work tools today). | P2 | |
 
+
+## Session 17 additions (rebuild step 3: Lotus's own engines, one Models page, image setups)
+| ID | Task | P | Notes |
+|---|---|---|---|
+| T55 | **Built-in engines on the user's PC**: install llama.cpp (CUDA 12 + cudart), stable-diffusion.cpp (CUDA 12) and sherpa-onnx from Models; get Qwen 3 8B, SDXL, Kokoro and Whisper; chat, an image, speak and dictate. Check sd-cli's `--scheduler`/`-b` flags and sherpa-onnx's flags against `--help` of the downloaded builds; check Windows `tar -xjf`. | P0 | Only stand-ins ran here. |
+| T56 | **Real tasks with the built-in engine**: add `--builtin <model id>` to `real-tasks.mjs` (start lotusd with `llmBackend: 'builtin'`) and run the 31 tasks with qwen3-8b and nemotron-3-nano-4b. | P0 | Native tool calls through llama-server `--jinja` are new. |
+| T57 | Data folder move on Windows: an existing 0.7 install opens with its chats after the move to Lotus Studio/Data; MSI uninstall leaves Data alone. | P0 | |
+| T58 | ComfyUI reading `lotus_studio` from extra_model_paths.yaml (portable, manual, Desktop); remote ComfyUI can't see Lotus Studio (say so). | P1 | |
+| T59 | Built-in images: inpaint/outpaint (sd-cli `--mask`), upscale (ESRGAN in sd.cpp), FLUX.2 edits with `-r`. | P2 | Say "needs ComfyUI" today. |
+| T60 | Keep llama-server's VRAM in step with the auto-scaler (ctx from the plan, `--fit`), unload after idle; image/chat juggling on 8 GB. | P2 | |
+| T61 | Voice page with the built-in engine: history of clips across launches (Audio folder), more Kokoro languages (multi-lang v1.1 needs lexicons). | P2 | |
+| T62 | Merge `models/catalog.ts` (Ollama size/quant list) into the Ollama path of `library.ts`; remove `setup/catalog.ts` picks once the classic guide uses `library.ts`. | P3 | |

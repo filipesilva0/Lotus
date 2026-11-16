@@ -152,7 +152,9 @@ Lotus talks to each engine over your own machine's loopback address. Your prompt
   <img alt="Diagram: inside a box labelled Your PC, Lotus connects to Ollama for language models at 127.0.0.1:11434, ComfyUI for images at 127.0.0.1:8188, and Voicebox for voice at 127.0.0.1:17493." src="docs/assets/engines-light.png" width="100%">
 </picture>
 
-Install only the engines you want. A page whose engine isn't running tells you so and offers to start it. Lotus never pretends.
+You don't have to install any of them. Lotus has its own engines (llama.cpp for chat, stable-diffusion.cpp for images, sherpa-onnx for voice and dictation), downloaded once from each project's GitHub releases into your Lotus Studio folder. Ollama, ComfyUI and Voicebox stay available in Settings → Engines if you already use them. A page whose engine or model is missing tells you so and offers to get it. Lotus never pretends.
+
+Everything Lotus keeps lives in the **Lotus Studio** folder (Documents by default): `Data` (chats, settings, memory), `Engines`, `Models` (chat, image and voice models, one place for every engine), `Images`, `Audio` and `Work`. An image model is kept with the exact VAE and text encoders it needs (Models → Image Setups).
 
 Behind the window runs **lotusd**, Lotus's background core. It keeps your chats, settings, tasks, memory and skills in one database file (`lotus.db` in the Lotus data folder) and saves generated images as ordinary files in `Lotus Studio/Images`, so they survive restarts and you can open them yourself. It also runs the agent: the model's tool calls go through it, so a task added from Chat lands on the Tasks board and an image made from Chat appears on the Images page. It starts and stops with Lotus and only listens on your own computer.
 
@@ -176,7 +178,7 @@ Grab the file for your system from the [latest release](https://github.com/filip
 Installed copies update themselves from **Settings → Updates** (the portable zip and the .deb/.rpm are replaced by downloading the new file).
 
 **2. Follow the setup guide.**<br>
-The first time Lotus opens, a short guide picks your **Lotus Studio** folder (in Documents), finds the engines you already have and installs the ones you want (**Ollama** for chat, research, the App Builder and tasks, **ComfyUI** for images, **Voicebox** for voice). Each engine's own installer opens, so you read its terms yourself. Then it suggests a quick, a balanced and a best model for each engine, picked for your graphics card. Reopen it any time from **Help → Setup Guide**.
+The first time Lotus opens, a short guide picks your **Lotus Studio** folder (in Documents) and asks how Lotus should run your models: with its own engines (nothing else to install), or with **Ollama**, **ComfyUI** and **Voicebox** if you already use them. Then it suggests a chat, an image and a voice model picked for your graphics card. Reopen it any time from **Help → Setup Guide**.
 
 **3. Start.**<br>
 Models download in the background. Everything else lives in **Engines & Models**.
@@ -214,7 +216,7 @@ Models download in the background. Everything else lives in **Engines & Models**
 
 Lotus is local-first by design. Nothing leaves your PC unless you switch it on.
 
-The setup guide downloads only what you pick, and only from each project's own site: engine installers from github.com (Ollama, Voicebox), download.comfy.org (ComfyUI), and models from ollama.com, huggingface.co (Comfy-Org repositories) and Voicebox's own sources.
+The setup guide and the Models page download only what you pick, and only from each project's own site: Lotus's engines from github.com (llama.cpp, stable-diffusion.cpp and sherpa-onnx releases, found through api.github.com), outside engine installers from github.com (Ollama, Voicebox) and download.comfy.org (ComfyUI), and models from huggingface.co (chat GGUFs, image models), github.com (sherpa-onnx voice and Whisper models), ollama.com and Voicebox's own sources.
 
 | What | When it goes online | What is sent |
 |---|---|---|
@@ -225,7 +227,7 @@ The setup guide downloads only what you pick, and only from each project's own s
 | **Model downloads** | Only when you press *Download* | A request to the link you pasted |
 | **Update check** | When you press the button, or at launch if you opt in | A request to this repository's Releases |
 
-No telemetry, no analytics, no remote fonts. Your chats, settings, tasks and memory live in a single file in your Lotus data folder (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+No telemetry, no analytics, no remote fonts. Your chats, settings, tasks and memory live in a single file in `Lotus Studio/Data` (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
 
 <div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 

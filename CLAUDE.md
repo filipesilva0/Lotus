@@ -1,6 +1,6 @@
 # CLAUDE.md: Lotus
 
-Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: prototype in a rebuild (project doc `claude/rebuild-plan.md`). CI builds and releases Windows/macOS/Linux, and 0.5.0 runs on the user's Windows PC. Step 1 (lotusd core + storage) landed in session 14; step 2 (agent + tools) in session 15; step 3 (built-in engines + new first run) is next.**
+Lotus is a **lightweight desktop app for Windows, macOS and Linux (Tauri 2 + React 19 + TypeScript)** that fronts local AI engines: chat (Ollama), images (ComfyUI), voice (Voicebox), Deep Research (local LLM + public academic APIs), plus an always-on-top **floating island**. Local-first and private. **Stage: prototype in a rebuild (project doc `claude/rebuild-plan.md`). CI builds and releases Windows/macOS/Linux, and 0.5.0 runs on the user's Windows PC. Step 1 (lotusd core + storage) landed in session 14; step 2 (agent + tools) in session 15; step 3 (built-in engines + new first run) in session 17 (not yet run with real engines, T55); step 4 (MCP + knowledge bases) is next.**
 
 ## Read first (in this order)
 1. `CURRENT_STATE.md` — what is verified, known bugs (B1…B17), CI history. **Start here.**
@@ -37,7 +37,8 @@ node handover/screenshots/shoot-s13.mjs           # session 13: menus, Undo note
 node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install card (ask, running, done) with a fake Ollama
 node handover/screenshots/shoot-s16.mjs           # session 16: Work end to end (fake model, real core), Tasks width, Hardware; 15 checks
 node handover/screenshots/shoot-s16-island.mjs    # session 16: the island compact / expanded / done
-cd core && bun install && bun test       # 67 core tests: 19 session 14 + 37 session 15 + 11 session 16 (Work, tool gating, computer/browser helpers, hardware)
+cd core && bun install && bun test       # 83 core tests: 19 session 14 + 37 session 15 + 11 session 16 + 16 session 17 (built-in engines end to end with stand-ins, catalog, image setups, data move)
+node handover/screenshots/shoot-s17.mjs           # session 17: built-in engines in the app (stand-in llama-server/sd-cli/sherpa-onnx, real core): chat, image, Models, Image Setups, Voice, guide; 19 checks
 node handover/verification/agent-e2e.mjs  # 19 checks (session 15): Chat → agent → tools in Chromium against a real core and fake engines; screenshots /tmp/shots/s15-*
 node handover/verification/real-tasks.mjs --model <ollama model>   # 31 real tasks against a REAL model (needs Ollama; `--list`, `--only 1,2`, `--comfy URL`, `--lotusd path`); results in handover/real-tasks/
 cd core && bun scripts/build.ts           # compile lotusd → src-tauri/binaries/lotusd-<triple> (needed before any cargo build/check)
@@ -46,13 +47,20 @@ cd src-tauri && cargo test --lib          # 13 Rust tests: hook installer, appro
 npm run tauri dev | tauri build           # needs Windows (or Linux libs) + Rust
 pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 ```
-**Expected today (session 16):** core 67/67; shoot-s16 15 checks; builder tests 6/6; s5 render 23. **Session 15:** core 55/55; agent-e2e 19/19; core-e2e 16/16; 13 Rust tests; base TS tests 63/63; the rest as below. Real tasks (user's PC): qwen3-abliterated 8B 30/31, llama3.2 3B 22/31. **Before session 14:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
+**Expected today (session 17):** core 83/83; shoot-s17 19 checks; 15 Rust tests; `cargo check --locked` clean. **Session 16:** shoot-s16 15 checks; builder tests 6/6; s5 render 23. Playwright: use `npm i --no-save playwright@1.63.0` here (matches the sandbox's /opt/pw-browsers chromium-1243; the CDN is blocked). **Session 15:** core 55/55; agent-e2e 19/19; core-e2e 16/16; 13 Rust tests; base TS tests 63/63; the rest as below. Real tasks (user's PC): qwen3-abliterated 8B 30/31, llama3.2 3B 22/31. **Before session 14:** tsc clean; build OK; 63/63 TS tests; 34/34 builder tests; 56 + 24 session 5 tests; 27 + 11 session 7 tests; 22 session 10 tests; 12 session 11 tests; 3 session 12 tests; 10 session 13 tests; 15 Rust tests; `cargo check --locked` clean (session 12, Linux sandbox). The WiX MSI, macOS build and real engine installs are still unverified.
 
 ### Sandbox recipes (the dev sandbox has no Windows/Rust by default)
 - **Rust:** `apt-get install -y --no-install-recommends rustc-1.85 cargo-1.85 build-essential pkg-config libssl-dev libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`, then
   `export RUSTC=rustc-1.85 CARGO_TARGET_DIR=/tmp/tgt CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS=fallback` and use `cargo-1.85 check|test --locked` in `src-tauri/`. First compile takes ~5 min: **run in chunks with `timeout 280` and redirect output to a file** (commands are killed at 300 s). Newest crates need Rust > 1.85, hence the fallback resolver; never regenerate `Cargo.lock` casually (see Constraints).
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
+
+## Session 17 map (built-in engines, one catalog, image setups, Lotus Studio)
+- Map: `CURRENT_STATE.md` §0n. Core: `core/src/engines/*` (`Builtins` in `manager.ts`, RPC in `rpc.ts`). Web: `lib/builtins.ts` (live state, `useBuiltins`, `useProfiles`), `components/models/ModelLibrary.tsx` + `ImageSetups.tsx`, `components/voice/BuiltinVoice.tsx`, `services/builtinImages.ts`.
+- **Every downloadable model goes in `models/library.ts`** with a source per engine; never add another catalog. New image families go in `models/imageProfiles.ts FAMILIES` with their slots, and need both `comfyWiring` and `sdcppArgs` cases plus tests.
+- Everything Lotus keeps goes under the Lotus Studio folder (`Data`, `Engines`, `Models`, …). Never write models or data to an OS app-data or cache folder; point outside engines at Lotus Studio instead.
+- `settings.llmBackend` 'builtin' | 'ollama' | 'llamacpp', `imageEngine`, `voiceEngine`: check these (not `ollamaUp` alone) before showing an engine notice; use `BuiltinNotice` for Lotus's engines.
+- Engine/model downloads are core jobs (`{ type: 'builtin' }` events); never download them from the window.
 
 ## Session 16 map (Work, voice, control, faces, island)
 - Map: `CURRENT_STATE.md` §0m. Pages: Chat, **Work**, Images, Voice, Tasks (petals in order). The App Builder is gone (Rust module still to remove, T52).
