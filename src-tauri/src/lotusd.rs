@@ -100,10 +100,12 @@ fn sidecar_in(exe_dir: &std::path::Path) -> PathBuf {
     beside
 }
 
-fn folders(app: &AppHandle) -> (PathBuf, PathBuf) {
+/// (data folder, Lotus Studio folder, the app-data folder older versions used).
+fn folders(app: &AppHandle) -> (PathBuf, PathBuf, PathBuf) {
     let installed = app.path().app_data_dir().unwrap_or_default();
-    let data = PathBuf::from(crate::paths::describe(installed, PathBuf::new()).data_dir);
-    (data, crate::setup::studio_dir(app))
+    let studio = crate::setup::studio_dir(app);
+    let data = PathBuf::from(crate::paths::describe(installed.clone(), studio.clone()).data_dir);
+    (data, studio, installed)
 }
 
 fn spawn(app: &AppHandle, token: &str) -> Result<Running, String> {
@@ -111,9 +113,12 @@ fn spawn(app: &AppHandle, token: &str) -> Result<Running, String> {
     if !exe.exists() {
         return Err(format!("The Lotus core is missing ({}). Reinstall Lotus to restore it.", exe.display()));
     }
-    let (data, studio) = folders(app);
+    let (data, studio, legacy) = folders(app);
     let mut cmd = Command::new(&exe);
     cmd.arg("--data").arg(&data).arg("--studio").arg(&studio).arg("--watch-stdin");
+    if legacy != data && legacy.join("lotus.db").exists() {
+        cmd.arg("--legacy-data").arg(&legacy);
+    }
     cmd.env("LOTUSD_TOKEN", token);
     // The dev server's page is allowed to call the core in `tauri dev`.
     if cfg!(debug_assertions) {

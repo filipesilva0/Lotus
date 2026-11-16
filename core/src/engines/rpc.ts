@@ -11,6 +11,7 @@
 //   job_cancel { jobId }
 //   chat_ensure { model, ctx? }                 → { url }       (starts llama-server with that model)
 //   chat_stop
+//   comfy_link_models { root? }                 → { files }   (ComfyUI reads Lotus Studio/Models/image)
 //   image_builtin { profile, prompt, … genId }  → { images: MediaRow[], … }   events { type: 'builtin-image', genId, step, total }
 //   image_cancel { genId }
 //   tts_builtin { voice, text, speaker?, speed? } → MediaRow (audio)
@@ -24,6 +25,8 @@ import type { Builtins } from './manager';
 import type { ImageFolder, ImageProfile, LoraUse } from '../../../src/models/imageProfiles';
 import { settingsFor, sizeFor } from '../../../src/models/imageProfiles';
 import type { ModelKind } from '../../../src/models/library';
+import { comfyDesktopConfigDir, linkComfy } from './comfyLink';
+import { join } from 'node:path';
 
 type Json = Record<string, unknown>;
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
@@ -81,6 +84,8 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
     case 'job_cancel': return { found: true, value: b.cancel(str(a.jobId)) };
     case 'chat_ensure': return { found: true, value: { url: await b.ensureChat(str(a.model), { ctx: num(a.ctx, 0) }) } };
     case 'chat_stop': return { found: true, value: b.stopChat() };
+    // Lets ComfyUI read Lotus Studio/Models/image (root = ComfyUI's own folder, if known).
+    case 'comfy_link_models': return { found: true, value: { files: linkComfy(join(b.modelsDir, 'image'), { root: str(a.root) || undefined, desktopConfigDir: a.desktop === false ? undefined : comfyDesktopConfigDir() }) } };
     case 'image_builtin': {
       const genId = str(a.genId) || `g${Date.now().toString(36)}`;
       const ctrl = new AbortController();

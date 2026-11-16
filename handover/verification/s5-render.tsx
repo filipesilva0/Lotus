@@ -80,7 +80,7 @@ absent('Composer: no separate memory / incognito text buttons, no hint line', <C
   memoryOn incognito={false} onToggleMemory={noop} onToggleIncognito={noop} contextUsed={0} contextTitle="" onOpenLibrary={noop} onResearch={noop}
   mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Memory<', '>Incognito<', 'Markdown supported');
 check('Chat stream: GFM reply, recall line, mode chips', <ChatStream session={session} isStreaming={false} autoScroll={false} reasoningMode="collapsed" onEdit={noop} onRegenerate={noop} onSwitch={noop} onMemory={noop} onOpenArtifact={noop} />, '<table', 'Thinking mode', 'Web search', 'Used 2 memories · 1 past chat · skill: Compare products · 1 project file', '<strong');
-check('Settings: engine & VRAM', <EngineScalingPanel settings={settings} onUpdateSettings={noop} />, 'Model server', 'Auto-scale to video memory', 'Keep free for other apps');
+check('Settings: engine & VRAM', <EngineScalingPanel settings={settings} onUpdateSettings={noop} />, 'Chat engine', 'Image engine', 'Voice engine', 'Keep engine models in Lotus Studio', 'Auto-scale to video memory', 'Keep free for other apps');
 check('Settings: web search', <WebSearchPanel settings={settings} onUpdateSettings={noop} />, 'SearXNG address', 'Pages to read');
 check('Settings: memory & skills', <MemorySkillsPanel settings={settings} onUpdateSettings={noop} />, 'Learn from conversations', 'Recall past conversations', 'Clear conversation search index');
 check('Tasks workspace (board tab)', <TasksWorkspace settings={settings} onSettings={noop} ollamaUp={false} />, 'Backlog', 'Ollama is offline', 'You can still plan on the board');

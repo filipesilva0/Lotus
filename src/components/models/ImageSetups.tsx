@@ -124,7 +124,7 @@ const Editor: React.FC<{ p: ImageProfile; files: (f: ImageFolder) => string[]; h
               <label htmlFor={`${s.slot}-${p.id}`} className="text-[12px] text-[var(--color-text-muted)] flex items-center gap-1">{s.label}{!s.required && ' (optional)'}<Tip label={s.label} text={SLOT_TIP[s.slot]} /></label>
               <div className="flex items-center gap-2 min-w-0">
                 <select id={`${s.slot}-${p.id}`} className={cx(sel, 'flex-1', gone && 'shadow-[0_0_0_1px_var(--c-orange)]')} value={cur} onChange={(e) => setFile(s.slot, e.target.value)}>
-                  <option value="">{s.required ? `Choose a ${s.label.toLowerCase()}…` : s.slot === 'vae' ? 'The one inside the checkpoint' : 'None'}</option>
+                  <option value="">{s.required ? 'Choose a file…' : s.slot === 'vae' ? 'The one inside the checkpoint' : 'None'}</option>
                   {gone && <option value={cur}>{cur} (not in Lotus Studio/Models/image/{s.folder})</option>}
                   {list.map((f) => <option key={f} value={f}>{f}</option>)}
                 </select>

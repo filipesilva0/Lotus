@@ -19,6 +19,8 @@ import {
 } from '../../setup/catalog';
 import { SetupState, StepId, enginesToInstall, initialEngines, modelScreenEngines, saveSetup, visibleSteps } from '../../setup/state';
 import { Job, fetchImages, fetchVoices, pullChat, useSetupJobs } from '../../setup/jobs';
+import { installEngine, installModel, useBuiltins, type BuiltinId } from '../../lib/builtins';
+import { fitOf, FIT_LABEL, LIBRARY, suggest, downloadGb, entryById, type LibEntry, type ModelKind } from '../../models/library';
 
 /*
  * First-run guide (session 10, second design). A blank Lotus window: the OS material (acrylic on
@@ -67,6 +69,13 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
   const [info, setInfo] = useState<SetupInfo | null>(null);
   const [studioDir, setStudioDir] = useState('');
   const [want, setWant] = useState<Record<EngineId, boolean>>({ ollama: true, comfyui: false, voicebox: false });
+  // Session 17: Lotus's own engines are the default (nothing else to install); Ollama, ComfyUI and
+  // Voicebox are the advanced choice. Needs the core; without it the guide works as before.
+  const own = useBuiltins();
+  const [useOwn, setUseOwn] = useState(true);
+  const ownMode = useOwn && own.available;
+  const [ownPick, setOwnPick] = useState<Record<'chat' | 'image' | 'voice' | 'dictation', string | null>>({ chat: null, image: null, voice: null, dictation: null });
+  const ownPicked = useRef(false);
   const [stepId, setStepId] = useState<StepId>('welcome');
   const [error, setError] = useState<string | null>(null);
   const [hw, setHw] = useState<{ done: boolean; gb?: number; unified: boolean; name?: string }>({ done: false, unified: false });
@@ -112,6 +121,13 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
   }, []);
 
   // Pre-pick the best tier that fits, once the hardware is known.
+  useEffect(() => {
+    if (ownPicked.current || !own.machine) return;
+    ownPicked.current = true;
+    const m = own.machine;
+    const g = (k: ModelKind) => suggest(k, m.vramGb, m.unified)?.id ?? null;
+    setOwnPick({ chat: g('chat'), image: m.gpu === 'none' ? null : g('image'), voice: g('voice'), dictation: g('dictation') });
+  }, [own.machine]);
   const picked = useRef(false);
   useEffect(() => {
     if (picked.current || !hw.done) return;
@@ -122,8 +138,8 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   const found = info?.found ?? {};
   const haveEngine = (id: EngineId) => !!found[id] || phase[id].kind === 'ready' || eng.engines[id].up === true;
-  const toInstall = enginesToInstall(want, found, remoteOn);
-  const modelEngines = modelScreenEngines(want, (id) => haveEngine(id) || !!remoteOn[id], remoteOn);
+  const toInstall = ownMode ? [] : enginesToInstall(want, found, remoteOn);
+  const modelEngines = ownMode ? (['ollama', 'comfyui', 'voicebox'] as EngineId[]) : modelScreenEngines(want, (id) => haveEngine(id) || !!remoteOn[id], remoteOn);
   const steps = visibleSteps(toInstall.length > 0 || ENGINE_ORDER.some((id) => phase[id].kind !== 'idle'), modelEngines);
   const idx = Math.max(0, steps.indexOf(stepId));
   useEffect(() => { onAccent(STEP_PALETTE[stepId]); }, [stepId, onAccent]);
@@ -198,7 +214,18 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
     return [...(p ? [p] : []), ...(id === 'voicebox' && dictation ? [DICTATION_PICK] : [])];
   });
 
+  const ownChosen = (Object.values(ownPick).filter(Boolean) as string[]).map((id) => entryById(id)).filter((e): e is LibEntry => !!e);
+  const startOwnDownloads = () => {
+    const engines = new Set<BuiltinId>(ownChosen.map((e) => (e.kind === 'chat' ? 'llama' : e.kind === 'image' ? 'sd' : 'sherpa') as BuiltinId));
+    void (async () => {
+      try {
+        for (const id of engines) if (!own.engines.find((x) => x.id === id)?.installed) await installEngine(id);
+        for (const e of ownChosen) await installModel(e.id);
+      } catch (err) { setError(errText(err)); }
+    })();
+  };
   const startDownloads = () => {
+    if (ownMode) { startOwnDownloads(); return; }
     const chats = chosen.filter((p): p is ChatPick => p.kind === 'chat');
     const imgs = chosen.filter((p): p is ImagePick => p.kind === 'image');
     const voices = chosen.filter((p): p is VoicePick => p.kind === 'voice');
@@ -211,7 +238,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   // ── Navigation ─────────────────────────────────────────────────────────
   const finish = (outcome: 'finished' | 'skipped') => {
-    const s: SetupState = { done: true, outcome, studioDir, engines: want, remote: remoteOn, at: Date.now() };
+    const s: SetupState = { done: true, outcome, studioDir, engines: want, remote: remoteOn, own: outcome === 'skipped' ? own.available : ownMode, at: Date.now() };
     saveSetup(s);
     onClose(s);
   };
@@ -226,7 +253,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
     }
     const after = steps[idx + 1];
     // Leaving the last model screen starts the downloads (they keep going after the guide closes).
-    if (after === 'done' && (stepId === 'chat' || stepId === 'images' || stepId === 'voice') && chosen.length) startDownloads();
+    if (after === 'done' && (stepId === 'chat' || stepId === 'images' || stepId === 'voice') && (ownMode ? ownChosen.length > 0 : chosen.length > 0)) startDownloads();
     if (stepId === 'done') { finish('finished'); return; }
     if (after) setStepId(after);
   };
@@ -234,7 +261,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   const installing = ENGINE_ORDER.some((id) => ['resolving', 'downloading', 'opened'].includes(phase[id].kind));
   const nextLabel = stepId === 'welcome' ? 'Get started' : stepId === 'done' ? 'Open Lotus' : stepId === 'install' && installing ? 'Continue for now' : 'Continue';
-  const blocked = stepId === 'images' && tier.comfyui !== null && !modelsDir;
+  const blocked = !ownMode && stepId === 'images' && tier.comfyui !== null && !modelsDir;
 
   // Enter continues (outside buttons and fields).
   useEffect(() => {
@@ -273,7 +300,24 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
             </Screen>
           )}
 
-          {stepId === 'engines' && (
+          {stepId === 'engines' && own.available && (
+            <Screen title="How should Lotus run your models?" body="Lotus can run everything itself, with its engines and models kept in your Lotus Studio folder. If you already use Ollama, ComfyUI or Voicebox, Lotus can use them instead. You can change this later in Settings → Engines.">
+              <div className="setup-list" role="radiogroup" aria-label="How Lotus runs models">
+                <button type="button" role="radio" aria-checked={useOwn} onClick={() => setUseOwn(true)} className={cx('setup-row setup-choice w-full text-left', useOwn && 'is-on')}>
+                  <span className="setup-radio" aria-hidden="true" />
+                  <span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold">Lotus does it all <span className="font-normal text-[var(--color-text-muted)]">· Recommended</span></span>
+                    <span className="block mt-0.5 text-[12px] leading-snug text-[var(--color-text-muted)]">Nothing else to install. Lotus downloads its engines (llama.cpp, stable-diffusion.cpp, sherpa-onnx) with the models you pick next.</span></span>
+                </button>
+                <button type="button" role="radio" aria-checked={!useOwn} onClick={() => setUseOwn(false)} className={cx('setup-row setup-choice w-full text-left', !useOwn && 'is-on')}>
+                  <span className="setup-radio" aria-hidden="true" />
+                  <span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold">Use Ollama, ComfyUI and Voicebox</span>
+                    <span className="block mt-0.5 text-[12px] leading-snug text-[var(--color-text-muted)]">For people who already run them, or want ComfyUI workflows and voice cloning.</span></span>
+                </button>
+              </div>
+            </Screen>
+          )}
+
+          {stepId === 'engines' && !ownMode && (
             <Screen title="Which engines do you want?" body="Lotus is the studio; these free engines do the work. Install them here, or use ones already running on another computer. You can change this later.">
               <div className="setup-list">
                 {ENGINE_ORDER.map((id) => {
@@ -331,12 +375,16 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
             </Screen>
           )}
 
-          {modelStep && (
+          {modelStep && ownMode && (
+            <OwnModelScreen step={modelStep} machine={own.machine} pick={ownPick} onPick={(k, id) => setOwnPick((p) => ({ ...p, [k]: id }))} />
+          )}
+
+          {modelStep && !ownMode && (
             <ModelScreen step={modelStep} hw={hw} value={tier[ENGINE_OF[modelStep]]} onChange={(t) => setTier((s) => ({ ...s, [ENGINE_OF[modelStep]]: t }))}
               dictation={dictation} onDictation={setDictation} modelsDir={modelsDir} onModelsDir={setModelsDir} />
           )}
 
-          {stepId === 'done' && <DoneScreen os={os} total={selectionGb(chosen)} />}
+          {stepId === 'done' && <DoneScreen os={os} total={ownMode ? downloadGb(ownChosen) : selectionGb(chosen)} />}
 
           {error && <p role="alert" className="mt-4 text-[12px] text-[var(--c-red)]">{error}</p>}
         </div>
@@ -500,7 +548,9 @@ const ModelScreen: React.FC<{
 };
 
 const DoneScreen: React.FC<{ os: DesktopOs; total: number }> = ({ os, total }) => {
-  const jobs = useSetupJobs();
+  const setupJobs = useSetupJobs();
+  const b = useBuiltins();
+  const jobs: Job[] = [...setupJobs, ...b.jobs.map((j): Job => ({ id: j.id, engine: 'ollama', label: j.label, status: j.state === 'running' ? 'running' : j.state === 'done' ? 'done' : 'error', detail: j.state === 'error' ? j.error ?? 'Failed' : j.state === 'stopped' ? 'Stopped' : j.step, progress: j.total ? j.done / j.total : undefined }))];
   const keys = os === 'macos' ? '⌃⌥Space' : 'Ctrl+Alt+Space';
   return (
     <Screen title="You're ready" body={`${total > 0 ? 'Your models download in the background, so you can start now. ' : ''}The floating island is off; press ${keys} anywhere to open it for a quick chat.`}>
@@ -518,3 +568,59 @@ const JobRow: React.FC<{ job: Job }> = ({ job }) => (
     {job.status === 'running' && <Progress className="mt-2.5" value={job.progress ?? null} label={`Downloading ${job.label}`} />}
   </div>
 );
+
+const OWN_COPY: Record<ModelStep, { title: string; body: string }> = {
+  chat: { title: 'Pick a chat model', body: 'For Chat, Work and Tasks. Models that use tools well can add tasks, make images and work with your files.' },
+  images: { title: 'Pick an image model', body: 'It comes with the VAE and text encoder it needs, already set up.' },
+  voice: { title: 'Pick a voice', body: 'For reading replies and questions aloud. Voices run on the processor, so they work on any computer.' },
+};
+
+/** Session 17: model choice for Lotus's own engines, from the one catalog (models/library.ts). */
+const OwnModelScreen: React.FC<{
+  step: ModelStep; machine: { gpuName: string; vramGb: number; unified: boolean; gpu: string } | null;
+  pick: Record<'chat' | 'image' | 'voice' | 'dictation', string | null>; onPick: (k: 'chat' | 'image' | 'voice' | 'dictation', id: string | null) => void;
+}> = ({ step, machine, pick, onPick }) => {
+  const kind: 'chat' | 'image' | 'voice' = step === 'images' ? 'image' : step;
+  const list = LIBRARY.filter((e) => e.kind === kind && e.builtin && e.tier);
+  const c = OWN_COPY[step];
+  const dict = LIBRARY.filter((e) => e.kind === 'dictation' && e.builtin && e.tier);
+  return (
+    <Screen title={c.title} body={c.body}>
+      <div className="setup-list" role="radiogroup" aria-label={c.title}>
+        {list.map((e) => {
+          const fit = machine ? fitOf(e, machine.vramGb, machine.unified) : 'unknown';
+          const on = pick[kind] === e.id;
+          return (
+            <button key={e.id} type="button" role="radio" aria-checked={on} onClick={() => onPick(kind, e.id)} className={cx('setup-row setup-choice w-full text-left', on && 'is-on')}>
+              <span className="setup-radio" aria-hidden="true" />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[14px] font-semibold">{e.title} <span className="font-normal text-[var(--color-text-muted)]">· {TIERS.find((t) => t.id === e.tier)!.label}</span></span>
+                <span className="block mt-0.5 text-[12px] leading-snug text-[var(--color-text-muted)]">{e.blurb}</span>
+              </span>
+              <span className="text-right shrink-0">
+                <span className="block text-[13px] tabular-nums">{e.diskGb >= 1 ? `${e.diskGb} GB` : `${Math.round(e.diskGb * 1000)} MB`}</span>
+                {fit !== 'fits' && <span className={cx('block text-[12px]', fit === 'too-big' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>{FIT_LABEL[fit]}</span>}
+              </span>
+            </button>
+          );
+        })}
+        <button type="button" role="radio" aria-checked={pick[kind] === null} onClick={() => onPick(kind, null)} className={cx('setup-row setup-choice w-full text-left', pick[kind] === null && 'is-on')}>
+          <span className="setup-radio" aria-hidden="true" />
+          <span className="flex-1 text-[14px] text-[var(--color-text-muted)]">None for now</span>
+        </button>
+      </div>
+      {step === 'voice' && dict.length > 0 && (
+        <div className="setup-row mt-6">
+          <span className="flex-1 min-w-0">
+            <span className="block text-[14px] font-semibold">Dictation</span>
+            <span className="block mt-0.5 text-[12px] text-[var(--color-text-muted)]">{entryById(pick.dictation ?? dict[0].id)?.title ?? dict[0].title}, to talk to Lotus and answer its questions aloud.</span>
+          </span>
+          <Toggle checked={!!pick.dictation} onChange={(v) => onPick('dictation', v ? (dict.find((d) => d.tier === 'balanced') ?? dict[0]).id : null)} ariaLabel="Download Whisper for dictation" />
+        </div>
+      )}
+      <p className="mt-5 text-[12px] text-[var(--color-text-muted)]">
+        {machine ? (machine.gpu === 'none' ? 'Lotus found no graphics card, so it suggests models that run on the processor.' : `Suggested for your ${machine.unified ? `Mac (${machine.vramGb.toFixed(0)} GB memory)` : `${machine.gpuName} (${machine.vramGb.toFixed(0)} GB)`}.`) : 'Reading this computer…'}
+      </p>
+    </Screen>
+  );
+};

@@ -19,6 +19,8 @@ import { startServer } from '../src/server';
 import { parseCustomSource, pickGguf, suggest, fitOf, LIBRARY, entryById, downloadGb, profileForEntry } from '../../src/models/library';
 import { comfyWiring, guessFamily, missingFor, sdcppArgs, sdcppProgress, settingsFor, suggestFile, type ImageProfile } from '../../src/models/imageProfiles';
 import { graphTxt2Img } from '../../src/services/comfyGraph';
+import { moveLegacyData } from '../src/legacyData';
+import { linkComfy, mergeSection } from '../src/engines/comfyLink';
 
 const dirs: string[] = [];
 const tmp = (tag: string) => { const d = mkdtempSync(join(tmpdir(), `lotus-s17-${tag}-`)); dirs.push(d); return d; };
@@ -156,6 +158,31 @@ describe('image setups', () => {
     expect([s[s.indexOf('--sampling-method') + 1], s[s.indexOf('--scheduler') + 1], s[s.indexOf('-n') + 1]]).toEqual(['dpm++2m', 'karras', 'blurry']);
     expect(sdcppProgress('  |=====>     | 5/20 - 1.23s/it')).toEqual({ step: 5, total: 20 });
     expect(sdcppProgress('loading model')).toBeNull();
+  });
+});
+
+describe('everything in Lotus Studio', () => {
+  test('an older data folder is copied into Lotus Studio/Data once, and kept', () => {
+    const old = tmp('old'), data = join(tmp('studio'), 'Data');
+    writeFileSync(join(old, 'lotus.db'), 'DB'); writeFileSync(join(old, 'lotus.db-wal'), 'WAL'); mkdirSync(join(old, 'logs')); writeFileSync(join(old, 'logs', 'lotusd.log'), 'L');
+    expect(moveLegacyData(old, data)).toEqual(['lotus.db', 'lotus.db-wal', 'logs/lotusd.log']);
+    expect(readFileSync(join(data, 'lotus.db'), 'utf8')).toBe('DB');
+    expect(existsSync(join(old, 'lotus.db'))).toBe(true);
+    writeFileSync(join(old, 'lotus.db'), 'NEWER');
+    expect(moveLegacyData(old, data)).toEqual([]); // never overwrites the new folder
+    expect(moveLegacyData(undefined, data)).toEqual([]);
+  });
+
+  test('ComfyUI gets a lotus_studio section in its model paths file; other sections stay', () => {
+    const before = 'comfyui:\n    base_path: C:/Comfy\n    checkpoints: models/checkpoints\n\nlotus_studio:\n    base_path: "old"\n    vae: vae\n';
+    const out = mergeSection(before, 'C:\\Users\\F\\Documents\\Lotus Studio\\Models\\image');
+    expect(out).toContain('comfyui:\n    base_path: C:/Comfy');
+    expect(out.match(/lotus_studio:/g)?.length).toBe(1);
+    expect(out).toContain('base_path: "C:/Users/F/Documents/Lotus Studio/Models/image"');
+    expect(out).toContain('    text_encoders: text_encoders\n    clip: text_encoders');
+    const root = tmp('comfy');
+    expect(linkComfy('/S/Models/image', { root })).toEqual([join(root, 'extra_model_paths.yaml')]);
+    expect(readFileSync(join(root, 'extra_model_paths.yaml'), 'utf8').startsWith('lotus_studio:')).toBe(true);
   });
 });
 

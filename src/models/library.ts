@@ -189,7 +189,7 @@ export function fitOf(e: Pick<LibEntry, 'vramGb'>, vramGb: number | undefined, u
   return 'too-big';
 }
 
-export const FIT_LABEL: Record<Fit, string> = { fits: 'Fits this computer', tight: 'Tight fit, runs slower', 'too-big': 'Too big for this computer', unknown: 'Needs a GPU' };
+export const FIT_LABEL: Record<Fit, string> = { fits: 'Fits this computer', tight: 'Tight fit, runs slower', 'too-big': 'Too big for this computer', unknown: 'Slow without a GPU' };
 
 /** The entry to suggest for a kind on this computer: the best tier that fits, else the smallest. */
 export function suggest(kind: ModelKind, vramGb: number | undefined, unified = false, engine: 'builtin' | 'ollama' | 'comfyui' | 'voicebox' = 'builtin'): LibEntry | undefined {

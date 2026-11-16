@@ -23,6 +23,7 @@ pub fn engine_start(
     exe: String,
     args: Vec<String>,
     cwd: Option<String>,
+    env: Option<HashMap<String, String>>,
 ) -> Result<Started, String> {
     let mut map = state.0.lock().unwrap();
     if let Some(child) = map.get_mut(&name) {
@@ -35,6 +36,12 @@ pub fn engine_start(
     cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     if let Some(dir) = cwd.filter(|d| !d.is_empty()) {
         cmd.current_dir(dir);
+    }
+    // Session 17: where an engine keeps its models (OLLAMA_MODELS, HF_HOME) so they live in Lotus Studio.
+    for (k, v) in env.unwrap_or_default() {
+        if matches!(k.as_str(), "OLLAMA_MODELS" | "HF_HOME" | "OLLAMA_HOST") {
+            cmd.env(k, v);
+        }
     }
     if name == "voicebox" {
         // The Voicebox server exits on its own if Lotus disappears.

@@ -29,8 +29,17 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
   };
   return (
     <div className="space-y-4">
-      <Row title="Model server" hint="Where chat, Thinking mode, tasks, routines and memory learning send requests. Images and voice keep using their own engines.">
-        <Segmented label="Model server" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'llama.cpp' }]} />
+      <Row title="Chat engine" hint="What runs chat, Work, tasks, routines and memory learning. Lotus keeps its own engine and models in Lotus Studio; Ollama or your own llama-server are there if you already use them.">
+        <Segmented label="Chat engine" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'llama-server' }]} />
+      </Row>
+      <Row title="Image engine" hint="What makes images. Lotus's engine runs stable-diffusion.cpp; ComfyUI adds inpainting, extending and custom workflows. Both use the models in Lotus Studio/Models/image.">
+        <Segmented label="Image engine" value={s.imageEngine} onChange={(v) => set({ imageEngine: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'comfyui', label: 'ComfyUI' }]} />
+      </Row>
+      <Row title="Keep engine models in Lotus Studio" hint="When Lotus starts Ollama or Voicebox, their models go in Lotus Studio/Models, next to everything else. Models they downloaded before stay where they are (download them again, or move them yourself). ComfyUI always reads Lotus Studio/Models/image.">
+        <Toggle checked={s.engineModelsInStudio !== false} onChange={(v) => set({ engineModelsInStudio: v })} ariaLabel="Keep engine models in Lotus Studio" />
+      </Row>
+      <Row title="Voice engine" hint="What speaks and listens. Lotus's engine runs Kokoro and Piper voices and Whisper dictation; Voicebox adds voice cloning and stories.">
+        <Segmented label="Voice engine" value={s.voiceEngine} onChange={(v) => set({ voiceEngine: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'voicebox', label: 'Voicebox' }]} />
       </Row>
       {s.llmBackend === 'llamacpp' && (
         <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">

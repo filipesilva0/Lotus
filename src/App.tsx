@@ -50,6 +50,7 @@ import type { ColorPalette } from './types/lotus';
 import { kv } from './lib/store';
 import { engineReady, hasImageFile, useBuiltins, useProfiles } from './lib/builtins';
 import { missingFor } from './models/imageProfiles';
+import { linkComfyModels } from './services/engineControl';
 
 import { DEFAULT_DENY } from './agents/toolDefaults';
 const SETTINGS_KEY = 'lotus.settings.v1';
@@ -126,7 +127,7 @@ function loadSettings(): LotusSettings {
   // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
   // Settings → Engines switches them to the built-in ones.
   if (raw && saved.imageEngine === undefined) {
-    return { ...DEFAULT_SETTINGS, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox', ...saved };
+    return { ...DEFAULT_SETTINGS, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox', engineModelsInStudio: false, ...saved };
   }
   return { ...DEFAULT_SETTINGS, ...saved };
 }
@@ -241,6 +242,8 @@ export default function App() {
   // Deep research lives in Chat, but its runs belong to the app so they keep going on other pages.
   const research = useResearch({ model: settings.selectedModel });
   // Images too: a generation keeps running and lands in its row while you use other pages.
+  // ComfyUI reads the image models in Lotus Studio/Models/image (it picks the link up when it next starts).
+  useEffect(() => { if (!builtinImages && isTauri) void linkComfyModels().catch(() => undefined); }, [builtinImages]);
   const gallery = useGallery(comfyUp, builtinImages ? 'builtin' : 'comfyui', readyProfiles);
   // Work runs too (session 16), and spoken questions / permission prompts when voice is on.
   const work = useWork(settings);
@@ -462,7 +465,12 @@ export default function App() {
   if (setupOpen) {
     return (
       <div className="h-screen w-screen relative overflow-hidden">
-        <WelcomeSetup eng={eng} onAccent={setSetupAccent} onClose={() => { setSetupOpen(false); void eng.refresh(); }} />
+        <WelcomeSetup eng={eng} onAccent={setSetupAccent} onClose={(st) => {
+          setSetupOpen(false); void eng.refresh();
+          // The guide's choice between Lotus's own engines and Ollama / ComfyUI / Voicebox (session 17).
+          if (st.own === true) setSettings((x) => ({ ...x, llmBackend: 'builtin', imageEngine: 'builtin', voiceEngine: 'builtin' }));
+          else if (st.own === false) setSettings((x) => ({ ...x, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox' }));
+        }} />
         <div className="absolute inset-x-0 top-0">
           <TitleBar bare canGoBack={false} canGoForward={false} onBack={goBack} onForward={goForward}
             leftPanel={false} rightPanel={false} onToggleLeft={toggleLeft} onToggleRight={toggleRight} menus={menus} />

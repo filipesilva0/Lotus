@@ -1,7 +1,7 @@
 // lotusd: Lotus's background core.
 //
 // Started by the Lotus app (src-tauri/src/core.rs) with:
-//   lotusd --data <app data folder> --studio <Lotus Studio folder> [--watch-stdin]
+//   lotusd --data <Lotus Studio/Data> --studio <Lotus Studio folder> [--legacy-data <old app-data folder>] [--watch-stdin]
 //   env LOTUSD_TOKEN=<random session token>
 // Prints one line when it is ready to serve:
 //   LOTUSD_READY {"port":53121,"pid":4242,"version":"0.1.0"}
@@ -12,6 +12,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openDb } from './db';
 import { startServer, VERSION } from './server';
+import { moveLegacyData } from './legacyData';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -35,6 +36,11 @@ const log = (msg: string) => {
   try { appendFileSync(logFile, line); } catch { /* read-only folder: stderr only */ }
   process.stderr.write(line);
 };
+
+try {
+  const moved = moveLegacyData(arg('legacy-data'), dataDir);
+  if (moved.length) log(`moved ${moved.length} files from ${arg('legacy-data')} into ${dataDir}`);
+} catch (e) { log(`could not copy the old data folder: ${(e as Error).message}`); }
 
 let db: ReturnType<typeof openDb>;
 try {

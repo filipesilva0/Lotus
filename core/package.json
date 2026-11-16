@@ -1,7 +1,7 @@
 {
   "name": "lotusd",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Lotus core: the local background process that owns Lotus's data (lotus.db, media files, memory).",
   "scripts": {

@@ -122,10 +122,10 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
     const t = prompt.trim();
     const cmd = /^\/(\w+)\s*(.*)$/s.exec(t);
     if (cmd && SLASH.some((c) => c.name === cmd[1])) { setNotice(runCommand(cmd[1], cmd[2].trim())); setPrompt(''); return; }
-    if (!t || g.busy || !params.checkpoint) return;
+    if (!t || g.busy || (builtin ? !profile : !params.checkpoint)) return;
     setNotice(null);
     const { p, neg } = expand(t);
-    void g.generate(p, { ...params, negative: neg }, ref?.blob);
+    void g.generate(p, { ...params, negative: neg, profile: profile?.id ?? params.profile }, ref?.blob);
   };
 
   const pick = (i: number) => {
@@ -184,7 +184,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
 
         {/* Canvas */}
         <div className="flex-1 min-h-0 p-5 flex flex-col items-center justify-center">
-          {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body="Describe an image below and press Generate. ComfyUI makes it on your own GPU." className="flex-1" />}
+          {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body={`Describe an image below and press Generate. ${builtin ? 'Lotus' : 'ComfyUI'} makes it on this computer.`} className="flex-1" />}
           {(cur || busyHere) && (
             <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
               {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!busyHere) setViewing(true); }}

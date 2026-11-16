@@ -181,7 +181,7 @@ export const ModelLibrary: React.FC<{
 };
 
 /** Lotus's own engines for the kinds on screen: installed version, or Install. */
-const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }> = ({ kind, settings }) => {
+export const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }> = ({ kind, settings }) => {
   const b = useBuiltins();
   if (!b.available) return null;
   const want = new Set<BuiltinId>();

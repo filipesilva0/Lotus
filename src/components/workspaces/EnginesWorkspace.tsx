@@ -6,6 +6,8 @@ import { useEngines, Policy } from '../../hooks/useEngines';
 import { EngineId, engineUrl, setEngineUrl, DEFAULT_URLS, isRemote, engineToken, setEngineToken, normalizeEngineUrl, LISTEN_HINT } from '../../services/engineConfig';
 import { browseForExe, appPaths, AppPaths, testEngine, EngineTest } from '../../services/engineControl';
 import { ModelsWorkspace } from './ModelsWorkspace';
+import { EnginesRow } from '../models/ModelLibrary';
+import { hasLiveSettings, liveSettings } from '../../lib/liveSettings';
 import { browseModelsDir, findModelsDir, folderPath, savedModelsDir } from '../../services/downloadService';
 import { openExternal, revealPath } from '../../lib/open';
 import { ToolbarContent } from '../common/ToolbarSlot';
@@ -36,6 +38,7 @@ const META: Record<EngineId, { name: string; blurb: string; install: string; ins
 export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng, initialTab = 'engines' }) => {
   const [tab, setTab] = useState<Tab>(initialTab);
   useEffect(() => setTab(initialTab), [initialTab]);
+  const settings = hasLiveSettings() ? liveSettings() : null;
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
@@ -46,7 +49,8 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
         ? <ModelsWorkspace engines={eng.engines} onOpenEngines={() => setTab('engines')} />
         : (
           <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            <p className="text-[13px] text-[var(--color-text-muted)] mb-4">The programs Lotus talks to. They run on this computer, or on another one on your network (use Change).</p>
+            {tab === 'engines' && settings && <div className="mb-8 max-w-6xl"><EnginesRow kind="all" settings={settings} /></div>}
+            <p className="text-[13px] text-[var(--color-text-muted)] mb-4">{tab === 'engines' ? 'Outside engines Lotus can use instead (Settings → Engines picks which). They run on this computer, or on another one on your network (use Change).' : 'The programs Lotus talks to.'}</p>
             {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
             {tab === 'storage' && <StorageTab />}
           </div>
@@ -60,7 +64,8 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
 const EnginesTab: React.FC<{ eng: Eng; goModels: () => void }> = ({ eng, goModels }) => {
   const [dismissed, setDismissed] = useState(() => kv.getItem('lotus.setup.dismissed') === '1');
   const { engines, gpu } = eng;
-  const showSetup = !dismissed && (engines.ollama.up === false || engines.voicebox.up === false);
+  const allOwn = hasLiveSettings() && liveSettings().llmBackend === 'builtin' && liveSettings().imageEngine === 'builtin' && liveSettings().voiceEngine === 'builtin';
+  const showSetup = !dismissed && !allOwn && (engines.ollama.up === false || engines.voicebox.up === false);
 
   return (
     <div className="space-y-5 max-w-6xl">

@@ -148,6 +148,8 @@ export interface LotusSettings {
   builtinSpeaker: number;
   /** Built-in dictation (speech to text) model id. */
   builtinDictation: string;
+  /** Ollama and Voicebox keep their models in Lotus Studio/Models when Lotus starts them (session 17). */
+  engineModelsInStudio?: boolean;
   llamacppUrl: string;
   /** Scale context size, chunking and background-agent count to free video memory. */
   autoScale: boolean;

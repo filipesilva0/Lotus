@@ -14,6 +14,8 @@ export interface SetupState {
   engines?: Partial<Record<EngineId, boolean>>;
   /** Engines the user connected to on another computer instead of installing (session 11). */
   remote?: Partial<Record<EngineId, boolean>>;
+  /** Session 17: Lotus's own engines (true) or Ollama / ComfyUI / Voicebox (false). */
+  own?: boolean;
   at?: number;
 }
 

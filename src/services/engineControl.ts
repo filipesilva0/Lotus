@@ -5,7 +5,7 @@ import { isTauri, http, timeoutSignal, networkErrorText } from '../lib/http';
 import { engineUrl, EngineId, isRemote, isLoopbackHost, LISTEN_HINT, engineToken, normalizeEngineUrl, authHeaderFromToken } from './engineConfig';
 import { kv } from '../lib/store';
 
-export interface AppPaths { portable: boolean; dataDir: string; exeDir: string; studioDir?: string }
+export interface AppPaths { portable: boolean; dataDir: string; exeDir: string; studioDir?: string; legacyDataDir?: string }
 
 const exeKey = (id: EngineId) => `lotus.engine.${id}.exe`;
 export const savedExe = (id: EngineId) => kv.getItem(exeKey(id)) || '';
@@ -43,16 +43,44 @@ export async function startEngine(id: EngineId): Promise<void> {
   if (!exe) throw new NeedsExecutable(id);
 
   let args: string[] = [];
-  const sep = '\\';
+  const sep = paths?.dataDir.includes('\\') ? '\\' : '/';
+  // Session 17: models and data of engines Lotus starts live in Lotus Studio too (new installs; older
+  // ones keep where their models already are until Settings → Engines says otherwise).
+  const inStudio = modelsInStudio() && !!paths?.studioDir;
+  const studio = paths?.studioDir ?? '';
+  const env: Record<string, string> = {};
   if (id === 'voicebox') {
     const port = new URL(engineUrl('voicebox')).port || '17493';
     args = ['--port', port];
-    if (paths) args.push('--data-dir', `${paths.dataDir}${sep}voicebox`);
+    if (paths) args.push('--data-dir', inStudio ? `${studio}${sep}Engines${sep}voicebox-data` : `${paths.legacyDataDir || paths.dataDir}${sep}voicebox`);
+    if (inStudio) env.HF_HOME = `${studio}${sep}Models${sep}voicebox`;
   } else if (id === 'ollama') {
     args = ['serve'];
+    if (inStudio) env.OLLAMA_MODELS = `${studio}${sep}Models${sep}ollama`;
+  } else if (id === 'comfyui') {
+    await linkComfyModels().catch(() => undefined);
   }
   const cwd = id === 'comfyui' ? exe.slice(0, Math.max(exe.lastIndexOf('\\'), exe.lastIndexOf('/'))) : undefined;
-  await invokeNative('engine_start', { name: id, exe, args, cwd });
+  await invokeNative('engine_start', { name: id, exe, args, cwd, env });
+}
+
+/** Settings → Engines: keep the models of Ollama and Voicebox in Lotus Studio when Lotus starts them. */
+function modelsInStudio(): boolean {
+  try { return JSON.parse(kv.getItem('lotus.settings.v1') || '{}').engineModelsInStudio !== false; } catch { return true; }
+}
+
+/**
+ * Lets ComfyUI read Lotus Studio/Models/image: the core writes a `lotus_studio` section into ComfyUI's
+ * extra_model_paths.yaml (and ComfyUI Desktop's extra_models_config.yaml). ComfyUI reads it when it starts.
+ */
+export async function linkComfyModels(): Promise<string[]> {
+  if (isRemote('comfyui')) return [];
+  const { rpc, coreReady } = await import('../lib/core');
+  if (!(await coreReady())) return [];
+  const { findModelsDir, savedModelsDir } = await import('./downloadService');
+  const models = savedModelsDir() || (await findModelsDir().catch(() => '')) || '';
+  const root = models ? models.replace(/[\\/]+models[\\/]*$/i, '') : '';
+  return (await rpc<{ files: string[] }>('comfy_link_models', { root: root || undefined })).files;
 }
 
 const HEALTH_PATH: Record<EngineId, string> = { ollama: '/api/version', comfyui: '/system_stats', voicebox: '/health' };

@@ -18,6 +18,9 @@ import type { LotusSettings } from '../../types/lotus';
 
 interface Clip { id: string; text: string; url: string; path: string; voice: string }
 
+/** Kokoro voice ids ("af_heart") → "Heart · US English, female". */
+const speakerLabel = (n: string) => { const m = /^([ab])([fm])_(\w+)$/.exec(n); return m ? `${m[3][0].toUpperCase()}${m[3].slice(1)} · ${m[1] === 'a' ? 'US' : 'UK'} English, ${m[2] === 'f' ? 'female' : 'male'}` : n; };
+
 const field = 'h-8 px-2 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[13px] text-[var(--color-text-main)]';
 
 export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; onOpenModels: () => void }> = ({ settings, onSettings, onOpenModels }) => {
@@ -81,7 +84,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
           {speakers.length > 1 && (
             <label className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Speaker
               <select aria-label="Speaker" className={field} value={settings.builtinSpeaker} onChange={(e) => onSettings({ builtinSpeaker: Number(e.target.value) })}>
-                {speakers.map((s) => <option key={s.id} value={s.id}>{s.name.replace(/^([ab][fm])_/, (_m, p: string) => `${p[0] === 'a' ? 'US' : 'UK'} ${p[1] === 'f' ? '♀' : '♂'} `)}</option>)}
+                {speakers.map((s) => <option key={s.id} value={s.id}>{speakerLabel(s.name)}</option>)}
               </select>
             </label>
           )}

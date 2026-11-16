@@ -17,6 +17,8 @@ pub struct AppPaths {
     pub exe_dir: String,
     /// Documents/Lotus Studio (or the folder chosen in the installer); see setup.rs.
     pub studio_dir: String,
+    /// Where an older Lotus kept its data (the OS app-data folder), read once to move it (session 17).
+    pub legacy_data_dir: String,
 }
 
 pub fn exe_dir() -> PathBuf {
@@ -61,14 +63,39 @@ pub fn apply_portable_env() {
     }
 }
 
+/// Session 17: everything Lotus keeps lives in the Lotus Studio folder, so the data folder is
+/// `<Lotus Studio>/Data` (portable: `<exe dir>/data`, as before). Older installs kept it in the OS
+/// app-data folder; the core copies it over once (`--legacy-data`).
+pub fn data_dir_for(portable: bool, installed_data_dir: &std::path::Path, studio_dir: &std::path::Path) -> PathBuf {
+    if portable {
+        portable_data_dir()
+    } else if studio_dir.as_os_str().is_empty() {
+        installed_data_dir.to_path_buf()
+    } else {
+        studio_dir.join("Data")
+    }
+}
+
 pub fn describe(installed_data_dir: PathBuf, studio_dir: PathBuf) -> AppPaths {
     let portable = is_portable();
     AppPaths {
         portable,
-        data_dir: if portable { portable_data_dir() } else { installed_data_dir }
-            .to_string_lossy()
-            .into_owned(),
+        data_dir: data_dir_for(portable, &installed_data_dir, &studio_dir).to_string_lossy().into_owned(),
         exe_dir: exe_dir().to_string_lossy().into_owned(),
         studio_dir: studio_dir.to_string_lossy().into_owned(),
+        legacy_data_dir: installed_data_dir.to_string_lossy().into_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn data_lives_in_the_studio_folder() {
+        let installed = PathBuf::from("/home/u/.local/share/com.lotus.app");
+        let studio = PathBuf::from("/home/u/Documents/Lotus Studio");
+        assert_eq!(data_dir_for(false, &installed, &studio), studio.join("Data"));
+        assert_eq!(data_dir_for(false, &installed, &PathBuf::new()), installed);
+        assert_eq!(data_dir_for(true, &installed, &studio), portable_data_dir());
     }
 }
