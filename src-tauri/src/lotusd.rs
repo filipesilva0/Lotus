@@ -210,9 +210,33 @@ impl Core {
                     }
                 }
             }
-            // Watch the process; restart it if it stops while Lotus is still running.
+            // Watch the process; restart it if it stops, or stops answering, while Lotus is still running.
+            let mut tick: u32 = 0;
+            let mut missed: u32 = 0;
             loop {
                 std::thread::sleep(Duration::from_millis(500));
+                tick = tick.wrapping_add(1);
+                // Every 5 s: is the core still answering? A core that is alive but stuck (seen on
+                // 0.8.0: no log lines, windows couldn't reach it) is stopped so it restarts.
+                if tick % 10 == 0 {
+                    let port = self.0.lock().ok().and_then(|g| g.running.as_ref().map(|r| r.info.port));
+                    if let Some(port) = port {
+                        if health_ok(port) {
+                            missed = 0;
+                        } else {
+                            missed += 1;
+                        }
+                        if missed >= HEALTH_MISSES {
+                            missed = 0;
+                            log_line(&app, &format!("the core on port {port} didn't answer for {}s; restarting it", HEALTH_MISSES * 5));
+                            if let Ok(mut g) = self.0.lock() {
+                                if let Some(r) = g.running.as_mut() {
+                                    let _ = r.child.kill();
+                                }
+                            }
+                        }
+                    }
+                }
                 let mut g = self.0.lock().expect("core state");
                 if g.stopping || g.generation != gen {
                     return;
@@ -304,6 +328,51 @@ impl Core {
     }
 }
 
+/// Health checks in a row that may fail (5 s apart, each waiting up to 3 s) before the core is restarted.
+const HEALTH_MISSES: u32 = 6;
+
+/// `GET /health` on the core, with plain std networking (no token needed, reveals nothing).
+fn health_ok(port: u16) -> bool {
+    use std::io::Read;
+    use std::net::{SocketAddr, TcpStream};
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_secs(3)) else { return false };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
+    let _ = s.set_write_timeout(Some(Duration::from_secs(3)));
+    if s.write_all(format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").as_bytes()).is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    match s.read(&mut buf) {
+        Ok(n) if n > 0 => is_ok_status(&buf[..n]),
+        _ => false,
+    }
+}
+
+fn is_ok_status(head: &[u8]) -> bool {
+    let line = String::from_utf8_lossy(head);
+    line.starts_with("HTTP/1.1 200") || line.starts_with("HTTP/1.0 200")
+}
+
+/// Appends a line to the core's own log (so a restart by the app is visible next to the core's lines).
+fn log_line(app: &AppHandle, msg: &str) {
+    let (data, _, _) = folders(app);
+    let dir = data.join("logs");
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("lotusd.log")) {
+        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = writeln!(f, "[app {secs}] {msg}");
+    }
+}
+
+/// Restarts the core now (the "Restart Core" button in the notice).
+#[tauri::command]
+pub async fn core_restart(app: AppHandle) -> Result<(), String> {
+    let core = app.state::<Core>().inner().clone();
+    log_line(&app, "restart asked for from the window");
+    tauri::async_runtime::spawn_blocking(move || core.restart(&app)).await.map_err(|e| e.to_string())
+}
+
 /// Port and token for the web layer. Waits briefly while the core is starting.
 #[tauri::command]
 pub async fn core_info(app: AppHandle) -> Result<CoreInfo, String> {
@@ -339,6 +408,18 @@ mod tests {
         std::fs::write(bin.join("lotusd"), b"x").unwrap();
         assert_eq!(sidecar_in(&bin), bin.join("lotusd"));
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn health_status_line() {
+        assert!(is_ok_status(b"HTTP/1.1 200 OK\r\ncontent-type"));
+        assert!(!is_ok_status(b"HTTP/1.1 503 Service Unavailable"));
+        assert!(!is_ok_status(b""));
+        // Nothing listening on a closed port.
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = l.local_addr().unwrap().port();
+        drop(l);
+        assert!(!health_ok(port));
     }
 
     #[test]

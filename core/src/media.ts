@@ -44,8 +44,25 @@ export function resolveMedia(studio: string, rel: string): string | null {
   return full.startsWith(root + sep) ? full : null;
 }
 
+/** The type from the file's first bytes, for uploads that arrive without one (0.7/0.8 sent some as application/octet-stream). */
+export function sniffMime(body: ArrayBuffer | Uint8Array): string | null {
+  const b = body instanceof Uint8Array ? body : new Uint8Array(body);
+  const at = (s: string, o = 0) => [...s].every((c, i) => b[o + i] === c.charCodeAt(0));
+  if (b[0] === 0x89 && at('PNG', 1)) return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+  if (at('RIFF') && at('WEBP', 8)) return 'image/webp';
+  if (at('RIFF') && at('WAVE', 8)) return 'audio/wav';
+  if (at('GIF8')) return 'image/gif';
+  if (at('OggS')) return 'audio/ogg';
+  if (at('fLaC')) return 'audio/flac';
+  if (at('ID3') || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'audio/webm';
+  return null;
+}
+
 export async function saveMedia(db: Db, studio: string, body: ArrayBuffer | Uint8Array, mime: string, name: string, now = new Date()): Promise<MediaRow> {
-  const type = mime.split(';')[0].trim().toLowerCase();
+  let type = mime.split(';')[0].trim().toLowerCase();
+  if (!kindOf(type)) type = sniffMime(body) ?? type;
   const kind = kindOf(type);
   if (!kind) throw new Error(`Lotus only saves images and audio here, not ${type || 'unknown files'}.`);
   const bytes = body.byteLength;

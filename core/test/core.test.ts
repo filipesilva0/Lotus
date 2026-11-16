@@ -135,7 +135,8 @@ describe('media', () => {
     expect(a.path).toBe('Images/2026-11/red-bicycle.png');
     expect(b.path).toBe('Images/2026-11/red-bicycle-2.png');
     expect(existsSync(join(studio, 'Images', '2026-11', 'red-bicycle.png'))).toBe(true);
-    await expect(saveMedia(db, studio, png, 'application/x-msdownload', 'x')).rejects.toThrow();
+    // Not an image or audio file, whatever it claims (0.8.1 sniffs untyped uploads, so use real exe bytes).
+    await expect(saveMedia(db, studio, new Uint8Array([0x4d, 0x5a, 0x90, 0, 3]), 'application/x-msdownload', 'x')).rejects.toThrow();
     db.sql.close();
   });
 });

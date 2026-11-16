@@ -80,6 +80,36 @@ export function parseSherpaText(out: string): string {
   return lines[lines.length - 1] ?? '';
 }
 
+let acp: Promise<number> | null = null;
+/** The Windows "ANSI" code page programs with a plain main() see their arguments in (1252 in Portugal). */
+export function windowsAnsiCodePage(): Promise<number> {
+  acp ??= (async () => {
+    try {
+      const p = Bun.spawn(['reg', 'query', 'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage', '/v', 'ACP'], { stdout: 'pipe', stderr: 'ignore', windowsHide: true });
+      const out = await new Response(p.stdout).text();
+      const m = /ACP\s+REG_SZ\s+(\d+)/i.exec(out);
+      return m ? Number(m[1]) : 1252;
+    } catch { return 1252; }
+  })();
+  return acp;
+}
+
+/**
+ * Text for a command-line argument that a Windows program reads as bytes in code page `cp` and then
+ * decodes as UTF-8: the UTF-8 bytes, read as that single-byte code page. With the UTF-8 code page
+ * (65001) or text that is plain ASCII, the text is returned as it is.
+ */
+export function argForAnsi(text: string, cp: number): string {
+  if (cp === 65001 || /^[\x00-\x7f]*$/.test(text)) return text;
+  if (cp !== 1252 && cp !== 28591) return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x00-\x7f]/g, ' ');
+  let out = '';
+  for (const b of new TextEncoder().encode(text)) out += b >= 0x80 && b <= 0x9f && cp === 1252 ? CP1252_HIGH[b - 0x80] : String.fromCharCode(b);
+  return out;
+}
+
+/** Windows-1252 bytes 0x80–0x9F as Unicode (the five unused bytes map to the C1 characters, as Windows does). */
+const CP1252_HIGH = '\u20ac\u0081\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u008d\u017d\u008f\u0090\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u009d\u017e\u0178';
+
 export class Builtins {
   private jobs = new Map<string, Job>();
   private ctrls = new Map<string, AbortController>();
@@ -461,6 +491,15 @@ export class Builtins {
     return true;
   }
 
+  /** Stops llama-server and waits until it has really exited and the GPU driver has freed its memory. */
+  async stopChatAndWait(): Promise<void> {
+    const p = this.chatProc;
+    this.stopChat();
+    if (!p) return;
+    await Promise.race([p.exited, Bun.sleep(10_000)]);
+    await Bun.sleep(1500);
+  }
+
   // ── Images (sd-cli) ──────────────────────────────────────────────────
   profiles(): ImageProfile[] {
     try { const l = JSON.parse(this.d.kvGet(PROFILES_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch { return []; }
@@ -481,7 +520,7 @@ export class Builtins {
     const m = await this.machine();
     // A chat model holding the GPU's memory makes big image models fail or crawl: unload it first on
     // GPUs under 16 GB (it loads again on the next message).
-    if (this.chat.state !== 'stopped' && m.vramGb > 0 && m.vramGb < 16 && !m.unified) this.stopChat();
+    if (this.chat.state !== 'stopped' && m.vramGb > 0 && m.vramGb < 16 && !m.unified) await this.stopChatAndWait();
     const outDir = join(this.enginesDir, ENGINE_DIR.sd, 'out', `${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
     mkdirSync(outDir, { recursive: true });
     const lowVram = m.gpu === 'none' || (!m.unified && m.vramGb > 0 && m.vramGb < 12);
@@ -508,8 +547,14 @@ export class Builtins {
       if (o.signal?.aborted) throw new DOMException('Stopped', 'AbortError');
       const made = readdirSync(outDir).filter((f) => /\.png$/i.test(f)).sort().map((f) => join(outDir, f));
       if (code !== 0 || !made.length) {
-        const why = log.split(/[\r\n]+/).filter((l) => /error|fail|out of memory|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
-        throw new Error(`The built-in image engine didn't make an image${why ? `: ${why}` : ''}. ${/memory/i.test(why) ? 'The model is too big for this GPU; try a smaller one or a smaller size.' : `The full log is in ${logPath}.`}`);
+        if (/cannot make enough memory available|out of memory|CUDA error: out of memory|failed to allocate/i.test(log)) {
+          const none = /available 0\.00 MB device|reported free 0\.00 MB/i.test(log);
+          throw new Error(none
+            ? 'The graphics card had no free memory left, so no image was made. Another program is holding it (Ollama, ComfyUI, a game or a browser tab). Close it, or wait a few minutes for Ollama to unload its model, and try again.'
+            : 'The graphics card ran out of memory making this image. Try a smaller size, one image at a time, or a smaller model.');
+        }
+        const why = log.split(/[\r\n]+/).filter((l) => /error|fail|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
+        throw new Error(`The built-in image engine didn't make an image${why ? `: ${why}` : ''}. The full log is in ${logPath}.`);
       }
       return made;
     } finally { this.imageBusy = false; }
@@ -550,7 +595,12 @@ export class Builtins {
     mkdirSync(dirname(out), { recursive: true });
     const clean = text.replace(/\s+/g, ' ').trim().slice(0, 4000);
     if (!clean) throw new Error('There is nothing to say.');
-    await this.runTool(exe, this.ttsArgs(dir, clean, out, o.speaker ?? 0, o.speed ?? 1), o.signal);
+    const args = this.ttsArgs(dir, clean, out, o.speaker ?? 0, o.speed ?? 1);
+    // sherpa-onnx's programs read their arguments as bytes in the system code page on Windows, then
+    // treat them as UTF-8, so "olá" arrived broken (seen on 0.8.0). Pass the text so that the code
+    // page conversion yields its UTF-8 bytes.
+    if (process.platform === 'win32') args[args.length - 1] = argForAnsi(args[args.length - 1], await windowsAnsiCodePage());
+    await this.runTool(exe, args, o.signal);
     if (!existsSync(out)) throw new Error('The built-in voice engine finished without making any audio.');
     return out;
   }

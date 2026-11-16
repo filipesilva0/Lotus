@@ -10,7 +10,7 @@
 // The first time a window connects, everything an older Lotus kept in localStorage and IndexedDB is
 // imported (once; the browser copies are left in place as a backup).
 
-import { coreJson, coreReady, onCoreEvent, setCoreError } from './core';
+import { coreJson, coreReady, forgetCore, onCoreEvent, setCoreError } from './core';
 
 type Mode = 'local' | 'core';
 let mode: Mode = 'local';
@@ -169,15 +169,22 @@ async function hydrate(): Promise<void> {
 /** Call once per window before rendering. Resolves to where data lives for this run. */
 export function initStore(): Promise<Mode> {
   started ??= (async (): Promise<Mode> => {
-    const info = await coreReady();
-    if (!info) return (mode = 'local');
-    try {
-      await migrate();
-      await hydrate();
-    } catch (e) {
-      console.warn('[lotus] core storage unavailable, using browser storage:', e);
-      // The core is running but this window can't use it: say why in the notice (it used to be silent).
-      setCoreError(`It started, but this window couldn't reach it (${(e as Error)?.message || String(e)}).`);
+    // A core that is busy or restarting gets a few chances (about 12 s) before this window gives up
+    // and keeps its changes locally (0.8.0: one failed attempt left the window local for good).
+    let lastErr: unknown = null;
+    let ok = false;
+    for (let attempt = 0; attempt < 4 && !ok; attempt++) {
+      if (attempt) { await new Promise((r) => setTimeout(r, 3000)); forgetCore(); }
+      const info = await coreReady();
+      if (!info) { lastErr = null; continue; }
+      try { await migrate(); await hydrate(); ok = true; } catch (e) { lastErr = e; }
+    }
+    if (!ok) {
+      if (lastErr) {
+        console.warn('[lotus] core storage unavailable, using browser storage:', lastErr);
+        setCoreError(`It started, but this window couldn't reach it (${(lastErr as Error)?.message || String(lastErr)}).`);
+      }
+      watchForCore();
       return (mode = 'local');
     }
     mode = 'core';
@@ -206,6 +213,22 @@ export function initStore(): Promise<Mode> {
     return mode;
   })();
   return started;
+}
+
+/**
+ * In local mode (desktop app only): keep checking for the core, and reload the window as soon as it
+ * answers, so the window is back on lotus.db without the user quitting Lotus.
+ */
+let watching = false;
+function watchForCore() {
+  if (watching || typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+  watching = true;
+  const t = setInterval(async () => {
+    forgetCore();
+    const info = await coreReady().catch(() => null);
+    if (!info) return;
+    try { await coreJson('/v1/info'); clearInterval(t); window.location.reload(); } catch { /* not yet */ }
+  }, 5000);
 }
 
 /** For tests: forget everything and go back to localStorage mode. */

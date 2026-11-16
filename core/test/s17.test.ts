@@ -12,7 +12,7 @@ import { openDb } from '../src/db';
 import { kvApply, kvGet } from '../src/kv';
 import { pickAssets, pickRelease, parseReleases, type Asset, type Platform } from '../src/engines/assets';
 import { safeJoin, unzip } from '../src/engines/files';
-import { Builtins, parseSherpaText } from '../src/engines/manager';
+import { argForAnsi, Builtins, parseSherpaText } from '../src/engines/manager';
 import { parseNvidiaList, parseWinControllers } from '../src/engines/machine';
 import { toOpenAi } from '../src/agent/llm';
 import { startServer } from '../src/server';
@@ -183,6 +183,33 @@ describe('everything in Lotus Studio', () => {
     const root = tmp('comfy');
     expect(linkComfy('/S/Models/image', { root })).toEqual([join(root, 'extra_model_paths.yaml')]);
     expect(readFileSync(join(root, 'extra_model_paths.yaml'), 'utf8').startsWith('lotus_studio:')).toBe(true);
+  });
+});
+
+describe('media without a type (0.8.1)', () => {
+  test('PNG and WAV uploads sent as application/octet-stream are recognised', async () => {
+    const { sniffMime, saveMedia } = await import('../src/media');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    expect(sniffMime(png)).toBe('image/png');
+    expect(sniffMime(Buffer.from('RIFF\0\0\0\0WAVEfmt '))).toBe('audio/wav');
+    expect(sniffMime(Buffer.from('hello'))).toBeNull();
+    const db = openDb(tmp('media-db'));
+    const row = await saveMedia(db, tmp('media-studio'), png, 'application/octet-stream', 'x');
+    expect([row.kind, row.mime, row.path.endsWith('.png')]).toEqual(['image', 'image/png', true]);
+  });
+});
+
+describe('Windows arguments for sherpa-onnx (0.8.1)', () => {
+  test('Portuguese text survives the code page conversion as UTF-8 bytes', () => {
+    const t = 'olá, tudo bem? como tens estado? ção — “aspas” €';
+    const arg = argForAnsi(t, 1252);
+    // What Windows does: each character back to its cp1252 byte, then the program reads the bytes as UTF-8.
+    const back: number[] = [];
+    for (const ch of arg) { const c = ch.codePointAt(0)!; const i = c >= 0x80 && c <= 0x9f ? -1 : '\u20ac\u0081\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u008d\u017d\u008f\u0090\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u009d\u017e\u0178'.indexOf(ch); back.push(i >= 0 ? 0x80 + i : c); }
+    expect(new TextDecoder().decode(new Uint8Array(back))).toBe(t);
+    expect(argForAnsi('hello', 1252)).toBe('hello');
+    expect(argForAnsi(t, 65001)).toBe(t);
+    expect(argForAnsi('olá', 932)).toBe('ola');
   });
 });
 

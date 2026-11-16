@@ -141,6 +141,7 @@ pub fn run() {
             context_files::ctx_discover,
             context_files::ctx_read_folder,
             lotusd::core_info,
+            lotusd::core_restart,
             updates::update_check,
             updates::update_install,
         ])

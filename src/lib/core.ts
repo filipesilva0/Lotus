@@ -75,6 +75,17 @@ export function coreReady(): Promise<CoreInfo | null> {
   return pending;
 }
 
+/** Forgets the cached core address so the next `coreReady()` asks the app again (after a restart). */
+export function forgetCore() { if (!pending) info = null; }
+
+/** Asks the desktop app to restart the core (the notice's Restart button). */
+export async function restartCore(): Promise<void> {
+  if (!isTauri) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  lastError = 'Restarting…'; notify();
+  await invoke('core_restart');
+}
+
 /** Synchronous view for render code (a stable object between changes, for useSyncExternalStore). */
 export const coreState = () => snapshot;
 export function subscribeCore(fn: () => void): () => void { statusSubs.add(fn); return () => { statusSubs.delete(fn); }; }

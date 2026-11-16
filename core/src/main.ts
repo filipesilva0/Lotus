@@ -42,6 +42,11 @@ try {
   if (moved.length) log(`moved ${moved.length} files from ${arg('legacy-data')} into ${dataDir}`);
 } catch (e) { log(`could not copy the old data folder: ${(e as Error).message}`); }
 
+// A mistake in one request or job must never take the core down (or leave it silently broken):
+// write it to the log and keep serving.
+process.on('uncaughtException', (e) => log(`uncaught: ${(e as Error)?.stack || String(e)}`));
+process.on('unhandledRejection', (e) => log(`unhandled rejection: ${(e as Error)?.stack || String(e)}`));
+
 let db: ReturnType<typeof openDb>;
 try {
   db = openDb(dataDir);

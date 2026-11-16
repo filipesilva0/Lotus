@@ -27,7 +27,7 @@ import { Builtins } from './engines/manager';
 import { builtinRpc } from './engines/rpc';
 import { kvGet } from './kv';
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 
 export interface CoreOptions {
   db: Db;
