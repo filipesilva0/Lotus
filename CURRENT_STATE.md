@@ -4,7 +4,7 @@
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
 ## 0.10.0 release (16 Nov)
-- Released from `main` with `release-notes/v0.10.0.md` (manual workflow run with version 0.10.0, as for 0.9.1/0.9.5). Contains everything in §0.9.6 below (0.9.6 itself was never released). Nothing in it was run on Windows/macOS before releasing; CI result: see the Actions run for 0.10.0.
+- Released from `main` with `release-notes/v0.10.0.md` (manual workflow run with version 0.10.0, as for 0.9.1/0.9.5). Contains everything in §0.9.6 below (0.9.6 itself was never released). Nothing in it was run on Windows/macOS before releasing. CI run 43973648821: all three builds and publish passed; the release has the MSI, portable zip, DMG, AppImage/deb/rpm, their signatures and latest.json (version 0.10.0).
 
 ## 0.9.6 (16 Nov): voice calls, whole-text stories, transcripts in their own language, image resolution, example prompts, Settings clean-up (⚠️ not run on Windows or with real models)
 Filipe's list: a first Voice tab that is a voice call with memory beyond the call; resolution next to aspect ratio in Images; pt-PT speech came out in English (should stay in its language, with a Translate option); Stories should take a whole text and make one line per paragraph; fuller "Act as…" example prompts in Chat/Work, and examples in Images; Settings redone without duplicates (new Settings features need his approval first).
