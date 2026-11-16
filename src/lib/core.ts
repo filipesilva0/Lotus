@@ -21,8 +21,23 @@ let lastError: string | null = null;
 let pending: Promise<CoreInfo | null> | null = null;
 const listeners = new Set<(e: CoreEvent) => void>();
 const statusSubs = new Set<() => void>();
-let socket: WebSocket | null = null;
+let socket: { close: () => void } | null = null;
 let socketRetry: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * HTTP to the core. In the desktop app it goes through Tauri's HTTP client (Rust), not the web view:
+ * WebView2 can refuse a page's requests to 127.0.0.1 (Chromium's local-network rules), which left the
+ * installed 0.7.0 on Windows without its core (session 16). A browser (tests, vite) uses fetch.
+ */
+let nativeFetch: typeof fetch | null = null;
+async function httpCore(url: string, init: RequestInit = {}): Promise<Response> {
+  if (!isTauri) return fetch(url, init);
+  nativeFetch ??= (await import('@tauri-apps/plugin-http')).fetch as unknown as typeof fetch;
+  return nativeFetch(url, init);
+}
+
+/** Shown in the "core isn't running" notice when the core started but this window can't reach it. */
+export function setCoreError(msg: string) { lastError = msg; notify(); }
 
 /** Lets tests and screenshot scripts point the web layer at a real core without Tauri. */
 declare global { interface Window { __LOTUS_CORE__?: CoreInfo } }
@@ -82,7 +97,7 @@ export class CoreError extends Error {}
 export async function coreFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const i = await coreReady();
   if (!i) throw new CoreError(lastError ?? 'The Lotus core is not running.');
-  const go = () => fetch(`${base()}${path}`, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${info!.token}` } });
+  const go = () => httpCore(`${base()}${path}`, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: `Bearer ${info!.token}` } });
   let res: Response;
   try {
     res = await go();
@@ -132,18 +147,49 @@ export async function deleteMedia(path: string): Promise<void> {
 export function onCoreEvent(fn: (e: CoreEvent) => void): () => void { listeners.add(fn); return () => { listeners.delete(fn); }; }
 
 function openSocket() {
-  if (!info || typeof WebSocket === 'undefined') return;
+  if (!info) return;
   if (socketRetry) { clearTimeout(socketRetry); socketRetry = null; }
   const port = info.port;
+  const retry = () => { socketRetry = setTimeout(() => { if (info?.port === port) openSocket(); }, 1500); };
+  const deliver = (raw: string) => {
+    try { const e = JSON.parse(raw) as { type: string }; if (e.type !== 'ping') listeners.forEach((f) => f(e as CoreEvent)); } catch { /* ignore */ }
+  };
+
+  if (isTauri) {
+    // Desktop app: one streamed HTTP response (/v1/stream) read through Tauri's HTTP client.
+    const ctrl = new AbortController();
+    const me = { close: () => ctrl.abort() };
+    socket = me;
+    void (async () => {
+      try {
+        const res = await httpCore(`http://127.0.0.1:${port}/v1/stream`, { headers: { authorization: `Bearer ${info!.token}` }, signal: ctrl.signal });
+        if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1); if (line) deliver(line); }
+        }
+      } catch { /* closed or failed: retry below */ }
+      if (socket !== me || ctrl.signal.aborted) return;
+      socket = null;
+      retry();
+    })();
+    return;
+  }
+
+  if (typeof WebSocket === 'undefined') return;
   const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/events?t=${encodeURIComponent(info.token)}`);
   socket = ws;
-  ws.onmessage = (m) => {
-    try { const e = JSON.parse(String(m.data)) as CoreEvent; listeners.forEach((f) => f(e)); } catch { /* ignore */ }
-  };
+  ws.onmessage = (m) => deliver(String(m.data));
   ws.onclose = () => {
     if (socket !== ws) return;
     socket = null;
     // Reconnect while the core is the same; a restart arrives as core:ready instead.
-    socketRetry = setTimeout(() => { if (info?.port === port) openSocket(); }, 1500);
+    retry();
   };
 }

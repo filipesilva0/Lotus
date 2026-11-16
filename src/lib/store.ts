@@ -10,7 +10,7 @@
 // The first time a window connects, everything an older Lotus kept in localStorage and IndexedDB is
 // imported (once; the browser copies are left in place as a backup).
 
-import { coreJson, coreReady, onCoreEvent } from './core';
+import { coreJson, coreReady, onCoreEvent, setCoreError } from './core';
 
 type Mode = 'local' | 'core';
 let mode: Mode = 'local';
@@ -176,6 +176,8 @@ export function initStore(): Promise<Mode> {
       await hydrate();
     } catch (e) {
       console.warn('[lotus] core storage unavailable, using browser storage:', e);
+      // The core is running but this window can't use it: say why in the notice (it used to be silent).
+      setCoreError(`It started, but this window couldn't reach it (${(e as Error)?.message || String(e)}).`);
       return (mode = 'local');
     }
     mode = 'core';

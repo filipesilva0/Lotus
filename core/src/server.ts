@@ -12,6 +12,9 @@
 //   GET    /v1/media-list?kind=image
 //   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
 //   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin } · { type: 'agent', runId, kind, … } · { type: 'memory' }
+//   GET    /v1/stream                    the same events as one JSON object per line (a streamed HTTP response).
+//                                        The desktop app uses this through Tauri's HTTP client, because WebView2
+//                                        may block a page from opening connections to 127.0.0.1 (session 16).
 
 import type { Server, ServerWebSocket } from 'bun';
 import { Db, schemaVersion, SCHEMA_VERSION } from './db';
@@ -103,6 +106,8 @@ export function startServer(o: CoreOptions): CoreServer {
       'access-control-allow-methods': 'GET, PUT, POST, DELETE, OPTIONS',
       'access-control-allow-headers': 'authorization, content-type, x-lotus-name',
       'access-control-max-age': '600',
+      // Chromium's Private Network Access preflight (pages reaching 127.0.0.1).
+      'access-control-allow-private-network': 'true',
       vary: 'origin',
     };
   };
@@ -110,14 +115,23 @@ export function startServer(o: CoreOptions): CoreServer {
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors(req) } });
   const fail = (req: Request, status: number, error: string) => json(req, { error }, status);
 
+  const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
+  const enc = new TextEncoder();
   const broadcast = (event: Json) => {
     const msg = JSON.stringify(event);
     for (const s of sockets) { try { s.send(msg); } catch { /* closed */ } }
+    const line = enc.encode(`${msg}\n`);
+    for (const c of streams) { try { c.enqueue(line); } catch { streams.delete(c); } }
   };
+  // Keeps idle streams from being cut by anything in between, and finds dead ones.
+  const keepAlive = setInterval(() => { const l = enc.encode('{"type":"ping"}\n'); for (const c of streams) { try { c.enqueue(l); } catch { streams.delete(c); } } }, 5_000);
+  (keepAlive as { unref?: () => void }).unref?.();
   const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log });
 
   const server = Bun.serve<{ id: number }, never>({
     hostname: '127.0.0.1',
+    // Bun closes a connection after 10 s without traffic; /v1/stream pings every 5 s, so 30 s is plenty.
+    idleTimeout: 30,
     port: o.port ?? 0,
     maxRequestBodySize: MAX_MEDIA + 1024 * 1024,
     async fetch(req, srv) {
@@ -138,6 +152,15 @@ export function startServer(o: CoreOptions): CoreServer {
         if (url.pathname === '/v1/events') {
           if (srv.upgrade(req, { data: { id: nextId++ } })) return undefined as unknown as Response;
           return fail(req, 400, 'Expected a WebSocket upgrade.');
+        }
+        if (url.pathname === '/v1/stream' && req.method === 'GET') {
+          let ctrl: ReadableStreamDefaultController<Uint8Array> | null = null;
+          const body = new ReadableStream<Uint8Array>({
+            start(c) { ctrl = c; streams.add(c); c.enqueue(enc.encode(`${JSON.stringify({ type: 'hello', version: VERSION })}\n`)); },
+            cancel() { if (ctrl) streams.delete(ctrl); },
+          });
+          req.signal.addEventListener('abort', () => { if (ctrl) { streams.delete(ctrl); try { ctrl.close(); } catch { /* closed */ } } });
+          return new Response(body, { headers: { 'content-type': 'application/x-ndjson', 'cache-control': 'no-store', ...cors(req) } });
         }
         if (url.pathname === '/v1/info' && req.method === 'GET') {
           return json(req, { version: VERSION, schema: schemaVersion(o.db), latestSchema: SCHEMA_VERSION, dataDir: o.db.dir, dbPath: o.db.path, studioDir: o.studio, fts5: o.db.fts, pid: process.pid });

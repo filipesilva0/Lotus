@@ -154,6 +154,25 @@ describe('HTTP API', () => {
     expect((await fetch(`${base}/v1/kv`, { headers: { authorization: `Bearer ${'y'.repeat(48)}` } })).status).toBe(401);
     expect((await fetch(`${base}/v1/kv`, { headers: auth })).status).toBe(200);
   });
+  test('/v1/stream: hello, then the same events the WebSocket gets, one JSON per line (session 16)', async () => {
+    expect((await fetch(`${base}/v1/stream`)).status).toBe(401);
+    const ctrl = new AbortController();
+    const res = await fetch(`${base}/v1/stream`, { headers: auth, signal: ctrl.signal });
+    expect(res.status).toBe(200);
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    const next = async () => { for (;;) { const i = buf.indexOf('\n'); if (i >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); return JSON.parse(l); } const { value } = await reader.read(); buf += dec.decode(value, { stream: true }); } };
+    expect((await next()).type).toBe('hello');
+    await fetch(`${base}/v1/kv`, { method: 'PUT', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ set: { 'stream.test': '1' }, origin: 'other' }) });
+    const e = await next();
+    expect(e).toEqual({ type: 'kv', set: { 'stream.test': '1' }, remove: [], origin: 'other' });
+    ctrl.abort();
+  });
+  test('preflight allows private-network requests from the app', async () => {
+    const r = await fetch(`${base}/v1/kv`, { method: 'OPTIONS', headers: { origin: 'http://127.0.0.1:8123', 'access-control-request-private-network': 'true' } });
+    expect(r.headers.get('access-control-allow-private-network')).toBe('true');
+  });
   test('a foreign Host header is refused (DNS rebinding)', async () => {
     const r = await fetch(`${base}/v1/kv`, { headers: { ...auth, host: 'evil.example:80' } });
     expect(r.status).toBe(403);
