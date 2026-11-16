@@ -25,12 +25,22 @@ export interface RuntimeSpec {
   licence: string;
   /** Executables Lotus needs inside the unpacked release (first found wins per entry). */
   exes: string[][];
+  /** Releases Lotus can use (all when absent). */
+  accepts?: (tag: string) => boolean;
+  /** Release to fetch by name when none of the newest ones is accepted. */
+  fallbackTag?: string;
+  /** Why newer releases are skipped, shown when an installed one is not accepted. */
+  pinNote?: string;
 }
 
 export const RUNTIMES: Record<BuiltinId, RuntimeSpec> = {
   llama: { id: 'llama', name: 'llama.cpp', repo: 'ggml-org/llama.cpp', role: 'Chat', licence: 'MIT', exes: [['llama-server']] },
   sd: { id: 'sd', name: 'stable-diffusion.cpp', repo: 'leejet/stable-diffusion.cpp', role: 'Images', licence: 'MIT', exes: [['sd-cli', 'sd']] },
-  sherpa: { id: 'sherpa', name: 'sherpa-onnx', repo: 'k2-fsa/sherpa-onnx', role: 'Voice and dictation', licence: 'Apache-2.0', exes: [['sherpa-onnx-offline-tts'], ['sherpa-onnx-offline']] },
+  // sherpa-onnx 2.0 removed espeak-ng (k2-fsa/sherpa-onnx#4055): Kokoro and Piper voices then need
+  // lexicon files those downloads don't have, so speaking failed on 2.0.x ("Failed to convert … to
+  // token IDs"). Lotus stays on 1.x, which has espeak-ng, PocketTTS and ZipVoice.
+  sherpa: { id: 'sherpa', name: 'sherpa-onnx', repo: 'k2-fsa/sherpa-onnx', role: 'Voice and dictation', licence: 'Apache-2.0', exes: [['sherpa-onnx-offline-tts'], ['sherpa-onnx-offline']],
+    accepts: (tag) => /^v1\./.test(tag), fallbackTag: 'v1.13.8', pinNote: 'This version can\'t pronounce Kokoro or Piper voices. Update to the version Lotus uses.' },
 };
 export const BUILTIN_ORDER: BuiltinId[] = ['llama', 'sd', 'sherpa'];
 
@@ -102,9 +112,15 @@ export function pickAssets(id: BuiltinId, assets: Asset[], p: Platform): Pick | 
  * binary release, and sd.cpp tags every commit, so Lotus looks through the most recent few.
  */
 export function pickRelease(id: BuiltinId, releases: Release[], p: Platform): { release: Release; pick: Pick } | null {
-  for (const r of releases) { const pk = pickAssets(id, r.assets, p); if (pk) return { release: r, pick: pk }; }
+  for (const r of releases) {
+    if (!releaseAccepted(id, r.tag)) continue;
+    const pk = pickAssets(id, r.assets, p); if (pk) return { release: r, pick: pk };
+  }
   return null;
 }
+
+/** Whether Lotus can use this release of an engine (sherpa-onnx: 1.x only). */
+export const releaseAccepted = (id: BuiltinId, tag: string) => RUNTIMES[id].accepts?.(tag) ?? true;
 
 /** GitHub's releases API → Release[] (ignores drafts). */
 export function parseReleases(json: unknown): Release[] {

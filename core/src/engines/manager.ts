@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { createServer } from 'node:net';
 import { basename, dirname, join, relative } from 'node:path';
 import type { Subprocess } from 'bun';
-import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, RUNTIMES } from './assets';
+import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, type LibEntry, type ModelKind } from '../../../src/models/library';
@@ -118,10 +118,29 @@ export function windowsShortPath(path: string): Promise<string> {
 }
 export const needsShortPath = (p: string) => /[^\x21-\x7e]/.test(p);
 
+/**
+ * A plain explanation when sd-cli stopped for lack of video memory, with the numbers it reported, or
+ * null when the log shows some other failure. (0.9.1 said "ran out of memory" for any log with
+ * "failed to allocate" and gave no numbers, so a wrong setting looked like a too-small card.)
+ */
+export function sdcppMemoryError(log: string, vramGb = 0): string | null {
+  if (!/cannot make enough memory available|out of memory|failed to allocate/i.test(log)) return null;
+  const gb = (mb: number) => `${(mb / 1024).toFixed(1)} GB`;
+  const need = [...log.matchAll(/need ([\d.]+) MB device[^\n]*?available ([\d.]+) MB device/gi)].pop();
+  const total = Number(/total ([\d.]+) MB/i.exec(log)?.[1]) || vramGb * 1024;
+  if (need) {
+    const want = Number(need[1]), free = Number(need[2]);
+    if (free < 1) return 'The graphics card had no free memory left, so no image was made. Another program is holding it (Ollama, ComfyUI, a game or a browser tab). Close it, or wait a few minutes for Ollama to unload its model, and try again.';
+    return `The image needed ${gb(want)} of video memory to work in, but only ${gb(free)}${total ? ` of the card's ${gb(total)}` : ''} was free. Close programs that use the graphics card, or try a smaller size or one image at a time.`;
+  }
+  return 'The graphics card ran out of memory making this image. Try a smaller size, one image at a time, or a smaller model.';
+}
+
 /** The lines of a tool's output that say what went wrong (sherpa-onnx prints the cause before its last line). */
 export function failureLines(output: string, max = 4): string {
-  const lines = output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const useful = lines.filter((l) => /error|fail|unable|cannot|can't|not found|invalid|espeak|unknown|skip/i.test(l));
+  // Leave out sherpa-onnx's echo of its own command line (older builds, or --print-args ignored).
+  const lines = output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).filter((l) => !/sherpa-onnx[\w-]*(\.exe)?['"]?\s+['"]?--/i.test(l) && !/parse-options\.cc:Read:/.test(l));
+  const useful = lines.filter((l) => /error|fail|unable|cannot|can't|not found|does not exist|invalid|deprecated|unknown|skip/i.test(l));
   const pick = [...new Set((useful.length ? useful : lines).slice(-max))];
   // sherpa-onnx prefixes its messages with the build machine's source path; keep only the message.
   return pick.map((l) => l.replace(/^[A-Z]:\\a\\sherpa-onnx\\\S+?:\w+:\d+\s*/, '').replace(/^\/\S+\/sherpa-onnx\/csrc\/\S+?:\w+:\d+\s*/, '')).join(' ').slice(0, 500);
@@ -178,8 +197,11 @@ export class Builtins {
   // ── Status ───────────────────────────────────────────────────────────
   engineInfo(id: BuiltinId) {
     const r = this.engines()[id];
-    const ok = !!r && Object.values(r.exes).every((p) => existsSync(p));
-    return { id, name: RUNTIMES[id].name, role: RUNTIMES[id].role, licence: RUNTIMES[id].licence, installed: ok, version: r?.tag ?? null, flavour: r?.flavour ?? null, folder: join(this.enginesDir, ENGINE_DIR[id]) };
+    const present = !!r && Object.values(r.exes).every((p) => existsSync(p));
+    // An installed release Lotus can't use (sherpa-onnx 2.x) counts as not installed, with a note, so
+    // the Models page offers Update and the first-run guide fetches the right one.
+    const outdated = present && !releaseAccepted(id, r!.tag);
+    return { id, name: RUNTIMES[id].name, role: RUNTIMES[id].role, licence: RUNTIMES[id].licence, installed: present && !outdated, outdated, note: outdated ? RUNTIMES[id].pinNote ?? null : null, version: r?.tag ?? null, flavour: r?.flavour ?? null, folder: join(this.enginesDir, ENGINE_DIR[id]) };
   }
 
   status() {
@@ -241,6 +263,14 @@ export class Builtins {
     if (r.status === 403 || r.status === 429) throw new DownloadError('GitHub is limiting requests from this network right now. Wait a few minutes and try again.');
     if (!r.ok) throw new DownloadError(`GitHub answered HTTP ${r.status} when Lotus asked for ${RUNTIMES[id].name}'s releases.`);
     const data = parseReleases(await r.json());
+    // A pinned engine whose last usable release has dropped out of the newest 20: fetch it by name.
+    const fb = RUNTIMES[id].fallbackTag;
+    if (fb && !data.some((x) => releaseAccepted(id, x.tag) && x.assets.length)) {
+      try {
+        const t = await f(`${api}/repos/${RUNTIMES[id].repo}/releases/tags/${fb}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'Lotus (local AI studio)' }, signal });
+        if (t.ok) data.push(...parseReleases([await t.json()]));
+      } catch (e) { if (signal?.aborted) throw e; }
+    }
     this.releaseCache.set(id, { at: now(), data });
     return data;
   }
@@ -305,6 +335,7 @@ export class Builtins {
     const r = this.engines()[id];
     const p = r?.exes[name];
     if (!p || !existsSync(p)) throw new Error(`${RUNTIMES[id].name} isn't installed yet. Install it in Settings → Models (Engines), or let Lotus install it from the first-run guide.`);
+    if (!releaseAccepted(id, r!.tag)) throw new Error(`${RUNTIMES[id].name} ${r!.tag} is installed, but ${RUNTIMES[id].pinNote ?? 'Lotus needs another version.'} Click Update in Settings → Models (Lotus Engines).`);
     return p;
   }
 
@@ -544,7 +575,25 @@ export class Builtins {
     return missingFor(p, (folder, file) => existsSync(this.imagePath(folder, file))).map((s) => (p.files[s] ? `${label[s]} (${p.files[s]})` : label[s]));
   }
 
-  async generateImage(p: ImageProfile, run: Omit<SdRun, 'output' | 'lowVram'>, o: { signal?: AbortSignal; onProgress?: (step: number, total: number) => void; loras?: LoraUse[] } = {}): Promise<string[]> {
+  private sdHelp = new Map<string, Promise<string>>();
+  /** sd-cli's --help text (cached per program), to use only the switches the installed build knows. */
+  private sdcppHelp(exe: string): Promise<string> {
+    let hit = this.sdHelp.get(exe);
+    if (!hit) {
+      hit = (async () => {
+        try {
+          const proc = Bun.spawn([exe, '--help'], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
+          const [out, err] = await Promise.all([new Response(proc.stdout as ReadableStream).text(), new Response(proc.stderr as ReadableStream).text()]);
+          await proc.exited;
+          return `${out}\n${err}`;
+        } catch { return ''; }
+      })();
+      this.sdHelp.set(exe, hit);
+    }
+    return hit;
+  }
+
+  async generateImage(p: ImageProfile, run: Omit<SdRun, 'output' | 'lowVram' | 'autoFit'>, o: { signal?: AbortSignal; onProgress?: (step: number, total: number) => void; loras?: LoraUse[] } = {}): Promise<string[]> {
     const exe = this.exe('sd', 'sd-cli');
     const missing = this.missingFiles(p);
     if (missing.length) throw new Error(`${p.name} is missing ${missing.join(', ')}. Open Settings → Models → Image Setups to fix it.`);
@@ -557,7 +606,8 @@ export class Builtins {
     const outDir = join(this.enginesDir, ENGINE_DIR.sd, 'out', `${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
     mkdirSync(outDir, { recursive: true });
     const lowVram = m.gpu === 'none' || (!m.unified && m.vramGb > 0 && m.vramGb < 12);
-    const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram }, this.imagePath, o.loras ?? []);
+    const autoFit = (await this.sdcppHelp(exe)).includes('--auto-fit');
+    const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram, autoFit }, this.imagePath, o.loras ?? []);
     const logPath = join(this.enginesDir, ENGINE_DIR.sd, 'last-run.log');
     let log = '';
     try {
@@ -580,12 +630,8 @@ export class Builtins {
       if (o.signal?.aborted) throw new DOMException('Stopped', 'AbortError');
       const made = readdirSync(outDir).filter((f) => /\.png$/i.test(f)).sort().map((f) => join(outDir, f));
       if (code !== 0 || !made.length) {
-        if (/cannot make enough memory available|out of memory|CUDA error: out of memory|failed to allocate/i.test(log)) {
-          const none = /available 0\.00 MB device|reported free 0\.00 MB/i.test(log);
-          throw new Error(none
-            ? 'The graphics card had no free memory left, so no image was made. Another program is holding it (Ollama, ComfyUI, a game or a browser tab). Close it, or wait a few minutes for Ollama to unload its model, and try again.'
-            : 'The graphics card ran out of memory making this image. Try a smaller size, one image at a time, or a smaller model.');
-        }
+        const oom = sdcppMemoryError(log, m.vramGb);
+        if (oom) throw new Error(`${oom} The full log is in ${logPath}.`);
         const why = log.split(/[\r\n]+/).filter((l) => /error|fail|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
         throw new Error(`The built-in image engine didn't make an image${why ? `: ${why}` : ''}. The full log is in ${logPath}.`);
       }
@@ -691,7 +737,9 @@ export class Builtins {
   }
 
   private async runTool(exe: string, args: string[], signal?: AbortSignal): Promise<string> {
-    const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
+    // sherpa-onnx echoes its whole command line first; with long Windows paths that echo filled the
+    // error message and hid the cause (0.9.1). Options must come before the text, so insert it first.
+    const proc = Bun.spawn([exe, '--print-args=false', ...args], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
     const onAbort = () => { try { proc.kill(); } catch { /* gone */ } };
     signal?.addEventListener('abort', onAbort, { once: true });
     const [out, err] = await Promise.all([new Response(proc.stdout as ReadableStream).text(), new Response(proc.stderr as ReadableStream).text()]);

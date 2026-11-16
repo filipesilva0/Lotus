@@ -60,11 +60,13 @@ export const BuiltinNotice: React.FC<{ kind: 'chat' | 'image' | 'voice'; purpose
   const b = useBuiltins();
   const engine: BuiltinId = kind === 'chat' ? 'llama' : kind === 'image' ? 'sd' : 'sherpa';
   const word = kind === 'chat' ? 'chat' : kind === 'image' ? 'image' : 'voice';
-  const installed = b.engines.find((e) => e.id === engine)?.installed;
+  const info = b.engines.find((e) => e.id === engine);
+  const installed = info?.installed;
   const job = b.jobs.find((j) => j.state === 'running' && (j.target === `engine:${engine}` || (j.kind === 'model' && b.loaded)));
   const pct = job && job.total ? ` ${Math.round((job.done / job.total) * 100)}%` : '';
   const text = job ? `Downloading ${job.label}…${pct}`
     : !b.available ? `Lotus's own ${word} engine needs the Lotus core, which isn't running.`
+    : info?.outdated ? `Lotus's ${word} engine needs an update. Update it in Models.`
     : !installed ? `Lotus's ${word} engine isn't installed yet. Get it and a model ${purpose}.`
     : kind === 'image' ? 'No image model is ready. Get one, or finish its setup, in Models.'
     : `No ${word} model yet. Get one ${purpose}.`;

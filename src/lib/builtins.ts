@@ -10,7 +10,7 @@ import type { ModelKind } from '../models/library';
 
 export type BuiltinId = 'llama' | 'sd' | 'sherpa';
 export interface Machine { os: 'windows' | 'macos' | 'linux'; arch: 'x64' | 'arm64'; gpu: 'nvidia' | 'amd' | 'intel' | 'apple' | 'none'; gpuName: string; vramGb: number; unified: boolean; ramGb: number }
-export interface EngineInfo { id: BuiltinId; name: string; role: string; licence: string; installed: boolean; version: string | null; flavour: string | null; folder: string }
+export interface EngineInfo { id: BuiltinId; name: string; role: string; licence: string; installed: boolean; /** Installed, but a release Lotus can't use (sherpa-onnx 2.x). */ outdated?: boolean; note?: string | null; version: string | null; flavour: string | null; folder: string }
 export interface Job { id: string; kind: 'engine' | 'model'; target: string; label: string; state: 'running' | 'done' | 'error' | 'stopped'; done: number; total: number; step: string; error?: string; started: number }
 export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string }
 export interface InstalledModel { id: string; kind: ModelKind; title: string; files: string[]; gguf?: string; mmproj?: string; dir?: string; entryId?: string; custom?: boolean; source?: string; bytes: number; at: number }

@@ -5,7 +5,9 @@ import { afterAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Builtins, failureLines, needsShortPath } from '../src/engines/manager';
+import { Builtins, failureLines, needsShortPath, sdcppMemoryError } from '../src/engines/manager';
+import { parseReleases, pickRelease } from '../src/engines/assets';
+import { sdcppArgs } from '../../src/models/imageProfiles';
 import { filesEdit } from '../src/tools/files';
 import { RETHINK_CHOICES, canRethink, draftLabel, rethinkRequest, rethinkRounds } from '../../src/chat/rethink';
 import { readFileSync } from 'node:fs';
@@ -244,5 +246,73 @@ describe('rethink for Nemotron (0.9.1)', () => {
   });
   test('earlier versions are labelled', () => {
     expect([0, 1, 2].map((i) => draftLabel(i, 4))).toEqual(['First answer', 'Rethink 1 of 3', 'Rethink 2 of 3']);
+  });
+});
+
+describe('0.9.2: voices on sherpa-onnx 1.x, images with auto-fit, honest errors', () => {
+  const rel = (tag: string) => ({ tag_name: tag, assets: [`sherpa-onnx-${tag}-win-x64-static-MT-Release.tar.bz2`].map((name) => ({ name, browser_download_url: `https://x/${name}`, size: 9 })) });
+  const win = { os: 'windows', arch: 'x64', gpu: 'nvidia' } as const;
+
+  test('sherpa-onnx 2.x is skipped (it dropped espeak-ng, so Kokoro and Piper fail)', () => {
+    expect(pickRelease('sherpa', parseReleases([rel('v2.0.1'), rel('v2.0.0'), rel('v1.13.8')]), win)!.release.tag).toBe('v1.13.8');
+    expect(pickRelease('sherpa', parseReleases([rel('v2.0.1')]), win)).toBeNull();
+    expect(pickRelease('llama', parseReleases([{ tag_name: 'b2', assets: [{ name: 'llama-b2-bin-win-cpu-x64.zip', browser_download_url: 'https://x/l', size: 1 }] }]), { ...win, gpu: 'none' })!.release.tag).toBe('b2');
+  });
+
+  test('the pinned release is fetched by name when the newest 20 are all 2.x', async () => {
+    const asked: string[] = [];
+    const fakeFetch = (async (url: string) => {
+      asked.push(url);
+      const body = url.endsWith('/releases/tags/v1.13.8') ? rel('v1.13.8') : [rel('v2.0.1'), { tag_name: 'tts-models', assets: [] }];
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const b = new Builtins({ studio: tmp(), broadcast: () => undefined, kvGet: () => null, kvSet: () => undefined, fetch: fakeFetch, githubApi: 'https://api.test', log: () => undefined } as never);
+    const list = await (b as unknown as { releases: (id: string) => Promise<{ tag: string }[]> }).releases('sherpa');
+    expect(list.map((r) => r.tag)).toEqual(['v2.0.1', 'tts-models', 'v1.13.8']);
+    expect(asked[1]).toBe('https://api.test/repos/k2-fsa/sherpa-onnx/releases/tags/v1.13.8');
+  });
+
+  test('an installed 2.x counts as needing an update, and speaking says so', async () => {
+    const studio = tmp();
+    const exe = join(studio, 'Engines/sherpa-onnx/v2.0.1/bin/sherpa-onnx-offline-tts');
+    files(studio, ['Engines/sherpa-onnx/v2.0.1/bin/sherpa-onnx-offline-tts', 'Engines/sherpa-onnx/v2.0.1/bin/sherpa-onnx-offline']);
+    writeFileSync(join(studio, 'Engines/builtin.json'), JSON.stringify({ sherpa: { tag: 'v2.0.1', flavour: 'Processor', dir: join(studio, 'Engines/sherpa-onnx/v2.0.1'), exes: { 'sherpa-onnx-offline-tts': exe, 'sherpa-onnx-offline': exe.replace(/-tts$/, '') }, installedAt: 1 } }));
+    const b = new Builtins({ studio, broadcast: () => undefined, kvGet: () => null, kvSet: () => undefined, fetch, log: () => undefined } as never);
+    const info = b.engineInfo('sherpa');
+    expect([info.installed, info.outdated, info.version]).toEqual([false, true, 'v2.0.1']);
+    expect(info.note).toContain("can't pronounce Kokoro or Piper");
+    await expect(b.speak('kokoro', 'hello')).rejects.toThrow(/v2\.0\.1 is installed.*Update/);
+  });
+
+  test("sherpa-onnx's command-line echo no longer hides the cause", () => {
+    const out = [
+      "D:\\a\\sherpa-onnx\\sherpa-onnx\\sherpa-onnx/csrc/parse-options.cc:Read:374 'C:\\Users\\Filipe\\Documents\\Lotus Studio\\Engines\\sherpa-onnx\\v2.0.1\\bin\\sherpa-onnx-offline-tts.exe' '--kokoro-model=C:\\Users\\Filipe\\Documents\\Lotus Studio\\Models\\voice\\kokoro\\model.onnx' '--kokoro-data-dir=C:\\Users\\Filipe\\DOCUME~1\\LOTUSS~1\\espeak-ng-data' 'Hello'",
+      'D:\\a\\sherpa-onnx\\sherpa-onnx\\sherpa-onnx/csrc/offline-tts-kokoro-model-config.cc:Validate:89 WARNING: --kokoro-data-dir is deprecated and ignored in sherpa-onnx >= v2.0.0.',
+      'Error in generating audio. Please read previous error messages.',
+    ].join('\n');
+    const msg = failureLines(out);
+    expect(msg).not.toContain('--kokoro-model');
+    expect(msg).toContain('--kokoro-data-dir is deprecated');
+  });
+
+  test('sd-cli with auto-fit: no --offload-to-cpu (it turns auto-fit off), 1 GiB spare instead', () => {
+    const path = (folder: string, file: string) => `/M/${folder}/${file}`;
+    const p = { id: 'x', name: 'SDXL', family: 'sdxl', files: { model: 'sd_xl_base_1.0.safetensors', vae: 'sdxl.vae.safetensors' } } as never;
+    const run = { prompt: 'x', width: 768, height: 1344, seed: 1, count: 1, steps: 50, cfg: 7, sampler: 'euler', scheduler: 'normal', output: '/o/x.png', lowVram: true };
+    const fit = sdcppArgs(p, { ...run, autoFit: true }, path);
+    expect(fit).not.toContain('--offload-to-cpu');
+    expect(fit[fit.indexOf('--max-vram') + 1]).toBe('-1');
+    expect(fit).toContain('--vae-tiling');
+    const old = sdcppArgs(p, { ...run, autoFit: false }, path);
+    expect(old).toContain('--offload-to-cpu');
+    expect(old).not.toContain('--max-vram');
+    expect(sdcppArgs(p, { ...run, lowVram: false, autoFit: true }, path)).not.toContain('--max-vram');
+  });
+
+  test("the memory message gives sd-cli's real numbers (log from an RTX 4060, 0.9.1)", () => {
+    const log = readFileSync(join(import.meta.dir, 'fixtures/sdcpp-oom-rtx4060.log'), 'utf8');
+    expect(sdcppMemoryError(log, 8)).toBe("The image needed 1.2 GB of video memory to work in, but only 0.6 GB of the card's 8.0 GB was free. Close programs that use the graphics card, or try a smaller size or one image at a time.");
+    expect(sdcppMemoryError('cannot make enough memory available on CUDA0: need 900.00 MB device / 0 MB budget, available 0.00 MB device', 8)).toContain('no free memory left');
+    expect(sdcppMemoryError('[E] generate failed: unknown model version', 8)).toBeNull();
   });
 });

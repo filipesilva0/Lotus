@@ -197,6 +197,12 @@ export interface SdRun {
   output: string;
   /** Low-memory switches for GPUs under ~12 GB. */
   lowVram?: boolean;
+  /**
+   * The installed sd-cli places weights by itself (--auto-fit, sd.cpp since July 2026). Then
+   * --offload-to-cpu must not be passed: it turns auto-fit off and pins every weight to the GPU on
+   * first use, which left no room to compute on an 8 GB card (SDXL, 0.9.1).
+   */
+  autoFit?: boolean;
   /** Image to image. */
   init?: string; strength?: number;
 }
@@ -250,7 +256,12 @@ export function sdcppArgs(p: ImageProfile, run: SdRun, path: (folder: ImageFolde
   // Split models are big: run the attention in flash mode, and on smaller GPUs keep weights in RAM
   // until each part is needed and decode the image in tiles.
   if (f.mainFolder === 'diffusion_models') args.push('--diffusion-fa');
-  if (run.lowVram) args.push('--offload-to-cpu', '--vae-tiling');
+  if (run.lowVram) {
+    // With auto-fit, keep 1 GiB of the free video memory spare for the desktop and other apps, and let
+    // sd.cpp leave the rest of the weights in RAM; older builds only have --offload-to-cpu.
+    if (run.autoFit) args.push('--max-vram', '-1', '--vae-tiling');
+    else args.push('--offload-to-cpu', '--vae-tiling');
+  }
   add('-o', run.output);
   return args;
 }
