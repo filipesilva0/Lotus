@@ -196,6 +196,16 @@ No new cross-window events. Tasks/routines report progress through the existing 
 - **Records:** `agent_runs` and `agent_steps` (schema 2), last 2000 runs; `agent_run`/`agent_runs` RPCs read them (real-task runner, future inspector). Runs left `running` by a crash are closed at the next start.
 - **Tests:** `cd core && bun test` (agent.test.ts with fake Ollama/ComfyUI in `core/test/fakes.ts`); `handover/verification/agent-e2e.mjs` (UI against a real core and the fakes); `handover/verification/real-tasks.mjs` (31 everyday tasks against a real model on a real PC, checked by side effects).
 
+## 5i. Session 17: Lotus's own engines (rebuild step 3)
+```
+Models page / guide ──rpc──▶ lotusd Builtins ──GitHub releases──▶ Lotus Studio/Engines/<engine>/<release>/
+                                  │        └──Hugging Face / GitHub──▶ Lotus Studio/Models/{chat,image/<folder>,voice}
+Chat/Work/agent ──chat_ensure──▶  ├─ llama-server -m <gguf> [--mmproj] --jinja (free port; one model at a time)
+Images ──image_builtin──────────▶ ├─ sd-cli <every file of the image setup> → Lotus Studio/Images (events builtin-image)
+Voice ──tts_builtin/stt_builtin─▶ └─ sherpa-onnx-offline-tts / sherpa-onnx-offline
+```
+Events: `{ type: 'builtin', jobs, chat }`, `{ type: 'builtin-image', genId, step, total }`. Files: `Engines/builtin.json` (installed releases), `Models/models.json` (installed models). Data folder: `Lotus Studio/Data` (lotusd `--data`, `--legacy-data` copies an older one once).
+
 ## 6. Persistence map ✅ (session 14: `kv` → lotus.db through the core; plain `localStorage` only without a core)
 
 All keys below are read and written through `kv` (`lib/store.ts`), never `localStorage` directly. The first run with a core imports every `lotus.*` localStorage key and every IndexedDB entry (as `lotus.idb.<key>`, JSON) once; the browser copies are left in place as a backup. Session 14 keys: `lotus.gallery.v2` (image sessions; each version has `file`, the image's path under Lotus Studio, and no blob), `lotus.idb.lotus.builder.chat.<project>` (App Builder chats, formerly IndexedDB), `lotus.core.migrated.v1` (browser-side flag; the core also records `meta.migrated.webStorage`). Saved chats: up to 200 with a core (80 without).
@@ -206,6 +216,8 @@ Session 7 keys: `lotus.plugins.v1` (installed plugins). `lotus.settings.v1` gain
 Session 4 keys: `lotus.comfy.modelsDir.v1` (ComfyUI models folder), `lotus.models.mode.v1`, `lotus.models.kind.v1`, `lotus.builder.projects.v1`, `lotus.builder.active.v1`, `lotus.builder.view.v1|term.v1|mode.v1|ctx.v1|model.v1`; `lotus.image.params.v1` gained optional `loras`.
 Session 10 keys: `lotus.setup.v1` (first-run guide: done/skipped, Lotus Studio folder, engines chosen). `lotus.island.v1` now defaults to `enabled: false`. On disk: `<app config>/studio-dir.txt` (folder picked in the guide). Registry (Windows, written by the MSI): `HKCU\Software\Lotus\Lotus\StudioDir`, `SetupEngines`.
 Generated images are files in `Lotus Studio/Images` since session 14 (before: IndexedDB blobs, or nothing). Removing an image in Lotus leaves its file on disk. Chat attachments are still session-only (B9). Portable mode relocates the WebView2 profile to `<exe dir>\data\webview`, and lotus.db to `<exe dir>\data`.
+
+Session 17 keys: `lotus.imageProfiles.v1` (image setups; the core adds one per installed catalog image model), `lotus.models.mode.v2` / `lotus.models.kind.v2` (Models page), settings fields `llmBackend: 'builtin'`, `imageEngine`, `voiceEngine`, `builtinVoice`, `builtinSpeaker`, `builtinDictation`, `engineModelsInStudio`; `lotus.image.params.v1.profile`.
 
 ## 7. Install/packaging architecture
 
