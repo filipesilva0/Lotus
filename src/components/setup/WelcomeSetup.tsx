@@ -13,14 +13,14 @@ import { browseModelsDir, findModelsDir } from '../../services/downloadService';
 import type { useEngines } from '../../hooks/useEngines';
 import type { ColorPalette } from '../../types/lotus';
 import {
-  Arch, CHAT_PICKS, COMFY_DESKTOP_URL, DICTATION_PICK, DesktopOs, ENGINES, ENGINE_ORDER, IMAGE_PICKS, Pick, TIERS, Tier,
+  Arch, COMFY_DESKTOP_URL, DICTATION_PICK, DesktopOs, ENGINES, ENGINE_ORDER, IMAGE_PICKS, Pick, TIERS, Tier,
   VOICEBOX_MANIFEST, VOICE_PICKS, afterOpenHint, fitFor, installerFor, isComfyDesktopPath, selectionGb, suggestedTier,
   ChatPick, ImagePick, VoicePick,
 } from '../../setup/catalog';
 import { SetupState, StepId, enginesToInstall, initialEngines, modelScreenEngines, saveSetup, visibleSteps } from '../../setup/state';
 import { Job, fetchImages, fetchVoices, pullChat, useSetupJobs } from '../../setup/jobs';
 import { installEngine, installModel, useBuiltins, type BuiltinId } from '../../lib/builtins';
-import { chatPicksFor, fitOf, FIT_LABEL, LIBRARY, suggest, downloadGb, entryById, type LibEntry, type ModelKind } from '../../models/library';
+import { chatPicksFor, picksFor, fitOf, FIT_LABEL, LIBRARY, suggest, downloadGb, entryById, type LibEntry, type ModelKind } from '../../models/library';
 
 /*
  * First-run guide (session 10, second design). A blank Lotus window: the OS material (acrylic on
@@ -45,7 +45,15 @@ const STEP_PALETTE: Record<StepId, ColorPalette> = {
   welcome: 'blue', folder: 'blue', engines: 'blue', install: 'blue', chat: 'blue', images: 'red', voice: 'amber', done: 'green',
 };
 type ModelStep = 'chat' | 'images' | 'voice';
-const PICKS: Record<ModelStep, Pick[]> = { chat: CHAT_PICKS, images: IMAGE_PICKS, voice: VOICE_PICKS };
+/**
+ * Ollama's chat choices: the three picks for this kind of computer from the one catalog (T71), as
+ * Ollama tags. ComfyUI and Voicebox keep their own lists (recipes and Voicebox's model names).
+ */
+const ollamaChatPicks = (hw: { gb?: number; unified: boolean; ramGb?: number }): ChatPick[] =>
+  chatPicksFor({ gpu: hw.unified ? 'apple' : hw.gb ? 'gpu' : 'none', vramGb: hw.gb ?? 0, unified: hw.unified, ramGb: hw.ramGb })
+    .filter((e) => e.ollama)
+    .map((e) => ({ kind: 'chat', id: e.ollama!, tag: e.ollama!, tier: e.tier!, title: e.title, maker: e.maker, licence: e.licence, blurb: e.blurb, vramGb: e.vramGb, diskGb: e.diskGb, vision: !!e.vision }));
+const picksOf = (step: ModelStep, hw: { gb?: number; unified: boolean; ramGb?: number }): Pick[] => (step === 'chat' ? ollamaChatPicks(hw) : step === 'images' ? IMAGE_PICKS : VOICE_PICKS);
 const ENGINE_OF: Record<ModelStep, EngineId> = { chat: 'ollama', images: 'comfyui', voice: 'voicebox' };
 
 const sepOf = (p: string) => (p.includes('\\') ? '\\' : '/');
@@ -78,7 +86,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
   const ownPicked = useRef(false);
   const [stepId, setStepId] = useState<StepId>('welcome');
   const [error, setError] = useState<string | null>(null);
-  const [hw, setHw] = useState<{ done: boolean; gb?: number; unified: boolean; name?: string }>({ done: false, unified: false });
+  const [hw, setHw] = useState<{ done: boolean; gb?: number; unified: boolean; name?: string; ramGb?: number }>({ done: false, unified: false });
   const [phase, setPhase] = useState<Record<EngineId, InstallPhase>>({ ollama: { kind: 'idle' }, comfyui: { kind: 'idle' }, voicebox: { kind: 'idle' } });
   /** One model per engine (null = none for now), plus dictation. */
   const [tier, setTier] = useState<Record<EngineId, Tier | null>>({ ollama: null, comfyui: null, voicebox: null });
@@ -112,9 +120,10 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
       const s = await invokeNative<{ gpus: { name: string; totalMb: number }[]; ramTotalMb: number }>('hw_snapshot').catch(() => undefined);
       if (!alive) return;
       const g = s?.gpus[0];
-      if (g && g.totalMb > 0) setHw({ done: true, gb: g.totalMb / 1024, unified: false, name: g.name });
-      else if (s && desktopOs() === 'macos' && s.ramTotalMb > 0) setHw({ done: true, gb: s.ramTotalMb / 1024, unified: true });
-      else setHw({ done: true, unified: false });
+      const ramGb = s && s.ramTotalMb > 0 ? s.ramTotalMb / 1024 : undefined;
+      if (g && g.totalMb > 0) setHw({ done: true, gb: g.totalMb / 1024, unified: false, name: g.name, ramGb });
+      else if (s && desktopOs() === 'macos' && s.ramTotalMb > 0) setHw({ done: true, gb: s.ramTotalMb / 1024, unified: true, ramGb });
+      else setHw({ done: true, unified: false, ramGb });
     })();
     void findModelsDir().then((d) => alive && d && setModelsDir(d));
     return () => { alive = false; };
@@ -133,7 +142,9 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
     if (picked.current || !hw.done) return;
     picked.current = true;
     const t = (list: Pick[]) => suggestedTier(list, hw.gb, hw.unified);
-    setTier({ ollama: t(CHAT_PICKS), comfyui: t(IMAGE_PICKS), voicebox: t(VOICE_PICKS) });
+    // Ollama chat: the same rule as Lotus's own engine (best of this computer's picks that fits).
+    const best = suggest('chat', hw.gb, hw.unified, 'ollama', hw.ramGb);
+    setTier({ ollama: ollamaChatPicks(hw).find((p) => p.id === best?.ollama)?.tier ?? 'quick', comfyui: t(IMAGE_PICKS), voicebox: t(VOICE_PICKS) });
   }, [hw]);
 
   const found = info?.found ?? {};
@@ -209,7 +220,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
 
   // ── Choices → downloads ────────────────────────────────────────────────
   const chosen: Pick[] = modelEngines.flatMap((id) => {
-    const list = id === 'ollama' ? CHAT_PICKS : id === 'comfyui' ? IMAGE_PICKS : VOICE_PICKS;
+    const list: Pick[] = id === 'ollama' ? ollamaChatPicks(hw) : id === 'comfyui' ? IMAGE_PICKS : VOICE_PICKS;
     const p = list.find((x) => x.tier === tier[id]);
     return [...(p ? [p] : []), ...(id === 'voicebox' && dictation ? [DICTATION_PICK] : [])];
   });
@@ -484,20 +495,20 @@ const LinkBtn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ clas
 );
 
 const MODEL_COPY: Record<ModelStep, { title: string; body: string }> = {
-  chat: { title: 'Pick a chat model', body: 'All three read images as well as text. Bigger is smarter, but slower and heavier.' },
+  chat: { title: 'Pick a chat model', body: 'Three picks for this computer. Bigger is smarter, but slower and heavier.' },
   images: { title: 'Pick an image model', body: 'It goes into ComfyUI and is ready to use in Images.' },
   voice: { title: 'Pick a voice model', body: 'For reading text aloud and copying a voice from a short sample.' },
 };
 
 const ModelScreen: React.FC<{
-  step: ModelStep; hw: { gb?: number; unified: boolean; name?: string }; value: Tier | null; onChange: (t: Tier | null) => void;
+  step: ModelStep; hw: { gb?: number; unified: boolean; name?: string; ramGb?: number }; value: Tier | null; onChange: (t: Tier | null) => void;
   dictation: boolean; onDictation: (v: boolean) => void; modelsDir: string; onModelsDir: (d: string) => void;
 }> = ({ step, hw, value, onChange, dictation, onDictation, modelsDir, onModelsDir }) => {
   const c = MODEL_COPY[step];
   return (
     <Screen title={c.title} body={c.body}>
       <div className="setup-list" role="radiogroup" aria-label={c.title}>
-        {PICKS[step].map((p) => {
+        {picksOf(step, hw).map((p) => {
           const fit = fitFor(p, hw.gb, hw.unified);
           const on = value === p.tier;
           return (
@@ -581,8 +592,8 @@ const OwnModelScreen: React.FC<{
   pick: Record<'chat' | 'image' | 'voice' | 'dictation', string | null>; onPick: (k: 'chat' | 'image' | 'voice' | 'dictation', id: string | null) => void;
 }> = ({ step, machine, pick, onPick }) => {
   const kind: 'chat' | 'image' | 'voice' = step === 'images' ? 'image' : step;
-  // Chat: the three picks for this kind of computer (T71); images and voice: the catalog's tiers.
-  const list = kind === 'chat' ? chatPicksFor(machine).filter((e) => e.builtin) : LIBRARY.filter((e) => e.kind === kind && e.builtin && e.tier);
+  // Chat and images: the three picks for this kind of computer (T71); voice: the catalog's tiers.
+  const list = kind === 'voice' ? LIBRARY.filter((e) => e.kind === kind && e.builtin && e.tier) : picksFor(kind, machine).filter((e) => e.builtin);
   const c = OWN_COPY[step];
   const dict = LIBRARY.filter((e) => e.kind === 'dictation' && e.builtin && e.tier);
   return (

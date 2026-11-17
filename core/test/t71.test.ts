@@ -8,7 +8,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Builtins } from '../src/engines/manager';
 import {
-  CHAT_CLASS_PICKS, CHAT_MODELS, CLASS_LABEL, chatPicksFor, entryById, fitOf, LIBRARY, machineClass, pickGguf, quantFolder, suggest,
+  availableOn, CHAT_CLASS_PICKS, CHAT_MODELS, CLASS_LABEL, chatPicksFor, DICTATION_MODELS, entryById, filesFor, fitOf, IMAGE_CLASS_PICKS, IMAGE_MODELS, LIBRARY, machineClass,
+  pickGguf, picksFor, profileForEntry, quantFolder, suggest, VOICE_MODELS,
   type MachineClass, type MachineFacts,
 } from '../../src/models/library';
 
@@ -125,6 +126,71 @@ describe('the catalog itself', () => {
     for (const [lo, hi] of [[0, 3.5], [3.5, 7], [7, 11.5], [11.5, 20], [20, 40], [40, 200]]) expect(sizes.some((v) => v >= lo && v < hi), `${lo}–${hi} GB`).toBe(true);
     // Every maker that matters for beginners is there.
     for (const maker of ['Alibaba', 'Google', 'NVIDIA', 'OpenAI', 'Microsoft', 'Mistral AI', 'Meta']) expect(CHAT_MODELS.some((e) => e.maker === maker), maker).toBe(true);
+  });
+});
+
+describe('images by kind of computer', () => {
+  test('every class has three real image picks that fit like the chat ones', () => {
+    for (const [c, picks] of Object.entries(IMAGE_CLASS_PICKS) as [MachineClass, Record<string, string>][]) {
+      const [small, large] = RANGE[c];
+      for (const t of ['quick', 'balanced', 'best']) {
+        const e = IMAGE_MODELS.find((x) => x.id === picks[t]);
+        expect(e, `${c} ${t} ${picks[t]}`).toBeTruthy();
+        const m = t === 'best' ? large : small;
+        const f = fitOf(e!, m.vramGb, m.unified, m.ramGb);
+        expect(c === 'cpu' ? f !== 'too-big' : f === 'fits', `${c} ${t} ${e!.id} → ${f}`).toBe(true);
+      }
+      expect(picksFor('image', small).map((e) => e.tier)).toEqual(['quick', 'balanced', 'best']);
+    }
+  });
+
+  test('suggestions: the 4060 gets the small Z-Image, ComfyUI never gets a GGUF file', () => {
+    expect(suggest('image', 8)?.id).toBe('z-image-turbo-q4');
+    expect(suggest('image', 6)?.id).toBe('z-image-turbo-q4');
+    expect(suggest('image', 4)?.id).toBe('sd15');
+    expect(suggest('image', 16)?.id).toBe('flux2-klein-9b-q4');
+    expect(suggest('image', 24)?.id).toBe('qwen-image-q4');
+    expect(suggest('image', 48)?.id).toBe('qwen-image');
+    expect(suggest('image', 0, false, 'builtin', 16)?.id).toBe('flux2-klein-4b-q4');
+    // ComfyUI: none of the small (GGUF) picks; the biggest safetensors model that fits instead.
+    expect(suggest('image', 8, false, 'comfyui')?.id).toBe('sdxl-base');
+    expect(suggest('image', 24, false, 'comfyui')?.id).toBe('z-image-turbo');
+    for (const e of IMAGE_MODELS) expect(availableOn(e, 'comfyui'), e.id).toBe(!e.builtin!.files!.some((f) => f.path.endsWith('.gguf')));
+  });
+
+  test('each small image model comes with its own text encoder and VAE, in the right folders', () => {
+    for (const id of ['flux2-klein-4b-q4', 'z-image-turbo-q4', 'flux2-klein-9b-q4', 'qwen-image-q4']) {
+      const e = entryById(id)!;
+      expect(e.tier).toBeUndefined();
+      const files = e.builtin!.files!;
+      expect(files.map((f) => f.path.split('/')[1])).toEqual(['diffusion_models', 'text_encoders', 'vae']);
+      for (const f of files) expect(f.url).toMatch(/^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\//);
+      const p = profileForEntry(e)!;
+      expect(Object.keys(p.files).sort()).toEqual(['llm', 'model', 'vae']);
+      expect(files.map((f) => f.path.split('/').pop())).toEqual([p.files.model, p.files.llm, p.files.vae]);
+      expect(Math.abs(e.diskGb - files.reduce((s, f) => s + f.gb, 0))).toBeLessThan(0.3);
+    }
+    expect(entryById('flux2-klein-9b-q4')!.licence).toBe('FLUX Non-Commercial');
+    // The FLUX.2 VAE is shared and fetched once.
+    expect(filesFor([entryById('flux2-klein-4b')!, entryById('flux2-klein-4b-q4')!]).filter((f) => f.path.endsWith('flux2-vae.safetensors')).length).toBe(1);
+  });
+});
+
+describe('voices and dictation', () => {
+  test('a Piper voice for every big language, more European Portuguese, every Whisper size', () => {
+    const langs = new Set(VOICE_MODELS.flatMap((e) => e.voice?.languages ?? []));
+    for (const l of ['en', 'pt', 'es', 'fr', 'de', 'it', 'nl', 'pl', 'ru', 'uk', 'tr', 'ar', 'hi', 'zh']) expect(langs.has(l), l).toBe(true);
+    expect(VOICE_MODELS.filter((e) => e.id.startsWith('piper-pt-pt-')).length).toBeGreaterThanOrEqual(3);
+    for (const e of VOICE_MODELS.filter((x) => x.voice?.engine === 'piper')) {
+      expect(e.builtin!.files![0].url).toMatch(/^https:\/\/github\.com\/k2-fsa\/sherpa-onnx\/releases\/download\/tts-models\/vits-piper-[a-z]{2}_[A-Z]{2}-[\w]+-(x_low|low|medium|high)\.tar\.bz2$/);
+      expect(e.builtin!.files![0].path).toBe(`voice/${e.id}`);
+      expect(e.vramGb).toBe(0);
+    }
+    expect(DICTATION_MODELS.map((e) => e.id)).toEqual(expect.arrayContaining(['whisper-tiny', 'whisper-base', 'whisper-small', 'whisper-medium', 'whisper-turbo', 'whisper-large-v3']));
+    for (const e of DICTATION_MODELS) expect(e.builtin!.files![0].url).toMatch(/\/asr-models\/sherpa-onnx-whisper-[\w.-]+\.tar\.bz2$/);
+    // The guide still offers the same voice and dictation defaults.
+    expect(suggest('voice', 0)?.id).toBe('kokoro');
+    expect(suggest('dictation', 0)?.id).toBe('whisper-turbo');
   });
 });
 

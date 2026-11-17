@@ -10,8 +10,7 @@ import { EnginesRow } from '../models/ModelLibrary';
 import { hasLiveSettings, liveSettings } from '../../lib/liveSettings';
 import { browseModelsDir, findModelsDir, folderPath, savedModelsDir } from '../../services/downloadService';
 import { openExternal, revealPath } from '../../lib/open';
-import { ToolbarContent } from '../common/ToolbarSlot';
-import { Btn, Card, Tabs, TextInput, Banner, Spinner, Label, cx } from '../common/ui';
+import { Btn, Card, TextInput, Banner, Spinner, Label, cx } from '../common/ui';
 import { kv } from '../../lib/store';
 
 type Eng = ReturnType<typeof useEngines>;
@@ -40,22 +39,20 @@ export const EnginesWorkspace: React.FC<{ eng: Eng; initialTab?: Tab }> = ({ eng
   useEffect(() => setTab(initialTab), [initialTab]);
   const settings = hasLiveSettings() ? liveSettings() : null;
 
+  // One sidebar for the whole page (T71, Filipe): Get Models, Image Setups, Arena, Engines, Storage.
+  // No toolbar strip above it, like Chat, Images and Voice.
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
-      <ToolbarContent>
-        <Tabs label="Engine sections" value={tab} onChange={setTab} options={[{ id: 'engines', label: 'Engines' }, { id: 'models', label: 'Models' }, { id: 'storage', label: 'Storage' }]} />
-      </ToolbarContent>
-      {tab === 'models'
-        ? <ModelsWorkspace engines={eng.engines} onOpenEngines={() => setTab('engines')} />
-        : (
-          <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            {tab === 'engines' && settings && <div className="mb-8 max-w-6xl"><EnginesRow kind="all" settings={settings} /></div>}
-            <p className="text-[13px] text-[var(--color-text-muted)] mb-4">{tab === 'engines' ? 'Outside engines Lotus can use instead (Settings → Engines picks which). They run on this computer, or on another one on your network (use Change).' : 'The programs Lotus talks to.'}</p>
-            {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
-            {tab === 'storage' && <StorageTab />}
-          </div>
-        )}
-    </div>
+    <ModelsWorkspace engines={eng.engines} onOpenEngines={() => setTab('engines')} page={{
+      section: tab === 'models' ? 'models' : tab, go: setTab,
+      other: (
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          {tab === 'engines' && settings && <div className="mb-8 max-w-6xl"><EnginesRow kind="all" settings={settings} /></div>}
+          <p className="text-[13px] text-[var(--color-text-muted)] mb-4">{tab === 'engines' ? 'Outside engines Lotus can use instead (Settings → Engines picks which). They run on this computer, or on another one on your network (use Change).' : 'Where Lotus keeps its files.'}</p>
+          {tab === 'engines' && <EnginesTab eng={eng} goModels={() => setTab('models')} />}
+          {tab === 'storage' && <StorageTab />}
+        </div>
+      ),
+    }} />
   );
 };
 

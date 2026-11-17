@@ -4,7 +4,7 @@ import { Banner, Btn, Card, cx } from '../common/ui';
 import { confirmAlert } from '../common/Alerts';
 import { Tip } from '../common/Tip';
 import { cancelJob, fmtSize, installCustomModel, installEngine, installModel, jobFor, removeEngine, removeModel, useBuiltins, type BuiltinId, type Job } from '../../lib/builtins';
-import { availableOn, chatPicksFor, CLASS_LABEL, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, machineClass, type Fit, type LibEntry, type ModelKind } from '../../models/library';
+import { availableOn, picksFor, CLASS_LABEL, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, machineClass, type Fit, type LibEntry, type ModelKind } from '../../models/library';
 import type { ImageFolder } from '../../models/imageProfiles';
 import { ollamaClient, type OllamaModel } from '../../services/ollamaService';
 import { voicebox } from '../../services/voicebox';
@@ -58,8 +58,8 @@ export const ModelLibrary: React.FC<{
   const vram = b.machine?.vramGb;
   const unified = !!b.machine?.unified;
   const ram = b.machine?.ramGb;
-  // T71: the three chat models suggested for this kind of computer come first, then what fits.
-  const picks = useMemo(() => new Map(chatPicksFor(b.machine).map((e) => [e.id, e.tier!])), [b.machine]);
+  // T71: the three chat and three image models suggested for this kind of computer come first, then what fits.
+  const picks = useMemo(() => new Map([...picksFor('chat', b.machine), ...picksFor('image', b.machine)].map((e) => [e.id, e.tier!])), [b.machine]);
 
   useEffect(() => { if (ollamaUp && settings.llmBackend === 'ollama') void ollamaClient.listModels().then(setOllama).catch(() => setOllama([])); }, [ollamaUp, settings.llmBackend, pulling]);
   useEffect(() => { if (voiceboxUp && settings.voiceEngine === 'voicebox') void voicebox.modelStatus().then((m) => setVbModels(m as typeof vbModels)).catch(() => setVbModels([])); }, [voiceboxUp, settings.voiceEngine]);
@@ -96,12 +96,13 @@ export const ModelLibrary: React.FC<{
   const KIND_ORDER: ModelKind[] = ['chat', 'image', 'voice', 'dictation'];
   const FIT_ORDER: Record<Fit, number> = { fits: 0, tight: 1, unknown: 1, 'too-big': 2 };
   const cpuOnly = !!b.machine && machineClass(b.machine) === 'cpu';
-  /** Kind first; within chat, this computer's picks, then by fit and size. */
+  /** Kind first; within chat and images, this computer's picks, then by fit and size. */
   const rankOf = (e: LibEntry): number => {
     const k = KIND_ORDER.indexOf(e.kind) * 1e6;
-    if (e.kind !== 'chat' || !b.machine) return k;
+    if (!b.machine) return k;
     const t = picks.get(e.id);
     if (t) return k + ['quick', 'balanced', 'best'].indexOf(t);
+    if (e.kind !== 'chat' && e.kind !== 'image') return k + 10;
     // With a graphics card bigger is better while it fits; on the processor smaller is faster.
     return k + 10 + FIT_ORDER[fitOf(e, vram, unified, ram)] * 1e4 + (cpuOnly ? Math.round(e.vramGb * 10) : Math.round(1000 - e.vramGb * 10));
   };

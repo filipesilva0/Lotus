@@ -90,7 +90,7 @@ describe('one catalog', () => {
     for (const e of LIBRARY) expect(!!(e.builtin || e.ollama || e.voicebox)).toBe(true);
     // An RTX 4060 (8 GB) gets an 8B tool-capable chat model and SDXL.
     expect(suggest('chat', 8)?.id).toBe('qwen3-8b');
-    expect(suggest('image', 8)?.id).toBe('sdxl-base');
+    expect(suggest('image', 8)?.id).toBe('z-image-turbo-q4'); // T71: the small Z-Image beats SDXL and fits better
     expect(suggest('image', 4)?.id).toBe('sd15');
     expect(suggest('chat', 24)?.id).toBe('qwen3.8-27b');
     expect(suggest('voice', 0)?.id).toBe('kokoro');

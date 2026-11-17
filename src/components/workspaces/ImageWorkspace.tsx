@@ -14,7 +14,6 @@ import { usePanels } from '../../lib/panels';
 import { VramMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
 import { usePersisted, uid } from '../../lib/persist';
 import { useFileIntake } from '../../lib/fileDrop';
-import { ToolbarContent } from '../common/ToolbarSlot';
 import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
 import { InspectorPane, KV, MenuItem, Popover, Section, SliderField } from '../common/Pane';
 import { ImageSidebar } from '../images/ImageSidebar';

@@ -11,7 +11,7 @@
 //
 // Pure: shared with the core (which downloads the files) and tested in Claude/handover/verification/s17-tests.ts.
 
-import { CHAT_PICKS, IMAGE_PICKS, VOICE_PICKS, DICTATION_PICK, type Tier, type ImagePick } from '../setup/catalog';
+import { IMAGE_PICKS, VOICE_PICKS, DICTATION_PICK, type Tier, type ImagePick } from '../setup/catalog';
 import type { ImageFamily, ImageFolder, ImageProfile, Slot } from './imageProfiles';
 
 export type ModelKind = 'chat' | 'image' | 'voice' | 'dictation';
@@ -65,7 +65,6 @@ export interface LibEntry {
 // ── Chat ───────────────────────────────────────────────────────────────────
 
 const chat = (e: Omit<LibEntry, 'kind'>): LibEntry => ({ ...e, kind: 'chat' });
-const pick = (id: string) => CHAT_PICKS.find((p) => p.id === id);
 
 // T71 (17 Nov 2026): a catalog for every kind of computer, from a laptop with no graphics card to a
 // 128 GB Mac. Repos, file names and sizes were read from Hugging Face's file lists that day
@@ -93,7 +92,7 @@ export const CHAT_MODELS: LibEntry[] = [
 
   // Small: 4–6 GB graphics cards, 8 GB Macs.
   chat({ id: 'qwen3.5-4b', title: 'Qwen 3.5 4B', maker: 'Alibaba', licence: 'Apache-2.0', tags: ['Small', 'Vision'], vision: true,
-    blurb: pick('qwen3.5:4b')?.blurb ?? 'Quick replies; reads screenshots and photos.', vramGb: 5, diskGb: 3.4,
+    blurb: 'Quick replies and reads screenshots and photos. Runs on laptops.', vramGb: 5, diskGb: 3.4,
     builtin: { gguf: { repo: 'unsloth/Qwen3.5-4B-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'qwen3.5:4b' }),
   chat({ id: 'nemotron-3-nano-4b', title: 'Nemotron 3 Nano 4B', maker: 'NVIDIA', licence: 'NVIDIA Open Model', tags: ['Small', 'Tools'], tools: true,
     blurb: 'Fast and light with a long memory. Passed 26 of Lotus\'s 31 real tasks in about two minutes.', vramGb: 4, diskGb: 2.8,
@@ -121,7 +120,7 @@ export const CHAT_MODELS: LibEntry[] = [
 
   // Large: 12–16 GB graphics cards, 16–24 GB Macs.
   chat({ id: 'gemma-4-12b', title: 'Gemma 4 12B', maker: 'Google', licence: 'Apache-2.0', tags: ['Vision', 'Tools'], vision: true, tools: true,
-    blurb: pick('gemma4:12b')?.blurb ?? 'Strong all-rounder with vision and tool use.', vramGb: 9, diskGb: 7.3,
+    blurb: 'Strong all-rounder with vision and tool use. Great for daily chat.', vramGb: 9, diskGb: 7.3,
     builtin: { gguf: { repo: 'unsloth/gemma-4-12b-it-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'gemma4:12b' }),
   chat({ id: 'qwen3-14b', title: 'Qwen 3 14B', maker: 'Alibaba', licence: 'Apache-2.0', tags: ['Reasoning'],
     blurb: 'The bigger Qwen 3: more knowledge and steadier long answers than the 8B. Text only.', vramGb: 10.5, diskGb: 9,
@@ -218,16 +217,40 @@ export const CHAT_CLASS_PICKS: Record<MachineClass, Record<Tier, string>> = {
   'apple-64': { quick: 'qwen3.6-35b-a3b', balanced: 'qwen3.8-27b', best: 'qwen3.5-122b-a10b' },
 };
 
-/** The suggested chat models for a computer, each carrying its tier for this class. */
-export function chatPicksFor(m: MachineFacts | null | undefined): LibEntry[] {
-  const p = CHAT_CLASS_PICKS[m ? machineClass(m) : 'gpu-8'];
+/**
+ * The three image models to suggest for each kind of computer (T71). Without a graphics card every
+ * image model is slow; Stable Diffusion 1.5 is the one that stays bearable, so it leads there.
+ */
+export const IMAGE_CLASS_PICKS: Record<MachineClass, Record<Tier, string>> = {
+  cpu: { quick: 'sd15', balanced: 'flux2-klein-4b-q4', best: 'z-image-turbo-q4' },
+  'gpu-6': { quick: 'sd15', balanced: 'flux2-klein-4b-q4', best: 'z-image-turbo-q4' },
+  'gpu-8': { quick: 'flux2-klein-4b-q4', balanced: 'sdxl-base', best: 'z-image-turbo-q4' },
+  'gpu-16': { quick: 'flux2-klein-4b', balanced: 'z-image-turbo-q4', best: 'flux2-klein-9b-q4' },
+  'gpu-24': { quick: 'flux2-klein-4b', balanced: 'z-image-turbo', best: 'qwen-image-q4' },
+  'gpu-48': { quick: 'z-image-turbo', balanced: 'qwen-image-q4', best: 'qwen-image' },
+  'apple-8': { quick: 'sd15', balanced: 'flux2-klein-4b-q4', best: 'z-image-turbo-q4' },
+  'apple-16': { quick: 'flux2-klein-4b-q4', balanced: 'z-image-turbo-q4', best: 'flux2-klein-9b-q4' },
+  'apple-32': { quick: 'z-image-turbo-q4', balanced: 'z-image-turbo', best: 'qwen-image-q4' },
+  'apple-64': { quick: 'z-image-turbo', balanced: 'qwen-image-q4', best: 'qwen-image' },
+};
+
+const CLASS_PICKS: Partial<Record<ModelKind, Record<MachineClass, Record<Tier, string>>>> = { chat: CHAT_CLASS_PICKS, image: IMAGE_CLASS_PICKS };
+
+/** The suggested models of a kind (chat or image) for a computer, each carrying its tier for this class. */
+export function picksFor(kind: ModelKind, m: MachineFacts | null | undefined): LibEntry[] {
+  const table = CLASS_PICKS[kind];
+  if (!table) return [];
+  const p = table[m ? machineClass(m) : 'gpu-8'];
   const out: LibEntry[] = [];
   for (const t of ['quick', 'balanced', 'best'] as Tier[]) {
-    const e = CHAT_MODELS.find((x) => x.id === p[t]);
+    const e = LIBRARY.find((x) => x.id === p[t]);
     if (e) out.push({ ...e, tier: t });
   }
   return out;
 }
+
+/** The suggested chat models for a computer, each carrying its tier for this class. */
+export const chatPicksFor = (m: MachineFacts | null | undefined) => picksFor('chat', m);
 
 // ── Images ─────────────────────────────────────────────────────────────────
 
@@ -241,17 +264,52 @@ const FAMILY_OF: Record<string, ImageFamily> = { 'flux2-klein-4b': 'flux2', 'z-i
 
 const HF = (repo: string, file: string) => `https://huggingface.co/${repo}/resolve/main/${file}`;
 
+// T71: smaller GGUF versions for stable-diffusion.cpp, so the newer models also run on 6–8 GB cards
+// and 16 GB Macs. Files from the repos stable-diffusion.cpp's own docs point to (leejet's GGUF
+// conversions, unsloth/mradermacher text encoders), sizes read from Hugging Face on 17 Nov 2026.
+// sd.cpp loads the text encoder and the image model one after the other, so the memory needed is
+// about the larger of the two plus room to work. ComfyUI can't read GGUF without an add-on, so these
+// are offered for Lotus's own engine only (availableOn).
+const ggufImage = (e: Omit<LibEntry, 'kind' | 'builtin' | 'image'> & { family: ImageFamily; model: [string, string, number]; llm: [string, string, number]; vae: [string, number] }): LibEntry => {
+  const { family, model, llm, vae, ...rest } = e;
+  const file = (url: string) => url.split('/').pop()!;
+  return {
+    ...rest, kind: 'image',
+    builtin: { files: [
+      { url: HF(model[0], model[1]), path: imgPath('diffusion_models', model[1]), gb: model[2] },
+      { url: HF(llm[0], llm[1]), path: imgPath('text_encoders', llm[1]), gb: llm[2] },
+      { url: vae[0], path: imgPath('vae', file(vae[0])), gb: vae[1] },
+    ] },
+    image: { family, files: { model: model[1], llm: llm[1], vae: file(vae[0]) } },
+  };
+};
+const FLUX2_VAE = 'https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors';
+const ZIMAGE_VAE = 'https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors';
+const QWEN_IMAGE_VAE = 'https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors';
+
 export const IMAGE_MODELS: LibEntry[] = [
-  ...IMAGE_PICKS.map((p) => fromPick(p, FAMILY_OF[p.id])),
-  { id: 'sdxl-base', kind: 'image', tier: 'balanced', title: 'Stable Diffusion XL', maker: 'Stability AI', licence: 'CreativeML Open RAIL++-M', tags: ['Classic'], vramGb: 7, diskGb: 7.3,
+  ...IMAGE_PICKS.map((p) => ({ ...fromPick(p, FAMILY_OF[p.id]), tier: undefined })),
+  ggufImage({ id: 'flux2-klein-4b-q4', title: 'FLUX.2 Klein 4B (small)', maker: 'Black Forest Labs', licence: 'Apache-2.0', tags: ['Small', 'Fast'], vramGb: 4.5, diskGb: 5.3,
+    blurb: 'The 4-step FLUX.2 Klein in a smaller file: drafts and photo edits on a 6 GB card. Lotus\'s own engine only.',
+    family: 'flux2', model: ['leejet/FLUX.2-klein-4B-GGUF', 'flux-2-klein-4b-Q4_0.gguf', 2.46], llm: ['unsloth/Qwen3-4B-GGUF', 'Qwen3-4B-Q4_K_M.gguf', 2.5], vae: [FLUX2_VAE, 0.34] }),
+  ggufImage({ id: 'z-image-turbo-q4', title: 'Z-Image Turbo (small)', maker: 'Alibaba Tongyi', licence: 'Apache-2.0', tags: ['Photoreal'], vramGb: 5.4, diskGb: 6.7,
+    blurb: 'Photoreal images with readable text in eight steps, sized for 8 GB cards. Lotus\'s own engine only.',
+    family: 'zimage', model: ['leejet/Z-Image-Turbo-GGUF', 'z_image_turbo-Q4_K.gguf', 3.86], llm: ['unsloth/Qwen3-4B-Instruct-2507-GGUF', 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf', 2.5], vae: [ZIMAGE_VAE, 0.33] }),
+  ggufImage({ id: 'flux2-klein-9b-q4', title: 'FLUX.2 Klein 9B (small)', maker: 'Black Forest Labs', licence: 'FLUX Non-Commercial', tags: ['Non-commercial'], vramGb: 7.5, diskGb: 11,
+    blurb: 'Sharper and more varied than Klein 4B, still four steps. Personal, non-commercial use only. Lotus\'s own engine only.',
+    family: 'flux2', model: ['leejet/FLUX.2-klein-9B-GGUF', 'flux-2-klein-9b-Q4_0.gguf', 5.62], llm: ['unsloth/Qwen3-8B-GGUF', 'Qwen3-8B-Q4_K_M.gguf', 5.03], vae: [FLUX2_VAE, 0.34] }),
+  ggufImage({ id: 'qwen-image-q4', title: 'Qwen-Image (small)', maker: 'Alibaba Qwen', licence: 'Apache-2.0', tags: ['Text in images'], vramGb: 15, diskGb: 18,
+    blurb: 'Qwen-Image\'s prompt following and text rendering in a 13 GB file, for 16–24 GB cards. Lotus\'s own engine only.',
+    family: 'qwen-image', model: ['QuantStack/Qwen-Image-GGUF', 'Qwen_Image-Q4_K_M.gguf', 13.07], llm: ['mradermacher/Qwen2.5-VL-7B-Instruct-GGUF', 'Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf', 4.68], vae: [QWEN_IMAGE_VAE, 0.25] }),
+  { id: 'sdxl-base', kind: 'image', title: 'Stable Diffusion XL', maker: 'Stability AI', licence: 'CreativeML Open RAIL++-M', tags: ['Classic'], vramGb: 7, diskGb: 7.3,
     blurb: 'The classic 1024 px model most LoRAs are made for. Comes with the fixed SDXL VAE.',
     builtin: { files: [
       { url: HF('stabilityai/stable-diffusion-xl-base-1.0', 'sd_xl_base_1.0.safetensors'), path: imgPath('checkpoints', 'sd_xl_base_1.0.safetensors'), gb: 6.9 },
       { url: HF('madebyollin/sdxl-vae-fp16-fix', 'sdxl.vae.safetensors'), path: imgPath('vae', 'sdxl.vae.safetensors'), gb: 0.3 },
     ] },
     image: { family: 'sdxl', files: { model: 'sd_xl_base_1.0.safetensors', vae: 'sdxl.vae.safetensors' } } },
-  { id: 'sd15', kind: 'image', tier: 'quick', title: 'Stable Diffusion 1.5', maker: 'RunwayML', licence: 'CreativeML Open RAIL-M', tags: ['Classic', 'Small'], vramGb: 4, diskGb: 4.4,
-    blurb: 'Small and fast 512 px model with thousands of add-ons. Comes with the MSE VAE.',
+  { id: 'sd15', kind: 'image', title: 'Stable Diffusion 1.5', maker: 'RunwayML', licence: 'CreativeML Open RAIL-M', tags: ['Classic', 'Small'], vramGb: 4, diskGb: 4.4,
+    blurb: 'Small and fast 512 px model with thousands of add-ons. The only image model that is bearable without a graphics card (about a minute an image).',
     builtin: { files: [
       { url: HF('stable-diffusion-v1-5/stable-diffusion-v1-5', 'v1-5-pruned-emaonly.safetensors'), path: imgPath('checkpoints', 'v1-5-pruned-emaonly.safetensors'), gb: 4.3 },
       { url: HF('stabilityai/sd-vae-ft-mse-original', 'vae-ft-mse-840000-ema-pruned.safetensors'), path: imgPath('vae', 'vae-ft-mse-840000-ema-pruned.safetensors'), gb: 0.3 },
@@ -286,6 +344,27 @@ export const VOICE_MODELS: LibEntry[] = [
     blurb: 'A tiny voice for Brazilian Portuguese.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-pt_BR-faber-medium.tar.bz2'), path: 'voice/piper-pt-br-faber', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['pt'] } },
+  // T71: more Piper voices (medium quality unless "high"), one or two per language. Archive names read
+  // from sherpa-onnx's tts-models release on 17 Nov 2026. Each voice's licence follows the recording
+  // it was trained on, so it is shown as "varies"; the archive's MODEL_CARD says which.
+  ...([
+    ['pt_PT-dii-high', 'Dii (European Portuguese)', 'pt', 0.064], ['pt_PT-miro-high', 'Miro (European Portuguese)', 'pt', 0.064],
+    ['pt_BR-cadu-medium', 'Cadu (Brazilian Portuguese)', 'pt', 0.064],
+    ['en_US-amy-medium', 'Amy (US English)', 'en', 0.064], ['en_US-ryan-high', 'Ryan (US English)', 'en', 0.11],
+    ['es_ES-davefx-medium', 'Davefx (Spanish, Spain)', 'es', 0.064], ['es_MX-ald-medium', 'Ald (Spanish, Mexico)', 'es', 0.064],
+    ['fr_FR-siwis-medium', 'Siwis (French)', 'fr', 0.064], ['de_DE-thorsten-medium', 'Thorsten (German)', 'de', 0.064],
+    ['it_IT-paola-medium', 'Paola (Italian)', 'it', 0.064], ['nl_NL-pim-medium', 'Pim (Dutch)', 'nl', 0.064],
+    ['pl_PL-gosia-medium', 'Gosia (Polish)', 'pl', 0.064], ['ru_RU-irina-medium', 'Irina (Russian)', 'ru', 0.064],
+    ['uk_UA-ukrainian_tts-medium', 'Ukrainian TTS (Ukrainian)', 'uk', 0.077], ['tr_TR-dfki-medium', 'DFKI (Turkish)', 'tr', 0.064],
+    ['ar_JO-kareem-medium', 'Kareem (Arabic)', 'ar', 0.064], ['hi_IN-priyamvada-medium', 'Priyamvada (Hindi)', 'hi', 0.064],
+    ['zh_CN-huayan-medium', 'Huayan (Chinese)', 'zh', 0.064],
+  ] as const).map(([name, label, lang, gb]): LibEntry => {
+    const id = `piper-${name.toLowerCase().replace(/_/g, '-')}`;
+    return { id, kind: 'voice', title: `Piper · ${label}`, maker: 'Rhasspy', licence: 'Varies by voice', tags: ['Tiny', lang.toUpperCase()], vramGb: 0, diskGb: gb,
+      blurb: name.endsWith('-high') ? 'A clearer, more natural Piper voice; still small and quick on any computer.' : 'A small, clear voice that speaks instantly on any computer.',
+      builtin: { files: [{ url: SHERPA('tts-models', `vits-piper-${name}.tar.bz2`), path: `voice/${id}`, gb, archive: true }] },
+      voice: { engine: 'piper', languages: [lang] } };
+  }),
   // Voice cloning with Lotus's own engine (0.8.2): a few seconds of someone speaking → that voice.
   // No tier: they can't speak without a recording, so the first-run guide never suggests them.
   { id: 'pocket-tts', kind: 'voice', title: 'PocketTTS (voice cloning)', maker: 'Kyutai', licence: 'MIT code, CC-BY-4.0 weights', tags: ['Cloning', 'Small'], vramGb: 0, diskGb: 0.2,
@@ -311,6 +390,24 @@ export const DICTATION_MODELS: LibEntry[] = [
   { id: 'whisper-small', kind: 'dictation', tier: 'quick', title: 'Whisper Small', maker: 'OpenAI', licence: 'MIT', tags: ['99 languages'], vramGb: 0, diskGb: 0.36,
     blurb: 'Lighter dictation that still understands Portuguese, Spanish and many more.',
     builtin: { files: [{ url: SHERPA('asr-models', 'sherpa-onnx-whisper-small.tar.bz2'), path: 'voice/whisper-small', gb: 0.36, archive: true }] },
+    voice: { engine: 'whisper', languages: ['multi'] } },
+  // T71: the other multilingual sizes (archive names and sizes from sherpa-onnx's asr-models release, 17 Nov 2026).
+  // Speech runs on the processor here, so bigger means slower, not "needs a graphics card".
+  { id: 'whisper-tiny', kind: 'dictation', title: 'Whisper Tiny', maker: 'OpenAI', licence: 'MIT', tags: ['99 languages', 'Tiny'], vramGb: 0, diskGb: 0.11,
+    blurb: 'The smallest Whisper: instant on old laptops, but makes more mistakes.',
+    builtin: { files: [{ url: SHERPA('asr-models', 'sherpa-onnx-whisper-tiny.tar.bz2'), path: 'voice/whisper-tiny', gb: 0.11, archive: true }] },
+    voice: { engine: 'whisper', languages: ['multi'] } },
+  { id: 'whisper-base', kind: 'dictation', title: 'Whisper Base', maker: 'OpenAI', licence: 'MIT', tags: ['99 languages', 'Tiny'], vramGb: 0, diskGb: 0.2,
+    blurb: 'Small and quick in any language; fine for short dictation.',
+    builtin: { files: [{ url: SHERPA('asr-models', 'sherpa-onnx-whisper-base.tar.bz2'), path: 'voice/whisper-base', gb: 0.2, archive: true }] },
+    voice: { engine: 'whisper', languages: ['multi'] } },
+  { id: 'whisper-medium', kind: 'dictation', title: 'Whisper Medium', maker: 'OpenAI', licence: 'MIT', tags: ['99 languages'], vramGb: 0, diskGb: 1.8,
+    blurb: 'More accurate than Small for accents and names; noticeably slower on long recordings.',
+    builtin: { files: [{ url: SHERPA('asr-models', 'sherpa-onnx-whisper-medium.tar.bz2'), path: 'voice/whisper-medium', gb: 1.8, archive: true }] },
+    voice: { engine: 'whisper', languages: ['multi'] } },
+  { id: 'whisper-large-v3', kind: 'dictation', title: 'Whisper Large v3', maker: 'OpenAI', licence: 'MIT', tags: ['99 languages', 'Accurate'], vramGb: 0, diskGb: 1.0,
+    blurb: 'The most accurate Whisper, for lectures and interviews. Several times slower than Turbo; give long files time.',
+    builtin: { files: [{ url: SHERPA('asr-models', 'sherpa-onnx-whisper-large-v3.tar.bz2'), path: 'voice/whisper-large-v3', gb: 1.02, archive: true }] },
     voice: { engine: 'whisper', languages: ['multi'] } },
   { id: 'whisper-base-en', kind: 'dictation', title: 'Whisper Base (English)', maker: 'OpenAI', licence: 'MIT', tags: ['English', 'Tiny'], vramGb: 0, diskGb: 0.16,
     blurb: 'Very small and quick, English only.',
@@ -348,17 +445,20 @@ export function fitOf(e: Pick<LibEntry, 'vramGb'>, vramGb: number | undefined, u
 export const FIT_LABEL: Record<Fit, string> = { fits: 'Fits this computer', tight: 'Tight fit, runs slower', 'too-big': 'Too big for this computer', unknown: 'Slow without a GPU' };
 
 /**
- * The entry to suggest for a kind on this computer. Chat: the best of this kind of computer's three
- * picks that fits (without a graphics card: the balanced pick, else the quick one). Other kinds: the
- * best tier that fits, else the smallest.
+ * The entry to suggest for a kind on this computer. Chat and images: the best of this kind of
+ * computer's three picks that fits (without a graphics card: the balanced pick, else the quick one).
+ * When none of the picks can run on the chosen engine (ComfyUI can't read Lotus's GGUF image files),
+ * the biggest model for that engine that fits. Voice and dictation: the catalog's tiers.
  */
 export function suggest(kind: ModelKind, vramGb: number | undefined, unified = false, engine: 'builtin' | 'ollama' | 'comfyui' | 'voicebox' = 'builtin', ramGb?: number): LibEntry | undefined {
-  if (kind === 'chat') {
+  if (CLASS_PICKS[kind]) {
     const m: MachineFacts = { gpu: vramGb ? (unified ? 'apple' : 'gpu') : 'none', vramGb: vramGb ?? 0, unified, ramGb };
-    const picks = chatPicksFor(m).filter((e) => availableOn(e, engine)).reverse();
     const cpu = machineClass(m) === 'cpu';
     const ok = (e: LibEntry) => { const f = fitOf(e, vramGb, unified, ramGb); return f === 'fits' || (cpu && f === 'unknown'); };
-    return (cpu ? picks.filter((e) => e.tier !== 'best') : picks).find(ok) ?? picks[picks.length - 1];
+    const picks = picksFor(kind, m).filter((e) => availableOn(e, engine)).reverse();
+    if (picks.length) return (cpu ? picks.filter((e) => e.tier !== 'best') : picks).find(ok) ?? picks[picks.length - 1];
+    const all = LIBRARY.filter((e) => e.kind === kind && availableOn(e, engine)).sort((a, b) => b.vramGb - a.vramGb);
+    return all.find(ok) ?? all[all.length - 1];
   }
   const usable = LIBRARY.filter((e) => e.kind === kind && e.tier && availableOn(e, engine));
   for (const t of ['best', 'balanced', 'quick'] as Tier[]) {
@@ -372,7 +472,8 @@ export function suggest(kind: ModelKind, vramGb: number | undefined, unified = f
 export function availableOn(e: LibEntry, engine: 'builtin' | 'ollama' | 'comfyui' | 'voicebox'): boolean {
   if (engine === 'builtin') return !!e.builtin;
   if (engine === 'ollama') return !!e.ollama;
-  if (engine === 'comfyui') return e.kind === 'image' && !!e.builtin?.files;
+  // ComfyUI reads the same files from Lotus Studio, except GGUF image models (they need an add-on there).
+  if (engine === 'comfyui') return e.kind === 'image' && !!e.builtin?.files && !e.builtin.files.some((f) => /\.gguf$/i.test(f.path));
   return !!e.voicebox;
 }
 
@@ -463,3 +564,11 @@ export function quantFolder(entries: { path: string; dir?: boolean }[], quant: s
   const q = quant.toUpperCase();
   return entries.find((e) => e.dir && (e.path.toUpperCase() === q || e.path.toUpperCase() === `UD-${q}`))?.path;
 }
+
+// ── Sizes (moved from the old models/catalog.ts, T71) ─────────────────────
+
+/** Rough VRAM need in GB: weights plus ~15% working memory and ~0.5 GB for the context cache. */
+export const estimateVram = (billions: number, bpw: number) => Math.round((billions * bpw / 8 * 1.15 + 0.5) * 10) / 10;
+/** Billions of parameters from Ollama's "8.2B" / "600M". */
+export const paramsOf = (sizeStr?: string) => { const m = /([\d.]+)\s*([BM])/i.exec(sizeStr ?? ''); return m ? parseFloat(m[1]) * (m[2].toUpperCase() === 'M' ? 0.001 : 1) : 0; };
+export const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;

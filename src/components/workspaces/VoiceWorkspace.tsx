@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Power, FolderSearch } from 'lucide-react';
-import { ToolbarContent } from '../common/ToolbarSlot';
 import { Btn, Empty, Banner, Spinner, cx } from '../common/ui';
 import { VoiceSidebar, VoiceMode } from '../voice/VoiceSidebar';
 import { VoiceInspector } from '../voice/VoiceInspector';
@@ -67,15 +66,6 @@ const VoiceboxWorkspace: React.FC<{ onOpenEngines: () => void }> = ({ onOpenEngi
 
   return (
     <div className="flex-1 flex h-full min-h-0 bg-[var(--color-bg-panel)] overflow-hidden">
-      <ToolbarContent>
-        <div className="flex-1" />
-        <span className="flex items-center gap-2 text-xs font-semibold text-[var(--color-text-muted)]" role="status">
-          <span className={cx('w-2 h-2 rounded-full', data.status === 'online' ? 'bg-[var(--c-green)]' : data.status === 'checking' ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--c-red)]')} />
-          {data.status === 'online'
-            ? `Voicebox${data.health?.gpu_type ? ` · ${data.health.gpu_type}` : data.health?.gpu_available ? ' · GPU' : ' · CPU'}`
-            : data.status === 'checking' ? 'Connecting…' : 'Voicebox offline'}
-        </span>
-      </ToolbarContent>
 
       <VoiceSidebar mode={tab} onMode={go} data={data} online={data.status === 'online'} profile={profile} onSelectProfile={selectProfile}
         onNew={() => { if (tab === 'voices') setCreateRequested(true); else if (tab === 'speak' || tab === 'library') { setText(''); go('speak'); } else if (tab === 'dictate') go('dictate'); else setNewStory((n) => n + 1); }}

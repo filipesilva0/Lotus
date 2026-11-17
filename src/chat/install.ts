@@ -9,7 +9,8 @@
 // Pure functions only, so the harness can test them without a DOM.
 
 import type { EngineId } from '../services/engineConfig';
-import { CHAT_PICKS, DICTATION_PICK, IMAGE_PICKS, VOICE_PICKS, ChatPick, ImagePick, VoicePick } from '../setup/catalog';
+import { DICTATION_PICK, IMAGE_PICKS, VOICE_PICKS, ImagePick, VoicePick } from '../setup/catalog';
+import { CHAT_MODELS } from '../models/library';
 
 export interface InstallTarget {
   engine: EngineId;
@@ -19,7 +20,7 @@ export interface InstallTarget {
   /** Download size when known. */
   diskGb?: number;
   reason?: string;
-  pick?: ChatPick | ImagePick | VoicePick;
+  pick?: ImagePick | VoicePick;
 }
 
 export interface ParsedInstall {
@@ -71,8 +72,8 @@ export function resolveInstall(raw: unknown): { target: InstallTarget | null; pr
   if (engine === 'ollama') {
     const tag = model.replace(/^ollama\s+(pull|run)\s+/i, '');
     if (!OLLAMA_TAG.test(tag)) return { target: null, problem: `"${model.slice(0, 80)}" is not an Ollama model name.` };
-    const pick = CHAT_PICKS.find((p) => p.tag === tag.toLowerCase());
-    return { target: { engine, id: tag, title: pick?.title ?? tag, diskGb: pick?.diskGb, reason, pick }, problem: null };
+    const known = CHAT_MODELS.find((e) => e.ollama === tag.toLowerCase());
+    return { target: { engine, id: tag, title: known?.title ?? tag, diskGb: known?.diskGb, reason }, problem: null };
   }
   if (engine === 'comfyui') {
     const pick = findPick(IMAGE_PICKS, model);

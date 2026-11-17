@@ -268,7 +268,7 @@ export const StoriesTab: React.FC<{
             </div>
           </Card>
 
-          {items.length === 0 && <p className="text-xs text-[var(--color-text-muted)]">Empty timeline. Use “Add line”, or send clips here from Speak and Library.</p>}
+          {items.length === 0 && <p className="text-[12px] text-[var(--color-text-muted)]">Empty timeline. Use Add Line, or send clips here from Speak and History.</p>}
 
           {sel && (
             <Card className="p-4 space-y-3">

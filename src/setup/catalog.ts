@@ -118,20 +118,14 @@ export interface ImageRecipe {
 }
 
 interface Base { id: string; tier: Tier; title: string; maker: string; licence: string; blurb: string; vramGb: number; diskGb: number }
-export interface ChatPick extends Base { kind: 'chat'; tag: string; vision: true }
+export interface ChatPick extends Base { kind: 'chat'; tag: string; vision: boolean }
 export interface ImagePick extends Base { kind: 'image'; files: ComfyFile[]; recipe: ImageRecipe }
 /** Voicebox names its models itself, so a pick is matched against `/models/status` at runtime. */
 export interface VoicePick extends Base { kind: 'voice'; match: RegExp; clones: boolean }
 export type Pick = ChatPick | ImagePick | VoicePick;
 
-export const CHAT_PICKS: ChatPick[] = [
-  { kind: 'chat', id: 'qwen3.5:4b', tag: 'qwen3.5:4b', tier: 'quick', title: 'Qwen 3.5 4B', maker: 'Alibaba', licence: 'Apache-2.0', vision: true,
-    blurb: 'Quick replies and reads screenshots and photos. Runs on laptops.', vramGb: 5, diskGb: 3.3 },
-  { kind: 'chat', id: 'gemma4:12b', tag: 'gemma4:12b', tier: 'balanced', title: 'Gemma 4 12B', maker: 'Google', licence: 'Apache-2.0', vision: true,
-    blurb: 'Strong all-rounder with vision and tool use. Great for daily chat.', vramGb: 10, diskGb: 7.7 },
-  { kind: 'chat', id: 'qwen3.5:27b', tag: 'qwen3.5:27b', tier: 'best', title: 'Qwen 3.5 27B', maker: 'Alibaba', licence: 'Apache-2.0', vision: true,
-    blurb: 'Top open model for reasoning, writing and image understanding.', vramGb: 22, diskGb: 17 },
-];
+// Chat picks for the Ollama path of the guide come from the one catalog per kind of computer
+// (models/library.ts CHAT_CLASS_PICKS, T71); this file keeps the ComfyUI recipes and Voicebox names.
 
 const KLEIN = 'https://huggingface.co/Comfy-Org/flux2-klein/resolve/main/split_files/';
 const ZIMG = 'https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/';
@@ -183,7 +177,6 @@ export const VOICE_PICKS: VoicePick[] = [
 export const DICTATION_PICK: VoicePick = { kind: 'voice', id: 'whisper-turbo', tier: 'balanced', title: 'Whisper Turbo', maker: 'OpenAI', licence: 'MIT', clones: false,
   blurb: 'Dictation and transcription, about eight times faster than Whisper Large.', vramGb: 3, diskGb: 1.6, match: /whisper.*turbo/i };
 
-export const PICKS_BY_ENGINE: Record<EngineId, Pick[]> = { ollama: CHAT_PICKS, comfyui: IMAGE_PICKS, voicebox: [...VOICE_PICKS, DICTATION_PICK] };
 
 /** Finds Voicebox's model for a pick in its `/models/status` list. */
 export function matchVoiceModel<T extends { model_name: string; display_name: string; hf_repo_id?: string | null }>(pick: VoicePick, models: T[]): T | undefined {

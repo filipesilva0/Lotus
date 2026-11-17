@@ -7,12 +7,13 @@ import { SidebarPane, groupByDate } from '../common/Pane';
 
 export type VoiceMode = 'voices' | 'speak' | 'dictate' | 'stories' | 'library';
 
+// Same names and order as the built-in Voice page (BuiltinVoice), so both engines look alike.
 export const MODES: { id: VoiceMode; label: string; icon: React.ReactNode; newLabel: string }[] = [
-  { id: 'voices', label: 'Voice Profiles', icon: <Mic2 className="w-4 h-4" />, newLabel: 'Clone Voice' },
-  { id: 'speak', label: 'Speech Generator', icon: <AudioLines className="w-4 h-4" />, newLabel: 'New Speech Script' },
-  { id: 'dictate', label: 'Captures', icon: <Mic className="w-4 h-4" />, newLabel: 'New Dictation' },
-  { id: 'stories', label: 'Multi-Track Stories', icon: <Film className="w-4 h-4" />, newLabel: 'New Story' },
-  { id: 'library', label: 'History', icon: <Library className="w-4 h-4" />, newLabel: 'New Speech Script' },
+  { id: 'speak', label: 'Speak', icon: <AudioLines className="w-4 h-4" />, newLabel: 'New Speech' },
+  { id: 'voices', label: 'Voices', icon: <Mic2 className="w-4 h-4" />, newLabel: 'New Voice' },
+  { id: 'stories', label: 'Stories', icon: <Film className="w-4 h-4" />, newLabel: 'New Story' },
+  { id: 'dictate', label: 'Dictation', icon: <Mic className="w-4 h-4" />, newLabel: 'New Dictation' },
+  { id: 'library', label: 'History', icon: <Library className="w-4 h-4" />, newLabel: 'New Speech' },
 ];
 
 interface Props {
