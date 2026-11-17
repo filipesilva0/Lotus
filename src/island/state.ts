@@ -66,6 +66,8 @@ export interface Activity {
   /** 0..1, omitted when indeterminate */
   progress?: number;
   done?: boolean;
+  /** 0.11.0: a Work helper agent's name; shown with its face. */
+  agent?: string;
 }
 
 export interface AgentSession {

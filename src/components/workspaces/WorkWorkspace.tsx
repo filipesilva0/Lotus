@@ -4,22 +4,24 @@
 // artifacts it made (documents, pages, tables, images, code), previewed and saved as real files.
 
 import { Starters } from '../common/Starters';
+import { documentText, READABLE } from '../../lib/docText';
 import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AudioLines, Check, ChevronDown, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pin, PinOff, Plus, Search, Table2, Trash2, X } from 'lucide-react';
-import { Work, WorkAttachment, WorkItem, WorkMsg, helpersOf, planOf } from '../../work/store';
+import { AlertCircle, AudioLines, Brain, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
+import { Work, WorkAttachment, WorkItem, WorkMsg, agentProgress, helpersOf, planOf } from '../../work/store';
+import { ThinkingDrawer } from '../chat/ChatStream';
+import type { ChatMessage } from '../../types/lotus';
 import { useFileIntake } from '../../lib/fileDrop';
 import { fileToBase64 } from '../../services/ollamaService';
-import { TEXT_EXT } from '../../chat/helpers';
 import { folderName, pickFolderPath } from '../../chat/folder';
 import { isTauri } from '../../lib/http';
-import type { ArtifactInfo, AgentStep } from '../../lib/agent';
+import type { ArtifactInfo, AgentStep, HelperInfo } from '../../lib/agent';
 import { agentAvailable, workArtifact, workDir } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
 import { AgentFace } from '../common/AgentFace';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { InspectorPane, MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
-import { Btn, IconBtn, Segmented, cx } from '../common/ui';
+import { Btn, IconBtn, Segmented, TextArea, cx, useFlash } from '../common/ui';
 import { ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, VramMeter } from '../common/PromptBox';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { Tip } from '../common/Tip';
@@ -134,8 +136,65 @@ const Plan: React.FC<{ item: WorkItem; busy: boolean }> = ({ item, busy }) => {
   );
 };
 
-const Reply: React.FC<{ m: WorkMsg; live: boolean; onDecide: (s: AgentStep, allow: boolean) => void; onArtifact: (f: string) => void }> = ({ m, live, onDecide, onArtifact }) => {
+/**
+ * 0.11.0: the agents Lotus deployed for this reply, each with its face, its task and how far it got.
+ * A row opens to show the agent's own steps and what it returned.
+ */
+const STATUS_WORD: Record<HelperInfo['status'], string> = { queued: 'Waiting its turn', running: 'Working', done: 'Done', error: 'Failed', stopped: 'Stopped' };
+const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: boolean; onDecide: (s: AgentStep, allow: boolean) => void }> = ({ agents, steps, live, onDecide }) => {
+  const [open, setOpen] = useState<string | null>(null);
+  const p = agentProgress(agents);
+  return (
+    <div className="my-3 rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] overflow-hidden" aria-label="Agents">
+      <div className="px-3 pt-2.5 pb-2">
+        <p className="flex items-center gap-2 text-[12px] font-semibold text-[var(--color-text-muted)]">
+          <span className="flex-1">{p.total === 1 ? '1 agent' : `${p.total} agents`} · {p.done} of {p.total} done</span>
+          {p.running > 0 && <span className="font-normal">{p.running} working</span>}
+        </p>
+        <div className="mt-1.5 h-1 rounded-full bg-[var(--hover)] overflow-hidden" role="progressbar" aria-label="Agents done" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={p.done}>
+          <div className="h-full rounded-full bg-[var(--color-accent-vibrant)] transition-[width] duration-300" style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} />
+        </div>
+      </div>
+      <ul>
+        {agents.map((h) => {
+          const mine = steps.filter((s) => s.data?.helperId === h.id || (!s.data?.helperId && s.data?.helper === h.name));
+          const busy = live && h.status === 'running';
+          const isOpen = open === h.id;
+          return (
+            <li key={h.id} className="border-t border-[var(--sep)]">
+              <button type="button" onClick={() => setOpen(isOpen ? null : h.id)} aria-expanded={isOpen}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[var(--hover)]">
+                <AgentFace name={h.name} size={26} animate={busy} mood={busy ? 'thinking' : h.status === 'error' ? 'sad' : undefined} />
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-1.5 text-[13px]"><span className="font-semibold truncate">{h.name}</span><span className="text-[var(--color-text-muted)] truncate">· {h.goal}</span></span>
+                  <span className={cx('block text-[12px] truncate', h.status === 'error' ? 'text-[var(--c-red)]' : 'text-[var(--color-text-muted)]')}>
+                    {h.status === 'running' && live ? `${h.current ?? 'Working'}…` : h.status === 'running' ? 'Stopped' : STATUS_WORD[h.status]}{h.steps ? ` · ${h.steps} step${h.steps === 1 ? '' : 's'}` : ''}
+                  </span>
+                </span>
+                {h.status === 'done' ? <Check className="w-4 h-4 text-[var(--c-green)] shrink-0" aria-label="Done" />
+                  : h.status === 'error' ? <AlertCircle className="w-4 h-4 text-[var(--c-red)] shrink-0" aria-label="Failed" />
+                  : busy ? <span className="w-4 h-4 rounded-full border-2 border-[var(--color-accent-vibrant)] border-t-transparent animate-spin shrink-0" aria-label="Working" />
+                  : <span className="w-4 h-4 rounded-full border border-[var(--sep)] shrink-0" aria-hidden="true" />}
+                <ChevronRight className={cx('w-3.5 h-3.5 text-[var(--color-text-muted)] transition-transform shrink-0', isOpen && 'rotate-90')} aria-hidden="true" />
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-3 pl-[50px]">
+                  {mine.length ? <AgentSteps steps={mine as never} onDecide={live ? (s, allow) => onDecide(s as unknown as AgentStep, allow) : undefined} /> : <p className="text-[12px] text-[var(--color-text-muted)]">No steps yet.</p>}
+                  {h.result && <div className="mt-2 text-[13px] leading-relaxed"><p className="text-[12px] font-semibold text-[var(--color-text-muted)] mb-0.5">Returned</p><MarkdownLite text={h.result} onDark={false} /></div>}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
+const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry }) => {
   const steps = m.steps ?? [];
+  const [copied, flash] = useFlash();
+  const agents = m.agents ?? [];
   const own = steps.filter((s) => !s.data?.helper && s.tool !== 'plan.set' && s.tool !== 'plan.check');
   const helpers = helpersOf(steps);
   const made = steps.filter((s) => s.tool === 'artifact.write' && s.status === 'done').map((s) => s.data?.artifact as { file: string; title: string; kind: string }).filter(Boolean);
@@ -144,6 +203,8 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; onDecide: (s: AgentStep, allo
       {/* The face is the status: it only moves (and thinks) while Lotus is working. */}
       <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-muted)] mb-1"><AgentFace size={18} animate={live} mood={live ? 'thinking' : m.error ? 'sad' : undefined} />Lotus</p>
       <div className="min-w-0">
+        <ThinkingDrawer m={{ id: m.id, role: 'assistant', content: m.content, timestamp: '', thinking: m.thinking, thinkingMs: m.thinkingMs, isStreaming: live && m.thinkingMs === undefined } as ChatMessage} mode={reasoning} />
+        {agents.length > 0 && <AgentsPanel agents={agents} steps={steps} live={live} onDecide={onDecide} />}
         {(() => {
           // Each helper's steps sit right under the step that started it, with the helper's own face.
           const out: React.ReactNode[] = [];
@@ -152,7 +213,7 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; onDecide: (s: AgentStep, allo
           const flush = () => { if (seg.length) out.push(<AgentSteps key={`s${out.length}`} steps={seg as never} onDecide={live ? (s, allow) => onDecide(s as unknown as AgentStep, allow) : undefined} />); seg = []; };
           for (const st of own) {
             seg.push(st);
-            if (st.tool !== 'agent.delegate') continue;
+            if (st.tool !== 'agent.delegate' || agents.length) continue;
             flush();
             k++;
             const want = String(st.args?.name ?? '').trim().slice(0, 40) || `Helper ${k}`;
@@ -181,7 +242,40 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; onDecide: (s: AgentStep, allo
         {live && !m.content && !steps.length && <p className="text-[13px] text-[var(--color-text-muted)]">Thinking about how to do this…</p>}
         {m.error && <p className="mt-1 text-[13px] text-[var(--c-red)]">{m.error}</p>}
         {m.unverified?.length ? <UnverifiedNote items={m.unverified} /> : null}
+        {!live && (m.content || m.error) && (
+          <div className="mt-1.5 flex items-center gap-0.5 text-[var(--color-text-muted)]">
+            <IconBtn label={copied ? 'Copied' : 'Copy'} className="!w-6 !h-6" onClick={() => { void navigator.clipboard.writeText(m.content); flash(); }}>{copied ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
+            {!busy && <IconBtn label="Try again" className="!w-6 !h-6" onClick={onRetry}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>}
+            {m.content && <IconBtn label="Read aloud" className="!w-6 !h-6" onClick={() => void speak(m.content)}><AudioLines className="w-3.5 h-3.5" /></IconBtn>}
+            {m.tokensPerSec ? <span className="ml-1.5 text-[12px] tabular-nums">{m.tokensPerSec} tok/s</span> : null}
+          </div>
+        )}
       </div>
+    </div>
+  );
+};
+
+/** A request you sent, with Edit (sends the new text in its place) and Copy. */
+const Request: React.FC<{ m: WorkMsg; busy: boolean; onEdit: (text: string) => void }> = ({ m, busy, onEdit }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(m.content);
+  const [copied, flash] = useFlash();
+  return (
+    <div className="group flex flex-col items-end gap-1.5">
+      {m.files?.length ? <div className="flex flex-wrap justify-end gap-1.5">{m.files.map((f, k) => <span key={k} className="inline-flex items-center gap-1.5 h-7 px-2 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">{f.kind === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}<span className="truncate">{f.name}</span></span>)}</div> : null}
+      {editing ? (
+        <div className="w-full max-w-[80%] flex flex-col gap-2">
+          <TextArea autoFocus rows={3} value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Edit your request"
+            onKeyDown={(e) => { if (e.key === 'Escape') setEditing(false); if (e.key === 'Enter' && !e.shiftKey && draft.trim()) { e.preventDefault(); onEdit(draft.trim()); setEditing(false); } }} />
+          <div className="flex justify-end gap-2"><Btn size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Btn><Btn size="sm" variant="primary" disabled={!draft.trim() || busy} onClick={() => { onEdit(draft.trim()); setEditing(false); }}>Send</Btn></div>
+        </div>
+      ) : <div className="max-w-[80%] px-3.5 py-2 rounded-[16px] bg-[var(--color-accent-pastel)] text-[14px] whitespace-pre-wrap">{m.content}</div>}
+      {!editing && (
+        <div className="flex items-center gap-0.5 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          {!busy && <IconBtn label="Edit request" className="!w-6 !h-6" onClick={() => { setDraft(m.content); setEditing(true); }}><Pencil className="w-3.5 h-3.5" /></IconBtn>}
+          <IconBtn label={copied ? 'Copied' : 'Copy'} className="!w-6 !h-6" onClick={() => { void navigator.clipboard.writeText(m.content); flash(); }}>{copied ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
+        </div>
+      )}
     </div>
   );
 };
@@ -248,8 +342,13 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
     const out: WorkAttachment[] = [], errors: string[] = [];
     for (const f of list) {
       if (f.type.startsWith('image/')) out.push({ name: f.name, kind: 'image', data: await fileToBase64(f) });
-      else if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') out.push({ name: f.name, kind: 'text', data: await f.text() });
-      else errors.push(`${f.name}: Lotus can read images and text or code files. PDFs and other formats can't be read yet.`);
+      else {
+        try {
+          const text = await documentText(f);
+          if (text === null) errors.push(`${f.name}: Lotus can read ${READABLE}; this kind of file isn't one of them.`);
+          else out.push({ name: f.name, kind: 'text', data: text });
+        } catch (e) { errors.push(e instanceof Error ? e.message : `${f.name}: couldn't be read.`); }
+      }
     }
     return { out, errors };
   };
@@ -346,7 +445,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
               <div className="pt-[8vh] text-center">
                 <div className="flex justify-center mb-2"><AgentFace size={44} /></div>
                 <h2 className="text-[22px] font-semibold tracking-[-0.01em]">What should Lotus work on?</h2>
-                <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Describe the result you want. Lotus plans it, works through it with helper agents, and hands you the finished files.</p>
+                <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Describe the result you want. Lotus plans it, deploys agents for the parts that can run side by side, and hands you the finished files.</p>
                 <Starters id="work" groups={WORK_STARTERS} className="mt-6" onPick={setText} />
               </div>
             ) : (
@@ -354,11 +453,9 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                 <Plan item={item} busy={work.busy} />
                 <div className="space-y-6">
                   {item.messages.map((m, i) => m.role === 'user'
-                    ? <div key={m.id} className="flex flex-col items-end gap-1.5">
-                        {m.files?.length ? <div className="flex flex-wrap justify-end gap-1.5">{m.files.map((f, k) => <span key={k} className="inline-flex items-center gap-1.5 h-7 px-2 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">{f.kind === 'image' ? <ImageIcon className="w-3.5 h-3.5 shrink-0" /> : <FileText className="w-3.5 h-3.5 shrink-0" />}<span className="truncate">{f.name}</span></span>)}</div> : null}
-                        <div className="max-w-[80%] px-3.5 py-2 rounded-[16px] bg-[var(--color-accent-pastel)] text-[14px] whitespace-pre-wrap">{m.content}</div>
-                      </div>
-                    : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} onDecide={(s, allow) => void work.decide(s, allow)} onArtifact={setOpenArtifact} />)}
+                    ? <Request key={m.id} m={m} busy={work.busy} onEdit={(t) => void work.edit(m.id, t).catch((e) => setNotice((e as Error).message))} />
+                    : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} busy={work.busy} reasoning={settings.reasoningBlockMode ?? 'collapsed'}
+                        onDecide={(s, allow) => void work.decide(s, allow)} onArtifact={setOpenArtifact} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
                 </div>
               </>
             )}
@@ -392,7 +489,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
               <VramMeter />
               {(files.length > 0 || drag) && (
                 <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them. You can also paste them.</p>}
+                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, PDFs, Office documents, text or code files to attach them. You can also paste them.</p>}
                   {files.map((f, i) => {
                     const url = previews[f.name + f.size];
                     return (
@@ -410,7 +507,8 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                 className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none max-h-48" />
               <div className="flex items-center gap-1 px-2.5 pb-2.5">
                 <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
-                <RoundIcon label="Attach files" tip="Attach images, text or code" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+                <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+                <ModeButton on={!!item.think} onClick={() => work.patch(item.id, (x) => ({ ...x, think: !x.think }))} icon={<Brain className="w-4 h-4" />} label="Think" title="Let the model think before it acts; its reasoning shows above the reply (slower, often better plans)" />
                 <ModeButton on={talk} onClick={() => setTalk((t) => !t)} icon={<AudioLines className="w-4 h-4" />} label={talk ? (vs === 'listening' ? 'Listening' : vs === 'speaking' ? 'Speaking' : 'Talk') : 'Talk'} title="Talk with Lotus hands-free: it listens, works, answers aloud and listens again (needs Voicebox for listening)" />
                 <span className="flex-1" />
                 <Popover up align="right" className="w-[280px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Model" text={model || 'No model'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>

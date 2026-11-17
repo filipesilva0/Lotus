@@ -41,7 +41,6 @@ interface LeftRailProps {
   onSelectView: (view: ViewMode) => void;
   onOpenSettings: () => void;
   onOpenAccount: (view: AccountView) => void;
-  onOpenLibrary: (tab: 'skills' | 'plugins') => void;
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
@@ -63,7 +62,7 @@ const idle = 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-
  * version and its toggle were removed; the title bar's panel buttons now control each page's own
  * left and right panels). The selected page's icon wears its petal colour; names show as tips.
  */
-export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenAccount, onOpenLibrary, engines, updateAvailable = false, dark }) => {
+export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenAccount, engines, updateAvailable = false, dark }) => {
   const nav = [
     { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
     { id: 'work' as ViewMode, glyph: Briefcase, label: 'Work' },
@@ -109,7 +108,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
             {updateAvailable && dot('bg-[var(--color-accent-vibrant)]')}
           </span>
         </button>
-        <ProfileButton rowClass={row} onOpenAccount={onOpenAccount} onOpenLibrary={onOpenLibrary} />
+        <ProfileButton rowClass={row} onOpenAccount={onOpenAccount} />
       </div>
     </aside>
   );

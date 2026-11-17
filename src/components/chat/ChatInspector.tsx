@@ -216,16 +216,6 @@ const ResearchTab: React.FC<Pick<Props, 'session' | 'searchOn' | 'onToggleSearch
 };
 
 // ── Parameters & developer ────────────────────────────────────────────────
-const CodeBlock: React.FC<{ title: string; value: unknown }> = ({ title, value }) => {
-  const text = value ? JSON.stringify(value, null, 2) : '';
-  return (
-    <div className="mb-3">
-      <div className="flex items-center justify-between mb-1"><span className="text-[12px] font-medium">{title}</span>{text && <IconBtn label={`Copy ${title}`} className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(text)}><Copy className="w-3.5 h-3.5" /></IconBtn>}</div>
-      <pre className="max-h-56 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[12px] leading-relaxed font-mono whitespace-pre-wrap break-all">{text || 'Send a message to see it.'}</pre>
-    </div>
-  );
-};
-
 /** Rethink (Nemotron): the model reviews its own answer and writes it again (chat/rethink.ts). */
 const RethinkSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {
   const n = s.rethink || 1;
@@ -242,14 +232,18 @@ const RethinkSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ sett
   );
 };
 
-const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ settings: s, onSettings: set, raw }) => {
+/**
+ * 0.11.0: only the knobs people turn. The folded "Advanced" part is gone (system prompt → Tasks → Soul;
+ * the raw request view was removed); stop sequences stay, and everything has room to breathe.
+ */
+const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {
   const hw = useHardware();
   const [stopDraft, setStopDraft] = useState('');
   const addStop = () => { const v = stopDraft.replace(/\\n/g, '\n'); if (v && !s.stopSequences.includes(v)) set({ stopSequences: [...s.stopSequences, v] }); setStopDraft(''); };
   return (
-    <div className="overflow-y-auto flex-1">
+    <div className="overflow-y-auto flex-1 [&_section]:py-4 [&_section>div:first-child]:mb-3">
       {canRethink(s.selectedModel) && <RethinkSection settings={s} onSettings={set} />}
-      <Section title="Sampling">
+      <Section title="Sampling" className="[&>div+div]:mb-4">
         <SliderField label="Temperature" value={s.temperature} min={0} max={2} step={0.05} onChange={(v) => set({ temperature: v })} format={(v) => v.toFixed(2)} />
         <SliderField label="Top-P" value={s.topP} min={0.05} max={1} step={0.01} onChange={(v) => set({ topP: v })} format={(v) => v.toFixed(2)} />
         <SliderField label="Top-K" value={s.topK} min={1} max={200} step={1} onChange={(v) => set({ topK: v })} />
@@ -258,15 +252,15 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
       </Section>
       <Section title="Limits">
         {s.autoScale ? (
-          <div className="mb-2">
+          <div className="mb-4">
             <div className="flex items-center justify-between text-[12px]"><span>Context window</span><span className="tabular-nums">Auto · {hw.plan.numCtx.toLocaleString()} tokens</span></div>
             <p className="text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">Sized to free video memory. <button type="button" className="text-[var(--color-accent-vibrant)] font-medium" onClick={() => set({ autoScale: false })}>Set it by hand</button></p>
           </div>
         ) : (
-          <div className="flex items-center justify-between text-[12px] mb-2"><span>Context window</span><Stepper label="Context window" value={s.contextWindow} min={512} max={131072} step={512} onChange={(v) => set({ contextWindow: v })} unit="tokens" /></div>
+          <div className="flex items-center justify-between gap-3 text-[12px] mb-4"><span>Context window</span><Stepper label="Context window" value={s.contextWindow} min={512} max={131072} step={512} onChange={(v) => set({ contextWindow: v })} unit="tokens" /></div>
         )}
-        <div className="flex items-center justify-between text-[12px] mb-2"><span>Max reply length</span><Stepper label="Max reply tokens, 0 for no limit" value={s.maxTokens} min={0} max={32768} step={64} onChange={(v) => set({ maxTokens: v })} unit="tokens" /></div>
-        <div className="flex items-center justify-between text-[12px]">
+        <div className="flex items-center justify-between gap-3 text-[12px] mb-4"><span>Max reply length</span><Stepper label="Max reply tokens, 0 for no limit" value={s.maxTokens} min={0} max={32768} step={64} onChange={(v) => set({ maxTokens: v })} unit="tokens" /></div>
+        <div className="flex items-center justify-between gap-3 text-[12px]">
           <span>Seed</span>
           <span className="inline-flex items-center gap-1.5">
             {s.seed === null ? <span className="text-[var(--color-text-muted)]">Random</span> : <Stepper label="Seed" value={s.seed} min={0} max={2 ** 31 - 1} step={1} onChange={(v) => set({ seed: v })} />}
@@ -275,26 +269,12 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings' | 'raw'>> = ({ s
           </span>
         </div>
       </Section>
-      {/* Rarely needed: folded away so the Model tab is just the knobs people actually turn (session 16). */}
-      <details className="group border-t border-[var(--sep)]">
-        <summary className="px-4 py-2.5 text-[12px] font-semibold text-[var(--color-text-muted)] cursor-default list-none flex items-center gap-1 hover:text-[var(--color-text-main)]"><span className="transition-transform group-open:rotate-90">›</span>Advanced: stop sequences, system prompt, raw request</summary>
-      <Section title="Stop sequences" hint="Generation stops when any of these appears. Use \n for a line break.">
-        <div className="flex gap-1.5 mb-2"><TextInput value={stopDraft} onChange={(e) => setStopDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addStop(); }} placeholder="e.g. ###" aria-label="New stop sequence" /><Btn size="sm" onClick={addStop} disabled={!stopDraft}>Add</Btn></div>
-        <div className="flex flex-wrap gap-1.5">{s.stopSequences.map((x) => <span key={x} className="inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-[6px] bg-[var(--hover)] text-[12px] font-mono">{x.replace(/\n/g, '\\n')}<IconBtn label={`Remove ${x}`} className="!w-4 !h-4" onClick={() => set({ stopSequences: s.stopSequences.filter((y) => y !== x) })}><X className="w-3 h-3" /></IconBtn></span>)}</div>
+      <Section title="Stop sequences" className="!py-4" hint="Generation stops when any of these appears. Use \n for a line break.">
+        <div className="flex gap-2 mb-3"><TextInput value={stopDraft} onChange={(e) => setStopDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addStop(); }} placeholder="e.g. ###" aria-label="New stop sequence" /><Btn size="sm" onClick={addStop} disabled={!stopDraft}>Add</Btn></div>
+        {s.stopSequences.length
+          ? <div className="flex flex-wrap gap-2">{s.stopSequences.map((x) => <span key={x} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-[6px] bg-[var(--hover)] text-[12px] font-mono">{x.replace(/\n/g, '\\n')}<IconBtn label={`Remove ${x}`} className="!w-5 !h-5" onClick={() => set({ stopSequences: s.stopSequences.filter((y) => y !== x) })}><X className="w-3 h-3" /></IconBtn></span>)}</div>
+          : <p className="text-[12px] text-[var(--color-text-muted)]">None. The model stops when it's done.</p>}
       </Section>
-      <Section title="System prompt">
-        <textarea aria-label="System prompt" value={s.systemPrompt} onChange={(e) => set({ systemPrompt: e.target.value })} rows={4} className="w-full p-2 rounded-[8px] bg-[var(--hover)] text-[12px] leading-relaxed resize-y focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]" />
-      </Section>
-      <Section title="Developer inspector" hint="The exact request Lotus sent to Ollama and the summary Ollama returned for the latest reply.">
-        <CodeBlock title="Request" value={raw?.request} />
-        <CodeBlock title="Response" value={raw?.response} />
-        {raw?.response ? (() => { const r = raw.response as any; return (<div>
-          <KV k="Prompt tokens" v={r.prompt_eval_count ?? '—'} /><KV k="Reply tokens" v={r.eval_count ?? '—'} />
-          <KV k="Load time" v={r.load_duration ? `${Math.round(r.load_duration / 1e6)} ms` : '—'} /><KV k="Finish" v={r.done_reason ?? '—'} />
-        </div>); })() : null}
-        <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Logit bias and per-token confidence aren't offered here: they aren't part of the request Lotus sends to Ollama.</p>
-      </Section>
-      </details>
     </div>
   );
 };
@@ -324,7 +304,7 @@ export const ChatInspector: React.FC<Props> = (p) => {
     {tab === 'artifacts' && <ArtifactsTab messages={p.session.messages} focus={p.focusArtifact} />}
     {tab === 'context' && <ContextTab {...p} />}
     {tab === 'research' && <ResearchTab session={p.session} searchOn={p.searchOn} onToggleSearch={p.onToggleSearch} />}
-    {tab === 'params' && <ParamsTab settings={p.settings} onSettings={p.onSettings} raw={p.raw} />}
+    {tab === 'params' && <ParamsTab settings={p.settings} onSettings={p.onSettings} />}
   </InspectorPane>
   );
 };

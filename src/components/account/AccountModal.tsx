@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Modal } from '../common/Modal';
-import { Banner, Btn, Label, TextInput } from '../common/ui';
+import { Banner, Btn, Label, Segmented, TextInput } from '../common/ui';
+import { Monitor } from '../workspaces/ModelsWorkspace';
+import { usePersisted } from '../../lib/persist';
+import type { EngineId } from '../../services/engineIds';
+import type { EngineState } from '../../hooks/useEngines';
 import { Avatar } from './Avatar';
 import {
   AccountError, getServer, imageToAvatar, setServer, signIn, signOut, signUp, updateProfile, useAccount,
@@ -16,7 +20,8 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
 
 /** Sign in, create an account, edit the profile, or point Lotus at a sync server. */
-export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: (v: AccountView) => void; onClose: () => void; sessions: ChatSession[] }> = ({ open, view, onView, onClose, sessions }) => {
+export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: (v: AccountView) => void; onClose: () => void; sessions: ChatSession[]; engines: Record<EngineId, EngineState> }> = ({ open, view, onView, onClose, sessions, engines }) => {
+  const [section, setSection] = usePersisted<'usage' | 'hardware'>('lotus.profile.section.v1', 'usage');
   const account = useAccount();
   const server = getServer();
   const title = { signin: 'Sign in to Lotus', signup: 'Create a Lotus account', profile: 'Your profile', server: 'Sync server' }[view];
@@ -36,7 +41,9 @@ export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: 
                 <Btn variant="primary" onClick={() => onView('signin')}>Sign In</Btn>
               </div>
             )}
-          <UsageDashboard sessions={sessions} />
+          <Segmented<'usage' | 'hardware'> label="Profile sections" value={section} onChange={setSection}
+            options={[{ id: 'usage', label: 'Usage' }, { id: 'hardware', label: 'Hardware & Runtime' }]} className="self-start" />
+          {section === 'usage' ? <UsageDashboard sessions={sessions} /> : <Monitor engines={engines} embedded />}
         </div>
       )}
     </Modal>

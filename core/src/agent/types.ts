@@ -49,6 +49,8 @@ export interface ToolCtx {
   ask?: (question: string, options: string[]) => Promise<string>;
   /** Runs a helper agent on one part of the job and returns its final answer and step count. */
   delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean }>;
+  /** 0.11.0: runs several helper agents at once (agents.deploy), each on its own part; results in order. */
+  deploy?: (jobs: { goal: string; name?: string }[], context: string) => Promise<{ name: string; content: string; steps: number; ok: boolean }[]>;
   /** The built-in engines (session 17): image.generate uses them when Settings → Engines picks Built in. */
   builtins?: import('../engines/manager').Builtins;
 }
@@ -99,4 +101,25 @@ export type AgentEvent =
   | { kind: 'error'; message: string }
   /** The agent asked the user something (ask.user) and waits; answer with agent_answer. */
   | { kind: 'ask'; askId: string; question: string; options: string[] }
-  | { kind: 'answered'; askId: string };
+  | { kind: 'answered'; askId: string }
+  /** 0.11.0: a helper agent was deployed, moved on, or finished (the Work page and the island show it). */
+  | { kind: 'helper'; helper: HelperInfo };
+
+/** One helper agent of a run, as the windows show it. */
+export interface HelperInfo {
+  /** `<runId>-h<n>`, unique per run. */
+  id: string;
+  name: string;
+  goal: string;
+  status: 'queued' | 'running' | 'done' | 'error' | 'stopped';
+  /** Finished steps so far. */
+  steps: number;
+  /** What it is doing now ("Searching the web · best keyboards"). */
+  current?: string;
+  /** The start of its result, once done. */
+  result?: string;
+  /** Deployed together with these (agents.deploy batch), for "2 of 3 done". */
+  batch?: string;
+  started: number;
+  finished?: number;
+}

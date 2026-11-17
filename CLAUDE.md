@@ -56,6 +56,14 @@ pwsh scripts/package-portable.ps1         # after tauri build (Windows only)
 - **Visual checks:** `apt-get install -y xvfb python3-gi gir1.2-webkit2-4.1 gir1.2-gtk-3.0 fonts-dejavu-core`; `npm run build`; in the **same command** start `(timeout 100 python3 -m http.server 8123 --directory dist &)` then `mkdir -p /tmp/shots && xvfb-run -a python3 handover/screenshots/shoot-research.py` (or `shoot-island-and-app.py`); view the PNGs. Scripts fake `__TAURI_INTERNALS__` for desktop layout and use an **ephemeral web context** (a persistent one served stale bundles). This is WebKit, not WebView2.
 - **Gotchas:** background processes die when a command ends and `wait` can hang forever, so give servers their own `timeout`. The bash network allow-list includes npm, crates.io, GitHub, apt, **not** the research APIs (arXiv/PubMed/…) or static.rust-lang.org. Run UI render tests from inside the project dir (a second copy of React breaks `renderToString`). SSR output escapes `'` and inserts `<!-- -->`; normalise before matching.
 
+## 0.11.0 map (agents, documents, library tabs, profile, loose cards)
+- Work agents: `agents.deploy` / `agent.delegate` (core `tools/work.ts`) → `AgentService.helper`, which must emit `helper` events (HelperInfo) and tag steps with `data.helperId`. UI: `WorkMsg.agents`, `AgentsPanel` in `WorkWorkspace.tsx`; island via `reportActivity({ agent })`.
+- Attachments go through `documentText(file)` (`lib/docText.ts`; parsing in `lib/docParse.ts`, tested in core s23). Never read `f.text()` for attachments. The pdf.js worker must stay a Vite `?worker` chunk (.js).
+- Card JSON (```choices, ```image) is found with `chat/looseBlock.ts findCardBlock` plus a shape check; keep new card kinds on it.
+- Library = `LibraryPane` inside Tasks tabs; open it with App `setLibrary(tab)`. Profile = `AccountModal('profile')` with Usage | Hardware & Runtime (`Monitor`).
+- Number fields use `Stepper` (`common/ui.tsx`); native spinners are hidden in `index.css`.
+- Checks: `node handover/screenshots/shoot-s23.mjs` (42 checks) and `core/test/s23.test.ts`.
+
 ## 0.10.5 map (microphones, routines/to-dos, images from Chat, soul)
 - Open microphones only through `openMic` / `MicRecorder` (`lib/audio.ts`); never call getUserMedia with an exact device id directly. Errors through `micErrorMessage`.
 - Chat proposes images with a ```image block (`chat/imageProposal.ts`, card `ImageProposalCard`); App's `createImage` turns Yes into Images settings + a run. Keep `imageInstructions` in step with `FAMILIES`.

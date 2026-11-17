@@ -4,7 +4,7 @@ import {
   voicebox, Generation, TTS_ENGINES, LANGUAGES, EffectConfig, engineLabel, fmtDuration, GenerateInput, TtsEngine,
 } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
-import { Btn, Card, Select, TextArea, TextInput, Label, Banner, Spinner, Empty, cx } from '../common/ui';
+import { Btn, Card, Select, TextArea, TextInput, Label, Banner, Spinner, Empty, Stepper, cx } from '../common/ui';
 import { PromptShell, SendButton, TrayNote } from '../common/PromptBox';
 import { AudioPlayer } from './AudioPlayer';
 import { EffectsChain } from './EffectsChain';
@@ -281,11 +281,11 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
               </label>
               <div>
                 <Label hint="characters">Split long text every</Label>
-                <TextInput type="number" min={100} max={5000} step={100} value={chunk} onChange={(e) => setChunk(Math.min(5000, Math.max(100, +e.target.value || 800)))} />
+                <Stepper label="Split long text every" value={chunk} min={100} max={5000} step={100} onChange={setChunk} unit="characters" />
               </div>
               <div>
                 <Label hint="ms">Blend between parts</Label>
-                <TextInput type="number" min={0} max={500} step={10} value={crossfade} onChange={(e) => setCrossfade(Math.min(500, Math.max(0, +e.target.value || 0)))} />
+                <Stepper label="Blend between parts" value={crossfade} min={0} max={500} step={10} onChange={setCrossfade} unit="ms" />
               </div>
             </div>
           )}

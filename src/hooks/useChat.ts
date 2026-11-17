@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { documentText, READABLE } from '../lib/docText';
 import { ChatFolder, ChatMessage, ChatSession, ChatSource, ChatToolCall, ContextItem, LotusSettings, MemoryItem } from '../types/lotus';
 import { ChatTurn, fileToBase64 } from '../services/ollamaService';
 import { llm } from '../services/llm';
@@ -362,9 +363,14 @@ export function useChat(settings: LotusSettings) {
     const chunk = hardware.get().plan.chunkChars;
     for (const f of files) {
       if (f.type.startsWith('image/')) { images.push(await fileToBase64(f)); refs.push({ name: f.name, kind: 'image', url: URL.createObjectURL(f) }); }
-      else if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') {
-        ctx.push(contextItemFromText(f.name, await f.text(), chunk)); refs.push({ name: f.name, kind: 'text' });
-      } else errors.push(`${f.name}: Lotus can read images and text or code files. PDFs and other formats can't be read yet.`);
+      else {
+        // PDFs, Word, PowerPoint, Excel, OpenDocument, EPUB, RTF, HTML, text and code (lib/docText.ts).
+        try {
+          const text = await documentText(f);
+          if (text === null) errors.push(`${f.name}: Lotus can read ${READABLE}; this kind of file isn't one of them.`);
+          else { ctx.push(contextItemFromText(f.name, text, chunk)); refs.push({ name: f.name, kind: 'text' }); }
+        } catch (e) { errors.push(e instanceof Error ? e.message : `${f.name}: couldn't be read.`); }
+      }
     }
     return { images, refs, ctx, errors };
   };

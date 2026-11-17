@@ -3,7 +3,7 @@
 // questions keep arriving) while you use other pages.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, runAgent, workArtifacts } from '../lib/agent';
+import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, HelperInfo, runAgent, workArtifacts } from '../lib/agent';
 import { kv } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
@@ -23,6 +23,12 @@ export interface WorkMsg {
   files?: { name: string; kind: 'image' | 'text' }[];
   /** Text of attached text/code files, sent to the model with this message (kept for later turns). */
   attached?: string;
+  /** 0.11.0: the model's reasoning before and between steps, how long it took, and its speed. */
+  thinking?: string;
+  thinkingMs?: number;
+  tokensPerSec?: number;
+  /** 0.11.0: helper agents deployed during this reply, in the order they started. */
+  agents?: HelperInfo[];
   ts: number;
 }
 
@@ -38,7 +44,7 @@ export function attachedText(files: WorkAttachment[], cap = 60_000): string {
     return `Attached file "${f.name}":\n\`\`\`\n${body}\n\`\`\``;
   }).join('\n\n');
 }
-export interface WorkItem { id: string; title: string; ts: number; pinned?: boolean; messages: WorkMsg[]; /** A folder the agent may read and edit for this work (0.9.1). */ folder?: string }
+export interface WorkItem { id: string; title: string; ts: number; pinned?: boolean; messages: WorkMsg[]; /** A folder the agent may read and edit for this work (0.9.1). */ folder?: string; /** 0.11.0: the model thinks before it acts (shown above the reply). */ think?: boolean }
 export interface PendingAsk { workId: string; runId: string; askId: string; question: string; options: string[] }
 
 const blank = (): WorkItem => ({ id: uid('work'), title: 'New work', ts: Date.now(), messages: [] });
@@ -61,6 +67,17 @@ export function planOf(item: WorkItem | undefined): { steps: string[]; done: Set
     return { steps, done };
   }
   return null;
+}
+
+/** Merges a helper's latest state into a reply's agent list (new ones at the end). */
+export function upsertHelper(list: HelperInfo[] = [], h: HelperInfo): HelperInfo[] {
+  const i = list.findIndex((x) => x.id === h.id);
+  return i < 0 ? [...list, h] : list.map((x, k) => (k === i ? { ...x, ...h } : x));
+}
+
+/** Agents of a reply that are still busy, and how many of them are done (for "2 of 3 agents done"). */
+export function agentProgress(list: HelperInfo[] = []): { total: number; done: number; running: number } {
+  return { total: list.length, done: list.filter((h) => h.status === 'done' || h.status === 'error' || h.status === 'stopped').length, running: list.filter((h) => h.status === 'running').length };
 }
 
 /** Helpers (agent.delegate) that worked on an item, with their steps. */
@@ -112,18 +129,27 @@ export function useWork(settings: LotusSettings) {
     if (activeId === id) setActiveId(next[0].id);
   }, [activeId, running]);
 
-  const send = useCallback(async (text: string, workId = activeId, files: WorkAttachment[] = []): Promise<string> => {
+  /**
+   * Sends a request. `from` (0.11.0, Edit and Try Again): the id of an earlier request to replace;
+   * it and everything after it are dropped first, and its attached files are kept.
+   */
+  const send = useCallback(async (text: string, workId = activeId, files: WorkAttachment[] = [], from?: string): Promise<string> => {
     const t = text.trim() || (files.length ? 'Look at the attached files.' : '');
-    const item = ref.current.find((w) => w.id === workId);
-    if (!t || !item || running[workId]) return '';
+    const item0 = ref.current.find((w) => w.id === workId);
+    if (!t || !item0 || running[workId]) return '';
     if (!agentAvailable()) throw new Error('Work mode needs the Lotus core, which runs with the desktop app.');
+    const cut = from ? item0.messages.findIndex((m) => m.id === from) : -1;
+    const old = cut >= 0 ? item0.messages[cut] : undefined;
+    const item: WorkItem = cut >= 0 ? { ...item0, messages: item0.messages.slice(0, cut) } : item0;
     const s = settingsRef.current;
-    const attached = attachedText(files);
+    const attached = attachedText(files) || old?.attached || '';
     const images = files.filter((f) => f.kind === 'image').map((f) => f.data);
+    const keptFiles = files.length ? files.map((f) => ({ name: f.name, kind: f.kind })) : old?.files;
     const user: WorkMsg = { id: uid('wm'), role: 'user', content: t, ts: Date.now(),
-      ...(files.length ? { files: files.map((f) => ({ name: f.name, kind: f.kind })) } : {}), ...(attached ? { attached } : {}) };
+      ...(keptFiles?.length ? { files: keptFiles } : {}), ...(attached ? { attached } : {}) };
     const reply: WorkMsg = { id: uid('wm'), role: 'assistant', content: '', steps: [], ts: Date.now() };
-    patch(workId, (w) => ({ ...w, ts: Date.now(), title: w.messages.length ? w.title : t.slice(0, 48), messages: [...w.messages, user, reply] }));
+    patch(workId, (w) => ({ ...w, ts: Date.now(), title: w.messages.length && cut !== 0 ? w.title : t.slice(0, 48), messages: [...(cut >= 0 ? w.messages.slice(0, cut) : w.messages), user, reply] }));
+    let thinkStart = 0;
     const history = [...item.messages, user].filter((m) => m.content.trim()).slice(-16)
       .map((m) => ({ role: m.role, content: m.attached ? `${m.content}\n\n${m.attached}` : m.content, ...(m === user && images.length ? { images } : {}) }));
     const ctrl = new AbortController();
@@ -134,14 +160,27 @@ export function useWork(settings: LotusSettings) {
       setRunning((r) => ({ ...r, [workId]: { runId: '', ctrl } }));
       const done = await runAgent({
         model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: [...(item.folder ? [item.folder] : []), ...(s.agentFolders ?? [])],
-        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow },
+        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow, ...(item.think ? { think: true } : {}) },
         messages: [{ role: 'system', content: s.systemPrompt }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;
         if (rid && !runId) { runId = rid; setRunning((r) => (r[workId] ? { ...r, [workId]: { ...r[workId], runId } } : r)); }
-        if (e.kind === 'token') patchMsg(workId, reply.id, (m) => ({ ...m, content: m.content + e.text }));
+        if (e.kind === 'token') patchMsg(workId, reply.id, (m) => ({ ...m, content: m.content + e.text, ...(thinkStart && m.thinkingMs === undefined ? { thinkingMs: Date.now() - thinkStart } : {}) }));
+        else if (e.kind === 'thinking') {
+          if (!thinkStart) thinkStart = Date.now();
+          // Thinking again after a step (a later turn): keep the first duration, add the text.
+          patchMsg(workId, reply.id, (m) => ({ ...m, thinking: (m.thinking ?? '') + e.text }));
+        } else if (e.kind === 'stats') patchMsg(workId, reply.id, (m) => ({ ...m, tokensPerSec: Math.round(e.tokensPerSec) || m.tokensPerSec }));
+        else if (e.kind === 'helper') {
+          patchMsg(workId, reply.id, (m) => ({ ...m, agents: upsertHelper(m.agents, e.helper) }));
+          // Each agent is its own line on the island too (it also reads the core's events directly).
+          const h = e.helper, end = h.status !== 'queued' && h.status !== 'running';
+          reportActivity({ id: `agent-${h.id}`, kind: 'build', agent: h.name, label: `${h.name} · ${end ? (h.status === 'done' ? 'Done' : h.status === 'error' ? 'Failed' : 'Stopped') : h.status === 'queued' ? 'Waiting its turn' : `${h.current ?? 'Working'}${h.steps ? ` · ${h.steps} step${h.steps === 1 ? '' : 's'}` : ''}`}`, done: end });
+        }
         else if (e.kind === 'reset') patchMsg(workId, reply.id, (m) => ({ ...m, content: m.content.slice(0, e.keep) }));
         else if (e.kind === 'step') {
+          // Thinking ends when the model starts acting (a step) or writing (a token).
+          if (thinkStart) patchMsg(workId, reply.id, (m) => (m.thinkingMs === undefined ? { ...m, thinkingMs: Date.now() - thinkStart } : m));
           patchMsg(workId, reply.id, (m) => {
             const list = m.steps ?? [];
             const i = list.findIndex((x) => x.id === e.step.id);
@@ -154,7 +193,8 @@ export function useWork(settings: LotusSettings) {
           reportActivity({ id: activity, kind: 'build', label: 'Asking you' });
         } else if (e.kind === 'answered') setAsks((a) => a.filter((x) => x.askId !== e.askId || x.runId !== (rid ?? runId)));
       }, ctrl.signal);
-      patchMsg(workId, reply.id, (m) => ({ ...m, content: done.content || m.content, unverified: done.unverified.length ? done.unverified : undefined }));
+      patchMsg(workId, reply.id, (m) => ({ ...m, content: done.content || m.content, unverified: done.unverified.length ? done.unverified : undefined,
+        ...(thinkStart && m.thinkingMs === undefined ? { thinkingMs: Date.now() - thinkStart } : {}) }));
       reportActivity({ id: activity, kind: 'build', label: 'Work done', done: true });
       void refreshArtifacts(workId);
       if (voicePrefs().notify && done.content) void speak(`Done. ${done.content.split(/(?<=[.!?])\s/)[0]}`);
@@ -177,9 +217,18 @@ export function useWork(settings: LotusSettings) {
     await answerAsk(a.runId, a.askId, text);
   }, []);
   const decide = useCallback((step: AgentStep, allow: boolean) => decideStep(step.runId, step.id, allow), []);
+  /** Edit a request: send the new text in its place (what came after it is replaced). */
+  const edit = useCallback((msgId: string, text: string, workId = activeId) => send(text, workId, [], msgId), [activeId, send]);
+  /** Try again: send the request before this reply once more. */
+  const retry = useCallback((replyId: string, workId = activeId) => {
+    const w = ref.current.find((x) => x.id === workId);
+    const i = w ? w.messages.findIndex((m) => m.id === replyId) : -1;
+    const req = i > 0 ? w!.messages[i - 1] : undefined;
+    return req && req.role === 'user' ? send(req.content, workId, [], req.id) : Promise.resolve('');
+  }, [activeId, send]);
 
   const active = items.find((w) => w.id === activeId) ?? items[0];
-  return { items, active, activeId: active.id, setActiveId, newWork, remove, patch, send, stop, answer, decide,
+  return { items, active, activeId: active.id, setActiveId, newWork, remove, patch, send, stop, answer, decide, edit, retry,
     busy: !!running[active.id], runningIds: Object.keys(running), asks: asks.filter((a) => a.workId === active.id), allAsks: asks,
     artifacts: artifacts[active.id] ?? [], refreshArtifacts };
 }

@@ -6,7 +6,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { ChatStream } from '../../src/components/chat/ChatStream';
 import { ChoiceCard } from '../../src/components/chat/ChoiceCard';
-import { LibrarySheet } from '../../src/components/library/LibrarySheet';
+import { LibraryPane } from '../../src/components/library/LibraryPane';
 import { UsageDashboard } from '../../src/components/account/UsageDashboard';
 import { AccountModal } from '../../src/components/account/AccountModal';
 import { SettingsModal } from '../../src/components/modals/SettingsModal';
@@ -45,12 +45,12 @@ check('Chat stream: choices block becomes a questionnaire card, JSON hidden', <C
 absent('Chat stream: raw choices JSON is never shown', <ChatStream session={session} isStreaming={false} autoScroll={false} reasoningMode="collapsed" onEdit={noop} onRegenerate={noop} onSwitch={noop} onMemory={noop} onOpenArtifact={noop} onAnswer={noop} />, '"questions"', '```');
 check('Choice card: answered state is read-only and marks the pick', <ChoiceCard poll={pollFromJson({ question: 'Pick', options: ['Red', 'Blue'] })!} answered="Blue" enabled={false} onAnswer={noop} />, 'Answered', 'aria-checked="true"', 'disabled');
 check('Usage dashboard: tiles and charts from saved chats', <UsageDashboard sessions={[session]} />, 'Your usage', 'Chats', 'Messages sent', 'Average speed', 'Activity', 'Models', 'When you chat', 'Features', 'llama3.1:8b', '30 tok/s');
-check('Profile sheet: usage for signed-out users', <AccountModal open view="profile" onView={noop} onClose={noop} sessions={[session]} />, 'Your profile', 'Not signed in', 'Your usage');
-check('Library: skills tab lists system skills', <LibrarySheet open tab="skills" onTab={noop} onClose={noop} settings={settings} onSettings={noop} />, 'Library', 'System skills', 'plugin-creator', 'interactive-choices', 'chat-titler', 'Built into Lotus');
-check('Library: memory tab shows memory.md', <LibrarySheet open tab="memory" onTab={noop} onClose={noop} settings={settings} onSettings={noop} />, 'memory.md', 'Long-term memory', 'Standing instructions');
-check('Library: soul tab shows the system prompt', <LibrarySheet open tab="soul" onTab={noop} onClose={noop} settings={settings} onSettings={noop} />, 'System prompt', 'You are Lotus, a helpful assistant.', 'Edit');
+check('Profile sheet: usage for signed-out users', <AccountModal open view="profile" onView={noop} onClose={noop} sessions={[session]} engines={{ ollama: { up: false }, comfyui: { up: false }, voicebox: { up: false } } as never} />, 'Your profile', 'Not signed in', 'Your usage', 'Hardware', 'Runtime');
+check('Library: skills tab lists system skills', <LibraryPane tab="skills" settings={settings} onSettings={noop} />, 'System skills', 'plugin-creator', 'interactive-choices', 'chat-titler', 'Built into Lotus');
+check('Library: memory tab shows memory.md', <LibraryPane tab="memory" settings={settings} onSettings={noop} />, 'memory.md', 'Long-term memory', 'Standing instructions');
+check('Library: soul tab shows the system prompt', <LibraryPane tab="soul" settings={settings} onSettings={noop} />, 'System prompt', 'You are Lotus, a helpful assistant.', 'Edit');
 plugins.install({ name: 'Standup', description: 'Daily updates', commands: [{ name: 'standup', description: 'Write it', prompt: 'Notes: {{input}}' }] }, 'created');
-check('Library: plugins tab with the creator and installed plugins', <LibrarySheet open tab="plugins" onTab={noop} onClose={noop} settings={settings} onSettings={noop} />, 'Create a plugin', 'Draft with Lotus', 'plugin-creator', 'Installed', 'Standup', 'Import Plugin File');
+check('Library: plugins tab with the creator and installed plugins', <LibraryPane tab="plugins" settings={settings} onSettings={noop} />, 'Create a plugin', 'Draft with Lotus', 'plugin-creator', 'Installed', 'Standup', 'Import Plugin File');
 check('Settings: background tasks model replaces the old checkpoint list', <SettingsModal isOpen onClose={noop} settings={settings} onUpdateSettings={noop} models={[{ id: 'gemma3:1b', name: 'gemma3:1b', tag: '1B' }]} updates={{ state: { kind: 'idle' }, version: '0.1.0', check: async () => undefined, install: async () => undefined } as never} />,
   'Background tasks model', 'Same as the chat model (llama3.1:8b)', 'gemma3:1b', 'Auto-rename chats');
 absent('Settings: no hard-coded model names', <SettingsModal isOpen onClose={noop} settings={settings} onUpdateSettings={noop} models={[]} updates={{ state: { kind: 'idle' }, version: '0.1.0', check: async () => undefined, install: async () => undefined } as never} />, 'Active Model Checkpoint', 'Mistral NeMo 12B', 'DeepSeek R1 Distill');

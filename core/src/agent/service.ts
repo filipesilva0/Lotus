@@ -22,7 +22,7 @@ import { Registry } from './registry';
 import { closeStaleRuns, finishRun, getRun, listRuns, pruneRuns, saveStep, startRun } from './runs';
 import type { WireMsg } from './llm';
 import { authHeader } from './llm';
-import type { AgentEvent, ApprovalMode, Step, Tool } from './types';
+import type { AgentEvent, ApprovalMode, HelperInfo, Step, Tool } from './types';
 import { FILE_TOOLS } from '../tools/files';
 import { TASK_TOOLS } from '../tools/tasks';
 import { imageGenerate } from '../tools/image';
@@ -38,7 +38,7 @@ import { join } from 'node:path';
 export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
-const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate']);
+const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate', 'agents.deploy']);
 
 /** A work id from the UI, as a safe folder name. */
 export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -46,7 +46,7 @@ export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z
 const WORK_PROMPT = `\n\nYou are working in Lotus's Work mode: the user hands you a job and expects a finished result, not advice.
 - For anything with more than two steps, call plan.set first, then work through the plan and tick each step with plan.check.
 - Deliver the result as artifacts with artifact.write (documents as .md, web pages as one self-contained .html, tables as .csv, code in its own file). Write the whole content.
-- For big jobs, hand self-contained parts to helper agents with agent.delegate and combine what they return.
+- Deploy agents by yourself, without being asked: when a job has two or more parts that don't depend on each other (several topics to research, separate sections or files to write, several things to check), call agents.deploy once with one line per agent ("Name: task") so they work at the same time, then combine what they return. For a single self-contained part use agent.delegate. The user watches each agent's task and progress.
 - If you are blocked or a choice is the user's to make, use ask.user with short options instead of guessing.
 - Finish with a short summary of what you made and where it is.`;
 
@@ -197,7 +197,8 @@ export class AgentService {
       backend: s.backend === 'ollama' ? 'ollama' : 'llamacpp', nativeTools: s.backend === 'builtin',
       url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options,
     };
-    let helperSeq = 0;
+    let helperSeq = 0, batchSeq = 0;
+    const helperBase = { model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'agents.deploy' && t.name !== 'ask.user'), llm, s, workDir: workDir ?? '', folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st: Step) => this.waitFor(runId, st, ctrl.signal) };
     void (async () => {
       try {
         if (s.backend === 'builtin') {
@@ -213,7 +214,15 @@ export class AgentService {
           llm,
           registry: this.registry,
           ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
-            delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { goal, context, name, model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'ask.user'), llm, s, workDir, folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st) => this.waitFor(runId, st, ctrl.signal) }) : undefined },
+            delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { ...helperBase, goal, context, name }) : undefined,
+            deploy: workDir ? (jobs, context) => {
+              // Several helpers at once. Lotus's own engine serves one request at a time (and may reload the
+              // model with a bigger context), so there they take turns; Ollama and llama.cpp run 3 together.
+              const batch = `b${++batchSeq}`;
+              const seqs = jobs.map(() => ++helperSeq);
+              jobs.forEach((j, i) => emit({ kind: 'helper', helper: { id: `${runId}-h${seqs[i]}`, name: j.name || `Helper ${seqs[i]}`, goal: j.goal.slice(0, 200), status: 'queued', steps: 0, batch, started: Date.now() } }));
+              return pool(jobs.map((j, i) => () => this.helper(runId, seqs[i], { ...helperBase, goal: j.goal, context, name: j.name, batch })), s.backend === 'builtin' ? 1 : 3);
+            } : undefined },
           signal: ctrl.signal,
           emit,
           record: (st, seq) => {
@@ -244,26 +253,47 @@ export class AgentService {
    * the helper's name so the UI can give each helper its own face.
    */
   private async helper(runId: string, n: number, h: {
-    goal: string; context: string; name?: string; model: string; tools: Tool[]; llm: Parameters<typeof runAgent>[1]['llm']; s: AgentSettings; workDir: string; folders: string[];
+    goal: string; context: string; name?: string; batch?: string; model: string; tools: Tool[]; llm: Parameters<typeof runAgent>[1]['llm']; s: AgentSettings; workDir: string; folders: string[];
     memoryOn: boolean; fetchFn: typeof fetch; signal: AbortSignal; emit: (e: AgentEvent) => void; approve: (st: Step) => Promise<boolean>;
-  }): Promise<{ content: string; steps: number; ok: boolean }> {
+  }): Promise<{ name: string; content: string; steps: number; ok: boolean }> {
     const name = (h.name ?? '').trim().slice(0, 40) || `Helper ${n}`;
     const subId = `${runId}-h${n}`;
-    const out = await runAgent({
-      runId: subId, model: h.model, tools: h.tools, approval: h.s.approval, rules: parseRules(h.s.deny), maxTurns: 10,
-      messages: [
-        { role: 'system', content: `You are ${name}. You are a helper agent working for Lotus on one part of a bigger job. Do exactly the goal below with your tools, then reply with the result itself (facts, text, file names you saved), not a description of your process. Be concise.` },
-        { role: 'user', content: `Goal: ${h.goal}${h.context ? `\n\nContext:\n${h.context}` : ''}` },
-      ],
-    }, {
-      llm: h.llm, registry: this.registry,
-      ctx: { db: this.o.db, studio: this.o.studio, folders: h.folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: h.fetchFn, memoryOn: h.memoryOn, workDir: h.workDir },
-      signal: h.signal,
-      emit: (e) => { if (e.kind === 'step') h.emit({ kind: 'step', step: { ...e.step, data: { ...(e.step.data ?? {}), helper: name, goal: h.goal.slice(0, 120) } } }); },
-      record: (st, seq) => saveStep(this.o.db, { ...st, runId }, 1000 * n + seq),
-      approve: h.approve,
-    });
-    return { content: out.content, steps: out.steps.length, ok: out.steps.every((x) => x.status !== 'error') || !!out.content };
+    // The helper's card (Work page, island): queued → running (with what it is doing) → done.
+    const info: HelperInfo = { id: subId, name, goal: h.goal.slice(0, 200), status: 'running', steps: 0, current: 'Starting', ...(h.batch ? { batch: h.batch } : {}), started: Date.now() };
+    const tell = (p: Partial<HelperInfo>) => { Object.assign(info, p); h.emit({ kind: 'helper', helper: { ...info } }); };
+    tell({});
+    let done = 0;
+    try {
+      const out = await runAgent({
+        runId: subId, model: h.model, tools: h.tools, approval: h.s.approval, rules: parseRules(h.s.deny), maxTurns: 10,
+        messages: [
+          { role: 'system', content: `You are ${name}. You are a helper agent working for Lotus on one part of a bigger job. Do exactly the goal below with your tools, then reply with the result itself (facts, text, file names you saved), not a description of your process. Be concise.` },
+          { role: 'user', content: `Goal: ${h.goal}${h.context ? `\n\nContext:\n${h.context}` : ''}` },
+        ],
+      }, {
+        llm: h.llm, registry: this.registry,
+        ctx: { db: this.o.db, studio: this.o.studio, folders: h.folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: h.fetchFn, memoryOn: h.memoryOn, workDir: h.workDir || undefined },
+        signal: h.signal,
+        emit: (e) => {
+          if (e.kind === 'step') {
+            h.emit({ kind: 'step', step: { ...e.step, data: { ...(e.step.data ?? {}), helper: name, helperId: subId, goal: h.goal.slice(0, 120) } } });
+            if (e.step.status === 'done' || e.step.status === 'error') done++;
+            tell({ steps: done, current: e.step.status === 'waiting' ? 'Waiting for your permission' : e.step.status === 'running' ? e.step.label : info.current });
+          } else if (e.kind === 'token' && info.current !== 'Writing its result') tell({ current: 'Writing its result' });
+          else if (e.kind === 'thinking' && info.current !== 'Thinking') tell({ current: 'Thinking' });
+        },
+        record: (st, seq) => saveStep(this.o.db, { ...st, runId }, 1000 * n + seq),
+        approve: h.approve,
+      });
+      const ok = out.steps.every((x) => x.status !== 'error') || !!out.content;
+      tell({ status: h.signal.aborted ? 'stopped' : ok ? 'done' : 'error', steps: out.steps.length, current: undefined, result: out.content.slice(0, 400), finished: Date.now() });
+      return { name, content: out.content, steps: out.steps.length, ok };
+    } catch (e) {
+      const stopped = h.signal.aborted;
+      tell({ status: stopped ? 'stopped' : 'error', current: undefined, result: stopped ? undefined : (e as Error)?.message ?? String(e), finished: Date.now() });
+      if (stopped) throw e;
+      return { name, content: `Failed: ${(e as Error)?.message ?? String(e)}`, steps: done, ok: false };
+    }
   }
 
   private waitFor(runId: string, st: Step, signal: AbortSignal): Promise<boolean> {
@@ -302,3 +332,12 @@ export class AgentService {
   running() { return [...this.runs.keys()]; }
 }
 
+
+/** Runs async jobs with at most `limit` at once; results keep the jobs' order. */
+export async function pool<T>(jobs: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const out: T[] = new Array(jobs.length);
+  let next = 0;
+  const worker = async () => { while (next < jobs.length) { const i = next++; out[i] = await jobs[i](); } };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, jobs.length)) }, worker));
+  return out;
+}

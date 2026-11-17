@@ -18,7 +18,14 @@ export type AgentEvent =
   | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags' }
   | { kind: 'error'; message: string }
   | { kind: 'ask'; askId: string; question: string; options: string[] }
-  | { kind: 'answered'; askId: string };
+  | { kind: 'answered'; askId: string }
+  | { kind: 'helper'; helper: HelperInfo };
+
+/** A helper agent of a Work run (0.11.0; core/src/agent/types.ts HelperInfo). */
+export interface HelperInfo {
+  id: string; name: string; goal: string; status: 'queued' | 'running' | 'done' | 'error' | 'stopped';
+  steps: number; current?: string; result?: string; batch?: string; started: number; finished?: number;
+}
 
 export interface AgentMessage { role: 'system' | 'user' | 'assistant'; content: string; images?: string[] }
 

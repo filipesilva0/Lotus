@@ -32,8 +32,11 @@ Lotus's Voice workspace talks to the Voicebox server over its local REST API
 - Project: https://github.com/jamiepine/voicebox
 - License: MIT, Copyright (c) 2026 Voicebox Contributors
 
-## fflate (bundled inside lotusd, session 17)
-- **What:** zip unpacking for the built-in engines' downloads. **Licence:** MIT. https://github.com/101arrowz/fflate
+## fflate (bundled inside lotusd, session 17; in the app since 0.11.0)
+- **What:** zip unpacking for the built-in engines' downloads, and (0.11.0) reading Word, Excel, PowerPoint, OpenDocument and EPUB attachments. **Licence:** MIT. https://github.com/101arrowz/fflate
+
+## pdf.js (pdfjs-dist, bundled in the app since 0.11.0)
+- **What:** reads the text of attached PDFs on this computer; loaded only when a PDF is attached. **Licence:** Apache-2.0, Copyright Mozilla Foundation. https://github.com/mozilla/pdf.js
 
 ## Lotus's own engines (session 17; downloaded on request, not bundled)
 Downloaded from each project's GitHub releases into `Lotus Studio/Engines` when the user installs them (Models page or the first-run guide). Lotus finds the release through `api.github.com` and downloads from `github.com`.

@@ -75,7 +75,7 @@ check('Scaling card (nothing measured yet)', <ScalingCard />, 'Auto-scaling to v
 // context gauge is a bar along the box's top edge; + attaches files; Choose folder / Library / Plugins sit in the tray.
 check('Composer: Think, Web, model picker, tray, context bar', <Composer model="m" streaming={false} sendOnEnter models={[{ id: 'm', name: 'm', tag: '8B' }]} onModel={noop} onOpenModels={noop} onAttachFolder={async () => undefined} thinkingOn webOn={false} onToggleWeb={noop} onToggleThinking={noop}
   memoryOn incognito={false} onToggleMemory={noop} onToggleIncognito={noop} contextUsed={0.4} contextTitle="Context: 1,000 of 4,096 tokens used" onOpenLibrary={noop} onResearch={noop}
-  mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Think<', '>Web<', 'aria-pressed="true"', 'Attach files', 'Model for this chat', 'Choose Folder', '>Library<', '>Plugins<', 'aria-label="Memory on', 'aria-label="Incognito', 'role="meter"', 'aria-valuenow="40"');
+  mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Think<', '>Web<', 'aria-pressed="true"', 'Attach files', 'Model for this chat', 'Choose Folder', '>Skills<', '>Plugins<', 'aria-label="Memory on', 'aria-label="Incognito', 'role="meter"', 'aria-valuenow="40"');
 absent('Composer: no separate memory / incognito text buttons, no hint line', <Composer model="m" streaming={false} sendOnEnter models={[]} onModel={noop} onOpenModels={noop} onAttachFolder={async () => undefined} thinkingOn={false} webOn={false} onToggleWeb={noop} onToggleThinking={noop}
   memoryOn incognito={false} onToggleMemory={noop} onToggleIncognito={noop} contextUsed={0} contextTitle="" onOpenLibrary={noop} onResearch={noop}
   mentions={[]} onSend={() => []} onCommand={noop} onStop={noop} />, '>Memory<', '>Incognito<', 'Markdown supported');
@@ -93,8 +93,8 @@ check('Lotus mark: the user\'s own five-petal art, unchanged', <LotusMark label=
   else { fail++; console.log('  ✗ Five pages, five petals, five distinct accents'); }
 }
 const eng = { ollama: { up: true }, comfyui: { up: false }, voicebox: { up: false } } as never;
-absent('Rail is always folded: no visible page names, no Research page, no Models/Settings in the profile menu', <LeftRail currentView="chat" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, '>Chat<', '>Images<', '>Settings<', '>Profile<', 'data-tip="Research"');
-check('Rail: tips name every page', <LeftRail currentView="images" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} onOpenLibrary={noop} engines={eng} dark={false} />, 'data-tip="Chat"', 'data-tip="Images"', 'data-tip="Work"', 'data-tip="Engines & Models"', 'data-tip="Settings"');
+absent('Rail is always folded: no visible page names, no Research page, no Models/Settings in the profile menu', <LeftRail currentView="chat" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} engines={eng} dark={false} />, '>Chat<', '>Images<', '>Settings<', '>Profile<', 'data-tip="Research"');
+check('Rail: tips name every page', <LeftRail currentView="images" onSelectView={noop} onOpenSettings={noop} onOpenAccount={noop} engines={eng} dark={false} />, 'data-tip="Chat"', 'data-tip="Images"', 'data-tip="Work"', 'data-tip="Engines & Models"', 'data-tip="Settings"');
 // Session 13 (HIG naming): the panel toggles are "sidebar" and "inspector".
 check('Title bar: sidebar and inspector toggles', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel={false} onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'aria-label="Hide sidebar"', 'aria-label="Show inspector"');
 absent('Title bar: no old "left panel" / "right panel" names', <TitleBar canGoBack={false} canGoForward={false} onBack={noop} onForward={noop} leftPanel rightPanel onToggleLeft={noop} onToggleRight={noop} menus={[]} />, 'left panel', 'right panel');

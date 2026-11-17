@@ -10,6 +10,7 @@ import { Activity, Mood, loadIsland, mainSettings } from './state';
 import { onCoreEvent } from '../lib/core';
 import { answerAsk, decideStep } from '../lib/agent';
 import { kv } from '../lib/store';
+import { AgentFace } from '../components/common/AgentFace';
 
 /**
  * The island, session 16 redesign ("ugly, useless, doesn't get out of the way"; then: "akin to the
@@ -104,6 +105,7 @@ export const Island: React.FC = () => {
   const running = activity.items.filter((a) => !a.done);
   const finished = activity.items.filter((a) => a.done);
   const head: Activity | undefined = running[0] ?? finished[finished.length - 1];
+  const agentRows = running.slice(1).filter((a) => a.agent);
   type Mode = 'hidden' | 'pill' | 'ask' | 'perm' | 'claude' | 'chat';
   // A key for "the thing on screen", so × hides only that and the next new thing shows again.
   const key = claude ? `c${claude.requestId}` : ask ? `a${ask.askId}` : perm ? `p${perm.stepId}` : voice !== 'idle' ? `v${voice}` : head ? `h${head.id}${head.done ? 'd' : ''}` : '';
@@ -143,10 +145,11 @@ export const Island: React.FC = () => {
     if (mode === 'ask') return { w: 440, h: top + 92 + (ask?.options.length ? 40 : 0) + 44 };
     if (mode === 'perm') return { w: 420, h: top + 124 };
     // Compact: a slim black bar. Hovered: the expanded view with everything running and two actions.
-    if (open) return { w: 372, h: (MAC ? NOTCH_H : 0) + 66 + (hovered ? Math.max(0, running.length - 1) * 24 + 44 : 0) };
+    // Work's agents are listed whenever the island opens (each with its face and what it is doing).
+    if (open) return { w: 372, h: (MAC ? NOTCH_H : 0) + 66 + (hovered ? Math.max(0, running.length - 1) * 24 + 44 : Math.min(4, agentRows.length) * 24 + (agentRows.length ? 8 : 0)) };
     // Compact: a leading glyph and a short trailing value on either side of the (real or imagined) notch.
     return { w: MAC ? NOTCH_W + 92 : 196, h: MAC ? NOTCH_H : 32 };
-  }, [mode, hasChat, ask?.options.length, hovered, open, running.length]);
+  }, [mode, hasChat, ask?.options.length, hovered, open, running.length, agentRows.length]);
 
   const shown = mode !== 'hidden';
   const compact = mode === 'pill' && !open;
@@ -210,7 +213,7 @@ export const Island: React.FC = () => {
           ) : (
             <div className="h-full flex flex-col">
               <div className="h-[66px] px-4 flex items-center gap-3">
-                <Mascot hue={hue} mood={mood} size={38} />
+                {head?.agent && voice === 'idle' ? <AgentFace name={head.agent} size={38} animate={!head.done} mood={head.done ? undefined : 'thinking'} /> : <Mascot hue={hue} mood={mood} size={38} />}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] text-white/45 leading-tight">{voice !== 'idle' ? 'Voice' : head ? KIND_WORD[head.kind] : 'Lotus'}</p>
                   <p className="truncate text-[15px] font-semibold leading-snug">{line}</p>
@@ -220,8 +223,9 @@ export const Island: React.FC = () => {
                   {trailing && <span className="text-[12px] font-semibold tabular-nums" style={{ color: `hsl(${hue} 85% 66%)` }}>{trailing}</span>}
                 </span>
               </div>
+              {!hovered && agentRows.slice(0, 4).map((a) => <div key={a.id} className="h-6 pl-[66px] pr-4 flex items-center gap-2 text-[12px] text-white/60"><AgentFace name={a.agent} size={16} mood="thinking" /><span className="flex-1 truncate">{a.label}</span>{ring(a)}</div>)}
               {hovered && <>
-                {running.slice(1).map((a) => <div key={a.id} className="h-6 pl-[66px] pr-4 flex items-center gap-2 text-[12px] text-white/60"><span className="flex-1 truncate">{a.label}</span>{ring(a)}</div>)}
+                {running.slice(1).map((a) => <div key={a.id} className="h-6 pl-[66px] pr-4 flex items-center gap-2 text-[12px] text-white/60">{a.agent && <AgentFace name={a.agent} size={16} mood="thinking" />}<span className="flex-1 truncate">{a.label}</span>{ring(a)}</div>)}
                 <div className="mt-auto px-3 pb-3 flex gap-1.5">
                   <button onClick={() => { setChatMounted(true); setChatOpen(true); void invokeNative('island_focus'); }} className={`${btn} bg-[#2c2c2e] hover:bg-[#3a3a3c]`}><MessageSquare className="w-3.5 h-3.5" />Ask Lotus</button>
                   <button onClick={() => void invokeNative('open_main', {})} className={`${btn} bg-[#2c2c2e] hover:bg-[#3a3a3c]`}><LayoutGrid className="w-3.5 h-3.5" />Open</button>

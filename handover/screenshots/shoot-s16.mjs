@@ -108,12 +108,10 @@ try {
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${shots}/s16-tasks-narrow-${tag}.png` });
     await page.setViewportSize({ width: 1360, height: 860 });
-    // Hardware & Runtime.
-    await page.keyboard.press('Control+6');
-    await page.waitForTimeout(500);
-    await page.click('[role=tab]:has-text("Models"), button:has-text("Models") >> nth=0').catch(() => undefined);
+    // Hardware & Runtime (0.11.0: on the profile page, opened by the profile button).
+    await page.click('button[aria-label^="Your profile"]');
     await page.waitForTimeout(400);
-    await page.click('text=Hardware & Runtime');
+    await page.click('[role=tab]:has-text("Hardware & Runtime")');
     await page.waitForTimeout(5000);
     await page.screenshot({ path: `${shots}/s16-hardware-${tag}.png` });
     ok(`hardware ${tag}: processor tile`, await page.isVisible('text=Processor'));

@@ -214,31 +214,42 @@ export const Slider: React.FC<{
   );
 };
 
-/** Stepper: value field with a paired decrement/increment control. */
+/**
+ * Stepper: a number field with up/down arrows built into its right edge (0.11.0: one control, wide
+ * enough for its largest value, arrows the full height of the field; the old separate 14 px pair
+ * looked cut off). Arrow keys and the mouse wheel over the arrows step too.
+ */
 export const Stepper: React.FC<{
-  value: number; min?: number; max?: number; step?: number; onChange: (v: number) => void; label: string; unit?: string; disabled?: boolean;
-}> = ({ value, min = -Infinity, max = Infinity, step = 1, onChange, label, unit, disabled }) => {
+  value: number; min?: number; max?: number; step?: number; onChange: (v: number) => void; label: string; unit?: string; disabled?: boolean; size?: 'sm' | 'md'; className?: string;
+}> = ({ value, min = -Infinity, max = Infinity, step = 1, onChange, label, unit, disabled, size = 'md', className }) => {
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
-  const bump = (d: number) => onChange(clamp(Math.round((value + d * step) * 1e6) / 1e6));
+  const decimals = (String(step).split('.')[1] ?? '').length;
+  const bump = (d: number) => onChange(clamp(Number((value + d * step).toFixed(decimals))));
+  // Wide enough for the longest value it can hold (digits, sign, decimals), plus the arrows.
+  const chars = Math.max(2, ...[min, max, value].filter(Number.isFinite).map((n) => n.toFixed(decimals).length));
+  const h = size === 'sm' ? 'h-6' : 'h-7';
   return (
-    <div className="inline-flex items-center gap-1.5" role="group" aria-label={label}>
-      <input
-        type="number" value={value} min={min} max={max} step={step} disabled={disabled} aria-label={label}
-        onChange={(e) => { const n = parseFloat(e.target.value); if (!Number.isNaN(n)) onChange(clamp(n)); }}
-        onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); bump(1); } if (e.key === 'ArrowDown') { e.preventDefault(); bump(-1); } }}
-        className={cx(field, 'h-7 w-16 px-2 text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none')}
-      />
-      {unit && <span className="text-[12px] text-[var(--color-text-muted)]">{unit}</span>}
-      <span className="inline-flex flex-col rounded-[6px] overflow-hidden shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] bg-[var(--color-bg-card)]">
-        <button type="button" aria-label={`Increase ${label}`} disabled={disabled || value >= max} onClick={() => bump(1)}
-          className={cx('h-3.5 w-5 inline-flex items-center justify-center hover:bg-[var(--hover)] active:bg-[var(--pressed)] disabled:opacity-35', ringFocus)}>
-          <ChevronUp className="w-2.5 h-2.5" strokeWidth={2.8} aria-hidden="true" />
-        </button>
-        <button type="button" aria-label={`Decrease ${label}`} disabled={disabled || value <= min} onClick={() => bump(-1)}
-          className={cx('h-3.5 w-5 inline-flex items-center justify-center hover:bg-[var(--hover)] active:bg-[var(--pressed)] disabled:opacity-35', ringFocus)}>
-          <ChevronDown className="w-2.5 h-2.5" strokeWidth={2.8} aria-hidden="true" />
-        </button>
+    <div className={cx('inline-flex items-center gap-1.5', className)} role="group" aria-label={label}>
+      <span className={cx('relative inline-flex items-stretch rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.08)] focus-within:shadow-[0_0_0_3px_var(--ring)]', h, disabled && 'opacity-45')}>
+        <input
+          type="number" inputMode="decimal" value={value} min={min} max={max} step={step} disabled={disabled} aria-label={label}
+          onChange={(e) => { const n = parseFloat(e.target.value); if (!Number.isNaN(n)) onChange(clamp(n)); }}
+          onKeyDown={(e) => { if (e.key === 'ArrowUp') { e.preventDefault(); bump(1); } if (e.key === 'ArrowDown') { e.preventDefault(); bump(-1); } }}
+          style={{ width: `calc(${chars}ch + 14px)` }}
+          className="bg-transparent pl-2 pr-1 text-right text-[13px] tabular-nums text-[var(--color-text-main)] focus:outline-none disabled:cursor-default"
+        />
+        <span className="flex flex-col w-[18px] shrink-0 border-l border-[var(--sep)]" onWheel={(e) => { if (!disabled) bump(e.deltaY < 0 ? 1 : -1); }}>
+          <button type="button" tabIndex={-1} aria-label={`Increase ${label}`} disabled={disabled || value >= max} onClick={() => bump(1)}
+            className="flex-1 min-h-0 inline-flex items-center justify-center rounded-tr-[6px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)] disabled:opacity-35">
+            <ChevronUp className="w-3 h-3" strokeWidth={2.4} aria-hidden="true" />
+          </button>
+          <button type="button" tabIndex={-1} aria-label={`Decrease ${label}`} disabled={disabled || value <= min} onClick={() => bump(-1)}
+            className="flex-1 min-h-0 inline-flex items-center justify-center rounded-br-[6px] border-t border-[var(--sep)] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] active:bg-[var(--pressed)] disabled:opacity-35">
+            <ChevronDown className="w-3 h-3" strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </span>
       </span>
+      {unit && <span className="text-[12px] text-[var(--color-text-muted)]">{unit}</span>}
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, Check, Copy, Trash2, Wand2 } from 'lucide-react';
-import { Banner, Btn, Card, TextInput, cx } from '../common/ui';
+import { Banner, Btn, Card, Stepper, TextInput, cx } from '../common/ui';
 import { confirmAlert } from '../common/Alerts';
 import { Tip } from '../common/Tip';
 import { fmtSize, hasImageFile, removeImageFile, useBuiltins, useProfiles } from '../../lib/builtins';
@@ -137,8 +137,8 @@ const Editor: React.FC<{ p: ImageProfile; files: (f: ImageFolder) => string[]; h
         ? <p className="text-[12px] text-[var(--color-text-muted)]">{fam.label} is a distilled model: Lotus always runs it with {fam.steps} steps and guidance {fam.cfg}, the values it was trained for.</p>
         : (
           <div className="grid grid-cols-3 gap-3 max-w-[460px]">
-            <label className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Steps<input type="number" min={1} max={150} className={sel} value={p.steps ?? fam.steps} onChange={(e) => set({ steps: Math.max(1, Math.min(150, Number(e.target.value) || fam.steps)) })} /></label>
-            <label className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Guidance<input type="number" min={0} max={30} step={0.5} className={sel} value={p.cfg ?? fam.cfg} onChange={(e) => set({ cfg: Math.max(0, Math.min(30, Number(e.target.value))) })} /></label>
+            <div className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Steps<Stepper label="Steps" value={p.steps ?? fam.steps} min={1} max={150} onChange={(v) => set({ steps: v })} /></div>
+            <div className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Guidance<Stepper label="Guidance" value={p.cfg ?? fam.cfg} min={0} max={30} step={0.5} onChange={(v) => set({ cfg: v })} /></div>
             <label className="text-[12px] text-[var(--color-text-muted)] flex flex-col gap-1">Sampler<select className={sel} value={p.sampler ?? fam.sampler} onChange={(e) => set({ sampler: e.target.value })}>
               {['euler', 'euler_ancestral', 'dpmpp_2m', 'heun', 'lcm', 'res_multistep'].map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
           </div>
@@ -152,7 +152,7 @@ const Editor: React.FC<{ p: ImageProfile; files: (f: ImageFolder) => string[]; h
               return (
                 <span key={l} className={cx('inline-flex items-center gap-1.5 h-7 px-2 rounded-[6px] text-[12px]', on ? 'bg-[var(--color-accent-fill)]/15' : 'bg-[var(--hover)]')}>
                   <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={!!on} onChange={(e) => set({ loras: e.target.checked ? [...(p.loras ?? []), { name: l, strength: 0.8 }] : (p.loras ?? []).filter((x) => x.name !== l) })} />{l}</label>
-                  {on && <input type="number" aria-label={`${l} strength`} min={-2} max={2} step={0.05} value={on.strength} onChange={(e) => set({ loras: (p.loras ?? []).map((x) => (x.name === l ? { ...x, strength: Number(e.target.value) } : x)) })} className="w-14 h-5 px-1 rounded bg-[var(--color-bg-card)] text-[12px]" />}
+                  {on && <Stepper size="sm" label={`${l} strength`} min={-2} max={2} step={0.05} value={on.strength} onChange={(v) => set({ loras: (p.loras ?? []).map((x) => (x.name === l ? { ...x, strength: v } : x)) })} />}
                 </span>
               );
             })}

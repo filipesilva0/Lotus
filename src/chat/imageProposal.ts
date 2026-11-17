@@ -7,6 +7,7 @@
 // Pure functions only, so the core's tests can import them.
 
 import { FAMILIES, settingsFor, type ImageFamily, type ImageProfile } from '../models/imageProfiles';
+import { findCardBlock, withoutBlock } from './looseBlock';
 
 export interface ImageProposal {
   prompt: string;
@@ -53,7 +54,6 @@ export function imageInstructions(models: ImageChoice[]): string {
     `Image models ready on this computer: ${list}. One image block per reply.`;
 }
 
-const OPEN_RE = /(^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*image[ \t]*\n/i;
 const num = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -88,21 +88,49 @@ export function resolveProposal(raw: unknown): { proposal: ImageProposal | null;
   };
 }
 
-/** Finds the ```image block in a reply. */
+const IMAGE_KEYS = ['aspect', 'aspect_ratio', 'ratio', 'model', 'checkpoint', 'steps', 'cfg', 'guidance', 'negative', 'negative_prompt', 'resolution', 'count', 'sampler', 'width', 'size'];
+
+/** JSON meant as an image proposal: a prompt plus at least one image setting, or (the prompt written in the text) several settings. */
+export function looksLikeImage(j: unknown): boolean {
+  const o = (Array.isArray(j) ? j[0] : j) as Record<string, unknown> | undefined;
+  if (!o || typeof o !== 'object') return false;
+  const prompt = o.prompt ?? o.positive ?? o.positive_prompt;
+  const settings = IMAGE_KEYS.filter((k) => k in o).length;
+  if (typeof prompt === 'string' && prompt.trim()) return settings >= 1;
+  return prompt === undefined && settings >= 3 && ('aspect' in o || 'aspect_ratio' in o || 'model' in o || 'checkpoint' in o);
+}
+
+/** The prompt when the model wrote it in the text and kept only the settings in the JSON. */
+export function promptFromText(text: string): string {
+  const line = /(?:^|\n)\s*[#>*_ ]*(?:positive\s+)?prompt[*_ ]*[:：]\s*[*_]*\s*(.+)/i.exec(text);
+  if (line && line[1].replace(/[*_"“”]/g, '').trim().length > 8) return line[1].replace(/^[*_"“]+|[*_"”]+$/g, '').trim();
+  const quote = /(?:^|\n)>\s*(.{20,})/.exec(text);
+  if (quote) return quote[1].trim();
+  const fenced = /```(?:text|prompt)?\n([^`]{20,}?)\n```/.exec(text);
+  return fenced ? fenced[1].trim() : '';
+}
+
+/**
+ * Finds the image block in a reply. 0.11.0: also a ```json or untagged block and a bare object at the
+ * end, with loose JSON (looseBlock.ts): the user got the prompt and its JSON but no card to press.
+ */
 export function parseImageProposal(content: string): ParsedImageProposal {
-  const open = OPEN_RE.exec(content);
-  if (!open) return { text: content, proposal: null, problem: null, pending: false };
-  const start = open.index + open[1].length;
-  const bodyStart = open.index + open[0].length;
-  const fence = open[2];
-  const close = new RegExp(`\\n[ ]{0,3}${fence[0] === '`' ? '`' : '~'}{${fence.length},}[ \\t]*(\\n|$)`).exec(content.slice(bodyStart - 1));
-  if (!close) return { text: content.slice(0, start).trimEnd(), proposal: null, problem: null, pending: true };
-  const body = content.slice(bodyStart, bodyStart - 1 + close.index);
-  const after = content.slice(bodyStart - 1 + close.index + close[0].length);
-  const text = `${content.slice(0, start).trimEnd()}${after.trim() ? `\n\n${after.trim()}` : ''}`;
-  let raw: unknown;
-  try { raw = JSON.parse(body.trim()); } catch { return { text, proposal: null, problem: 'The model suggested an image Lotus could not read.', pending: false }; }
+  const b = findCardBlock(content, ['image', 'img', 'image-prompt', 'imageprompt', 'image_prompt'], looksLikeImage, /"(prompt|positive)"\s*:[\s\S]*"(aspect|negative|model|steps|cfg)"|"(aspect|negative|model|steps|cfg)"\s*:[\s\S]*"prompt"/);
+  if (!b) return { text: content, proposal: null, problem: null, pending: false };
+  if (b.pending) return { text: content.slice(0, b.start).trimEnd(), proposal: null, problem: null, pending: true };
+  const text = withoutBlock(content, b);
+  if (b.broken) return { text, proposal: null, problem: 'The model suggested an image Lotus could not read.', pending: false };
+  let raw = b.json;
   if (Array.isArray(raw)) raw = raw[0];
+  const r = raw as Record<string, unknown> | null;
+  // Width × height given separately.
+  if (r && typeof r === 'object' && !r.aspect && Number(r.width) > 0 && Number(r.height) > 0) raw = { ...(raw as object), aspect: `${r.width}x${r.height}` };
+  // Settings only: the prompt is in the text above.
+  if (r && typeof r === 'object' && !(r.prompt ?? r.positive ?? r.positive_prompt)) {
+    const prompt = promptFromText(content.slice(0, b.start));
+    if (!prompt && !b.tagged) return { text: content, proposal: null, problem: null, pending: false };
+    if (prompt) raw = { ...(raw as object), prompt };
+  }
   return { text, pending: false, ...resolveProposal(raw) };
 }
 

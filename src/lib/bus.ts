@@ -39,6 +39,8 @@ export interface ActivityReport {
   label: string;
   progress?: number;
   done?: boolean;
+  /** 0.11.0: a Work helper agent's name; the island shows its face. */
+  agent?: string;
 }
 
 /** Tell the island about a running task so it can show a pill. Fire-and-forget. */

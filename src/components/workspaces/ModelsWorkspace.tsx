@@ -1,7 +1,7 @@
 import { confirmAlert } from '../common/Alerts';
 import { EngineNotice } from '../common/EngineNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, Boxes, Layers, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
+import { Boxes, Layers, Check, Cpu, Download, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
 import { ChatStats, ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
 import { llm } from '../../services/llm';
 import { ensureChat, useBuiltins } from '../../lib/builtins';
@@ -24,7 +24,7 @@ import { findModelsDir, savedModelsDir, setSavedModelsDir } from '../../services
 import { InspectorPane, KV, Section, SidebarPane } from '../common/Pane';
 import { reportActivity } from '../../lib/bus';
 
-type Mode = 'hub' | 'setups' | 'arena' | 'monitor';
+type Mode = 'hub' | 'setups' | 'arena';
 interface Props { engines: Record<EngineId, EngineState>; onOpenEngines: () => void }
 
 // ── Shared pull state (one download at a time) ──────────────────────────────
@@ -248,7 +248,8 @@ const Spark: React.FC<{ values: number[]; max: number; label: string; color?: st
 };
 
 interface Sample { vram: number; ram: number; ollama: number; vbox: number }
-const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines }) => {
+/** Hardware and runtime: live readings, what the engines hold in memory, the request log. 0.11.0: shown on the profile page. */
+export const Monitor: React.FC<{ engines: Record<EngineId, EngineState>; embedded?: boolean }> = ({ engines, embedded }) => {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [stats, setStats] = useState<ComfyStats | null>(null);
   const [ps, setPs] = useState<RunningModel[]>([]);
@@ -281,7 +282,7 @@ const Monitor: React.FC<{ engines: Record<EngineId, EngineState> }> = ({ engines
   const shown = (onlyErr ? log.filter(isErr) : log).slice(-120).reverse();
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
+    <div className={embedded ? 'space-y-5' : 'flex-1 min-h-0 overflow-y-auto p-6 space-y-5'}>
       {/* Engine on/off status lives on the Engines tab and the auto-scaling card in Settings → Engines;
           they are not repeated here (session 8). This page is live memory use and the request log. */}
       <LiveHardware />
@@ -322,7 +323,9 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
   const settings = hasLiveSettings() ? liveSettings() : null;
   const [gpuTotalGb, setGpuTotalGb] = useState<number | null>(null);
   useEffect(() => { if (engines.comfyui.up) void comfy.stats().then((s) => setGpuTotalGb(s.vramTotalGb || null)).catch(() => undefined); }, [engines.comfyui.up]);
-  const [mode, setMode] = usePersisted<Mode>('lotus.models.mode.v2', 'hub');
+  const [savedMode, setMode] = usePersisted<Mode>('lotus.models.mode.v2', 'hub');
+  // Hardware & Runtime moved to the profile page in 0.11.0; a saved 'monitor' falls back to Get Models.
+  const mode: Mode = (['hub', 'setups', 'arena'] as Mode[]).includes(savedMode) ? savedMode : 'hub';
   const [kind, setKind] = usePersisted<KindFilter>('lotus.models.kind.v2', 'all');
   const [q, setQ] = useState('');
   const [installed, setInstalled] = useState<OllamaModel[]>([]);
@@ -360,7 +363,6 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
     { id: 'hub' as const, label: 'Get Models', icon: <Boxes className="w-4 h-4" /> },
     { id: 'setups' as const, label: 'Image Setups', icon: <Layers className="w-4 h-4" /> },
     { id: 'arena' as const, label: 'Arena & Benchmark', icon: <Swords className="w-4 h-4" /> },
-    { id: 'monitor' as const, label: 'Hardware & Runtime', icon: <Activity className="w-4 h-4" /> },
   ];
   const navBtn = (on: boolean) => cx('w-full h-9 px-2.5 flex items-center gap-2.5 rounded-[8px] text-[13px] text-left', on ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]');
 
@@ -389,7 +391,6 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
             ))}
             {!history.length && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)]">Run a comparison and pick a winner to start a history.</p>}
           </>)}
-          {mode === 'monitor' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">Readings update every two seconds while this page is open. Hover a chart to see a moment.</p>}
           {mode === 'setups' && <p className="px-2.5 text-[12px] text-[var(--color-text-muted)] leading-snug">A setup ties an image model to its own VAE, text encoders and settings.</p>}
         </div>
       </SidebarPane>
@@ -404,7 +405,6 @@ export const ModelsWorkspace: React.FC<Props> = ({ engines, onOpenEngines }) => 
         )}
         {mode === 'setups' && <div className="flex-1 min-h-0 overflow-y-auto p-6"><ImageSetups q={q} /></div>}
         {mode === 'arena' && <Arena names={arenaNames} engine={arenaEngine} ready={arenaReady} history={history} setHistory={setHistory} />}
-        {mode === 'monitor' && <Monitor engines={engines} />}
       </div>
 
       {mode === 'arena' && (

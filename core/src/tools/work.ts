@@ -7,6 +7,7 @@
 //                   in Lotus Studio/Work/<work id>/
 //   artifact.read   read one back to revise it
 //   agent.delegate  hand a self-contained part of the job to a helper agent, get its result back
+//   agents.deploy   (0.11.0) start several helper agents at once on independent parts, get all results
 //   ask.user        ask a question (with optional choices) and wait for the answer
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -129,6 +130,45 @@ export const agentDelegate: Tool = {
   },
 };
 
+/** "Researcher: find X" → name + goal; a plain line is just the goal. */
+export function parseJob(raw: string): { name?: string; goal: string } {
+  const t = String(raw ?? '').trim();
+  const m = /^([A-Z][\w .'-]{0,30}?)\s*:\s+(\S[\s\S]*)$/.exec(t);
+  return m && m[1].split(/\s+/).length <= 3 ? { name: m[1].trim(), goal: m[2].trim() } : { goal: t };
+}
+
+export const agentsDeploy: Tool = {
+  name: 'agents.deploy', label: 'Deploying agents', risk: 'read',
+  description: 'Start several helper agents at the same time, each on its own independent part of the job (e.g. research three topics, draft separate sections, check several files). Each has your tools except deploying, delegating and asking, works on its own, and returns its result; you get all results back to combine. The user sees every agent with its task and progress. Prefer this over doing independent parts one by one.',
+  parameters: { type: 'object', properties: {
+    tasks: { type: 'array', items: { type: 'string' }, description: 'One line per agent: "Name: exactly what it should do and return", e.g. "Researcher: find three budget keyboards with prices". 2–6 agents.' },
+    context: { type: 'string', description: 'What every agent needs to know (facts, file names, constraints).' },
+  }, required: ['tasks'] },
+  describe: (a) => `Deploy ${Array.isArray(a.tasks) ? a.tasks.length : 0} agents`,
+  async run(a, ctx) {
+    if (!ctx.deploy) return { ok: false, text: 'Agents can only be deployed in Work mode.', summary: 'Not available here' };
+    const jobs = (Array.isArray(a.tasks) ? a.tasks : []).map((x) => parseJob(String(x))).filter((j) => j.goal).slice(0, 6);
+    if (!jobs.length) return { ok: false, text: 'Give at least one task, one line per agent.', summary: 'No tasks' };
+    // Names must tell agents apart (each gets its own face).
+    const seen = new Map<string, number>();
+    jobs.forEach((j, i) => {
+      const base = j.name || `Agent ${i + 1}`;
+      const n = (seen.get(base.toLowerCase()) ?? 0) + 1;
+      seen.set(base.toLowerCase(), n);
+      j.name = n > 1 ? `${base} ${n}` : base;
+    });
+    ctx.progress(`${jobs.length} agents working…`);
+    const out = await ctx.deploy(jobs, String(a.context ?? ''));
+    const ok = out.filter((r) => r.ok).length;
+    return {
+      ok: ok > 0,
+      text: out.map((r) => `### ${r.name}${r.ok ? '' : ' (failed)'}\n${r.content || 'Returned nothing.'}`).join('\n\n'),
+      summary: `${ok} of ${out.length} agents finished · ${out.map((r) => r.name).join(', ')}`.slice(0, 160),
+      data: { agents: out.map((r) => ({ name: r.name, ok: r.ok, steps: r.steps })) },
+    };
+  },
+};
+
 export const askUser: Tool = {
   name: 'ask.user', label: 'Asking you', risk: 'read',
   description: 'Ask the user a question and wait for the answer, when you need a decision or missing information to continue (e.g. "The site needs a login. Should I continue with A, B or C?"). Offer 2–4 short choices when you can. Don\'t ask about things you can find out yourself.',
@@ -145,4 +185,4 @@ export const askUser: Tool = {
   },
 };
 
-export const WORK_TOOLS: Tool[] = [planSet, planCheck, artifactWrite, artifactRead, agentDelegate, askUser];
+export const WORK_TOOLS: Tool[] = [planSet, planCheck, artifactWrite, artifactRead, agentDelegate, agentsDeploy, askUser];

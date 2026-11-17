@@ -13,17 +13,6 @@ import type { LotusSettings } from '../../types/lotus';
 
 export type LibraryTab = 'skills' | 'memory' | 'soul' | 'plugins';
 
-interface Props {
-  open: boolean;
-  tab: LibraryTab;
-  onTab: (t: LibraryTab) => void;
-  onClose: () => void;
-  settings: LotusSettings;
-  onSettings: (p: Partial<LotusSettings>) => void;
-  /** Workspace folder of the open chat: its SOUL.md / memory.md are listed too. */
-  folder?: string;
-}
-
 /** One readable document in the left list. */
 interface Doc {
   id: string;
@@ -37,49 +26,19 @@ interface Doc {
   icon: React.ReactNode;
 }
 
-const TABS: { id: LibraryTab; label: string }[] = [
-  { id: 'skills', label: 'Skills' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'soul', label: 'Soul' },
-  { id: 'plugins', label: 'Plugins' },
-];
-
 /**
- * Library: read what Lotus actually sends to the model. Skills (system, learned and plugin skills),
+ * Library panes: read what Lotus actually sends to the model. Skills (system, learned and plugin skills),
  * memory (long-term memory and project memory files), the soul (system prompt and project persona
- * files) and plugins, including the plugin creator. Opened from the profile menu, /library or /plugins.
+ * files) and plugins, including the plugin creator. 0.11.0: shown as tabs of the Tasks page
+ * (Tasks → Skills / Memory / Soul / Plugins); /library and /plugins open them there.
  */
-export const LibrarySheet: React.FC<Props> = ({ open, tab, onTab, onClose, settings, onSettings, folder }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => { window.removeEventListener('keydown', h); prev?.focus?.(); };
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[6vh] px-4 bg-black/25 dark:bg-black/45" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Library"
-        className="material-frosted w-full max-w-[980px] h-[86vh] max-h-[720px] flex flex-col rounded-[12px] outline-none overflow-hidden">
-        <div className="flex items-center gap-3 px-4 h-12 shrink-0 border-b border-[var(--sep)]">
-          <BookOpen className="w-4 h-4 text-[var(--petal-violet)]" aria-hidden="true" />
-          <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">Library</h2>
-          <Segmented label="Library sections" value={tab} onChange={onTab} options={TABS} className="ml-2" />
-          <div className="flex-1" />
-          <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
-        </div>
-        <div className="flex-1 min-h-0 flex">
-          {tab === 'plugins'
-            ? <PluginsPane />
-            : <DocsPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}
-        </div>
-      </div>
-    </div>
-  );
-};
+export const LibraryPane: React.FC<{ tab: LibraryTab; settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; folder?: string }> = ({ tab, settings, onSettings, folder }) => (
+  <div className="flex-1 min-h-0 flex">
+    {tab === 'plugins'
+      ? <PluginsPane />
+      : <DocsPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}
+  </div>
+);
 
 // ── Skills / Memory / Soul ──────────────────────────────────────────────────
 
@@ -102,7 +61,7 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
       return [
         ...SYSTEM_SKILLS.map<Doc>((s) => ({ id: s.id, group: 'System skills', title: s.name, subtitle: s.description, badge: s.usedBy, text: systemSkillFile(s), readOnly: 'Built into Lotus. This is the exact text the feature sends.', icon: <Lock className="w-3.5 h-3.5" /> })),
         ...mem.skills.map<Doc>((s) => ({ id: s.id, group: 'Your skills', title: s.name, subtitle: s.description, badge: `${s.origin === 'auto' ? 'Learned' : 'Yours'} · v${s.version}${s.enabled ? '' : ' · off'}`, text: skillFile(s), readOnly: 'Edit or switch it off in Tasks → Skills.', icon: <Sparkles className="w-3.5 h-3.5" /> })),
-        ...installed.flatMap((p) => p.skills.map<Doc>((k, i) => ({ id: `plg:${p.id}:${i}`, group: 'Plugin skills', title: k.name, subtitle: k.description, badge: `${p.name}${p.enabled ? '' : ' · off'}`, text: pluginSkillFile(k, p), readOnly: 'Part of a plugin. Edit it in Library → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> }))),
+        ...installed.flatMap((p) => p.skills.map<Doc>((k, i) => ({ id: `plg:${p.id}:${i}`, group: 'Plugin skills', title: k.name, subtitle: k.description, badge: `${p.name}${p.enabled ? '' : ' · off'}`, text: pluginSkillFile(k, p), readOnly: 'Part of a plugin. Edit it in Tasks → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> }))),
       ];
     }
     if (tab === 'memory') {
@@ -115,7 +74,7 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
     return [
       { id: 'soul', group: 'Lotus', title: 'System prompt', subtitle: 'Sent first in every chat', text: soulFile(settings.systemPrompt), icon: <Flower2 className="w-3.5 h-3.5" /> },
       ...projFiles('soul'),
-      ...installed.filter((p) => p.instructions).map<Doc>((p) => ({ id: `plgi:${p.id}`, group: 'Plugin instructions', title: p.name, subtitle: p.enabled ? 'On: added after the system prompt' : 'Off', text: `# ${p.name}\n\n${p.instructions}`, readOnly: 'Part of a plugin. Edit it in Library → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> })),
+      ...installed.filter((p) => p.instructions).map<Doc>((p) => ({ id: `plgi:${p.id}`, group: 'Plugin instructions', title: p.name, subtitle: p.enabled ? 'On: added after the system prompt' : 'Off', text: `# ${p.name}\n\n${p.instructions}`, readOnly: 'Part of a plugin. Edit it in Tasks → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> })),
     ];
   }, [tab, mem.skills, mem.memories, mem.status, installed, project.files, settings.systemPrompt]);
 

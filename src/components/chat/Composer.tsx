@@ -199,7 +199,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
 
             {(files.length > 0 || drag) && (
               <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, text or code files to attach them. You can also paste them.</p>}
+                {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, PDFs, Office documents, text or code files to attach them. You can also paste them.</p>}
                 {files.map((f, i) => {
                   const url = previews[f.name + f.size];
                   return (
@@ -221,7 +221,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               <input ref={dirInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true"
                 {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                 onChange={(e) => { const l = e.target.files; if (l?.length) void attachFolder(l); e.target.value = ''; }} />
-              <button type="button" aria-label="Attach files" data-tip="Attach images, text or code (or paste or drop them)" onClick={() => fileInput.current?.click()}
+              <button type="button" aria-label="Attach files" data-tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => fileInput.current?.click()}
                 className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]">
                 <Plus className="w-[18px] h-[18px]" />
               </button>
@@ -280,7 +280,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
                 <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => onClearFolder?.()}><X className="w-3 h-3" /></IconBtn>
               </span>
             ) : trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', isTauri ? 'Let Lotus work in a folder: it opens, searches and edits the files it needs (saving asks first)' : "Attach a folder: its text and code files join this chat's context")}
-            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Library', 'The skills, memory and soul Lotus uses')}
+            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Skills', 'The skills, memory and soul Lotus uses (Tasks page)')}
             {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
             <div className="flex-1" />
             {trayToggle(memoryOn, onToggleMemory, <BrainCircuit className="w-4 h-4" />,

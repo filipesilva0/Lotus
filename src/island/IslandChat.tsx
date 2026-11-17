@@ -1,4 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { DocReadError, docKind, documentText } from '../lib/docText';
 import { ArrowUp, Square, Mic, Paperclip, Plus, Copy, Check, Volume2, RotateCcw, ExternalLink, X, FileText } from 'lucide-react';
 import { ollamaClient, ChatTurn, fileToBase64 } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
@@ -94,11 +95,12 @@ export const IslandChat = forwardRef<IslandChatHandle, {
         if (f.type.startsWith('image/')) {
           const data = await fileToBase64(f);
           setAttach((a) => [...a, { name: f.name, kind: 'image', data }]);
-        } else if (f.size <= MAX_TEXT_FILE && (f.type.startsWith('text/') || /\.(md|json|csv|log|ts|tsx|js|jsx|py|rs|go|java|c|cpp|h|cs|sql|yml|yaml|toml|xml|html|css|sh|bat|ps1)$/i.test(f.name))) {
-          const data = await f.text();
-          setAttach((a) => [...a, { name: f.name, kind: 'text', data }]);
-        } else flash(`${f.name}: only images and text files up to 100 KB are supported.`);
-      } catch { flash(`Couldn't read ${f.name}.`); }
+        } else if (docKind(f.name, f.type)) {
+          const data = (await documentText(f)) ?? '';
+          if (data.length > MAX_TEXT_FILE) flash(`${f.name}: too long for the island (over ${Math.round(MAX_TEXT_FILE / 1000)} K characters). Open it in Chat instead.`);
+          else setAttach((a) => [...a, { name: f.name, kind: 'text', data }]);
+        } else flash(`${f.name}: the island reads images, PDFs, Office files and text files.`);
+      } catch (e) { flash(e instanceof DocReadError ? e.message : `Couldn't read ${f.name}.`); }
     }
   };
   // Drop files on the island chat, or paste them (Ctrl/Cmd+V).

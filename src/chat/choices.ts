@@ -8,6 +8,8 @@
 //      (or preceded) by a short lettered/numbered/bulleted list of options.
 // Pure functions only, so the harness can test them without a DOM.
 
+import { findCardBlock, withoutBlock } from './looseBlock';
+
 export type QuestionType = 'single' | 'multi' | 'text';
 
 export interface ChoiceQuestion {
@@ -43,7 +45,6 @@ export const CHOICES_INSTRUCTIONS =
 
 const MAX_OPTIONS = 12;
 const MAX_QUESTIONS = 8;
-const OPEN_RE = /(^|\n)[ ]{0,3}(`{3,}|~{3,})[ \t]*choices[ \t]*\n/i;
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
@@ -83,25 +84,25 @@ export function pollFromJson(json: unknown): ChoicePoll | null {
   return { title, questions, source: 'block' };
 }
 
-/** Finds and removes a ```choices block. Unclosed blocks (still streaming) are hidden and flagged. */
+/** JSON that is meant as a choices card (not any JSON a reply happens to contain). */
+export function looksLikeChoices(j: unknown): boolean {
+  if (Array.isArray(j)) return j.length > 0 && j.every((q) => q && typeof q === 'object' && ('question' in q || 'q' in q));
+  if (!j || typeof j !== 'object') return false;
+  const o = j as Record<string, unknown>;
+  return Array.isArray(o.questions) || (typeof (o.question ?? o.q ?? o.prompt) === 'string' && Array.isArray(o.options ?? o.choices));
+}
+
+/**
+ * Finds and removes the choices block. Unclosed blocks (still streaming) are hidden and flagged.
+ * 0.11.0: also a ```json or untagged block, a bare object at the end, and loose JSON (looseBlock.ts),
+ * because models sometimes ignore the exact format and the user saw raw JSON instead of the card.
+ */
 function extractBlock(content: string): ParsedChoices | null {
-  const m = OPEN_RE.exec(content);
-  if (!m) return null;
-  const start = m.index + m[1].length;
-  const fence = m[2];
-  const bodyStart = m.index + m[0].length;
-  const closeRe = new RegExp(`\\n[ ]{0,3}${fence[0] === '`' ? '`' : '~'}{${fence.length},}[ \\t]*(?:\\n|$)`);
-  const rest = content.slice(bodyStart - 1);
-  const c = closeRe.exec(rest);
-  const before = content.slice(0, start).replace(/\s+$/, '');
-  if (!c) return { text: before, poll: null, pending: true };
-  const body = rest.slice(1, c.index);
-  const after = rest.slice(c.index + c[0].length);
-  const text = (before + (after.trim() ? `\n\n${after.trim()}` : '')).trim();
-  let poll: ChoicePoll | null = null;
-  try { poll = pollFromJson(JSON.parse(body)); } catch { poll = null; }
+  const b = findCardBlock(content, ['choices', 'choice', 'options', 'poll', 'questions'], looksLikeChoices, /"(questions|options|choices)"\s*:/);
+  if (!b) return null;
+  if (b.pending) return { text: content.slice(0, b.start).replace(/\s+$/, ''), poll: null, pending: true };
   // Broken JSON: show the reply without the block rather than a wall of JSON.
-  return { text, poll, pending: false };
+  return { text: withoutBlock(content, b), poll: b.json ? pollFromJson(b.json) : null, pending: false };
 }
 
 const OPTION_RE = /^\s*(?:\(?([A-Ha-h])[).:]|\(?([1-9])[).]|[-*•])\s+(.+?)\s*$/;

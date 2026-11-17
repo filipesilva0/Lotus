@@ -30,7 +30,7 @@ interface Props {
   onStep?: (msgId: string, step: ChatToolCall, allow: boolean) => void;
 }
 
-const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
+export const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
   const [open, setOpen] = useState(mode === 'expanded');
   const running = m.isStreaming && !m.content;
   // Agent steps are shown on their own, always visible (AgentSteps); the drawer keeps lookups and thinking.

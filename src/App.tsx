@@ -26,7 +26,7 @@ import { startScheduler } from './tasks/store';
 import { loadMemory } from './memory/store';
 import { SettingsModal, type SettingsTab } from './components/modals/SettingsModal';
 import { AccountModal, AccountView } from './components/account/AccountModal';
-import { LibrarySheet, LibraryTab } from './components/library/LibrarySheet';
+import type { LibraryTab } from './components/library/LibraryPane';
 import { ollamaClient } from './services/ollamaService';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
@@ -170,7 +170,9 @@ export default function App() {
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
   const openSettings = useCallback((pane: SettingsTab | null = null) => { setSettingsPane(pane); setIsSettingsOpen(true); }, []);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
-  const [library, setLibrary] = useState<LibraryTab | null>(null);
+  // 0.11.0: skills, memory, soul and plugins are tabs of the Tasks page.
+  const [tasksRequest, setTasksRequest] = useState<{ tab: LibraryTab; n: number } | null>(null);
+  const setLibrary = useCallback((tab: LibraryTab) => { setTasksRequest({ tab, n: Date.now() }); setCurrentView('tasks'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
 
   // Each page's left panel (its list) and right panel (its inspector), toggled from the title bar.
@@ -413,8 +415,10 @@ export default function App() {
       { label: panels.left ? 'Hide Sidebar' : 'Show Sidebar', shortcut: 'Ctrl+Alt+S', mac: 'Ctrl+Cmd+S', onSelect: toggleLeft },
       { label: panels.right ? 'Hide Inspector' : 'Show Inspector', shortcut: 'Ctrl+Alt+I', mac: 'Alt+Cmd+I', onSelect: toggleRight },
       'separator',
-      { label: 'Library…', onSelect: () => setLibrary('skills') },
-      { label: 'Plugins…', onSelect: () => setLibrary('plugins') },
+      { label: 'Skills', onSelect: () => setLibrary('skills') },
+      { label: 'Memory', onSelect: () => setLibrary('memory') },
+      { label: 'Soul', onSelect: () => setLibrary('soul') },
+      { label: 'Plugins', onSelect: () => setLibrary('plugins') },
       // macOS adds its own Enter Full Screen (lib/nativeMenu.ts); Windows and Linux get the same command here.
       ...(chromeOs() === 'macos' ? [] : ['separator' as const, { label: fullScreen ? 'Exit Full Screen' : 'Enter Full Screen', shortcut: 'F11', onSelect: () => void toggleFullScreen() }]),
     ] },
@@ -475,7 +479,6 @@ export default function App() {
         onSelectView={setCurrentView}
         onOpenSettings={() => openSettings()}
         onOpenAccount={setAccountView}
-        onOpenLibrary={setLibrary}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
         dark={dark}
@@ -505,7 +508,7 @@ export default function App() {
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
           onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} />}
 
-        {currentView === 'tasks' && <TasksWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} ollamaUp={ollamaUp} />}
+        {currentView === 'tasks' && <TasksWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} ollamaUp={ollamaUp} request={tasksRequest} folder={chat.active?.folder} />}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>
@@ -538,8 +541,7 @@ export default function App() {
       <TitleBar canGoBack={past.length > 0} canGoForward={future.length > 0} onBack={goBack} onForward={goForward}
         leftPanel={panels.left} rightPanel={panels.right} onToggleLeft={toggleLeft} onToggleRight={toggleRight} menus={menus} />
       {panel}
-      <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} />
-      <LibrarySheet open={library !== null} tab={library ?? 'skills'} onTab={setLibrary} onClose={() => setLibrary(null)} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} folder={chat.active?.folder} />
+      <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} engines={eng.engines} />
       <AlertHost />
       <CoreNotice />
       <SettingsModal isOpen={isSettingsOpen} pane={settingsPane} onClose={closeSettings} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />

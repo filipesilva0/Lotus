@@ -299,3 +299,9 @@ html.no-glass body { background: var(--color-bg-base); }
 /* Island (session 16): a plain dark pill; an indeterminate bar slides while work has no percentage. */
 @keyframes island-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { [style*="island-slide"] { animation: none !important; } }
+
+/* 0.11.0: no native number spinners anywhere (WebView2 drew them clipped in short fields). Steppers
+   bring their own arrows (components/common/ui.tsx Stepper); plain number fields take typing and arrow keys. */
+input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

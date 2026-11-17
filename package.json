@@ -28,7 +28,9 @@
     "@tauri-apps/plugin-http": "2.7.0",
     "@tauri-apps/plugin-opener": "2.5.5",
     "@vitejs/plugin-react": "^6.1.1",
+    "fflate": "^0.8.3",
     "lucide-react": "^0.546.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^8.3.0"

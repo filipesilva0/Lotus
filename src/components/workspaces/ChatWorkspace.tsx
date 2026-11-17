@@ -1,4 +1,5 @@
 import type { ImageProposal } from '../../chat/imageProposal';
+import { documentText } from '../../lib/docText';
 import { Starters } from '../common/Starters';
 import { CHAT_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -20,7 +21,7 @@ import { usePersisted } from '../../lib/persist';
 import { engineUrl } from '../../services/engineConfig';
 import { folderSummary, folderToContext, pickFolderPath, readPickedFiles } from '../../chat/folder';
 import { expandCommand, pluginCommands, usePlugins } from '../../plugins/store';
-import type { LibraryTab } from '../library/LibrarySheet';
+import type { LibraryTab } from '../library/LibraryPane';
 import type { ResearchApi } from '../../research/store';
 import { ResearchView } from '../research/ResearchWorkspace';
 
@@ -118,7 +119,10 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
   };
 
   const mountFiles = async (files: File[]) => {
-    for (const f of files) if (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') chat.addContext(contextItemFromText(f.name, await f.text(), hardware.get().plan.chunkChars));
+    for (const f of files) {
+      const text = await documentText(f).catch(() => null);
+      if (text !== null) chat.addContext(contextItemFromText(f.name, text, hardware.get().plan.chunkChars));
+    }
   };
 
   const offline = ollamaUp === false;

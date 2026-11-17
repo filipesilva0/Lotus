@@ -4,7 +4,7 @@
 
 import type { WireMsg } from '../src/agent/llm';
 
-export interface FakeTurn { content?: string; calls?: { name: string; args: Record<string, unknown> }[]; thinking?: string; error?: string; status?: number }
+export interface FakeTurn { content?: string; calls?: { name: string; args: Record<string, unknown> }[]; thinking?: string; error?: string; status?: number; /** Wait this long before answering (to watch agents work). */ delay?: number }
 export type Responder = (messages: WireMsg[], body: { tools?: unknown[]; model: string }) => FakeTurn;
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
@@ -39,6 +39,7 @@ export function fakeOllama(respond: Responder | FakeTurn[], o: { capabilities?: 
       requests.push({ messages: body.messages, tools: body.tools, model: body.model });
       const turn = next(body.messages, body);
       i++;
+      if (turn.delay) await Bun.sleep(turn.delay);
       if (turn.status) return Response.json({ error: turn.error ?? 'boom' }, { status: turn.status });
       const lines: string[] = [];
       if (turn.thinking) lines.push(JSON.stringify({ message: { role: 'assistant', content: '', thinking: turn.thinking }, done: false }));
@@ -158,6 +159,31 @@ export const worker: Responder = (ms) => {
   return { content: `Done. You said **${answer.replace('The user answered: ', '')}** matters most, so the guide recommends the Akko 5075B. I made a comparison table (keyboards.csv) and a one-page buying guide (guide.html); both are in the Artifacts panel.` };
 };
 
+/** 0.11.0: Work deploys three agents by itself (shoot-s23.mjs); each takes a moment so they can be watched. */
+export const team: Responder = (ms) => {
+  const sys = String(ms[0]?.content ?? '');
+  const tools = ms.filter((m) => m.role === 'tool');
+  const helper = /You are (\w+)\. You are a helper agent/.exec(sys)?.[1];
+  if (helper) {
+    const wait = { Researcher: 2600, Writer: 1200, Checker: 1800 }[helper] ?? 1000;
+    return tools.length ? { delay: wait, content: `${helper} result: ${helper === 'Researcher' ? 'quad sets, heel slides, straight-leg raises' : helper === 'Writer' ? 'Knee rehab starts gently.' : 'Stop if pain rises above 5/10.'}` } : { delay: wait, calls: [{ name: 'artifact_read', args: {} }] };
+  }
+  const user = String(last(ms, 'user')?.content ?? '');
+  if (!tools.length) return { thinking: 'Three independent parts: exercises, an intro, safety notes. I will deploy three agents so they work at the same time.', calls: [{ name: 'agents_deploy', args: { tasks: ['Researcher: list three gentle knee exercises', 'Writer: draft a two-line intro about knee rehab', 'Checker: write one safety note'], context: user } }] };
+  if (tools.length === 1) return { calls: [{ name: 'artifact_write', args: { title: 'Knee plan', filename: 'knee-plan.md', content: `# Knee plan\n\n${tools[0].content}` } }] };
+  return { content: `Done. Three agents worked on it at once; I combined their parts into **knee-plan.md**. (${user.slice(0, 40)})` };
+};
+
+/** 0.11.0: Chat replies whose cards come in the formats models actually use (shoot-s23.mjs). */
+export const cards: Responder = (ms) => {
+  const all = JSON.stringify(ms);
+  const user = String(last(ms, 'user')?.content ?? '');
+  if (all.includes('Hello from page one') && /pdf/i.test(user)) return { content: 'PDF READ OK: it says Hello from page one, and page two says Second page text.' };
+  if (/image/i.test(user)) return { content: 'Here is a prompt for your picture.\n\n```json\n{"title": "Fox in snow", "prompt": "a red fox sitting in fresh snow, soft morning light", "negative": "blurry", "aspect": "4:3", "steps": 25,}\n```' };
+  if (/plan/i.test(user)) return { content: 'A couple of questions first.\n\n{"title": "Your plan", "questions": [{"question": "Days per week?", "options": ["2", "3", "4"]}, {"question": "Main goal?", "options": ["Strength", "Mobility"]}]}' };
+  return { content: 'Hello!' };
+};
+
 /** Always claims, never acts. */
 export const liar: Responder = () => ({ content: "I've added “Renew passport” to your task board." });
 
@@ -166,6 +192,8 @@ if (import.meta.main && process.argv.includes('--serve')) {
   const b = fakeOllama(liar);
   const c = fakeComfy({ models: ['sdxl-fake.safetensors'], big: true });
   const w = fakeOllama(worker);
-  console.log(`FAKES ${JSON.stringify({ ollama: a.url, liar: b.url, comfy: c.url, work: w.url })}`);
+  const t = fakeOllama(team);
+  const k = fakeOllama(cards);
+  console.log(`FAKES ${JSON.stringify({ ollama: a.url, liar: b.url, comfy: c.url, work: w.url, team: t.url, cards: k.url })}`);
   setTimeout(() => process.exit(0), Number(process.env.FAKES_TTL ?? 240) * 1000);
 }
