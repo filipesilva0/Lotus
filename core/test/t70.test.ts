@@ -24,7 +24,7 @@ import { fakeOllama, last } from './fakes';
 const dirs: string[] = [];
 const stops: (() => void)[] = [];
 const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), `lotus-t70-${p}-`)); dirs.push(d); return d; };
-afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => rmSync(d, { recursive: true, force: true })); });
+afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows: a test database may still be open; the OS cleans temp */ } }); });
 
 function harness(url: string, o: { approval?: 'ask' | 'risky' | 'auto'; approve?: (s: Step) => boolean | 'timeout' | Promise<boolean | 'timeout'>; backend?: 'ollama' | 'llamacpp'; nativeTools?: boolean; auth?: string } = {}) {
   const db = openDb(tmp('db'));
