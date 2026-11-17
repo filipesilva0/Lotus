@@ -1,5 +1,5 @@
-// Project context files: when Lotus loads a folder (a chat workspace folder or an App Builder
-// project) it looks for SOUL.md, memory.md, AGENTS.md, CLAUDE.md, .hermes.md, .cursorrules,
+// Project context files: when Lotus loads a folder (a chat workspace folder) it
+// looks for SOUL.md, memory.md, AGENTS.md, CLAUDE.md, .hermes.md, .cursorrules,
 // .cursor/rules/*.mdc, .github/copilot-instructions.md, .lotus/*.md … (full list in
 // src-tauri/src/context_files.rs) and applies them to the model's instructions:
 //   soul   → who the assistant is and how it speaks (goes first)

@@ -1,7 +1,6 @@
 // Tool calls for models without native tool calling (and for llama.cpp servers): the model writes
 //   <tool name="task.add">{"title": "Buy milk"}</tool>
-// and gets the result back as a user turn starting "Tool result". Same idea as the App Builder's tag
-// protocol (builder/protocol.ts), kept separate because its tags edit project files.
+// and gets the result back as a user turn starting "Tool result".
 
 import type { Tool } from './types';
 

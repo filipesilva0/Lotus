@@ -197,7 +197,7 @@
 
                 <Control Id="Intro" Type="Text" X="20" Y="56" Width="330" Height="28" NoPrefix="yes" Text="These free engines do the work behind Lotus. For each one you tick, Lotus downloads the official installer from the engine's own site and opens it, so you can read its terms." />
 
-                <Control Id="OllamaBox" Type="CheckBox" X="20" Y="94" Width="320" Height="14" Property="INSTALL_OLLAMA" CheckBoxValue="1" Text="Ollama, for chat, research and the App Builder">
+                <Control Id="OllamaBox" Type="CheckBox" X="20" Y="94" Width="320" Height="14" Property="INSTALL_OLLAMA" CheckBoxValue="1" Text="Ollama, for chat and research">
                     <Condition Action="hide">OLLAMA_FOUND</Condition>
                     <Condition Action="show">NOT OLLAMA_FOUND</Condition>
                 </Control>

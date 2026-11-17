@@ -1,4 +1,3 @@
-mod appbuilder;
 mod context_files;
 mod downloads;
 mod engines;
@@ -84,7 +83,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(engines::Engines::default())
-        .manage(appbuilder::AppBuilder::default())
         .manage(downloads::Downloads::default())
         .manage(hooks::Pending::default())
         .manage(lotusd::Core::default())
@@ -117,26 +115,6 @@ pub fn run() {
             setup::setup_prepare,
             setup::engine_detect,
             setup::installer_open,
-            appbuilder::proj_create,
-            appbuilder::proj_tree,
-            appbuilder::proj_read,
-            appbuilder::proj_write,
-            appbuilder::proj_mkdir,
-            appbuilder::proj_delete,
-            appbuilder::proj_rename,
-            appbuilder::proc_spawn,
-            appbuilder::proc_kill,
-            appbuilder::proc_running,
-            appbuilder::preview_serve,
-            appbuilder::preview_stop,
-            appbuilder::toolchain_check,
-            appbuilder::android_paths,
-            appbuilder::adb_devices,
-            appbuilder::emulator_avds,
-            appbuilder::adb_screenshot,
-            appbuilder::adb_tap,
-            appbuilder::adb_swipe,
-            appbuilder::adb_key,
             hardware::hw_snapshot,
             context_files::ctx_discover,
             context_files::ctx_read_folder,
@@ -235,7 +213,6 @@ pub fn run() {
         RunEvent::Exit => {
             handle.state::<lotusd::Core>().stop();
             engines::kill_all(&handle.state::<engines::Engines>());
-            appbuilder::kill_all(&handle.state::<appbuilder::AppBuilder>());
         }
         // macOS: clicking the Dock icon after closing the window (Lotus keeps running) brings it back.
         #[cfg(target_os = "macos")]

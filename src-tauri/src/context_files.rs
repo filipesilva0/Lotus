@@ -1,5 +1,5 @@
-//! Finds project context files in a folder Lotus opens (a chat workspace folder or an App Builder
-//! project): persona, memory and rules files that other agent tools also read.
+//! Finds project context files in a folder Lotus opens (a chat workspace folder):
+//! persona, memory and rules files that other agent tools also read.
 //! Read-only: Lotus never writes to these files.
 
 use serde::Serialize;

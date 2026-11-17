@@ -1,4 +1,4 @@
-// Minimal key/value store for larger values (App Builder chats). With the core running these live in
+// Minimal key/value store for larger values. With the core running these live in
 // lotus.db as `lotus.idb.<key>` (JSON); without one, in the browser's IndexedDB as before.
 // Blobs can't go through the core this way: save images and audio with saveMedia (lib/core.ts).
 import { kv, storeMode } from './store';
