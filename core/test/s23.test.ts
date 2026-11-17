@@ -38,7 +38,7 @@ describe('real documents', () => {
     expect(t).toContain('## Page 1');
     expect(t).toContain('Hello from page one');
     expect(t.indexOf('Second page text')).toBeGreaterThan(t.indexOf('## Page 2'));
-  });
+  }, 30_000); // the first PDF loads pdf.js; a cold Windows CI runner took over 5 s (v0.13.0 build)
   test('PDF without text says it looks scanned', async () => {
     await expect(read('scanned.pdf')).rejects.toThrow(DocReadError);
     await expect(read('scanned.pdf')).rejects.toThrow(/scanned/);
