@@ -3,7 +3,7 @@ import { uid } from '../lib/persist';
 
 export const estimateTokens = (s: string) => Math.ceil(s.length / 4);
 
-export const TEXT_EXT = /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|xml|html?|css|scss|js|jsx|ts|tsx|py|rs|go|java|c|h|cpp|hpp|cs|rb|php|sh|ps1|bat|sql|tex)$/i;
+export { TEXT_EXT } from '../lib/fileKinds';
 
 /** Split text into chunks on line boundaries. The size follows the VRAM auto-scaler (bigger context → bigger chunks). */
 export function chunkText(text: string, size = 1500): ContextChunk[] {

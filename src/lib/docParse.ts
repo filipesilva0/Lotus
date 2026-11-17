@@ -3,7 +3,7 @@
 // PDF with pdf.js (bundled, loaded only when a PDF is attached), the zip formats with fflate.
 // The pure parts (XML → text, RTF → text, kind detection) live here without DOM globals so the
 // core's tests can run them; DOMParser is not needed. The window-side entry is lib/docText.ts.
-import { TEXT_EXT } from '../chat/helpers';
+import { TEXT_EXT } from './fileKinds';
 
 export type DocKind = 'pdf' | 'docx' | 'pptx' | 'xlsx' | 'odf' | 'epub' | 'rtf' | 'html' | 'text';
 

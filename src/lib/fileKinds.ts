@@ -52,3 +52,6 @@ export function sortFiles(files: File[]) {
   return { images, media, other };
 }
 
+
+/** Text and code files Lotus reads as text (more document kinds: lib/docParse.ts). */
+export const TEXT_EXT = /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|xml|html?|css|scss|js|jsx|ts|tsx|py|rs|go|java|c|h|cpp|hpp|cs|rb|php|sh|ps1|bat|sql|tex)$/i;
