@@ -20,7 +20,7 @@ import {
 import { SetupState, StepId, enginesToInstall, initialEngines, modelScreenEngines, saveSetup, visibleSteps } from '../../setup/state';
 import { Job, fetchImages, fetchVoices, pullChat, useSetupJobs } from '../../setup/jobs';
 import { installEngine, installModel, useBuiltins, type BuiltinId } from '../../lib/builtins';
-import { fitOf, FIT_LABEL, LIBRARY, suggest, downloadGb, entryById, type LibEntry, type ModelKind } from '../../models/library';
+import { chatPicksFor, fitOf, FIT_LABEL, LIBRARY, suggest, downloadGb, entryById, type LibEntry, type ModelKind } from '../../models/library';
 
 /*
  * First-run guide (session 10, second design). A blank Lotus window: the OS material (acrylic on
@@ -125,7 +125,7 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
     if (ownPicked.current || !own.machine) return;
     ownPicked.current = true;
     const m = own.machine;
-    const g = (k: ModelKind) => suggest(k, m.vramGb, m.unified)?.id ?? null;
+    const g = (k: ModelKind) => suggest(k, m.vramGb, m.unified, 'builtin', m.ramGb)?.id ?? null;
     setOwnPick({ chat: g('chat'), image: m.gpu === 'none' ? null : g('image'), voice: g('voice'), dictation: g('dictation') });
   }, [own.machine]);
   const picked = useRef(false);
@@ -577,18 +577,19 @@ const OWN_COPY: Record<ModelStep, { title: string; body: string }> = {
 
 /** Session 17: model choice for Lotus's own engines, from the one catalog (models/library.ts). */
 const OwnModelScreen: React.FC<{
-  step: ModelStep; machine: { gpuName: string; vramGb: number; unified: boolean; gpu: string } | null;
+  step: ModelStep; machine: { gpuName: string; vramGb: number; unified: boolean; gpu: string; ramGb?: number } | null;
   pick: Record<'chat' | 'image' | 'voice' | 'dictation', string | null>; onPick: (k: 'chat' | 'image' | 'voice' | 'dictation', id: string | null) => void;
 }> = ({ step, machine, pick, onPick }) => {
   const kind: 'chat' | 'image' | 'voice' = step === 'images' ? 'image' : step;
-  const list = LIBRARY.filter((e) => e.kind === kind && e.builtin && e.tier);
+  // Chat: the three picks for this kind of computer (T71); images and voice: the catalog's tiers.
+  const list = kind === 'chat' ? chatPicksFor(machine).filter((e) => e.builtin) : LIBRARY.filter((e) => e.kind === kind && e.builtin && e.tier);
   const c = OWN_COPY[step];
   const dict = LIBRARY.filter((e) => e.kind === 'dictation' && e.builtin && e.tier);
   return (
     <Screen title={c.title} body={c.body}>
       <div className="setup-list" role="radiogroup" aria-label={c.title}>
         {list.map((e) => {
-          const fit = machine ? fitOf(e, machine.vramGb, machine.unified) : 'unknown';
+          const fit = machine ? fitOf(e, machine.vramGb, machine.unified, machine.ramGb) : 'unknown';
           const on = pick[kind] === e.id;
           return (
             <button key={e.id} type="button" role="radio" aria-checked={on} onClick={() => onPick(kind, e.id)} className={cx('setup-row setup-choice w-full text-left', on && 'is-on')}>

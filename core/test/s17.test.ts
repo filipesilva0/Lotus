@@ -92,7 +92,7 @@ describe('one catalog', () => {
     expect(suggest('chat', 8)?.id).toBe('qwen3-8b');
     expect(suggest('image', 8)?.id).toBe('sdxl-base');
     expect(suggest('image', 4)?.id).toBe('sd15');
-    expect(suggest('chat', 24)?.id).toBe('qwen3.5-27b');
+    expect(suggest('chat', 24)?.id).toBe('qwen3.8-27b');
     expect(suggest('voice', 0)?.id).toBe('kokoro');
     expect(fitOf({ vramGb: 0 }, undefined)).toBe('fits');
     expect(fitOf({ vramGb: 20 }, 8)).toBe('too-big');

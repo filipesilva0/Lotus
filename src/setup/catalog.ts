@@ -127,7 +127,7 @@ export type Pick = ChatPick | ImagePick | VoicePick;
 export const CHAT_PICKS: ChatPick[] = [
   { kind: 'chat', id: 'qwen3.5:4b', tag: 'qwen3.5:4b', tier: 'quick', title: 'Qwen 3.5 4B', maker: 'Alibaba', licence: 'Apache-2.0', vision: true,
     blurb: 'Quick replies and reads screenshots and photos. Runs on laptops.', vramGb: 5, diskGb: 3.3 },
-  { kind: 'chat', id: 'gemma4:12b', tag: 'gemma4:12b', tier: 'balanced', title: 'Gemma 4 12B', maker: 'Google', licence: 'Gemma terms', vision: true,
+  { kind: 'chat', id: 'gemma4:12b', tag: 'gemma4:12b', tier: 'balanced', title: 'Gemma 4 12B', maker: 'Google', licence: 'Apache-2.0', vision: true,
     blurb: 'Strong all-rounder with vision and tool use. Great for daily chat.', vramGb: 10, diskGb: 7.7 },
   { kind: 'chat', id: 'qwen3.5:27b', tag: 'qwen3.5:27b', tier: 'best', title: 'Qwen 3.5 27B', maker: 'Alibaba', licence: 'Apache-2.0', vision: true,
     blurb: 'Top open model for reasoning, writing and image understanding.', vramGb: 22, diskGb: 17 },

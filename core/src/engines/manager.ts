@@ -21,7 +21,7 @@ import type { Subprocess } from 'bun';
 import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
-import { entryById, parseCustomSource, pickGguf, profileForEntry, type LibEntry, type ModelKind } from '../../../src/models/library';
+import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
 import { missingFor, sdcppArgs, sdcppProgress, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
 
 export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx' };
@@ -381,25 +381,30 @@ export class Builtins {
     this.d.kvSet(PROFILES_KEY, JSON.stringify([...list, p]));
   }
 
-  private async hfFiles(repo: string, signal: AbortSignal): Promise<{ path: string; size?: number }[]> {
+  /** A Hugging Face repo's files (and folders, marked `dir`) at its top level or in one folder. */
+  private async hfFiles(repo: string, signal: AbortSignal, folder?: string): Promise<{ path: string; size?: number; dir?: boolean }[]> {
     const base = this.d.hfBase ?? 'https://huggingface.co';
     const f = this.d.fetch ?? fetch;
     let r: Response;
-    try { r = await f(`${base}/api/models/${repo}/tree/main`, { headers: { 'user-agent': 'Lotus (local AI studio)' }, signal }); }
+    try { r = await f(`${base}/api/models/${repo}/tree/main${folder ? `/${folder.split('/').map(encodeURIComponent).join('/')}` : ''}`, { headers: { 'user-agent': 'Lotus (local AI studio)' }, signal }); }
     catch (e) { if (signal.aborted) throw e; throw new DownloadError('Couldn\'t reach Hugging Face. Check the internet connection and try again.'); }
     if (r.status === 404 || r.status === 401) throw new DownloadError(`Hugging Face has no public model called ${repo}. Check the name (owner/model).`);
     if (!r.ok) throw new DownloadError(`Hugging Face answered HTTP ${r.status} for ${repo}.`);
     const j = (await r.json()) as { path?: string; size?: number; type?: string }[];
-    return (Array.isArray(j) ? j : []).filter((x) => x.type !== 'directory' && x.path).map((x) => ({ path: String(x.path), size: Number(x.size) || undefined }));
+    return (Array.isArray(j) ? j : []).filter((x) => x.path).map((x) => (x.type === 'directory' ? { path: String(x.path), dir: true } : { path: String(x.path), size: Number(x.size) || undefined }));
   }
 
   private async fetchGguf(job: Job, signal: AbortSignal, repo: string, quant: string, mmproj: string | undefined, folder: string) {
     job.step = `Looking up ${repo}…`; this.emit();
-    const list = await this.hfFiles(repo, signal);
-    const pick = pickGguf(list, quant, mmproj);
+    const top = await this.hfFiles(repo, signal);
+    let list = top.filter((x) => !x.dir);
+    let pick = pickGguf(list, quant, mmproj);
+    // Big models are split into parts inside a folder named for the quantisation (Q4_K_M/…-00001-of-00003.gguf).
+    const sub = pick.model ? undefined : quantFolder(top, quant);
+    if (sub) { list = [...list, ...(await this.hfFiles(repo, signal, sub)).filter((x) => !x.dir)]; pick = pickGguf(list, quant, mmproj); }
     if (!pick.model) throw new DownloadError(`${repo} has no ${quant} GGUF file. Try another quantisation, e.g. ${repo}:Q4_K_M.`);
     const base = this.d.hfBase ?? 'https://huggingface.co';
-    const parts = [pick.model, ...(pick.mmproj ? [pick.mmproj] : [])];
+    const parts = [...(pick.parts ?? [pick.model]), ...(pick.mmproj ? [pick.mmproj] : [])];
     const total = parts.reduce((s, p) => s + (p.size ?? 0), 0);
     let before = 0;
     const out: string[] = [];
@@ -411,7 +416,7 @@ export class Builtins {
       before += p.size ?? 0;
       out.push(rel);
     }
-    return { gguf: out[0], mmproj: pick.mmproj ? out[1] : undefined, files: out };
+    return { gguf: out[0], mmproj: pick.mmproj ? out[out.length - 1] : undefined, files: out };
   }
 
   installModel(id: string): string {

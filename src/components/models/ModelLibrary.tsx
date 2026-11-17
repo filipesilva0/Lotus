@@ -4,7 +4,7 @@ import { Banner, Btn, Card, cx } from '../common/ui';
 import { confirmAlert } from '../common/Alerts';
 import { Tip } from '../common/Tip';
 import { cancelJob, fmtSize, installCustomModel, installEngine, installModel, jobFor, removeEngine, removeModel, useBuiltins, type BuiltinId, type Job } from '../../lib/builtins';
-import { availableOn, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, type LibEntry, type ModelKind } from '../../models/library';
+import { availableOn, chatPicksFor, CLASS_LABEL, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, machineClass, type Fit, type LibEntry, type ModelKind } from '../../models/library';
 import type { ImageFolder } from '../../models/imageProfiles';
 import { ollamaClient, type OllamaModel } from '../../services/ollamaService';
 import { voicebox } from '../../services/voicebox';
@@ -43,6 +43,8 @@ const Progress: React.FC<{ job: Job; onCancel?: () => void }> = ({ job, onCancel
   );
 };
 
+const TIER_LABEL = { quick: 'Quick', balanced: 'Balanced', best: 'Best' } as const;
+
 export const ModelLibrary: React.FC<{
   kind: KindFilter; q: string; settings: LotusSettings; ollamaUp: boolean | null; voiceboxUp: boolean | null;
   /** Ollama pulls stay in the Models page's own pull state (one at a time, shown at the top). */
@@ -55,6 +57,9 @@ export const ModelLibrary: React.FC<{
   const [vbModels, setVbModels] = useState<{ model_name: string; display_name: string; hf_repo_id?: string | null; downloaded?: boolean }[]>([]);
   const vram = b.machine?.vramGb;
   const unified = !!b.machine?.unified;
+  const ram = b.machine?.ramGb;
+  // T71: the three chat models suggested for this kind of computer come first, then what fits.
+  const picks = useMemo(() => new Map(chatPicksFor(b.machine).map((e) => [e.id, e.tier!])), [b.machine]);
 
   useEffect(() => { if (ollamaUp && settings.llmBackend === 'ollama') void ollamaClient.listModels().then(setOllama).catch(() => setOllama([])); }, [ollamaUp, settings.llmBackend, pulling]);
   useEffect(() => { if (voiceboxUp && settings.voiceEngine === 'voicebox') void voicebox.modelStatus().then((m) => setVbModels(m as typeof vbModels)).catch(() => setVbModels([])); }, [voiceboxUp, settings.voiceEngine]);
@@ -88,13 +93,26 @@ export const ModelLibrary: React.FC<{
   };
 
   const needle = q.trim().toLowerCase();
+  const KIND_ORDER: ModelKind[] = ['chat', 'image', 'voice', 'dictation'];
+  const FIT_ORDER: Record<Fit, number> = { fits: 0, tight: 1, unknown: 1, 'too-big': 2 };
+  const cpuOnly = !!b.machine && machineClass(b.machine) === 'cpu';
+  /** Kind first; within chat, this computer's picks, then by fit and size. */
+  const rankOf = (e: LibEntry): number => {
+    const k = KIND_ORDER.indexOf(e.kind) * 1e6;
+    if (e.kind !== 'chat' || !b.machine) return k;
+    const t = picks.get(e.id);
+    if (t) return k + ['quick', 'balanced', 'best'].indexOf(t);
+    // With a graphics card bigger is better while it fits; on the processor smaller is faster.
+    return k + 10 + FIT_ORDER[fitOf(e, vram, unified, ram)] * 1e4 + (cpuOnly ? Math.round(e.vramGb * 10) : Math.round(1000 - e.vramGb * 10));
+  };
   const entries = useMemo(() => LIBRARY.filter((e) => {
     if (kind !== 'all' && e.kind !== kind) return false;
     if (!availableOn(e, engineFor(e.kind, settings))) return false;
     if (needle && !`${e.title} ${e.maker} ${e.tags.join(' ')} ${KIND_LABEL[e.kind]}`.toLowerCase().includes(needle)) return false;
-    if (onlyFits && b.machine && fitOf(e, vram, unified) === 'too-big') return false;
+    if (onlyFits && b.machine && fitOf(e, vram, unified, ram) === 'too-big') return false;
     return true;
-  }), [kind, settings.llmBackend, settings.imageEngine, settings.voiceEngine, needle, onlyFits, b.machine]); // eslint-disable-line react-hooks/exhaustive-deps
+  }).map((e, i) => ({ e, i })).sort((a, z) => rankOf(a.e) - rankOf(z.e) || a.i - z.i).map((x) => x.e),
+  [kind, settings.llmBackend, settings.imageEngine, settings.voiceEngine, needle, onlyFits, b.machine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const installed = b.models.filter((m) => (kind === 'all' || m.kind === kind) && (!needle || m.title.toLowerCase().includes(needle)));
   const running = b.jobs.filter((j) => j.state === 'running');
@@ -105,7 +123,8 @@ export const ModelLibrary: React.FC<{
       {/* This computer, and where everything goes. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
         <span className="inline-flex items-center gap-1.5"><HardDrive className="w-4 h-4 text-[var(--color-text-muted)]" aria-hidden="true" />
-          {b.machine ? (b.machine.gpu === 'none' ? 'No graphics card found: models run on the processor' : `${b.machine.gpuName}${b.machine.vramGb ? ` · ${b.machine.vramGb} GB ${b.machine.unified ? 'shared memory' : 'video memory'}` : ''}`) : 'Reading this computer…'}
+          {b.machine ? (b.machine.gpu === 'none' ? `No graphics card found: models run on the processor${b.machine.ramGb ? ` · ${Math.round(b.machine.ramGb)} GB memory` : ''}` : `${b.machine.gpuName}${b.machine.vramGb ? ` · ${b.machine.vramGb} GB ${b.machine.unified ? 'shared memory' : 'video memory'}` : ''}`) : 'Reading this computer…'}
+          {b.machine && <span className="text-[var(--color-text-muted)]">· Suggestions for: {CLASS_LABEL[machineClass(b.machine)]}</span>}
           <Tip label="Video memory" text="VRAM: the graphics card's own memory. A model runs fastest when it fits in it." /></span>
         <label className="inline-flex items-center gap-2 text-[13px]"><input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />Only Models That Fit</label>
         <div className="flex-1" />
@@ -149,7 +168,8 @@ export const ModelLibrary: React.FC<{
             const job = jobFor(b, `model:${e.id}`);
             const busy = job?.state === 'running' || (eng === 'ollama' && pulling === e.ollama);
             const have = isInstalled(e);
-            const fit = b.machine ? fitOf(e, vram, unified) : null;
+            const fit = b.machine ? fitOf(e, vram, unified, ram) : null;
+            const tier = picks.get(e.id);
             const offline = (eng === 'ollama' && ollamaUp === false) || (eng === 'voicebox' && voiceboxUp === false) || ((eng === 'builtin' || eng === 'comfyui') && !b.available);
             return (
               <Card key={e.id} className="p-3.5 flex flex-col min-w-0 overflow-hidden">
@@ -157,6 +177,7 @@ export const ModelLibrary: React.FC<{
                   <div className="flex-1 min-w-0"><p className="text-[14px] font-semibold truncate">{e.title}</p><p className="text-[12px] text-[var(--color-text-muted)] truncate">{e.maker} · {e.licence}</p></div>
                   <span className="shrink-0 px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--hover)] text-[12px] font-medium">{KIND_LABEL[e.kind]}</span>
                 </div>
+                {tier && b.machine && <p className="mt-1 text-[12px] font-medium text-[var(--color-accent-vibrant)]">Suggested for this computer · {TIER_LABEL[tier]}</p>}
                 <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug flex-1">{e.blurb}</p>
                 <p className="mt-2 text-[12px] tabular-nums">
                   {e.diskGb >= 1 ? `${e.diskGb} GB` : `${Math.round(e.diskGb * 1000)} MB`}
