@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { EngineNotice } from '../common/EngineNotice';
+import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
+import { hasLiveSettings, liveSettings } from '../../lib/liveSettings';
 import { FlaskConical, Plus, Trash2, Sparkles, RefreshCw, Play, User } from 'lucide-react';
 import { ResearchApi } from '../../research/store';
 import { Project, SubTopic, Persona } from '../../research/types';
@@ -24,7 +25,7 @@ export const ScopingView: React.FC<Props> = ({ r, p, models, ollamaUp, onOpenEng
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       {r.error && <Banner tone="error" action={<Btn size="sm" variant="secondary" onClick={onOpenEngines}>Engines</Btn>}>{r.error}</Banner>}
-      {ollamaUp === false && <EngineNotice id="ollama" purpose="to research" note="Deep research uses your local model for every step." />}
+      {ollamaUp === false && (hasLiveSettings() && liveSettings().llmBackend === 'builtin' ? <BuiltinNotice kind="chat" purpose="to research" /> : <EngineNotice id="ollama" purpose="to research" note="Deep research uses your local model for every step." />)}
 
       {/* 1 · Question */}
       {stage === 'ask' && (

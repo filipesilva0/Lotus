@@ -3,6 +3,16 @@
 > Snapshot taken at the end of session 1. Evidence legend: ✅ confirmed (command/test output seen) · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > **Rule for future sessions:** update this file whenever a claim here changes. Do not mark something ✅ without having run it.
 
+## After 0.11.0 (17 Nov): audit fixes for the default built-in engines (⚠️ not run on Windows)
+The audit (project doc `claude/audit-0.11.0.md`, full report linked there) found surfaces hard-wired to Ollama/Voicebox that fail on the default built-in engines. Fixed (D85):
+- **Chat bar Dictate** (`components/chat/Composer.tsx`): `voice/voice.ts transcribe(wav)`, which uses Lotus's Whisper when Voice is on Lotus's engine, else Voicebox (with a plain message when it isn't running).
+- **Island quick chat** (`island/IslandChat.tsx`): runs through the core agent like Chat (any engine, tools, approvals answered on the island, the claim warning), memory off; models listed from the engine Settings picks (Lotus's downloads or Ollama), a saved model from another engine replaced. Steps show as ✓/✕ lines. Without the core it falls back to Ollama as before.
+- **Island dictation and read-aloud**: `transcribe` / `speak` (Lotus voice, Voicebox or the system voice).
+- **Deep Research** (`research/llm.ts`, `research/engine.ts`): `services/llm.ts` instead of `ollamaClient`, so it runs on Lotus's engine; the scoping notice uses `BuiltinNotice` there.
+- **Nemotron/Qwen calls written as text** (`<tool_call><function=…><parameter=…>` and `<tool_call>{json}</tool_call>`) now run as tool calls (`agent/loop.ts textCall`, tests in agent.test.ts).
+- `shoot-s16-island.mjs` waited 0.8 s for an island that waits up to ~12 s for the core before using browser storage; it now waits for the island to render.
+- Verified (Linux sandbox): tsc (app + core), build, run-tests, builder, s5, s7, s10–s13, core 178/178, shoot-s16-island, an island chat screenshot with steps and the claim warning. **Not verified:** any of it on Windows with real engines (T68).
+
 ## 0.11.0 (17 Nov): agents deployed by Work, thinking and message actions in Work, documents as attachments, library tabs on Tasks, profile = usage + Hardware & Runtime, looser card parsing, steppers (⚠️ not run on Windows or with real models)
 Filipe's list: Skills/Memory/Soul/Plugins as Tasks tabs; profile button opens usage; Work deploys agents by itself and they show in the island and the chat with task and progress; chat Model panel without the advanced options (keep stop sequences), spaced out; the image card still didn't appear after the model gave a prompt and a JSON; up/down arrows looked cut; Hardware & Runtime on the profile page; Work had no thinking and no edit/reload/copy buttons. Mid-session: PDFs and other common files as attachments; question cards sometimes left as raw JSON.
 - **Library → Tasks tabs**: `components/library/LibrarySheet.tsx` became `LibraryPane.tsx` (no modal); Tasks tabs Board · Routines · Skills (Yours = `SkillsView`, All = the library list, `lotus.tasks.skillView.v1`) · Memory · Soul · Plugins. `/library`, `/plugins`, the chat tray (button renamed Skills) and View › Skills/Memory/Soul/Plugins open Tasks at that tab (App `setLibrary` → `TasksWorkspace request`).

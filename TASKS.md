@@ -3,6 +3,12 @@
 > Bug/limitation IDs (B1…B17) refer to `CURRENT_STATE.md`. Evidence legend: ✅ confirmed · ⚠️ unverified · 💡 proposed · ❓ unknown.
 > Priorities: **P0** unblocks everything · **P1** correctness against real services · **P2** quality/polish · **P3** ideas.
 
+## Audit follow-ups (17 Nov; plan in project doc `claude/audit-0.11.0.md`)
+- **T68** On Filipe's PC with Lotus's own engines only (no Ollama/Voicebox): Dictate in Chat, the island quick chat (Ctrl+Alt+Space, a tool request such as "add a task", an approval on the island), island dictation and read-aloud, a Deep Research run.
+- **T69** Remaining audit P0s on the PC: SDXL on 8 GB with Lotus's engine, a pt-PT Piper/Kokoro voice, the microphone (T63).
+- **T70** Audit P1s: Think mode through the agent, task agent/routines/voice calls on the core agent (T43), a proper OpenAI-compatible provider (model list, key in the OS keychain, native tools), claim counts (T47), empty-overwrite as destructive, one shared settings default for core and UI, inspector penalties on the agent path, visible approval/question timeouts.
+- **T71** A big model catalog across machine classes (CPU-only, 4–6 GB, 8 GB, 12–16 GB, 24 GB+, Apple Silicon by memory) in `models/library.ts` (Filipe, 17 Nov).
+
 ## 0.11.0 follow-ups
 - **T65** With a real model in Work: does it deploy agents on its own for a job with independent parts (and not for one-step jobs)? Watch the island while they run. With Lotus's own engine they take turns; check it still feels alive.
 - **T66** Attach a real PDF, Word file and spreadsheet on Windows (WebView2) and macOS: text read, nothing blocked by the CSP, speed on a 100-page PDF.

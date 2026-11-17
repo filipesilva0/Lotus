@@ -18,6 +18,8 @@ try {
   const sender = await ctx.newPage();
   await sender.goto(`${U}/island.html#sender`);
   const post = (name, payload) => sender.evaluate(([n, p]) => new BroadcastChannel('lotus-bus').postMessage({ name: n, payload: p }), [name, payload]);
+  // The island waits up to ~12 s for the core before falling back to browser storage (0.8.1).
+  await island.waitForSelector('#root > *', { timeout: 20000 });
   await island.waitForTimeout(800);
   await post('activity', { id: 'img', kind: 'image', label: 'Generating “red fox in snow”', progress: 0.42 });
   await post('activity', { id: 'work', kind: 'build', label: 'Writing the buying guide' });

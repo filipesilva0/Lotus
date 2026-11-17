@@ -4,7 +4,7 @@
 //
 // All state lives in the Project object; the engine only calls api.patch().
 
-import { ollamaClient } from '../services/ollamaService';
+import { llm } from '../services/llm';
 import { EngineError } from '../lib/http';
 import { Project, Source, AgentState, RepoId, SubTopic } from './types';
 import { searchRepo, REPO_INFO } from './repos';
@@ -207,7 +207,7 @@ export async function synthesize(api: RunApi, ctl: RunControl): Promise<void> {
   let lastPush = 0;
   let tokens = 0;
   try {
-    for await (const tok of ollamaClient.streamChat(turns, { model: p.model, numCtx: p.numCtx, temperature: 0.4, signal: ctl.signal }, (s) => { tokens = s.totalTokens; })) {
+    for await (const tok of llm.streamChat(turns, { model: p.model, numCtx: p.numCtx, temperature: 0.4, signal: ctl.signal }, (s) => { tokens = s.totalTokens; })) {
       text += tok;
       if (Date.now() - lastPush > 150) { lastPush = Date.now(); const snap = text; api.patch((q) => ({ ...q, report: snap })); }
     }

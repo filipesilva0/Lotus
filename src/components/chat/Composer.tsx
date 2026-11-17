@@ -3,7 +3,7 @@ import { ArrowUp, Mic, MicOff, Plus, Square, X, FileText, Navigation, AtSign, Br
 import { IconBtn, cx } from '../common/ui';
 import { EdgeMeter, ModeButton, SendButton, TrayButton, TrayToggle } from '../common/PromptBox';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
-import { voicebox } from '../../services/voicebox';
+import { transcribe } from '../../voice/voice';
 import { isTauri } from '../../lib/http';
 import { folderName } from '../../chat/folder';
 import { useFileIntake } from '../../lib/fileDrop';
@@ -158,8 +158,8 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     setRec(false); setBusyMic(true);
     try {
       const r = await recorder.current!.stop();
-      const t = await voicebox.transcribe(r.wav);
-      if (t.text.trim()) setText((p) => (p ? `${p} ${t.text.trim()}` : t.text.trim())); else setNotice('Heard nothing. Try again a little closer to the mic.');
+      const said = await transcribe(r.wav);
+      if (said) setText((p) => (p ? `${p} ${said}` : said)); else setNotice('Heard nothing. Try again a little closer to the mic.');
     } catch (e) { setNotice((e as Error).message); } finally { setBusyMic(false); }
   };
 

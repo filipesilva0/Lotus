@@ -2,15 +2,34 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } f
 import { DocReadError, docKind, documentText } from '../lib/docText';
 import { ArrowUp, Square, Mic, Paperclip, Plus, Copy, Check, Volume2, RotateCcw, ExternalLink, X, FileText } from 'lucide-react';
 import { ollamaClient, ChatTurn, fileToBase64 } from '../services/ollamaService';
-import { voicebox } from '../services/voicebox';
 import { MicRecorder, micErrorMessage } from '../lib/audio';
+import { agentAvailable, runAgent } from '../lib/agent';
+import { builtinsNow, refreshBuiltins } from '../lib/builtins';
+import { hush, speak as speakText, transcribe } from '../voice/voice';
 import { emitEvent, invokeNative } from '../lib/bus';
 import { MarkdownLite, toSpeakable } from '../lib/markdownLite';
 import { loadIsland, mainSettings, Mood } from './state';
 import { kv } from '../lib/store';
 import { useFileIntake } from '../lib/fileDrop';
 
-interface Msg { role: 'user' | 'assistant'; content: string; error?: boolean; files?: string[] }
+interface Msg { role: 'user' | 'assistant'; content: string; error?: boolean; files?: string[]; steps?: string[]; unverified?: boolean }
+interface ModelOpt { id: string; name: string }
+
+/** The chat engine Settings → Engines picks (the island has no live settings, so it reads them). */
+function chatEngine(): 'builtin' | 'ollama' | 'llamacpp' {
+  try { const b = JSON.parse(kv.getItem('lotus.settings.v1') || '{}').llmBackend; return b === 'builtin' || b === 'llamacpp' ? b : 'ollama'; } catch { return 'ollama'; }
+}
+
+/** Chat models of that engine: Lotus's own downloads, or Ollama's list (a user-run llama-server serves one model). */
+async function chatModels(): Promise<ModelOpt[]> {
+  const engine = chatEngine();
+  if (engine === 'builtin') {
+    if (!builtinsNow().loaded) await refreshBuiltins();
+    return builtinsNow().models.filter((m) => m.kind === 'chat').map((m) => ({ id: m.id, name: m.title }));
+  }
+  if (engine === 'ollama') return (await ollamaClient.listModels()).map((m) => ({ id: m.name, name: m.name }));
+  return [];
+}
 interface Attach { name: string; kind: 'text' | 'image'; data: string }
 
 const HISTORY_KEY = 'lotus.island.chat.v1';
@@ -33,23 +52,28 @@ export const IslandChat = forwardRef<IslandChatHandle, {
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ModelOpt[]>([]);
   const [model, setModel] = useState(() => loadIsland().model || mainSettings().model);
 
   const abort = useRef<AbortController | null>(null);
   const rec = useRef<MicRecorder | null>(null);
-  const audio = useRef<HTMLAudioElement | null>(null);
   const input$ = useRef<HTMLTextAreaElement>(null);
   const end$ = useRef<HTMLDivElement>(null);
 
   useEffect(() => { kv.setItem(HISTORY_KEY, JSON.stringify(msgs.slice(-30).map(({ files: _f, ...m }) => m))); onHasContent(msgs.length > 0); }, [msgs, onHasContent]);
   useEffect(() => { end$.current?.scrollIntoView({ block: 'end' }); }, [msgs]);
-  useEffect(() => { ollamaClient.listModels().then((m) => setModels(m.map((x) => x.name))).catch(() => undefined); }, []);
+  useEffect(() => {
+    chatModels().then((list) => {
+      setModels(list);
+      // A model saved for another engine (e.g. an Ollama tag after switching to Lotus's engine) can't run here.
+      setModel((cur) => (list.length && !list.some((m) => m.id === cur) ? (list.find((m) => m.id === mainSettings().model)?.id ?? list[0].id) : cur));
+    }).catch(() => undefined);
+  }, []);
   useEffect(() => { input$.current?.focus(); }, []);
   useEffect(() => {
     onMood(recording ? 'listening' : speakingIdx !== null ? 'speaking' : busy ? 'thinking' : 'idle');
   }, [recording, speakingIdx, busy, onMood]);
-  useEffect(() => () => { rec.current?.cancel(); audio.current?.pause(); abort.current?.abort(); }, []);
+  useEffect(() => () => { rec.current?.cancel(); hush(); abort.current?.abort(); }, []);
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(null), 4000); return () => clearTimeout(t); }, [notice]);
 
   const flash = (m: string) => setNotice(m);
@@ -76,10 +100,34 @@ export const IslandChat = forwardRef<IslandChatHandle, {
     const c = new AbortController();
     abort.current = c;
     let acc = '';
+    const steps: string[] = [];
+    const show = (extra: Partial<Msg> = {}) => setMsgs((cur) => [...cur.slice(0, -1), { role: 'assistant', content: acc, steps: steps.length ? [...steps] : undefined, ...extra }]);
     try {
-      for await (const tok of ollamaClient.streamChat(turns, { model, temperature: ms.temperature, signal: c.signal }, (s) => onBusy(true, s.tokensPerSec))) {
-        acc += tok;
-        setMsgs((cur) => [...cur.slice(0, -1), { role: 'assistant', content: acc }]);
+      if (agentAvailable()) {
+        // The same agent as Chat (core): whichever engine Settings → Engines picks, with tools, approvals
+        // (answered on the island) and the "no step, no claim" check.
+        const done = await runAgent({
+          model, prompt: text, chatId: 'island',
+          messages: turns.map((t) => ({ role: t.role as 'system' | 'user' | 'assistant', content: t.content, images: t.images })),
+          options: { temperature: ms.temperature }, memoryOn: false,
+        }, (e) => {
+          if (e.kind === 'token') { acc += e.text; show(); }
+          else if (e.kind === 'reset') { acc = acc.slice(0, e.keep); show(); }
+          else if (e.kind === 'stats') onBusy(true, e.tokensPerSec);
+          else if (e.kind === 'step' && e.step.status !== 'running' && e.step.status !== 'waiting') {
+            const line = `${e.step.status === 'done' ? '✓' : '✕'} ${e.step.label}`;
+            const at = steps.findIndex((x) => x.endsWith(` ${e.step.label}`) && x.startsWith('…'));
+            if (at >= 0) steps[at] = line; else steps.push(line);
+            show();
+          } else if (e.kind === 'step' && e.step.status === 'running' && !steps.includes(`… ${e.step.label}`)) { steps.push(`… ${e.step.label}`); show(); }
+        }, c.signal);
+        acc = done.content || acc;
+        show({ unverified: done.unverified.length > 0 || undefined });
+      } else {
+        for await (const tok of ollamaClient.streamChat(turns, { model, temperature: ms.temperature, signal: c.signal }, (st) => onBusy(true, st.tokensPerSec))) {
+          acc += tok;
+          show();
+        }
       }
     } catch (e) {
       if (!c.signal.aborted) setMsgs((cur) => [...cur.slice(0, -1), { role: 'assistant', content: acc || (e as Error).message, error: !acc }]);
@@ -117,8 +165,8 @@ export const IslandChat = forwardRef<IslandChatHandle, {
     setRecording(false); setTranscribing(true);
     try {
       const r = await rec.current!.stop();
-      const t = await voicebox.transcribe(r.wav);
-      if (t.text.trim()) setInput((cur) => `${cur}${cur && !cur.endsWith(' ') ? ' ' : ''}${t.text.trim()}`);
+      const said = await transcribe(r.wav);
+      if (said) setInput((cur) => `${cur}${cur && !cur.endsWith(' ') ? ' ' : ''}${said}`);
       else flash('Heard nothing. Try again a little closer to the mic.');
     } catch (e) { flash((e as Error).message); }
     finally { setTranscribing(false); input$.current?.focus(); }
@@ -127,22 +175,19 @@ export const IslandChat = forwardRef<IslandChatHandle, {
 
   // ── Read aloud ────────────────────────────────────────────────────────────
   const speak = async (i: number) => {
-    if (speakingIdx === i) { audio.current?.pause(); setSpeakingIdx(null); return; }
-    audio.current?.pause();
+    hush();
+    if (speakingIdx === i) { setSpeakingIdx(null); return; }
     setSpeakingIdx(i);
+    // Lotus's voice engine, Voicebox or the system voice, as Settings → Engines picks (voice/voice.ts).
     try {
       const profile = loadIsland().voiceProfileId || kv.getItem('lotus.voice.profile') || undefined;
-      const q = await voicebox.speak(toSpeakable(msgs[i].content), { profile });
-      const done = await voicebox.waitFor(q.id);
-      const a = new Audio(await voicebox.audioUrl(done.id));
-      audio.current = a;
-      a.onended = () => setSpeakingIdx(null);
-      await a.play();
-    } catch (e) { setSpeakingIdx(null); flash((e as Error).message); }
+      if (!(await speakText(toSpeakable(msgs[i].content), profile))) flash('Nothing to read aloud.');
+    } catch (e) { flash((e as Error).message); }
+    finally { setSpeakingIdx((cur) => (cur === i ? null : cur)); }
   };
 
   const lastIdx = msgs.length - 1;
-  const clear = () => { abort.current?.abort(); audio.current?.pause(); setSpeakingIdx(null); setMsgs([]); };
+  const clear = () => { abort.current?.abort(); hush(); setSpeakingIdx(null); setMsgs([]); };
 
   return (
     <div className="flex flex-col h-full min-h-0"
@@ -151,7 +196,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
       <div className="flex items-center gap-1.5 pl-14 pr-3 pt-2.5 pb-1.5">
         <select aria-label="Model" value={model} onChange={(e) => setModel(e.target.value)}
           className="max-w-[170px] bg-white/10 hover:bg-white/15 text-white/90 text-[11px] font-semibold rounded-[6px] px-2.5 h-6 outline-none appearance-none truncate">
-          {[...new Set([model, ...models])].map((m) => <option key={m} value={m} className="text-black">{m}</option>)}
+          {(models.some((m) => m.id === model) ? models : [{ id: model, name: model }, ...models]).map((m) => <option key={m.id} value={m.id} className="text-black">{m.name}</option>)}
         </select>
         <div className="flex-1" />
         {msgs.length > 0 && (
@@ -168,13 +213,15 @@ export const IslandChat = forwardRef<IslandChatHandle, {
         {msgs.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center text-white/50 text-xs px-6">
             <p className="font-semibold text-white/80 text-[13px]">Ask anything</p>
-            <p className="mt-1">Runs on {model}, on this computer. Drop a file or image here to include it.</p>
+            <p className="mt-1">Runs on {models.find((m) => m.id === model)?.name ?? model}, on this computer. Drop a file or image here to include it.</p>
           </div>
         )}
         {msgs.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'flex justify-end' : ''}>
             <div className={m.role === 'user' ? 'max-w-[85%] rounded-2xl rounded-br-md bg-[var(--color-accent-vibrant)] text-white px-3 py-2' : `group max-w-full ${m.error ? 'text-amber-300' : ''}`}>
               {m.files?.length ? <p className="text-[11px] opacity-80 mb-1 flex items-center gap-1"><FileText className="w-3 h-3" />{m.files.join(', ')}</p> : null}
+              {m.steps?.length ? <ul aria-label="Steps Lotus took" className="mb-1 space-y-0.5 text-[11px] text-white/60">{m.steps.map((x, k) => <li key={k}>{x}</li>)}</ul> : null}
+              {m.unverified ? <p className="mb-1 text-[11px] text-amber-300">This reply says Lotus did something no step shows. Check before relying on it.</p> : null}
               {m.content ? <MarkdownLite text={m.content} /> : <span className="inline-flex gap-1 py-1" aria-label="Thinking">{[0, 1, 2].map((d) => <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/50" style={{ animation: `lotus-dots 1.2s ${d * 0.2}s infinite` }} />)}</span>}
               {m.role === 'assistant' && m.content && !m.error && !(busy && i === lastIdx) && (
                 <div className="flex gap-0.5 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">

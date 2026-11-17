@@ -1,6 +1,7 @@
 // Prompts and tolerant JSON handling for the research pipeline.
 
-import { ollamaClient, ChatTurn } from '../services/ollamaService';
+import { ChatTurn } from '../services/ollamaService';
+import { llm } from '../services/llm';
 import { Clarification, Persona, SubTopic, Source } from './types';
 
 export interface LlmCtx {
@@ -37,7 +38,7 @@ async function askJson<T>(ctx: LlmCtx, system: string, user: string, validate: (
       { role: 'system', content: `${system}\nReply with a single JSON object and nothing else.` },
       { role: 'user', content: attempt ? `${user}\n\nYour previous reply was not valid. Return ONLY the JSON object.` : user },
     ];
-    const r = await ollamaClient.chatOnce(turns, { model: ctx.model, numCtx: ctx.numCtx, temperature: 0.3, signal: ctx.signal, json: true });
+    const r = await llm.chatOnce(turns, { model: ctx.model, numCtx: ctx.numCtx, temperature: 0.3, signal: ctx.signal, json: true });
     ctx.onUsage(r.promptTokens, r.evalTokens);
     const ok = validate(parseJson(r.content));
     if (ok) return ok;

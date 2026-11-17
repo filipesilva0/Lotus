@@ -139,6 +139,10 @@ describe('registry', () => {
     expect(textCall('```json\n{"function": {"name": "files_list", "arguments": "{}"}}\n```')).toEqual({ name: 'files_list', args: {} });
     expect(textCall('{}')).toEqual({ name: '', args: {} });
     expect(textCall('Here: {"a": 1}')).toBeNull();
+    // Nemotron / Qwen templates written as text (15 Nov real tasks).
+    expect(textCall('<tool_call>\n<function=files_read>\n<parameter=path>\nnotes.txt\n</parameter>\n</function>\n</tool_call>')).toEqual({ name: 'files_read', args: { path: 'notes.txt' } });
+    expect(textCall('Sure.\n<tool_call><function=task_add><parameter=title>Call the dentist</parameter><parameter=priority>2</parameter></function></tool_call>')).toEqual({ name: 'task_add', args: { title: 'Call the dentist', priority: 2 } });
+    expect(textCall('<tool_call>{"name": "task_list", "arguments": {}}</tool_call>')).toEqual({ name: 'task_list', args: {} });
     expect(textCall('{"answer": 391}')).toBeNull();
   });
   test('every tool has a valid schema and label', () => {

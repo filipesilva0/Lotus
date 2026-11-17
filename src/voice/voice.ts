@@ -69,6 +69,17 @@ export async function builtinTranscribe(wav: Blob, model?: string): Promise<stri
   return (await rpc<{ text: string }>('stt_builtin', { model: m, path: saved.path, language: p.language || undefined })).text.trim();
 }
 
+/**
+ * Turns a recording into text with the engine Settings → Engines picks for voice: Lotus's own Whisper,
+ * or Voicebox. Every dictation button uses this (the chat bar, the island), never one engine directly.
+ */
+export async function transcribe(wav: Blob): Promise<string> {
+  if (builtinVoicePrefs().on) return builtinTranscribe(wav);
+  const up = await voicebox.health(1000).then(() => true).catch(() => false);
+  if (!up) throw new Error('Dictation needs Voicebox running. Start it in Engines, or switch Voice to Lotus in Settings → Engines.');
+  return (await voicebox.transcribe(wav)).text.trim();
+}
+
 /** Transcribes audio already saved in Lotus Studio (a voice's reference recording, an uploaded file) and keeps it. */
 export async function builtinTranscribePath(path: string, o: { model?: string; language?: string } = {}): Promise<string> {
   const p = builtinVoicePrefs();

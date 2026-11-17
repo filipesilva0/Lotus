@@ -228,6 +228,22 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
 
 /** A reply that is only a JSON tool call written as text (or an empty object). */
 export function textCall(text: string): { name: string; args: Record<string, unknown> } | null {
+  // Nemotron and Qwen-style templates sometimes leave the call as text (seen 15 Nov with nemotron-3-nano):
+  //   <tool_call><function=files_read><parameter=path>notes.txt</parameter></function></tool_call>
+  const fx = /<function=([A-Za-z0-9_.-]+)>([\s\S]*?)(?:<\/function>|$)/.exec(text);
+  if (fx) {
+    const args: Record<string, unknown> = {};
+    for (const m of fx[2].matchAll(/<parameter=([A-Za-z0-9_]+)>\s*([\s\S]*?)\s*(?:<\/parameter>|(?=<parameter=)|$)/g)) {
+      const raw = m[2];
+      let v: unknown = raw;
+      if (/^(?:-?\d+(?:\.\d+)?|true|false|null|[[{][\s\S]*[\]}])$/.test(raw)) { try { v = JSON.parse(raw); } catch { v = raw; } }
+      args[m[1]] = v;
+    }
+    return { name: fx[1], args };
+  }
+  // <tool_call>{"name": …, "arguments": …}</tool_call> (Hermes/Qwen format written as text).
+  const tc = /<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/.exec(text);
+  if (tc && tc[1].trim().startsWith('{')) return textCall(tc[1]);
   const t = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
   if (!t.startsWith('{') || !t.endsWith('}')) return null;
   let j: unknown;
