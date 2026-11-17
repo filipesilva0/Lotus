@@ -17,6 +17,8 @@ export interface ChatOpts {
   auth?: string | null;
   model: string;
   temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[];
+  /** Chat's right panel (STATE #11): sent to both engines. */
+  frequencyPenalty?: number; presencePenalty?: number;
   /** Ollama: ask a thinking model to think (true) or not (false); undefined leaves the model's default. */
   think?: boolean;
   signal: AbortSignal;
@@ -144,6 +146,7 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     const body: Record<string, unknown> = {
       model: o.model, stream: true, messages: native ? toOpenAi(messages) : messages.map((m) => (m.role === 'tool' ? { role: 'user', content: m.content } : { role: m.role, content: m.content })),
       temperature: o.temperature, top_p: o.topP, top_k: o.topK, seed: o.seed, max_tokens: o.numPredict, stop: o.stop?.length ? o.stop : undefined,
+      frequency_penalty: o.frequencyPenalty, presence_penalty: o.presencePenalty,
     };
     if (native) body.tools = tools;
     let res: Response;
@@ -151,7 +154,8 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     catch (e) { throw reachError(o, e); }
     if (!res.ok) {
       const text = (await res.text()).slice(0, 300);
-      if (native && (res.status === 400 || res.status === 500) && /tool|template|jinja/i.test(text)) throw new ToolsUnsupported(text);
+      if (native && (res.status === 400 || res.status === 422 || res.status === 500) && /tool|template|jinja|function/i.test(text)) throw new ToolsUnsupported(text);
+      if (res.status === 401 || res.status === 403) throw new Error(`The server at ${o.url} wants an access key, or the one saved is wrong. Enter it under the server's address in Settings → Engines.`);
       const need = /exceed_context_size|exceeds the available context/i.test(text) ? Number(/"n_prompt_tokens"\s*:\s*(\d+)/.exec(text)?.[1]) || 0 : 0;
       if (need && o.growCtx) {
         // Room for the prompt plus a reply, rounded up to a whole 4K.
@@ -195,7 +199,7 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
 
   const body: Record<string, unknown> = {
     model: o.model, messages, stream: true,
-    options: { temperature: o.temperature, top_p: o.topP, top_k: o.topK, num_ctx: o.numCtx, seed: o.seed, num_predict: o.numPredict, stop: o.stop?.length ? o.stop : undefined },
+    options: { temperature: o.temperature, top_p: o.topP, top_k: o.topK, num_ctx: o.numCtx, seed: o.seed, num_predict: o.numPredict, stop: o.stop?.length ? o.stop : undefined, frequency_penalty: o.frequencyPenalty, presence_penalty: o.presencePenalty },
   };
   if (tools?.length) body.tools = tools;
   if (o.think !== undefined) body.think = o.think;

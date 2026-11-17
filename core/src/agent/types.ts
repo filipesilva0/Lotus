@@ -46,7 +46,7 @@ export interface ToolCtx {
   /** Work mode: the folder this piece of work keeps its artifacts in (Lotus Studio/Work/<id>). */
   workDir?: string;
   /** Asks the user a question and waits for the answer (typed, a picked option, or spoken). */
-  ask?: (question: string, options: string[]) => Promise<string>;
+  ask?: (question: string, options: string[]) => Promise<string | null>;
   /** Runs a helper agent on one part of the job and returns its final answer and step count. */
   delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean }>;
   /** 0.11.0: runs several helper agents at once (agents.deploy), each on its own part; results in order. */
@@ -66,6 +66,11 @@ export interface Tool {
   run: (args: Record<string, unknown>, ctx: ToolCtx) => Promise<ToolResult>;
   /** The step's one-line description of what it is about to do, for approval cards. */
   describe?: (args: Record<string, unknown>) => string;
+  /**
+   * Says why this particular call destroys something (emptying a file…), or null. Such a call always
+   * waits for Allow, even in "Never ask" (deny rules still come first).
+   */
+  destructive?: (args: Record<string, unknown>, ctx: Pick<ToolCtx, 'folders'>) => string | null;
 }
 
 export type StepStatus = 'waiting' | 'running' | 'done' | 'error' | 'denied';
@@ -101,7 +106,7 @@ export type AgentEvent =
   | { kind: 'error'; message: string }
   /** The agent asked the user something (ask.user) and waits; answer with agent_answer. */
   | { kind: 'ask'; askId: string; question: string; options: string[] }
-  | { kind: 'answered'; askId: string }
+  | { kind: 'answered'; askId: string; timedOut?: boolean }
   /** 0.11.0: a helper agent was deployed, moved on, or finished (the Work page and the island show it). */
   | { kind: 'helper'; helper: HelperInfo };
 

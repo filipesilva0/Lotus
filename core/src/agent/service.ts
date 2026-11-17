@@ -16,7 +16,8 @@ import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Db } from '../db';
 import { kvApply, kvGet } from '../kv';
-import { runAgent } from './loop';
+import { engineChoice } from '../../../src/lib/engineDefaults';
+import { APPROVAL_WAIT_MS, runAgent } from './loop';
 import { DEFAULT_DENY, isApprovalMode, parseRules } from './policy';
 import { Registry } from './registry';
 import { closeStaleRuns, finishRun, getRun, listRuns, pruneRuns, saveStep, startRun } from './runs';
@@ -59,7 +60,7 @@ export function readAgentSettings(db: Db): AgentSettings {
     approval: isApprovalMode(s.agentApproval) ? s.agentApproval : 'risky',
     deny: Array.isArray(s.agentDeny) ? s.agentDeny.map(String) : DEFAULT_DENY,
     folders: Array.isArray(s.agentFolders) ? s.agentFolders.map(String) : [],
-    backend: s.llmBackend === 'llamacpp' ? 'llamacpp' : s.llmBackend === 'builtin' ? 'builtin' : 'ollama',
+    backend: engineChoice(kvGet(db, 'lotus.settings.v1')).llmBackend,
     contextWindow: typeof s.contextWindow === 'number' ? s.contextWindow : 0,
     llamacppUrl: typeof s.llamacppUrl === 'string' && s.llamacppUrl ? s.llamacppUrl : 'http://127.0.0.1:8080',
     enabled: s.agentTools !== false,
@@ -73,7 +74,9 @@ export interface StartArgs {
   messages: WireMsg[];
   prompt: string;
   chatId?: string;
-  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean };
+  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean; frequencyPenalty?: number; presencePenalty?: number };
+  /** Think mode (Chat's brain button): analyse first, act with tools, then review the answer (loop.ts). */
+  think?: boolean;
   memoryOn?: boolean;
   web?: boolean;
   /** Extra folders for this run (the chat's attached folder). */
@@ -83,10 +86,12 @@ export interface StartArgs {
   /** Work mode: the piece of work this run belongs to (its artifacts folder). */
   workId?: string;
   capabilities?: string[];
+  /** A task or routine run nobody may be watching: approvals give up after 15 min and questions after 30, saying so (STATE #12). */
+  unattended?: boolean;
 }
 
 const isDir = (p: string) => { try { return statSync(p).isDirectory(); } catch { return false; } };
-const APPROVAL_TIMEOUT = 15 * 60_000;
+const ASK_TIMEOUT = 30 * 60_000;
 
 export class AgentService {
   private runs = new Map<string, AbortController>();
@@ -159,7 +164,8 @@ export class AgentService {
     const fetchFn = this.o.fetch ?? fetch;
     let ollama = 'http://127.0.0.1:11434', auth: string | null = null;
     try { const m = JSON.parse(kvGet(this.o.db, 'lotus.engineUrls.v1') || '{}'); if (m.ollama) ollama = String(m.ollama).replace(/\/+$/, ''); } catch { /* default */ }
-    try { auth = authHeader(JSON.parse(kvGet(this.o.db, 'lotus.engineAuth.v1') || '{}').ollama); } catch { /* none */ }
+    let serverAuth: string | null = null;
+    try { const keys = JSON.parse(kvGet(this.o.db, 'lotus.engineAuth.v1') || '{}'); auth = authHeader(keys.ollama); serverAuth = authHeader(keys.llamacpp); } catch { /* none */ }
     const folders = this.folders(a.folders);
     const tools = this.toolsFor(a);
     const messages = a.messages.map((m) => ({ ...m }));
@@ -175,12 +181,13 @@ export class AgentService {
     // ask.user: the question goes to every window (chat, Work, the island), spoken aloud there if the
     // user turned voice on, and the first answer wins.
     let askSeq = 0;
-    const ask = (question: string, options: string[]) => new Promise<string>((done) => {
+    const ask = (question: string, options: string[]) => new Promise<string | null>((done) => {
       const askId = `ask${++askSeq}`;
       const key = `${runId}/${askId}`;
-      const finish = (v: string) => { if (!this.asks.has(key)) return; this.asks.delete(key); clearTimeout(t); ctrl.signal.removeEventListener('abort', onAbort); emit({ kind: 'answered', askId }); done(v); };
+      const finish = (v: string | null) => { if (!this.asks.has(key)) return; this.asks.delete(key); if (t) clearTimeout(t); ctrl.signal.removeEventListener('abort', onAbort); emit({ kind: 'answered', askId, ...(v === null ? { timedOut: true } : {}) }); done(v); };
       const onAbort = () => finish('');
-      const t = setTimeout(() => finish(''), 30 * 60_000);
+      // Interactive runs wait until answered or stopped; unattended ones give up and say so.
+      const t = a.unattended ? setTimeout(() => finish(null), ASK_TIMEOUT) : null;
       ctrl.signal.addEventListener('abort', onAbort);
       this.asks.set(key, finish);
       emit({ kind: 'ask', askId, question, options });
@@ -194,11 +201,13 @@ export class AgentService {
     }
 
     const llm: { backend: 'ollama' | 'llamacpp'; nativeTools?: boolean; url: string; auth: string | null; fetch: typeof fetchFn; growCtx?: (tokens: number) => Promise<string> } & NonNullable<StartArgs['options']> = {
-      backend: s.backend === 'ollama' ? 'ollama' : 'llamacpp', nativeTools: s.backend === 'builtin',
-      url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : null, fetch: fetchFn, ...a.options,
+      // STATE #7: a server the user runs (llama-server, LM Studio, vLLM) gets the OpenAI tool list too, with
+      // its access key; one that refuses tools falls back to tags (loop.ts).
+      backend: s.backend === 'ollama' ? 'ollama' : 'llamacpp', nativeTools: s.backend !== 'ollama',
+      url: s.backend === 'ollama' ? ollama : s.llamacppUrl.replace(/\/+$/, ''), auth: s.backend === 'ollama' ? auth : s.backend === 'llamacpp' ? serverAuth : null, fetch: fetchFn, ...a.options,
     };
     let helperSeq = 0, batchSeq = 0;
-    const helperBase = { model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'agents.deploy' && t.name !== 'ask.user'), llm, s, workDir: workDir ?? '', folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st: Step) => this.waitFor(runId, st, ctrl.signal) };
+    const helperBase = { model: a.model, tools: tools.filter((t) => t.name !== 'agent.delegate' && t.name !== 'agents.deploy' && t.name !== 'ask.user'), llm, s, workDir: workDir ?? '', folders, memoryOn: !!a.memoryOn, fetchFn, signal: ctrl.signal, emit, approve: (st: Step) => this.waitFor(runId, st, ctrl.signal, !!a.unattended) };
     void (async () => {
       try {
         if (s.backend === 'builtin') {
@@ -209,7 +218,7 @@ export class AgentService {
           llm.growCtx = async (tokens) => { const url = await b.ensureChat(a.model, { ctx: tokens }); llm.url = url; return url; };
         }
         const out = await runAgent({
-          runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined,
+          runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined, think: !!a.think,
         }, {
           llm,
           registry: this.registry,
@@ -229,7 +238,7 @@ export class AgentService {
             saveStep(this.o.db, st, seq);
             if (st.tool === 'memory.save' && st.status === 'done') this.o.broadcast({ type: 'memory' });
           },
-          approve: (st) => this.waitFor(runId, st, ctrl.signal),
+          approve: (st) => this.waitFor(runId, st, ctrl.signal, !!a.unattended),
         });
         const status = ctrl.signal.aborted ? 'stopped' : 'done';
         finishRun(this.o.db, runId, { status, reply: out.content, mode: out.mode, unverified: out.unverified });
@@ -254,7 +263,7 @@ export class AgentService {
    */
   private async helper(runId: string, n: number, h: {
     goal: string; context: string; name?: string; batch?: string; model: string; tools: Tool[]; llm: Parameters<typeof runAgent>[1]['llm']; s: AgentSettings; workDir: string; folders: string[];
-    memoryOn: boolean; fetchFn: typeof fetch; signal: AbortSignal; emit: (e: AgentEvent) => void; approve: (st: Step) => Promise<boolean>;
+    memoryOn: boolean; fetchFn: typeof fetch; signal: AbortSignal; emit: (e: AgentEvent) => void; approve: (st: Step) => Promise<boolean | 'timeout'>;
   }): Promise<{ name: string; content: string; steps: number; ok: boolean }> {
     const name = (h.name ?? '').trim().slice(0, 40) || `Helper ${n}`;
     const subId = `${runId}-h${n}`;
@@ -296,12 +305,13 @@ export class AgentService {
     }
   }
 
-  private waitFor(runId: string, st: Step, signal: AbortSignal): Promise<boolean> {
+  private waitFor(runId: string, st: Step, signal: AbortSignal, unattended = false): Promise<boolean | 'timeout'> {
     const key = `${runId}/${st.id}`;
-    return new Promise<boolean>((done) => {
-      const finish = (v: boolean) => { if (!this.waits.has(key)) return; this.waits.delete(key); clearTimeout(t); signal.removeEventListener('abort', onAbort); done(v); };
+    return new Promise<boolean | 'timeout'>((done) => {
+      const finish = (v: boolean | 'timeout') => { if (!this.waits.has(key)) return; this.waits.delete(key); if (t) clearTimeout(t); signal.removeEventListener('abort', onAbort); done(v); };
       const onAbort = () => finish(false);
-      const t = setTimeout(() => finish(false), APPROVAL_TIMEOUT);
+      // STATE #12: a chat or Work run waits until you answer or press Stop; a task/routine gives up and says so.
+      const t = unattended ? setTimeout(() => finish('timeout'), APPROVAL_WAIT_MS.value) : null;
       signal.addEventListener('abort', onAbort);
       this.waits.set(key, finish);
     });

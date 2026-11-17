@@ -3,6 +3,7 @@
 // as files in Lotus Studio/Images and added to the Images page's history.
 
 import type { Tool, ToolCtx } from '../agent/types';
+import { engineChoice } from '../../../src/lib/engineDefaults';
 import { dimensionsFor, GraphError, graphTxt2Img, type GraphInput } from '../../../src/services/comfyGraph';
 import { recipeFor } from '../../../src/setup/catalog';
 import { saveMedia } from '../media';
@@ -12,7 +13,7 @@ import type { ImageProfile } from '../../../src/models/imageProfiles';
 
 /** Settings → Engines: which engine makes images ('builtin' since session 17, or 'comfyui'). */
 export function imageEngine(ctx: Pick<ToolCtx, 'kvGet'>): 'builtin' | 'comfyui' {
-  try { return JSON.parse(ctx.kvGet('lotus.settings.v1') || '{}').imageEngine === 'builtin' ? 'builtin' : 'comfyui'; } catch { return 'comfyui'; }
+  return engineChoice(ctx.kvGet('lotus.settings.v1')).imageEngine;
 }
 
 /** The built-in engine's run: the setup picked on the Images page, else the first complete one. */

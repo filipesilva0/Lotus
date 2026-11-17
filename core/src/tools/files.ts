@@ -42,6 +42,8 @@ export function resolveInFolders(folders: string[], raw: unknown, forWrite = fal
   let p = String(raw ?? '').trim().replace(/^["']|["']$/g, '');
   if (!p || p === '.' || p === './') p = folders[0];
   if (p.includes('\0')) return { error: 'That path is not valid.' };
+  // Seen with nemotron (task 26): paths with a stray line break inside. Never guess what was meant.
+  if (/[\x00-\x1f]/.test(p)) return { error: 'That path has a line break or another control character in it. Give the path on one line.' };
   if (p === '~' || p.startsWith('~/') || p.startsWith('~\\')) p = join(homedir(), p.slice(1));
   const abs = isAbsolute(p) ? resolve(p) : resolve(folders[0], p);
   // For a new file, check the nearest folder that exists (so a link in the parent can't escape).
@@ -203,6 +205,13 @@ export const filesWrite: Tool = {
     mode: { type: 'string', description: 'create, overwrite or append.', enum: ['create', 'overwrite', 'append'] },
   }, required: ['path', 'content'] },
   describe: (a) => `${a.mode === 'overwrite' ? 'Replace' : a.mode === 'append' ? 'Add to' : 'Create'} ${String(a.path)} (${String(a.content ?? '').length.toLocaleString('en')} characters)`,
+  destructive(a, ctx) {
+    // STATE #9: blanking a file with spaces is deleting its contents, whatever the approval setting.
+    if (a.mode !== 'overwrite' || String(a.content ?? '').trim()) return null;
+    const r = resolveInFolders(ctx.folders, a.path, true);
+    if ('error' in r || !existsSync(r.path) || statSync(r.path).isDirectory()) return null;
+    return statSync(r.path).size > 0 ? `This empties ${basename(r.path)} (its contents would be lost)` : null;
+  },
   async run(a, ctx) {
     const r = resolveInFolders(ctx.folders, a.path, true);
     if ('error' in r) return { ok: false, text: r.error, summary: r.error };
@@ -234,6 +243,17 @@ export const filesEdit: Tool = {
     all: { type: 'boolean', description: 'Replace every place it appears (default false).' },
   }, required: ['path', 'find', 'replace'] },
   describe: (a) => `Change ${String(a.path)}: replace “${String(a.find ?? '').replace(/\s+/g, ' ').slice(0, 60)}${String(a.find ?? '').length > 60 ? '…' : ''}”`,
+  destructive(a, ctx) {
+    if (String(a.replace ?? '').trim()) return null;
+    const r = resolveInFolders(ctx.folders, a.path, true);
+    if ('error' in r || !existsSync(r.path) || statSync(r.path).isDirectory()) return null;
+    let before = '';
+    try { before = readFileSync(r.path, 'utf8'); } catch { return null; }
+    const find = String(a.find ?? '');
+    if (!find || !before.trim()) return null;
+    const after = a.all === true ? before.split(find).join(String(a.replace ?? '')) : before.replace(find, () => String(a.replace ?? ''));
+    return after.trim() ? null : `This empties ${basename(r.path)} (its contents would be lost)`;
+  },
   async run(a, ctx) {
     const r = resolveInFolders(ctx.folders, a.path, true);
     if ('error' in r) return { ok: false, text: r.error, summary: r.error };

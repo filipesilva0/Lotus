@@ -16,6 +16,7 @@ import { TaskInspector } from '../tasks/TaskInspector';
 import { RoutinesView } from '../tasks/RoutinesView';
 import { SkillsView } from '../tasks/SkillsView';
 import { ScalingCard } from '../hardware/ScalingCard';
+import { PendingApprovals } from '../tasks/PendingApprovals';
 
 export type TasksTab = 'board' | 'routines' | 'skills' | 'memory' | 'soul' | 'plugins';
 type Tab = TasksTab;
@@ -98,6 +99,7 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
 
       {ollamaUp === false && settings.llmBackend === 'ollama' && <EngineNotice id="ollama" purpose="" note="Lotus can't work on tasks or run routines until it starts. You can still plan on the board." className="px-4 pt-2" />}
       {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="so Lotus can work on tasks" className="px-4 pt-2" />}
+      <PendingApprovals className="px-4 pt-3" />
       {notice && <div className="px-4 pt-3"><Banner tone="warn" action={<Btn size="sm" onClick={store.clearNotice}>OK</Btn>}>{notice}</Banner></div>}
 
       {tab === 'board' && (

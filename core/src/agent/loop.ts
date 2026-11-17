@@ -12,6 +12,7 @@ import { checkArgs, fromWire, Registry, toWire, wireTools } from './registry';
 import { decide, Rule } from './policy';
 import { claimText, unbackedClaims } from './claims';
 import { parseTags, TagFilter, tagInstructions } from './tags';
+import { analysePrompt, isNoIssues, reviewPrompt, reviewFix, stepsDigest } from './think';
 import type { AgentEvent, ApprovalMode, Step, Tool, ToolCtx, ToolResult } from './types';
 
 export interface AgentRequest {
@@ -26,6 +27,8 @@ export interface AgentRequest {
   maxTurns?: number;
   /** Ollama capabilities when the caller already knows them (tests). */
   capabilities?: string[];
+  /** Think mode (Chat's brain button): an analysis turn before acting and a review of the answer after (think.ts). */
+  think?: boolean;
 }
 
 export interface AgentDeps {
@@ -36,8 +39,8 @@ export interface AgentDeps {
   emit: (e: AgentEvent) => void;
   /** Saves the step (called on every change). */
   record: (s: Step, seq: number) => void;
-  /** Waits for the user's Allow (true) or Deny (false). */
-  approve: (s: Step) => Promise<boolean>;
+  /** Waits for the user's Allow (true) or Deny (false); 'timeout' when an unattended run got no answer in time. */
+  approve: (s: Step) => Promise<boolean | 'timeout'>;
 }
 
 export interface AgentOutcome { content: string; steps: Step[]; unverified: string[]; mode: 'native' | 'tags' }
@@ -45,6 +48,8 @@ export interface AgentOutcome { content: string; steps: Step[]; unverified: stri
 const RULES = `\n\nWhen the user asks you to do something one of your tools can do (files, tasks, images, memory, web, the computer, the browser), use the tool; don't describe how they could do it themselves. Never say you did something unless a tool call in this conversation did it and its result said so. If a tool fails or is denied, say so plainly.`;
 
 const MAX_CALLS_PER_TURN = 6;
+/** How long an unattended run (a task, a routine) waits for Allow / Deny; interactive runs wait until answered or stopped. */
+export const APPROVAL_WAIT_MS = { value: 15 * 60_000 };
 /** A turn stops after this many tokens (thinking included) unless the user set a limit, so a model that
  *  rambles or loops can't hold the chat forever. */
 const TURN_TOKENS = 4096;
@@ -54,10 +59,11 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   const steps: Step[] = [];
   let mode: 'native' | 'tags' = 'tags';
   let think = d.llm.think;
+  let caps: string[] = [];
   // The built-in llama-server runs with --jinja, so it takes an OpenAI tool list (falls back to tags below).
   if (d.llm.backend === 'llamacpp' && d.llm.nativeTools && req.tools.length) mode = 'native';
   if (d.llm.backend === 'ollama' && req.tools.length) {
-    const caps = req.capabilities ?? (await ollamaCapabilities({ ...d.llm, model: req.model, signal: d.signal }));
+    caps = req.capabilities ?? (await ollamaCapabilities({ ...d.llm, model: req.model, signal: d.signal }));
     mode = caps.length === 0 || caps.includes('tools') ? 'native' : 'tags';
     // Thinking models answer tool requests without a long think first, and some (seen: an abliterated
     // qwen3 8B on an RTX 4060) think for minutes and never call the tool. Thinking mode stays on the Think button.
@@ -65,6 +71,25 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   }
 
   const messages: WireMsg[] = req.messages.map((m) => ({ ...m }));
+  // Think mode reasons in its analysis and review turns (native reasoning when the model has it); tool turns stay as above.
+  const reasoning = req.think && caps.includes('thinking') ? true : think;
+  const aside = async (extra: WireMsg[], numPredict: number, temperature: number, title: string): Promise<string> => {
+    d.emit({ kind: 'thinking', text: `\n\n### ${title}\n` });
+    const r = await chatTurn({ ...d.llm, think: reasoning, numPredict, temperature, model: req.model, signal: d.signal }, [...messages, ...extra], null, {
+      token: (t) => d.emit({ kind: 'thinking', text: t }),
+      thinking: (t) => d.emit({ kind: 'thinking', text: t }),
+    });
+    return parseTags(r.content).text.trim();
+  };
+  if (req.think && !d.signal.aborted) {
+    // STATE #5: Think mode used to skip the agent (no tools, no claim check). Now it analyses first, then acts.
+    const analysis = await aside([{ role: 'user', content: analysePrompt(req.tools) }], 1200, 0.3, 'Analysis');
+    if (analysis) {
+      const note = `\n\nYour private analysis of the user's latest message (use it; don't show it to the user):\n<analysis>\n${analysis.slice(0, 6000)}\n</analysis>`;
+      if (messages[0]?.role === 'system') messages[0] = { ...messages[0], content: `${messages[0].content}${note}` };
+      else messages.unshift({ role: 'system', content: note.trim() });
+    }
+  }
   const withInstructions = (m: 'native' | 'tags') => {
     const extra = req.tools.length ? (m === 'tags' ? tagInstructions(req.tools) : '') + RULES : '';
     if (messages[0]?.role === 'system') messages[0] = { ...messages[0], content: `${messages[0].content}${extra}` };
@@ -76,6 +101,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   let shown = '';
   let nudged = false;
   let fixedText = false;
+  let reviewed = !req.think;
   let lastCall = '';
   let repeats = 0;
   const maxTurns = req.maxTurns ?? 8;
@@ -135,15 +161,27 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
 
     if (!calls.length) {
       // Final answer. Check its claims against the steps that really succeeded.
-      const ok = steps.filter((s) => s.status === 'done').map((s) => s.tool);
+      const ok = steps.filter((s) => s.status === 'done');
       const missing = unbackedClaims(turnText, ok);
       if (missing.length && !nudged && turn < maxTurns - 1 && req.tools.length) {
         nudged = true;
         d.emit({ kind: 'reset', keep: keep.length });
         shown = keep;
         messages.push({ role: 'assistant', content: result.content });
-        messages.push({ role: 'user', content: `(Lotus check) Your reply says you ${missing.map((c) => `did this: “${short(c.sentence, 90)}”`).join('; ')} — but no tool call in this conversation did it. If the user asked for it, call the tool now. Otherwise answer again without claiming it was done.` });
+        messages.push({ role: 'user', content: `(Lotus check) Your reply says you ${missing.map((c) => `did this: “${short(c.sentence, 90)}”`).join('; ')} — but ${missing.some((c) => c.count) ? 'the tool calls in this conversation did not do that much (count what the results say)' : 'no tool call in this conversation did it'}. If the user asked for it, call the tool now. Otherwise answer again without claiming it was done.` });
         continue;
+      }
+      if (!reviewed && !missing.length && turn < maxTurns - 1 && !d.signal.aborted) {
+        // Think mode: review the answer against the request and what the steps really did.
+        reviewed = true;
+        const review = await aside([{ role: 'assistant', content: result.content }, { role: 'user', content: reviewPrompt(stepsDigest(steps)) }], 900, 0.2, 'Review');
+        if (review && !isNoIssues(review)) {
+          d.emit({ kind: 'reset', keep: keep.length });
+          shown = keep;
+          messages.push({ role: 'assistant', content: result.content });
+          messages.push({ role: 'user', content: reviewFix(review) });
+          continue;
+        }
       }
       return { content: shown.trim(), steps, unverified: missing.map(claimText), mode };
     }
@@ -176,7 +214,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     if (images.length) messages.push({ role: 'user', content: '(Lotus) The screenshot you asked for is attached. Coordinates you give to computer.click are pixels in this image.', images: [images[images.length - 1]] });
   }
 
-  const ok = steps.filter((s) => s.status === 'done').map((s) => s.tool);
+  const ok = steps.filter((s) => s.status === 'done');
   const content = shown.trim() || (d.signal.aborted ? '' : 'I stopped after several tool steps without a final answer. The steps above show what was done.');
   return { content, steps, unverified: unbackedClaims(content, ok).map(claimText), mode };
 }
@@ -202,9 +240,16 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
     update({ status: 'denied', detail: `Blocked by your rule “${verdict.rule}”`, finished: Date.now() });
     return `The user's settings block this (${verdict.rule}). Don't try it again; tell the user it is blocked.`;
   }
-  if (verdict.decision === 'ask') {
-    update({ status: 'waiting', ask: tool.describe ? tool.describe(args) : `${tool.label}` });
+  let harm: string | null = null;
+  try { harm = tool.destructive ? tool.destructive(args, d.ctx) : null; } catch { harm = null; }
+  if (verdict.decision === 'ask' || harm) {
+    const what = tool.describe ? tool.describe(args) : `${tool.label}`;
+    update({ status: 'waiting', ask: harm ? `${harm}. ${what}` : what });
     const allowed = await d.approve({ ...step });
+    if (allowed === 'timeout') {
+      update({ status: 'denied', ask: undefined, detail: `No answer within ${Math.round(APPROVAL_WAIT_MS.value / 60_000)} minutes, so Lotus didn't do it`, finished: Date.now() });
+      return 'Nobody answered the permission request in time (the user may be away), so it was not done. Do not do it another way; say in your answer that it is waiting for their permission next time.';
+    }
     if (!allowed) {
       update({ status: 'denied', ask: undefined, detail: d.signal.aborted ? 'Stopped' : 'You said no', finished: Date.now() });
       return 'The user denied this action. Do not do it another way; tell them it was not done.';

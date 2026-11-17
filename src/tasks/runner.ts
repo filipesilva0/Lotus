@@ -5,6 +5,8 @@
 //      the tasks this one depended on, and any learned skill that matches
 //   4. a short write-up of the outcome
 // Runs through the agent pool, so parallel tasks stay within the VRAM-safe limit.
+// With the core (the desktop app), each step is a run of the core agent with its tools (files, tasks,
+// memory, web, images…), approvals and the claim check (STATE #6); without it, plain model calls.
 
 import { extractJson, llm } from '../services/llm';
 import { uid } from '../lib/persist';
@@ -12,6 +14,7 @@ import { memoryStore, Skill } from '../memory/store';
 import { readPage, searchWeb } from '../chat/webSearch';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { JobCtx } from '../agents/pool';
+import { agentAvailable, runAgent, type AgentStep } from '../lib/agent';
 import { parseSteps, Task, TaskStep } from './kanban';
 
 export interface RunHooks {
@@ -22,8 +25,8 @@ export interface RunHooks {
   dependencyResults: () => { title: string; result: string }[];
 }
 
-const SYSTEM = (t: Task, skills: Skill[], web: string, deps: { title: string; result: string }[]) => `You are Lotus, an AI agent running on the user's own PC, working through a task from their task board.
-You can only think and write: you cannot run programs, open files or browse. When a step needs an action you cannot take, write exactly what the user should do (commands, settings, text to paste) so they can do it in one go.
+const SYSTEM = (t: Task, skills: Skill[], web: string, deps: { title: string; result: string }[], tools = false) => `You are Lotus, an AI agent running on the user's own computer, working through a task from their task board.
+${tools ? 'Use your tools for anything they can do (files, the task board, memory, images, the web when it is on). When a step needs an action no tool can take, write exactly what the user should do so they can do it in one go.' : 'You can only think and write: you cannot run programs, open files or browse. When a step needs an action you cannot take, write exactly what the user should do (commands, settings, text to paste) so they can do it in one go.'}
 Today's date: ${new Date().toDateString()}.
 
 TASK: ${t.title}
@@ -42,6 +45,7 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
   if (!t0) throw new Error('The task was deleted.');
   if (!c.model) throw new Error('No model selected. Choose one in Chat or Engines → Models.');
   const opts = { model: c.model, numCtx: c.numCtx, signal: c.signal, temperature: 0.3 };
+  const withTools = agentAvailable() && s?.agentTools !== false;
 
   // Skills that match the task
   const ids = await memoryStore.searchSkills(`${t0.title} ${t0.description}`.slice(0, 400), 2);
@@ -50,7 +54,7 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
 
   // Web
   let web = '';
-  if (t0.web && s) {
+  if (t0.web && s && !withTools) {
     try {
       h.log('Searching the web', 'agent');
       const results = await searchWeb(t0.title, { provider: s.webSearchProvider, searxngUrl: s.searxngUrl, limit: 5, signal: c.signal });
@@ -63,7 +67,7 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
     }
   }
 
-  const system = SYSTEM(t0, skills, web, h.dependencyResults());
+  const system = SYSTEM(t0, skills, web, h.dependencyResults(), withTools);
 
   // Plan
   if (!t0.steps.length) {
@@ -85,11 +89,10 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
     const i = t.steps.indexOf(step);
     h.log(`Step ${i + 1}: ${step.text}`, 'agent');
     const before = t.steps.slice(0, i).filter((x) => x.done).map((x, k) => `Step ${k + 1} (${x.text}):\n${(x.result ?? '').slice(0, 1200)}`).join('\n\n');
-    const r = await llm.chatOnce([
-      { role: 'system', content: system },
-      { role: 'user', content: `${before ? `Work done so far:\n${before}\n\n` : ''}Now do step ${i + 1} of ${t.steps.length}: ${step.text}\nWrite the result of this step only.` },
-    ], { ...opts, numPredict: 1800 });
-    const result = r.content.trim() || '(no output)';
+    const ask = `${before ? `Work done so far:\n${before}\n\n` : ''}Now do step ${i + 1} of ${t.steps.length}: ${step.text}\nWrite the result of this step only.`;
+    const result = withTools
+      ? await agentStep(system, ask, step.text, t, h, c)
+      : ((await llm.chatOnce([{ role: 'system', content: system }, { role: 'user', content: ask }], { ...opts, numPredict: 1800 })).content.trim() || '(no output)');
     h.patch((x) => ({ ...x, steps: x.steps.map((st) => (st.id === step.id ? { ...st, done: true, result: result.slice(0, 6000) } : st)) }));
   }
 
@@ -102,4 +105,24 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
     { role: 'user', content: `All steps are done:\n${all}\n\nWrite the final result for the user: what was produced or decided, the key output (complete, ready to use), and anything they must do themselves. Markdown.` },
   ], { ...opts, numPredict: 2000 });
   return r.content.trim();
+}
+
+/** One step as a core agent run: its tool steps go to the task's log, waiting approvals included. */
+async function agentStep(system: string, ask: string, stepText: string, t: Task, h: RunHooks, c: JobCtx): Promise<string> {
+  const seen = new Map<string, string>();
+  const note = (st: AgentStep) => {
+    const line = st.status === 'waiting' ? `Waiting for your permission: ${st.ask ?? st.label} (Allow or Deny on the Tasks page or the island)`
+      : st.status === 'running' ? '' : `${st.label}: ${st.detail ?? st.status}`;
+    if (!line || seen.get(st.id) === line) return;
+    seen.set(st.id, line);
+    h.log(line, st.status === 'error' || st.status === 'denied' ? 'error' : 'agent');
+  };
+  const done = await runAgent({
+    model: c.model, prompt: stepText, unattended: true,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: ask }],
+    options: { numCtx: c.numCtx, temperature: 0.3, numPredict: 1800 },
+    memoryOn: true, web: !!t.web,
+  }, (e) => { if (e.kind === 'step') note(e.step); }, c.signal);
+  if (done.unverified.length) h.log(`Not backed by a step: ${done.unverified.join(', ')}`, 'error');
+  return done.content.trim() || '(no output)';
 }

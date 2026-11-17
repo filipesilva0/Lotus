@@ -179,7 +179,9 @@ export const askUser: Tool = {
   async run(a, ctx) {
     if (!ctx.ask) return { ok: false, text: 'You cannot ask questions here; answer with what you have and say what is missing.', summary: 'Can\'t ask here' };
     const options = (Array.isArray(a.options) ? a.options : []).map(String).map((s) => s.trim()).filter(Boolean).slice(0, 4);
-    const answer = (await ctx.ask(String(a.question), options)).trim();
+    const got = await ctx.ask(String(a.question), options);
+    if (got === null) return { ok: false, text: 'Nobody answered within 30 minutes (the user may be away). Continue with the safest reasonable choice and say clearly which you took, or stop and say what you need.', summary: 'No answer within 30 minutes' };
+    const answer = got.trim();
     if (!answer) return { ok: false, text: 'The user did not answer. Continue with the safest reasonable choice and say which you took, or stop.', summary: 'No answer' };
     return { ok: true, text: `The user answered: ${answer}`, summary: `You answered: ${answer.slice(0, 80)}` };
   },

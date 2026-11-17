@@ -13,6 +13,7 @@
 import { MicRecorder, micErrorMessage } from '../lib/audio';
 import { emitEvent } from '../lib/bus';
 import { kv } from '../lib/store';
+import { engineChoice } from '../lib/engineDefaults';
 import { voicebox } from '../services/voicebox';
 import { deleteMedia, loadMedia, rpc, saveMedia, type SavedMedia } from '../lib/core';
 import { builtinsNow, refreshBuiltins } from '../lib/builtins';
@@ -27,7 +28,7 @@ export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: numb
   const voice = voices.find((m) => m.id === s.builtinVoice)?.id ?? voices[0]?.id ?? '';
   const dictation = dict.find((m) => m.id === s.builtinDictation)?.id ?? dict[0]?.id ?? '';
   const LANG: Record<string, string> = { English: 'en', Portuguese: 'pt', Spanish: 'es', French: 'fr', German: 'de', Italian: 'it', Dutch: 'nl', Japanese: 'ja', Chinese: 'zh', Korean: 'ko', Russian: 'ru' };
-  return { on: s.voiceEngine === 'builtin', voice, speaker: typeof s.builtinSpeaker === 'number' ? s.builtinSpeaker : 0, dictation, language: LANG[String(s.whisperLanguage ?? '')] ?? '' };
+  return { on: engineChoice(kv.getItem('lotus.settings.v1')).voiceEngine === 'builtin', voice, speaker: typeof s.builtinSpeaker === 'number' ? s.builtinSpeaker : 0, dictation, language: LANG[String(s.whisperLanguage ?? '')] ?? '' };
 }
 
 const builtinReady = (engine: 'sherpa') => builtinsNow().engines.some((e) => e.id === engine && e.installed);

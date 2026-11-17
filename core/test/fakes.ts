@@ -19,7 +19,7 @@ function withCors(f: (req: Request) => Response | Promise<Response>) {
   };
 }
 
-export interface FakeOllama { url: string; requests: { messages: WireMsg[]; tools?: unknown[]; model: string }[]; stop: () => void }
+export interface FakeOllama { url: string; requests: { messages: WireMsg[]; tools?: unknown[]; model: string; body?: Record<string, unknown> }[]; stop: () => void }
 
 export function fakeOllama(respond: Responder | FakeTurn[], o: { capabilities?: string[]; rejectTools?: boolean } = {}): FakeOllama {
   const requests: FakeOllama['requests'] = [];
@@ -34,9 +34,9 @@ export function fakeOllama(respond: Responder | FakeTurn[], o: { capabilities?: 
       if (url.pathname === '/api/show') return Response.json({ capabilities: o.capabilities ?? ['completion', 'tools'] });
       if (url.pathname === '/api/tags') return Response.json({ models: [{ name: 'fake:latest', model: 'fake:latest', size: 5e9, details: { parameter_size: '8B', family: 'qwen3', quantization_level: 'Q4_K_M' } }] });
       if (url.pathname !== '/api/chat') return new Response('not found', { status: 404 });
-      const body = (await req.json()) as { messages: WireMsg[]; tools?: unknown[]; model: string };
+      const body = (await req.json()) as { messages: WireMsg[]; tools?: unknown[]; model: string } & Record<string, unknown>;
       if (o.rejectTools && body.tools?.length) return Response.json({ error: `registry.ollama.ai/library/${body.model} does not support tools` }, { status: 400 });
-      requests.push({ messages: body.messages, tools: body.tools, model: body.model });
+      requests.push({ messages: body.messages, tools: body.tools, model: body.model, body });
       const turn = next(body.messages, body);
       i++;
       if (turn.delay) await Bun.sleep(turn.delay);

@@ -38,22 +38,31 @@ export async function* sse(res: Response): AsyncGenerator<any> {
 }
 
 export class LlamaCppService {
-  constructor(private readonly url: () => string) {}
+  /** `auth`: the Authorization header for the server the user runs (null for Lotus's own). */
+  constructor(private readonly url: () => string, private readonly auth: () => string | null = () => null) {}
   get baseUrl() { return this.url().replace(/\/+$/, ''); }
+
+  private withAuth(init: RequestInit = {}): RequestInit {
+    const a = this.auth();
+    return a ? { ...init, headers: { ...(init.headers as Record<string, string> | undefined), authorization: a } } : init;
+  }
 
   private async raw(path: string, init: RequestInit = {}, timeoutMs = 15_000): Promise<Response> {
     let res: Response;
     try {
-      res = await http(`${this.baseUrl}${path}`, { ...init, signal: init.signal ?? timeoutSignal(timeoutMs) });
+      res = await http(`${this.baseUrl}${path}`, this.withAuth({ ...init, signal: init.signal ?? timeoutSignal(timeoutMs) }));
     } catch (e) {
       throw new EngineError(`Can't reach llama-server at ${this.baseUrl}. Start it (for example \`llama-server -m model.gguf --port 8080\`) or change the address in Settings → Models. (${(e as Error).message})`, ENGINE, undefined, true);
     }
+    if (res.status === 401 || res.status === 403) throw new EngineError(`The server at ${this.baseUrl} wants an access key, or the one saved is wrong. Enter it under the server's address in Settings → Engines.`, ENGINE, res.status);
     if (!res.ok) throw new EngineError(await errorText(res), ENGINE, res.status);
     return res;
   }
 
+  /** llama-server and vLLM answer /health; LM Studio doesn't, but every OpenAI-style server lists /v1/models. */
   async checkHealth(timeoutMs = 1500): Promise<boolean> {
-    try { return (await http(`${this.baseUrl}/health`, { signal: timeoutSignal(timeoutMs) })).ok; } catch { return false; }
+    try { if ((await http(`${this.baseUrl}/health`, this.withAuth({ signal: timeoutSignal(timeoutMs) }))).ok) return true; } catch { /* try the model list */ }
+    try { return (await http(`${this.baseUrl}/v1/models`, this.withAuth({ signal: timeoutSignal(timeoutMs) }))).ok; } catch { return false; }
   }
 
   /** Context size and slot count the server was started with. */

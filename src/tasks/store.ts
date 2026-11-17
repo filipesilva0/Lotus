@@ -14,6 +14,7 @@ import { addLink, blockersOf, moveTask, newTask, nextRunnable, removeLink, remov
 import { nextRun, validateCron } from './cron';
 import { runTaskAgent } from './runner';
 import { kv } from '../lib/store';
+import { agentAvailable, runAgent } from '../lib/agent';
 
 const TASKS_KEY = 'lotus.tasks.v1';
 const ROUTINES_KEY = 'lotus.routines.v1';
@@ -198,6 +199,19 @@ export const routines = {
     void agentPool.run(`Routine: ${r.name}`, 'routine', async ({ model, numCtx, signal }) => {
       if (!model) throw new Error('No model selected.');
       if (r.action === 'task') return r.prompt; // the task agent does the work
+      // STATE #6: with the core, a routine is a run of the agent with its tools (unattended: an approval
+      // nobody answers gives up after 15 minutes and says so). Without it, a plain model call as before.
+      if (agentAvailable() && (!hasLiveSettings() || liveSettings().agentTools !== false)) {
+        const done = await runAgent({
+          model, prompt: r.prompt.slice(0, 400), unattended: true, web: r.web, memoryOn: true,
+          messages: [{ role: 'system', content: ROUTINE_PROMPT(r, '').replace(/\nDo what the instructions ask/, '\nUse your tools when the instructions need them (files, tasks, memory, images, the web when it is on). Do what the instructions ask') }, { role: 'user', content: r.prompt }],
+          options: { numCtx, temperature: 0.4, numPredict: 2000 },
+        }, (e) => { if (e.kind === 'step' && e.step.status === 'waiting') reportActivity({ id: `routine-${id}`, kind: 'chat', label: `Routine waiting for your permission: ${r.name}` }); }, signal);
+        const steps = done.steps ? ` (${done.steps} step${done.steps === 1 ? '' : 's'})` : '';
+        const warn = done.unverified.length ? `\n\n> Lotus check: this says it did things no step did (${done.unverified.join(', ')}).` : '';
+        if (steps) reportActivity({ id: `routine-${id}`, kind: 'chat', label: `Routine: ${r.name}${steps}` });
+        return `${done.content.trim()}${warn}`;
+      }
       let web = '';
       if (r.web && hasLiveSettings()) {
         const s = liveSettings();

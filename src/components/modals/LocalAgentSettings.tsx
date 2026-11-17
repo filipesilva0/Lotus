@@ -5,6 +5,7 @@ import { Toggle } from '../common/Toggle';
 import { Segmented, Stepper, TextInput, Btn } from '../common/ui';
 import { ScalingCard } from '../hardware/ScalingCard';
 import { llamacpp } from '../../services/llm';
+import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
 import { memoryStore, useMemoryStore } from '../../memory/store';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
@@ -25,12 +26,17 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
   const test = async () => {
     setProbe('Checking…');
     try { const p = await llamacpp.props(); setProbe(`Connected · ${p.model || 'model loaded'} · ${p.nCtx.toLocaleString()} tokens across ${p.slots} slot${p.slots > 1 ? 's' : ''}`); }
-    catch (e) { setProbe((e as Error).message); }
+    catch (e) {
+      // LM Studio and vLLM have no /props; their model list is enough to know they answer.
+      const ids = await llamacpp.listModels();
+      setProbe(ids.length ? `Connected · ${ids.length} model${ids.length > 1 ? 's' : ''}: ${ids.slice(0, 3).join(', ')}${ids.length > 3 ? '…' : ''}` : (e as Error).message);
+    }
   };
+  const [key, setKey] = useState(() => llamacppToken());
   return (
     <div className="space-y-4">
-      <Row title="Chat engine" hint="What runs chat, Work, tasks, routines and memory learning. Lotus keeps its own engine and models in Lotus Studio; Ollama or your own llama-server are there if you already use them.">
-        <Segmented label="Chat engine" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'llama-server' }]} />
+      <Row title="Chat engine" hint="What runs chat, Work, tasks, routines and memory learning. Lotus keeps its own engine and models in Lotus Studio; Ollama, or your own server (llama-server, LM Studio, vLLM), are there if you already use them.">
+        <Segmented label="Chat engine" value={s.llmBackend} onChange={(v) => set({ llmBackend: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'ollama', label: 'Ollama' }, { id: 'llamacpp', label: 'Your server' }]} />
       </Row>
       <Row title="Image engine" hint="What makes images. Lotus's engine runs stable-diffusion.cpp; ComfyUI adds inpainting, extending and custom workflows. Both use the models in Lotus Studio/Models/image.">
         <Segmented label="Image engine" value={s.imageEngine} onChange={(v) => set({ imageEngine: v })} options={[{ id: 'builtin', label: 'Lotus' }, { id: 'comfyui', label: 'ComfyUI' }]} />
@@ -43,8 +49,10 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
       </Row>
       {s.llmBackend === 'llamacpp' && (
         <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
-          <span className="text-xs font-semibold">llama-server address</span>
-          <div className="flex gap-2"><TextInput value={s.llamacppUrl} onChange={(e) => set({ llamacppUrl: e.target.value })} aria-label="llama-server address" className="font-mono" /><Btn onClick={() => void test()}>Test</Btn></div>
+          <span className="text-xs font-semibold">Server address (llama-server, LM Studio or vLLM)</span>
+          <div className="flex gap-2"><TextInput value={s.llamacppUrl} onChange={(e) => set({ llamacppUrl: e.target.value })} aria-label="Server address" className="font-mono" /><Btn onClick={() => void test()}>Test</Btn></div>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold">Access key (optional)<Tip text="Only if the server asks for one (vLLM --api-key, LM Studio with authentication on, a server behind a password). Sent only to this address." /></span>
+          <TextInput type="password" value={key} onChange={(e) => { setKey(e.target.value); setLlamacppToken(e.target.value); }} aria-label="Access key" placeholder="None" autoComplete="off" />
           {probe && <p className="text-xs text-[var(--color-text-muted)]" role="status">{probe}</p>}
           <p className="text-xs text-[var(--color-text-muted)] leading-snug">llama-server fixes its context size (-c) and parallel slots (-np) when it starts, so Lotus reads them and suggests flags that fit your GPU instead of changing them.</p>
         </div>

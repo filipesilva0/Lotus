@@ -258,14 +258,16 @@ export function useChat(settings: LotusSettings) {
       const t0 = performance.now();
 
       // 3a. With the core: the agent, which can use tools (files, tasks, images, memory, web) and
-      // shows each step with its real result. Thinking mode keeps its own multi-pass pipeline.
-      if (s.agentTools !== false && !o.thinking && agentAvailable()) {
+      // shows each step with its real result. Thinking mode runs there too (analysis → tools → review,
+      // core/src/agent/think.ts); the multi-pass pipeline below is only for the browser preview or tools off.
+      if (s.agentTools !== false && agentAvailable()) {
         const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, media: st.media });
         setRaw({ request: { agent: true, model: o.model, messages: turns.length, web: !!o.web, memory: memOn }, response: null, at: Date.now() });
         const done = await runAgent({
           model: o.model, prompt: o.query ?? '', chatId: sid,
           messages: turns.map((t) => ({ role: t.role as 'system' | 'user' | 'assistant', content: t.content, images: t.images })),
-          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences },
+          options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx, seed: s.seed ?? undefined, numPredict: s.maxTokens > 0 ? s.maxTokens : undefined, stop: s.stopSequences, frequencyPenalty: s.frequencyPenalty, presencePenalty: s.presencePenalty },
+          think: !!o.thinking,
           memoryOn: memOn, web: !!o.web, folders: session0.folder ? [session0.folder] : [],
         }, (e) => {
           if (e.kind === 'token') { acc += e.text; patchMsg(sid, aiId, { content: acc }); }

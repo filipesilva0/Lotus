@@ -1,4 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { engineChoice } from '../lib/engineDefaults';
+import { llamacpp } from '../services/llm';
 import { DocReadError, docKind, documentText } from '../lib/docText';
 import { ArrowUp, Square, Mic, Paperclip, Plus, Copy, Check, Volume2, RotateCcw, ExternalLink, X, FileText } from 'lucide-react';
 import { ollamaClient, ChatTurn, fileToBase64 } from '../services/ollamaService';
@@ -17,10 +19,10 @@ interface ModelOpt { id: string; name: string }
 
 /** The chat engine Settings → Engines picks (the island has no live settings, so it reads them). */
 function chatEngine(): 'builtin' | 'ollama' | 'llamacpp' {
-  try { const b = JSON.parse(kv.getItem('lotus.settings.v1') || '{}').llmBackend; return b === 'builtin' || b === 'llamacpp' ? b : 'ollama'; } catch { return 'ollama'; }
+  return engineChoice(kv.getItem('lotus.settings.v1')).llmBackend;
 }
 
-/** Chat models of that engine: Lotus's own downloads, or Ollama's list (a user-run llama-server serves one model). */
+/** Chat models of that engine: Lotus's own downloads, Ollama's list, or the user's server's list. */
 async function chatModels(): Promise<ModelOpt[]> {
   const engine = chatEngine();
   if (engine === 'builtin') {
@@ -28,7 +30,8 @@ async function chatModels(): Promise<ModelOpt[]> {
     return builtinsNow().models.filter((m) => m.kind === 'chat').map((m) => ({ id: m.id, name: m.title }));
   }
   if (engine === 'ollama') return (await ollamaClient.listModels()).map((m) => ({ id: m.name, name: m.name }));
-  return [];
+  // A llama-server, LM Studio or vLLM the user runs lists its models at /v1/models (STATE #7).
+  return (await llamacpp.listModels()).map((id) => ({ id, name: id }));
 }
 interface Attach { name: string; kind: 'text' | 'image'; data: string }
 

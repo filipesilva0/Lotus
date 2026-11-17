@@ -28,6 +28,7 @@ import { SettingsModal, type SettingsTab } from './components/modals/SettingsMod
 import { AccountModal, AccountView } from './components/account/AccountModal';
 import type { LibraryTab } from './components/library/LibraryPane';
 import { ollamaClient } from './services/ollamaService';
+import { llamacpp } from './services/llm';
 import { comfy } from './services/comfyService';
 import { useChat } from './hooks/useChat';
 import { useEngines } from './hooks/useEngines';
@@ -244,7 +245,18 @@ export default function App() {
   const builtinImages = settings.imageEngine === 'builtin';
   const builtinChatModels = builtins.models.filter((m) => m.kind === 'chat');
   // "Up" means: ready to answer. For the built-in engines that is "installed, with a model".
-  const ollamaUp = builtinChat ? (builtins.loaded ? engineReady(builtins, 'llama') && builtinChatModels.length > 0 : null) : eng.engines.ollama.up;
+  // A llama-server / LM Studio / vLLM the user runs is checked on its own address (STATE #7: it used to follow Ollama's state).
+  const serverChat = settings.llmBackend === 'llamacpp';
+  const [serverUp, setServerUp] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!serverChat) return;
+    let stop = false;
+    const tick = async () => { const ok = await llamacpp.checkHealth(3000); if (!stop) setServerUp(ok); };
+    void tick();
+    const t = setInterval(() => void tick(), 10_000);
+    return () => { stop = true; clearInterval(t); };
+  }, [serverChat, settings.llamacppUrl]);
+  const ollamaUp = builtinChat ? (builtins.loaded ? engineReady(builtins, 'llama') && builtinChatModels.length > 0 : null) : serverChat ? serverUp : eng.engines.ollama.up;
   const readyProfiles = profiles.filter((p) => !missingFor(p, hasImageFile(builtins.imageFiles)).length);
   const comfyUp = builtinImages ? (builtins.loaded ? engineReady(builtins, 'sd') && readyProfiles.length > 0 : null) : eng.engines.comfyui.up;
 
@@ -343,12 +355,19 @@ export default function App() {
     setSettings((s) => (list.length && !list.some((m) => m.id === s.selectedModel) ? { ...s, selectedModel: list[0].id } : s));
   }, [builtinChat, builtinChatModels.map((m) => m.id).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!ollamaUp || builtinChat) return;
+    if (!ollamaUp || !serverChat) return;
+    void llamacpp.listModels().then((ids) => {
+      setModels(ids.map((id) => ({ id, name: id, tag: 'Your server' })));
+      setSettings((s) => (ids.length && !ids.includes(s.selectedModel) ? { ...s, selectedModel: ids[0] } : s));
+    });
+  }, [ollamaUp, serverChat, settings.llamacppUrl]);
+  useEffect(() => {
+    if (!ollamaUp || builtinChat || serverChat) return;
     ollamaClient.listModels().then((list) => {
       setModels(list.map((m) => ({ id: m.name, name: m.name, tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
       setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
     }).catch(() => undefined);
-  }, [ollamaUp, chatModelsDone, builtinChat]);
+  }, [ollamaUp, chatModelsDone, builtinChat, serverChat]);
   useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp, imageFilesDone]);
 
   // ── Messages from other windows ───────────────────────────────────────────

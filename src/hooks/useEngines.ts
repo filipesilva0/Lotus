@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EngineId, isRemote } from '../services/engineConfig';
+import { EngineId, comfyAlternate, engineUrl, isRemote, setEngineUrl } from '../services/engineConfig';
+import { http, timeoutSignal } from '../lib/http';
 import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { comfy } from '../services/comfyService';
@@ -43,6 +44,7 @@ export function useEngines() {
   const autoStarted = useRef(false);
 
   const probing = useRef(false);
+  const lastComfyAlt = useRef(0);
   const lastDiag = useRef<Record<string, { at: number; text: string | null }>>({});
   const probe = useCallback(async () => {
     if (probing.current) return; // never stack probes if one is slow
@@ -53,6 +55,18 @@ export function useEngines() {
       Promise.all(IDS.map(isSupervised)),
     ]);
     const ups = [o !== null, c !== null, v !== null];
+    // ComfyUI not answering on its address: it may be on its other usual port (Desktop 8000, manual 8188).
+    if (!ups[1] && Date.now() - lastComfyAlt.current > 30_000) {
+      lastComfyAlt.current = Date.now();
+      const alt = comfyAlternate(engineUrl('comfyui'));
+      if (alt) {
+        try {
+          const r = await http(`${alt}/system_stats`, { signal: timeoutSignal(1500) });
+          const j = r.ok ? await r.json() as { system?: unknown } : null;
+          if (j?.system) setEngineUrl('comfyui', alt);
+        } catch { /* not there either */ }
+      }
+    }
     // Diagnosing is a raw TCP check; repeat it at most every 30 s per offline engine.
     const detail = await Promise.all(IDS.map(async (id, i) => {
       if (ups[i]) { delete lastDiag.current[id]; return null; }

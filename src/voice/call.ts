@@ -15,6 +15,7 @@ import { uid } from '../lib/persist';
 import { reportActivity } from '../lib/bus';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { llm } from '../services/llm';
+import { agentAvailable, runAgent } from '../lib/agent';
 import { effectiveNumCtx } from '../hardware/monitor';
 import { buildRecall } from '../memory/recall';
 import { loadMemory, memoryStore } from '../memory/store';
@@ -179,17 +180,26 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   const stopReply = () => rc.abort();
   a.signal.addEventListener('abort', stopReply, { once: true });
   const gen = speakGen;
+  let take = 0; // bumped when the agent takes back text it already streamed (the claim check)
   let chain: Promise<unknown> = Promise.resolve();
   const say = (sentence: string) => {
+    const mine = take;
     chain = chain.then(async () => {
-      if (gen !== speakGen || a.signal.aborted) return;
+      if (gen !== speakGen || mine !== take || a.signal.aborted) return;
       set({ phase: 'speaking' });
       await speak(sentence);
     });
   };
   let raw = '', spoken = 0, pending = '';
   try {
-    for await (const tok of llm.streamChat(turns, { model, temperature: s?.temperature ?? 0.7, numCtx: effectiveNumCtx(), signal: rc.signal })) {
+    for await (const tok of replyStream(turns, { model, temperature: s?.temperature ?? 0.7, numCtx: effectiveNumCtx(), signal: rc.signal, memoryOn: call.memory, prompt: last.text })) {
+      if (typeof tok !== 'string') {
+        // The agent's claim check asked for the reply again: stop saying the old one.
+        take++; hush();
+        raw = raw.slice(0, tok.keep); spoken = Math.min(spoken, visibleText(raw).length); pending = '';
+        set({ partial: visibleText(raw) });
+        continue;
+      }
       raw += tok;
       const visible = visibleText(raw);
       if (visible.length > spoken) { pending += visible.slice(spoken); spoken = visible.length; }
@@ -232,4 +242,34 @@ function afterTurn(user: CallTurn, ai: CallTurn) {
   ]);
   const userTurns = c.turns.filter((t) => t.role === 'user').length;
   if (s?.autoMemory && shouldReflect(userTurns, user.text)) void reflect(c.turns.map((t) => ({ role: t.role, content: t.text })), 'Remembering the call').catch(() => undefined);
+}
+
+/**
+ * The reply's text as it streams. With the core it comes from the agent, so a call can use tools (add a
+ * task, save a note, search the web when on…) with approvals and the claim check (STATE #6); `{ keep }`
+ * means the agent took back what it wrote after that point. Without the core, the plain model stream.
+ */
+async function* replyStream(turns: { role: 'system' | 'user' | 'assistant'; content: string }[], o: { model: string; temperature: number; numCtx: number; signal: AbortSignal; memoryOn: boolean; prompt: string }): AsyncGenerator<string | { keep: number }> {
+  const s = settings();
+  if (!agentAvailable() || s?.agentTools === false) {
+    yield* llm.streamChat(turns, { model: o.model, temperature: o.temperature, numCtx: o.numCtx, signal: o.signal });
+    return;
+  }
+  const queue: (string | { keep: number })[] = [];
+  let wake: (() => void) | null = null;
+  let end = false, failed: unknown = null;
+  const push = (x: string | { keep: number }) => { queue.push(x); wake?.(); };
+  const sys = turns[0]?.role === 'system' ? `${turns[0].content}\n\nOn this call you can use your tools when the user asks for something they can do; say briefly what you did, in one or two spoken sentences.` : '';
+  const msgs = sys ? [{ role: 'system' as const, content: sys }, ...turns.slice(1)] : turns;
+  void runAgent({ model: o.model, prompt: o.prompt.slice(0, 400), messages: msgs, memoryOn: o.memoryOn, options: { temperature: o.temperature, numCtx: o.numCtx } }, (e) => {
+    if (e.kind === 'token') push(e.text);
+    else if (e.kind === 'reset') push({ keep: e.keep });
+  }, o.signal).catch((e) => { failed = e; }).finally(() => { end = true; wake?.(); });
+  for (;;) {
+    if (queue.length) { yield queue.shift()!; continue; }
+    if (end) break;
+    await new Promise<void>((r) => { wake = r; });
+    wake = null;
+  }
+  if (failed && !o.signal.aborted) throw failed;
 }

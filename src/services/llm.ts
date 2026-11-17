@@ -6,12 +6,23 @@
 import { ChatOptions, ChatStats, ChatTurn, ollamaClient } from './ollamaService';
 import { LlamaCppService } from './llamacppService';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
+import { engineChoice } from '../lib/engineDefaults';
+import { kv } from '../lib/store';
+import { authHeaderFromToken, llamacppToken } from './engineConfig';
 import { builtinsNow, ensureChat } from '../lib/builtins';
 
 let builtinUrl = '';
-export const llamacpp = new LlamaCppService(() => (backend() === 'builtin' ? builtinUrl : hasLiveSettings() ? liveSettings().llamacppUrl : 'http://127.0.0.1:8080'));
+export const llamacpp = new LlamaCppService(
+  () => (backend() === 'builtin' ? builtinUrl : hasLiveSettings() ? liveSettings().llamacppUrl : savedLlamacppUrl()),
+  () => (backend() === 'llamacpp' ? authHeaderFromToken(llamacppToken()) : null),
+);
 
-export const backend = (): 'builtin' | 'ollama' | 'llamacpp' => (hasLiveSettings() ? liveSettings().llmBackend : 'ollama');
+function savedLlamacppUrl(): string {
+  try { return String(JSON.parse(kv.getItem('lotus.settings.v1') || '{}').llamacppUrl || 'http://127.0.0.1:8080'); } catch { return 'http://127.0.0.1:8080'; }
+}
+
+// Windows without live settings (the island) read the saved choice, with the same defaults as the core.
+export const backend = (): 'builtin' | 'ollama' | 'llamacpp' => (hasLiveSettings() ? liveSettings().llmBackend : engineChoice(kv.getItem('lotus.settings.v1')).llmBackend);
 
 /** The built-in engine loads the model on first use (and swaps when another model is asked for). */
 async function ready(model: string) {

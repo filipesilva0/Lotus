@@ -111,3 +111,22 @@ export const LISTEN_HINT: Record<EngineId, string> = {
   comfyui: 'On that computer, start ComfyUI with --listen 0.0.0.0 (ComfyUI Desktop: set the host to 0.0.0.0 in its Server-Config settings), so it listens on the network.',
   voicebox: 'On that computer, start the Voicebox server with --host 0.0.0.0, so it listens on the network.',
 };
+
+/**
+ * The access key for a llama-server / LM Studio / vLLM the user runs (Settings → Engines, STATE #7).
+ * Kept with the other engine keys; only ever sent to that server.
+ */
+export function llamacppToken(): string {
+  try { return String((JSON.parse(kv.getItem(AUTH_KEY) || '{}') as Record<string, string>).llamacpp ?? ''); } catch { return ''; }
+}
+
+export function setLlamacppToken(token: string) {
+  let map: Record<string, string> = {};
+  try { map = JSON.parse(kv.getItem(AUTH_KEY) || '{}'); } catch { /* fresh */ }
+  const t = token.trim();
+  if (t) map.llamacpp = t; else delete map.llamacpp;
+  kv.setItem(AUTH_KEY, JSON.stringify(map));
+}
+
+
+export { comfyAlternate } from '../lib/engineDefaults';

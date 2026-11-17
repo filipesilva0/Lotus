@@ -95,7 +95,7 @@ describe('work mode run', () => {
     const ol = fakeOllama((ms) => (last(ms, 'tool') ? { content: 'ok' } : { calls: [{ name: 'ask_user', args: { question: 'Continue?' } }] }));
     stops.push(ol.stop);
     const db = openDb(tmp('ask'));
-    kvApply(db, { set: { 'lotus.engineUrls.v1': JSON.stringify({ ollama: ol.url }) }, remove: [] });
+    kvApply(db, { set: { 'lotus.engineUrls.v1': JSON.stringify({ ollama: ol.url }), 'lotus.settings.v1': JSON.stringify({ llmBackend: 'ollama' }) }, remove: [] });
     const events: Record<string, any>[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
     const svc = new AgentService({ db, studio: tmp('ask-s'), broadcast: (e) => events.push(e) });
     const { runId } = svc.start({ model: 'fake', prompt: 'x', messages: [{ role: 'user', content: 'x' }] });

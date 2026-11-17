@@ -18,7 +18,7 @@ export type AgentEvent =
   | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags' }
   | { kind: 'error'; message: string }
   | { kind: 'ask'; askId: string; question: string; options: string[] }
-  | { kind: 'answered'; askId: string }
+  | { kind: 'answered'; askId: string; timedOut?: boolean }
   | { kind: 'helper'; helper: HelperInfo };
 
 /** A helper agent of a Work run (0.11.0; core/src/agent/types.ts HelperInfo). */
@@ -34,12 +34,16 @@ export interface AgentStart {
   messages: AgentMessage[];
   prompt: string;
   chatId?: string;
-  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean };
+  options?: { temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[]; think?: boolean; frequencyPenalty?: number; presencePenalty?: number };
+  /** Think mode: analyse, act with tools, review (core/src/agent/loop.ts). */
+  think?: boolean;
   memoryOn?: boolean;
   web?: boolean;
   folders?: string[];
   /** Work mode: the piece of work (artifacts go to Lotus Studio/Work/<workId>). */
   workId?: string;
+  /** A task or routine run nobody may be watching: approvals and questions give up after a while, saying so. */
+  unattended?: boolean;
 }
 
 export interface ToolInfo { name: string; label: string; description: string; risk: 'read' | 'write' | 'risky' }

@@ -529,7 +529,7 @@ describe('agent over the core API', () => {
     __clearCapCache();
     const ol = fakeOllama([{ calls: [{ name: 'files_write', args: { path: 'x.md', content: 'x' } }] }]); stops.push(ol.stop);
     const db = openDb(tmp('stop'));
-    kvApply(db, { set: { 'lotus.engineUrls.v1': JSON.stringify({ ollama: ol.url }) }, remove: [] });
+    kvApply(db, { set: { 'lotus.engineUrls.v1': JSON.stringify({ ollama: ol.url }), 'lotus.settings.v1': JSON.stringify({ llmBackend: 'ollama' }) }, remove: [] });
     const events: Record<string, unknown>[] = [];
     const svc = new AgentService({ db, studio: tmp('stop-s'), broadcast: (e) => events.push(e) });
     const { runId } = svc.start({ model: 'fake', prompt: 'x', messages: [{ role: 'user', content: 'x' }] });
