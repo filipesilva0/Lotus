@@ -38,6 +38,8 @@ node handover/screenshots/shoot-s11-install.mjs   # session 11: chat install car
 node handover/screenshots/shoot-s16.mjs           # session 16: Work end to end (fake model, real core), Tasks width, Hardware; 15 checks
 node handover/screenshots/shoot-s16-island.mjs    # session 16: the island compact / expanded / done
 cd core && bun install && bun test       # 83 core tests: 19 session 14 + 37 session 15 + 11 session 16 + 16 session 17 (built-in engines end to end with stand-ins, catalog, image setups, data move)
+node handover/screenshots/shoot-showcase.mjs     # README/website showcase (Work with agents) → docs/assets/showcase-*.png; THEME=dark|light for one
+node handover/screenshots/readme-art.mjs          # README petal cards + engine diagram → docs/assets/{petals,engines}-*.png
 node handover/screenshots/shoot-s20.mjs           # 0.9.6: Call tab, past call, Stories whole text, STT translation tabs, Images resolution + examples, Settings General/Chat; 8 checks
 node handover/screenshots/shoot-s17.mjs           # session 17: built-in engines in the app (stand-in llama-server/sd-cli/sherpa-onnx, real core): chat, image, Models, Image Setups, Voice, guide; 19 checks
 node handover/verification/agent-e2e.mjs  # 19 checks (session 15): Chat → agent → tools in Chromium against a real core and fake engines; screenshots /tmp/shots/s15-*
