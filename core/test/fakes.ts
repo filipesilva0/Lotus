@@ -1,6 +1,6 @@
 // Fake engines for tests: an Ollama that answers /api/chat from a script (streamed as NDJSON, with
 // tool calls like a real tool-capable model) and a ComfyUI that "renders" a tiny PNG.
-// Also used by handover/verification/agent-e2e.mjs (through `bun test/fakes.ts --serve`).
+// Also used by Claude/handover/verification/agent-e2e.mjs (through `bun test/fakes.ts --serve`).
 
 import type { WireMsg } from '../src/agent/llm';
 

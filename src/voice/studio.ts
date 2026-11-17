@@ -4,7 +4,7 @@
 //            saved with your own settings and effects
 //   effects  applied after speaking, in the window (Web Audio), with presets for a low start
 //   stories  a script ("Ana: Hello") turned into clips on tracks, played and exported as one file
-// Pure (no DOM, no kv): shared by the Voice page, the island/notices and handover/verification/s18-tests.ts.
+// Pure (no DOM, no kv): shared by the Voice page, the island/notices and Claude/handover/verification/s18-tests.ts.
 
 // ── Voices ─────────────────────────────────────────────────────────────────
 

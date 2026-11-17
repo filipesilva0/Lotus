@@ -1,6 +1,6 @@
 // First-run setup data (session 10): where each engine's official installer comes from, and the
 // recommended models for each engine in three tiers. Pure data + pure helpers, so it is tested in
-// handover/verification/s10-tests.ts. Picked in November 2026; see DECISIONS D27 for why.
+// Claude/handover/verification/s10-tests.ts. Picked in November 2026; see DECISIONS D27 for why.
 
 import type { EngineId } from '../services/engineIds';
 

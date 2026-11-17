@@ -9,7 +9,7 @@
 //   comfyui    the same image files, which ComfyUI reads from Lotus Studio/Models/image when Lotus starts it
 //   voicebox   a pattern matched against Voicebox's own model list
 //
-// Pure: shared with the core (which downloads the files) and tested in handover/verification/s17-tests.ts.
+// Pure: shared with the core (which downloads the files) and tested in Claude/handover/verification/s17-tests.ts.
 
 import { CHAT_PICKS, IMAGE_PICKS, VOICE_PICKS, DICTATION_PICK, type Tier, type ImagePick } from '../setup/catalog';
 import type { ImageFamily, ImageFolder, ImageProfile, Slot } from './imageProfiles';

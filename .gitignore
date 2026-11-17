@@ -14,3 +14,6 @@ LOTUS_SIGNING_PRIVATE_KEY.txt
 # lotusd sidecar builds (core/scripts/build.ts); CI builds them per OS
 src-tauri/binaries/
 core/node_modules/
+
+# Claude's guides, notes and test harnesses (kept on Filipe's Mac, not in git)
+Claude/

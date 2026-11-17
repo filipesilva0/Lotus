@@ -262,7 +262,6 @@ src/                 The interface
 core/                lotusd, the background core: lotus.db, media files, memory (TypeScript, Bun)
 src-tauri/           The native shell: windows, tray, shortcuts, engine launcher, starts lotusd
   wix/               Installer template
-handover/            Test harnesses and screenshot scripts
 ```
 
 </details>
@@ -275,10 +274,8 @@ handover/            Test harnesses and screenshot scripts
 npx tsc --noEmit                          # type-check
 npm run build                             # build the interface
 npm run check:tauri                       # native and web package versions match
-bash handover/verification/run-tests.sh   # test suite
+(cd core && bun test)                     # core tests
 ```
-
-Maintainer notes, project history and known issues live in `CURRENT_STATE.md`, `TASKS.md`, `ARCHITECTURE.md` and `DECISIONS.md`.
 
 </details>
 

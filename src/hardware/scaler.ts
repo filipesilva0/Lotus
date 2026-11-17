@@ -1,6 +1,6 @@
 // VRAM auto-scaling: turns a live memory reading plus what we know about the loaded model into
 // concrete limits: context window, chunk size for mounted files, how many background agents may
-// run at once, and which model size fits. Pure functions only (unit-tested in handover/verification).
+// run at once, and which model size fits. Pure functions only (unit-tested in Claude/handover/verification).
 //
 // The maths, in short:
 //   KV cache per token  = 2 (K and V) × layers × kv_heads × head_dim × 2 bytes (f16)

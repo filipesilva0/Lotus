@@ -4,7 +4,7 @@
 // file to the exact files it needs, plus the settings it works best with, so the Images page, the
 // image.generate tool, ComfyUI and the built-in engine (stable-diffusion.cpp) all use the same set.
 //
-// Pure (no DOM, no storage): shared with the core and tested in handover/verification/s17-tests.ts.
+// Pure (no DOM, no storage): shared with the core and tested in Claude/handover/verification/s17-tests.ts.
 
 export type ImageFamily = 'sd15' | 'sdxl' | 'sd35' | 'flux1' | 'flux2' | 'zimage' | 'qwen-image';
 export type Slot = 'model' | 'vae' | 'clip_l' | 'clip_g' | 't5xxl' | 'llm';
