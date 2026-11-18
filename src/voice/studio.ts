@@ -297,6 +297,24 @@ export function takeSentences(buf: string, final = false): { sentences: string[]
   return { sentences, rest };
 }
 
+/**
+ * The start of a long first sentence, up to a comma (or ; : —) after at least 30 characters, so a
+ * call can start speaking before the whole sentence is written (0.15.0). Null when there is none yet.
+ * Numbers like "1,000" aren't cut.
+ */
+export function firstClause(buf: string): { clause: string; rest: string } | null {
+  const re = /[,;:—–](?=\s)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(buf))) {
+    const end = m.index + m[0].length;
+    if (end < 30) continue;
+    const clause = buf.slice(0, end).trim();
+    if (clause.split(/\s+/).length < 5) continue;
+    return { clause, rest: buf.slice(end).replace(/^\s+/, '') };
+  }
+  return null;
+}
+
 export interface CallTurn { role: 'user' | 'assistant'; text: string; ts: number }
 export interface CallLog { id: string; title: string; started: number; ended?: number; turns: CallTurn[]; memory: boolean }
 

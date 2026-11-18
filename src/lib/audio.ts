@@ -92,7 +92,8 @@ export class MicRecorder {
   private raf = 0;
   private startedAt = 0;
 
-  constructor(private onLevel?: (level: number, elapsedSec: number) => void) {}
+  /** Can be swapped while recording (a call hands a recording that heard you interrupt over to listening). */
+  constructor(public onLevel?: (level: number, elapsedSec: number) => void) {}
 
   get active() {
     return this.rec?.state === 'recording';

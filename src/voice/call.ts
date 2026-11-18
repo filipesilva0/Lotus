@@ -3,7 +3,10 @@
 //   listen  the mic records until you stop talking, Whisper writes it down (voice.ts listen)
 //   think   the chat model answers, with long-term memory: remembered facts and instructions, matching
 //           parts of past chats and calls (full-text recall) and the end of the previous call
-//   speak   finished sentences are spoken while the rest of the reply is still being written
+//   speak   finished sentences are spoken while the rest of the reply is still being written; the next
+//           sentence's audio is made while the current one plays (0.15.0)
+//   cut in  while Lotus thinks or speaks the mic stays open: talk over it and it stops, and what you
+//           said becomes your next turn (bargeIn.ts, 0.15.0). The Interrupt button still works.
 //
 // The call keeps running when you switch pages. Calls are kept in `lotus.voice.calls.v1`; each turn is
 // indexed for recall and the memory learner runs every few turns and when the call ends, so what you
@@ -20,10 +23,14 @@ import { effectiveNumCtx } from '../hardware/monitor';
 import { buildRecall } from '../memory/recall';
 import { loadMemory, memoryStore } from '../memory/store';
 import { reflect, shouldReflect } from '../memory/learn';
-import { hush, listen, speak } from './voice';
-import { CallLog, CallTurn, callSystemPrompt, callTitle, cleanModelText, takeSentences } from './studio';
+import { hush, listen, playSpeech, speak, synthesize, warmVoice } from './voice';
+import { watchForBargeIn } from './bargeIn';
+import type { MicRecorder } from '../lib/audio';
+import { CallLog, CallTurn, callSystemPrompt, callTitle, cleanModelText, firstClause, takeSentences } from './studio';
 
 export const CALLS_KEY = 'lotus.voice.calls.v1';
+/** Interrupt by voice on or off (Call page; on unless turned off). */
+export const BARGE_KEY = 'lotus.voice.callBarge.v1';
 const MAX_CALLS = 100;
 
 export type CallPhase = 'idle' | 'starting' | 'listening' | 'thinking' | 'speaking';
@@ -36,9 +43,12 @@ export interface CallState {
   muted: boolean;
   level: number;
   error: string | null;
+  /** Talking over Lotus stops it (interrupt by voice). */
+  bargeIn: boolean;
 }
 
-let st: CallState = { phase: 'idle', call: null, partial: '', muted: false, level: 0, error: null };
+const bargeDefault = () => { try { return kv.getItem(BARGE_KEY) !== 'off'; } catch { return true; } };
+let st: CallState = { phase: 'idle', call: null, partial: '', muted: false, level: 0, error: null, bargeIn: bargeDefault() };
 const subs = new Set<() => void>();
 const set = (p: Partial<CallState>) => { st = { ...st, ...p }; subs.forEach((f) => f()); };
 export const callState = () => st;
@@ -94,6 +104,7 @@ export function endCall() {
   if (!c) return;
   ctrl?.abort(); ctrl = null;
   speakGen++; hush();
+  pendingRec?.cancel(); pendingRec = null;
   const done: CallLog = { ...st.call!, ended: Date.now(), title: callTitle(st.call!.turns) };
   if (done.turns.length) {
     keepCall(done);
@@ -108,6 +119,7 @@ export function endCall() {
 }
 
 export const setMuted = (m: boolean) => set({ muted: m });
+export const setBargeIn = (on: boolean) => { try { kv.setItem(BARGE_KEY, on ? 'on' : 'off'); } catch { /* memory only */ } set({ bargeIn: on }); };
 export const setCallMemory = (on: boolean) => { if (st.call) set({ call: { ...st.call, memory: on } }); };
 
 /** Stops Lotus mid-sentence and goes back to listening. */
@@ -117,6 +129,8 @@ export function interrupt() {
   replyCtrl?.abort();
 }
 let replyCtrl: AbortController | null = null;
+/** The recording that heard you talk over Lotus; the next listen continues it. */
+let pendingRec: MicRecorder | null = null;
 
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((r) => { const t = setTimeout(r, ms); signal.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true }); });
 
@@ -125,12 +139,16 @@ async function run(c: CallLog, a: AbortController) {
   // The end of the previous call (memory on): a greeting can pick up where it left off.
   const prev = savedCalls().find((x) => x.id !== c.id && x.memory && x.turns.length);
   const recent = c.memory && prev ? prev.turns.slice(-6) : [];
+  // Load Whisper and the voice while you say hello (doesn't hold the call up).
+  void warmVoice();
   while (!a.signal.aborted) {
-    if (st.muted) { set({ phase: 'listening', level: 0 }); await sleep(250, a.signal); continue; }
+    if (st.muted) { pendingRec?.cancel(); pendingRec = null; set({ phase: 'listening', level: 0 }); await sleep(250, a.signal); continue; }
     set({ phase: 'listening', partial: '' });
     let heard = '';
     try {
-      heard = await listen({ silenceMs: 900, maxSec: 45, waitSec: 30, signal: a.signal, onLevel: (l) => { if (Math.abs(l - st.level) > 0.03) set({ level: l }); } });
+      const resume = pendingRec ?? undefined; pendingRec = null;
+      // 0.15.0: a shorter pause ends your turn (was 900 ms); Whisper stays loaded between turns.
+      heard = await listen({ silenceMs: 750, maxSec: 45, waitSec: 30, signal: a.signal, resume, warm: true, onLevel: (l) => { if (Math.abs(l - st.level) > 0.03) set({ level: l }); } });
     } catch (e) {
       if (a.signal.aborted) break;
       set({ error: (e as Error).message });
@@ -182,14 +200,23 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   const gen = speakGen;
   let take = 0; // bumped when the agent takes back text it already streamed (the claim check)
   let chain: Promise<unknown> = Promise.resolve();
+  // Audio is made one sentence at a time, ahead of what is playing, so there's no gap between sentences.
+  let making: Promise<Blob | null> = Promise.resolve(null);
+  const stale = (mine: number) => gen !== speakGen || mine !== take || a.signal.aborted;
+  let said = 0;
   const say = (sentence: string) => {
     const mine = take;
+    said++;
+    const audio = making = making.then(() => (stale(mine) ? null : synthesize(sentence).catch(() => null)));
     chain = chain.then(async () => {
-      if (gen !== speakGen || mine !== take || a.signal.aborted) return;
+      const clip = await audio;
+      if (stale(mine)) return;
       set({ phase: 'speaking' });
-      await speak(sentence);
+      if (clip) await playSpeech(clip); else await speak(sentence);
     });
   };
+  // Talking over Lotus stops it; your words carry on into the next turn.
+  const watch = st.bargeIn && !st.muted ? watchForBargeIn((rec) => { pendingRec = rec; interrupt(); }) : null;
   let raw = '', spoken = 0, pending = '';
   try {
     for await (const tok of replyStream(turns, { model, temperature: s?.temperature ?? 0.7, numCtx: effectiveNumCtx(), signal: rc.signal, memoryOn: call.memory, prompt: last.text })) {
@@ -206,10 +233,12 @@ async function reply(a: AbortController, recent: CallTurn[]) {
       const { sentences, rest } = takeSentences(pending);
       pending = rest;
       sentences.forEach(say);
+      // The first words go out at a comma when the first sentence is long, so Lotus starts talking sooner.
+      if (!said) { const f = firstClause(pending); if (f) { pending = f.rest; say(f.clause); } }
       set({ partial: visible });
     }
   } catch (e) {
-    if (!rc.signal.aborted) throw e;
+    if (!rc.signal.aborted) { watch?.stop(); throw e; }
   } finally { a.signal.removeEventListener('abort', stopReply); }
   const { sentences } = takeSentences(pending, true);
   if (!rc.signal.aborted) sentences.forEach(say);
@@ -220,7 +249,7 @@ async function reply(a: AbortController, recent: CallTurn[]) {
     afterTurn(last, ai);
   }
   set({ partial: '' });
-  await chain;
+  try { await chain; } finally { watch?.stop(); }
 }
 
 /** The reply without thinking: complete <think> blocks removed, an unfinished one held back. */

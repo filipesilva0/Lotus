@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { openDb } from './db';
 import { startServer, VERSION } from './server';
 import { moveLegacyData } from './legacyData';
+import { stopGptSovits } from './engines/rpc';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -65,6 +66,7 @@ function stop(why: string) {
   stopping = true;
   log(`stopping (${why})`);
   try { server.builtins.shutdown(); } catch { /* nothing running */ }
+  try { stopGptSovits(); } catch { /* nothing running */ }
   try { server.board.stop(); } catch { /* nothing running */ }
   try { server.stop(true); } catch { /* already stopped */ }
   try { db.sql.close(); } catch { /* already closed */ }

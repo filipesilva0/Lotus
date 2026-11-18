@@ -17,6 +17,8 @@ import { engineChoice } from '../lib/engineDefaults';
 import { voicebox } from '../services/voicebox';
 import { deleteMedia, loadMedia, rpc, saveMedia, type SavedMedia } from '../lib/core';
 import { builtinsNow, refreshBuiltins } from '../lib/builtins';
+import { playThroughLoop, stopPlayback } from './echo';
+import { GSV_ID, gsvSpeech } from './gptsovits';
 
 /** Settings → Engines → Voice, and the built-in voice and dictation models picked there. */
 export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: number; dictation: string; language: string } {
@@ -35,8 +37,10 @@ const builtinReady = (engine: 'sherpa') => builtinsNow().engines.some((e) => e.i
 
 /** Speaks with the built-in engine; returns the saved audio (the caller decides whether to keep it). */
 export async function builtinSpeech(text: string, o: { voice?: string; speaker?: number; speed?: number; reference?: string; referenceText?: string; steps?: number } = {}): Promise<SavedMedia> {
-  if (!builtinsNow().loaded) await refreshBuiltins();
   const p = builtinVoicePrefs();
+  // Voices made with GPT-SoVITS (0.15.0) are spoken by that program, started by Lotus when needed.
+  if (o.voice === GSV_ID) return gsvSpeech(text, { reference: o.reference, referenceText: o.referenceText, speed: o.speed, language: p.language || undefined });
+  if (!builtinsNow().loaded) await refreshBuiltins();
   const voice = o.voice ?? p.voice;
   if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
   if (!voice) throw new Error('No voice is downloaded yet. Get one in Settings → Models.');
@@ -60,14 +64,48 @@ async function viaBuiltin(text: string): Promise<boolean> {
   } catch { return false; }
 }
 
-/** Turns a WAV recording into text with the built-in Whisper. */
-export async function builtinTranscribe(wav: Blob, model?: string): Promise<string> {
+/** Turns a WAV recording into text with the built-in Whisper. `warm` keeps Whisper loaded for the next turn (calls). */
+export async function builtinTranscribe(wav: Blob, model?: string, o: { warm?: boolean } = {}): Promise<string> {
   const p = builtinVoicePrefs();
   const m = model ?? p.dictation;
   if (!builtinReady('sherpa')) throw new Error('Lotus\'s voice engine isn\'t installed yet. Get it in Settings → Models.');
   if (!m) throw new Error('No dictation model is downloaded yet. Get Whisper in Settings → Models.');
   const saved = await saveMedia(wav, 'recording');
-  return (await rpc<{ text: string }>('stt_builtin', { model: m, path: saved.path, language: p.language || undefined })).text.trim();
+  return (await rpc<{ text: string }>('stt_builtin', { model: m, path: saved.path, language: p.language || undefined, warm: o.warm || undefined })).text.trim();
+}
+
+/**
+ * Gets a call ready (0.15.0): loads Whisper into a warm dictation server and speaks a word into
+ * nothing, so the voice model's files are read from disk before the first answer. Best effort.
+ */
+export async function warmVoice(): Promise<void> {
+  const p = builtinVoicePrefs();
+  if (!p.on || !builtinReady('sherpa')) return;
+  const jobs: Promise<unknown>[] = [];
+  if (p.dictation) jobs.push(rpc('stt_warm', { model: p.dictation, language: p.language || undefined }).catch(() => undefined));
+  jobs.push(synthesize('Hello.').then((b) => b && undefined).catch(() => undefined));
+  await Promise.all(jobs);
+}
+
+/**
+ * Makes the audio for `text` with Lotus's own voice engine without playing it (null when Settings →
+ * Engines doesn't use Lotus's engine). Calls make the next sentence while the current one plays.
+ */
+export async function synthesize(text: string): Promise<Blob | null> {
+  if (!builtinVoicePrefs().on) return null;
+  const t = speakable(text);
+  if (!t) return null;
+  const studio = await import('./useStudio');
+  const v = studio.currentVoice();
+  const m = v ? await studio.speakWith(v, t) : await builtinSpeech(t);
+  try { return await loadMedia(m.path); }
+  finally { void deleteMedia(m.path).catch(() => undefined); }
+}
+
+/** Plays audio made by synthesize(); resolves when it ends or hush() stops it. */
+export async function playSpeech(audio: Blob): Promise<void> {
+  setState('speaking');
+  try { await playThroughLoop(audio); } finally { if (state === 'speaking') setState('idle'); }
 }
 
 /**
@@ -107,6 +145,7 @@ export function voicePrefs(): VoicePrefs {
 let current: HTMLAudioElement | null = null;
 /** Stops anything being spoken. */
 export function hush() {
+  stopPlayback();
   try { current?.pause(); } catch { /* gone */ }
   current = null;
   try { window.speechSynthesis?.cancel(); } catch { /* none */ }
@@ -155,22 +194,31 @@ export async function speak(text: string, profile = voicePrefs().profile): Promi
  * Records until a pause after speech (or `maxSec`), then transcribes. Resolves '' when nothing was
  * said. Rejects with a plain message when the mic is blocked or Voicebox isn't running.
  */
-export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?: number; signal?: AbortSignal; /** Mic level 0…1 while listening (voice calls). */ onLevel?: (level: number) => void } = {}): Promise<string> {
+export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?: number; signal?: AbortSignal; /** Mic level 0…1 while listening (voice calls). */ onLevel?: (level: number) => void;
+  /** A recording that already heard you start talking (a call interrupted by voice): keep it going. */ resume?: MicRecorder;
+  /** Keep Whisper loaded for the next turn (calls). */ warm?: boolean } = {}): Promise<string> {
   const maxSec = o.maxSec ?? 30, silenceMs = o.silenceMs ?? 1300, waitSec = o.waitSec ?? 8;
   const builtin = builtinVoicePrefs();
   const useBuiltin = builtin.on && builtinReady('sherpa') && !!builtin.dictation;
   if (!useBuiltin && !(await voicebox.health(1000).then(() => true).catch(() => false))) {
     throw new Error(builtin.on ? 'Spoken answers need a dictation model. Get Whisper in Settings → Models, or type your answer.' : 'Spoken answers need Voicebox running (it turns speech into text). Start it in Engines, or type your answer.');
   }
-  let heard = false, quietSince = 0;
+  let heard = !!o.resume, quietSince = 0;
   let resolveStop: () => void = () => undefined;
   const stopNow = new Promise<void>((r) => { resolveStop = r; });
-  const rec = new MicRecorder((level, t) => {
+  const onLevel = (level: number, t: number) => {
     o.onLevel?.(level);
     if (level > 0.09) { heard = true; quietSince = 0; } else if (heard && !quietSince) quietSince = performance.now();
     if ((heard && quietSince && performance.now() - quietSince > silenceMs) || t > maxSec || (!heard && t > waitSec)) resolveStop();
-  });
-  try { await rec.start(); } catch (e) { throw new Error(micErrorMessage(e)); }
+  };
+  let rec: MicRecorder;
+  if (o.resume?.active) { rec = o.resume; rec.onLevel = onLevel; }
+  else {
+    if (o.resume) o.resume.cancel();
+    heard = false;
+    rec = new MicRecorder(onLevel);
+    try { await rec.start(); } catch (e) { throw new Error(micErrorMessage(e)); }
+  }
   setState('listening');
   // The level callback runs on animation frames, which a hidden window may not get; a timer backs it up.
   const guard = setTimeout(resolveStop, (maxSec + 1) * 1000);
@@ -182,7 +230,7 @@ export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?:
   setState('transcribing');
   try {
     const r = await rec.stop();
-    return useBuiltin ? await builtinTranscribe(r.wav) : (await voicebox.transcribe(r.wav)).text.trim();
+    return useBuiltin ? await builtinTranscribe(r.wav, undefined, { warm: o.warm }) : (await voicebox.transcribe(r.wav)).text.trim();
   } finally { setState('idle'); }
 }
 

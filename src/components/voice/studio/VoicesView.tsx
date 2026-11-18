@@ -2,7 +2,7 @@
 // built-in speaker with your own settings; then test it, tune it and use it everywhere.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Download, Mic, Square, Trash2, Upload, Volume2, Wand2 } from 'lucide-react';
+import { Check, Download, ExternalLink, FolderOpen, Mic, Sparkles, Square, Trash2, Upload, Volume2, Wand2 } from 'lucide-react';
 import { Banner, Btn, Empty, Select, TextArea, TextInput, cx } from '../../common/ui';
 import { SliderField } from '../../common/Pane';
 import { SampleHealthPanel } from '../SampleHealth';
@@ -14,6 +14,8 @@ import { installModel } from '../../../lib/builtins';
 import { builtinTranscribePath } from '../../../voice/voice';
 import { MyVoice, READING_SCRIPTS, VoiceOption, speakerLabel } from '../../../voice/studio';
 import { Studio, speakWith } from '../../../voice/useStudio';
+import { GSV_DOWNLOAD, GSV_ID, GSV_NOTE, useGptSovits } from '../../../voice/gptsovits';
+import { openExternal } from '../../../lib/open';
 
 const TEST_LINE = 'Hello! This is how I sound in Lotus. I can read your notes, stories and messages aloud.';
 
@@ -40,6 +42,38 @@ const TestVoice: React.FC<{ option: VoiceOption | null }> = ({ option }) => {
 };
 
 const H: React.FC<{ children: React.ReactNode }> = ({ children }) => <h3 className="text-[13px] font-semibold mb-2">{children}</h3>;
+
+/**
+ * GPT-SoVITS (0.15.0): a separate, free program for the most natural copied voices. Lotus doesn't
+ * download it (several GB with its own Python); you pick its folder and Lotus starts it when needed.
+ */
+const GptSovitsCard: React.FC = () => {
+  const g = useGptSovits();
+  const s = g.status;
+  return (
+    <div className="p-3 rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] space-y-2">
+      <div className="flex items-start gap-2">
+        <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[var(--color-accent-fill)]" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[13px] font-medium">GPT-SoVITS{g.dir ? (s?.running ? ' · running' : ' · starts when a voice speaks') : ''}</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
+            {g.dir
+              ? <>Folder: <span className="break-all">{g.dir}</span>. Pick “GPT-SoVITS” as the cloning model below. {GSV_NOTE}</>
+              : <>For the most natural copied voice, use GPT-SoVITS: free, but a separate download of several GB. Download it, unpack it, then pick its folder here. {GSV_NOTE}</>}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {!g.dir && <Btn size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => void openExternal(GSV_DOWNLOAD)}>Download Page</Btn>}
+        <Btn size="sm" icon={<FolderOpen className="w-3 h-3" />} onClick={() => void g.pick()}>{g.dir ? 'Change Folder' : 'Pick Its Folder'}</Btn>
+        {g.dir && !s?.running && <Btn size="sm" loading={g.busy} onClick={() => void g.start()}>Start Now</Btn>}
+        {g.dir && s?.running && s.startedByLotus && <Btn size="sm" onClick={() => void g.stop()}>Stop</Btn>}
+        {g.dir && <Btn size="sm" variant="ghost" onClick={g.forget}>Don’t Use It</Btn>}
+      </div>
+      {(g.err || s?.error) && <p className="text-[12px] text-[var(--c-red)]">{g.err || s?.error}</p>}
+    </div>
+  );
+};
 
 /** Making a voice: name → recording (record or upload, quality check, trim) → model → done. */
 const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenModels: () => void }> = ({ studio, onDone, onOpenModels }) => {
@@ -138,6 +172,8 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
             <Select aria-label="Cloning model" value={model} onChange={(e) => setModel(e.target.value)}>{cloners.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}</Select>
           </div>
         )}
+        <GptSovitsCard />
+        {chosen?.id === GSV_ID && <p className="text-[12px] text-[var(--color-text-muted)]">GPT-SoVITS uses 3 to 10 seconds of the recording; Lotus cuts a longer one at a pause.</p>}
         {chosen?.needsReferenceText && sample && (
           <div><H>Words in the Recording</H>
             <TextArea rows={3} value={words} onChange={(e) => setWords(e.target.value)} placeholder="Leave empty and Lotus writes them with Whisper" aria-label="Words in the recording" />

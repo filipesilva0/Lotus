@@ -21,6 +21,7 @@ import type { Subprocess } from 'bun';
 import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
+import { SttServers } from './sttServer';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
 import { missingFor, sdcppArgs, sdcppProgress, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
 
@@ -763,11 +764,28 @@ export class Builtins {
     return [`--whisper-encoder=${enc}`, `--whisper-decoder=${dec}`, `--tokens=${tokens}`, ...(language ? [`--whisper-language=${language}`] : []), '--whisper-task=transcribe', '--num-threads=4', wav];
   }
 
-  async transcribe(modelId: string, wav: string, o: { language?: string; signal?: AbortSignal } = {}): Promise<string> {
+  async transcribe(modelId: string, wav: string, o: { language?: string; signal?: AbortSignal; warm?: boolean } = {}): Promise<string> {
     const exe = this.exe('sherpa', 'sherpa-onnx-offline');
-    const out = await this.runTool(exe, this.sttArgs(this.voiceDir(modelId), wav, o.language), o.signal);
+    const args = this.sttArgs(this.voiceDir(modelId), wav, o.language);
+    // Calls (and anything that asks for it) use a server that keeps Whisper loaded (0.15.0).
+    if (o.warm) {
+      const text = await this.stt.transcribe(this.sttServerExe(exe), this.warmSttArgs(args), wav, o.signal).catch((e) => { if ((e as Error).name === 'AbortError') throw e; return null; });
+      if (text !== null) return text;
+    }
+    const out = await this.runTool(exe, args, o.signal);
     return parseSherpaText(out);
   }
+
+  /** Loads Whisper into a warm dictation server ahead of time (a call starting); false when it can't. */
+  async warmDictation(modelId: string, language?: string): Promise<boolean> {
+    const exe = this.exe('sherpa', 'sherpa-onnx-offline');
+    return this.stt.warm(this.sttServerExe(exe), this.warmSttArgs(this.sttArgs(this.voiceDir(modelId), 'x.wav', language)));
+  }
+
+  private stt = new SttServers({ freePort, log: (s) => this.d.log?.(s) });
+  private sttServerExe = (offline: string) => join(dirname(offline), basename(offline).replace('sherpa-onnx-offline', 'sherpa-onnx-offline-websocket-server'));
+  /** The one-off program's arguments without the file, for the server (which takes audio over the socket). */
+  private warmSttArgs = (args: string[]) => ['--model-type=whisper', ...args.slice(0, -1).filter((a) => !a.startsWith('--num-threads='))];
 
   private async runTool(exe: string, args: string[], signal?: AbortSignal): Promise<string> {
     // sherpa-onnx echoes its whole command line first; with long Windows paths that echo filled the
@@ -784,7 +802,7 @@ export class Builtins {
   }
 
   /** Stops everything this manager started (the core is shutting down). */
-  shutdown() { this.stopChat(false); for (const c of this.ctrls.values()) c.abort(); }
+  shutdown() { this.stopChat(false); this.stt.stopAll(); for (const c of this.ctrls.values()) c.abort(); }
 
   /** Size of every image setup's needed files (for the Models page). */
   sizeFor = sizeFor;

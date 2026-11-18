@@ -16,7 +16,11 @@
 //                                               (0.9.5: everything goes in Images/<dir>/ as Reference N and Output N)
 //   image_cancel { genId }
 //   tts_builtin { voice, text, speaker?, speed?, reference?, referenceText?, steps? } → MediaRow (audio)   (reference: a media path, for cloning voices)
-//   stt_builtin { model, path, language? }      → { text }      (path: a media file, e.g. Audio/2026-11/x.wav)
+//   stt_builtin { model, path, language?, warm? } → { text }    (path: a media file, e.g. Audio/2026-11/x.wav; warm: keep Whisper loaded)
+//   stt_warm    { model, language? }             → boolean     (loads Whisper ahead of a call)
+//   gsv_status  { dir }  → { folderOk, running, startedByLotus, error? }   GPT-SoVITS (optional voice engine)
+//   gsv_start   { dir }  / gsv_stop {}
+//   tts_gptsovits { dir, text, reference, referenceText?, language?, speed? } → MediaRow (audio)
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import type { Db } from '../db';
@@ -27,6 +31,7 @@ import type { ImageFolder, ImageProfile, LoraUse } from '../../../src/models/ima
 import { FAMILIES, settingsFor, sizeFor } from '../../../src/models/imageProfiles';
 import type { ModelKind } from '../../../src/models/library';
 import { comfyDesktopConfigDir, linkComfy } from './comfyLink';
+import { GptSovits } from './gptsovits';
 import { join } from 'node:path';
 
 type Json = Record<string, unknown>;
@@ -96,6 +101,12 @@ export async function builtinImage(b: Builtins, db: Db, studio: string, a: Image
   return { images, references, dir, seed, width: size.width, height: size.height, sec: Math.round((Date.now() - t0) / 100) / 10, steps: s.locked ? s.steps : (a.steps ?? s.steps), cfg: s.locked ? s.cfg : (a.cfg ?? s.cfg) };
 }
 
+/** GPT-SoVITS, when a voice uses it (0.15.0). One per core. */
+let gsv: GptSovits | null = null;
+const gptSovits = (studio: string) => (gsv ??= new GptSovits({ tempDir: join(studio, 'Engines', 'GPT-SoVITS-temp') }));
+/** Stops the GPT-SoVITS server Lotus started (the core is shutting down). */
+export const stopGptSovits = () => gsv?.stop();
+
 export async function builtinRpc(b: Builtins, db: Db, studio: string, method: string, a: Json, broadcast: (e: Json) => void): Promise<{ found: boolean; value?: unknown }> {
   const engine = (): BuiltinId => { const e = str(a.engine) as BuiltinId; if (!ENGINES.includes(e)) throw new Error(`Unknown engine ${a.engine}.`); return e; };
   switch (method) {
@@ -142,10 +153,20 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
     case 'stt_builtin': {
       const full = resolveMedia(studio, str(a.path));
       if (!full) throw new Error('That recording is outside the Lotus Studio folder.');
-      const text = await b.transcribe(str(a.model), full, { language: str(a.language) || undefined });
+      const text = await b.transcribe(str(a.model), full, { language: str(a.language) || undefined, warm: a.warm === true });
       if (a.keep !== true) { try { rmSync(full, { force: true }); db.sql.query('DELETE FROM media WHERE path = ?').run(str(a.path)); } catch { /* keep */ } }
       return { found: true, value: { text } };
     }
+    case 'gsv_status': return { found: true, value: await gptSovits(studio).status(str(a.dir)) };
+    case 'gsv_start': await gptSovits(studio).start(str(a.dir)); return { found: true, value: true };
+    case 'gsv_stop': gptSovits(studio).stop(); return { found: true, value: true };
+    case 'tts_gptsovits': {
+      const ref = resolveMedia(studio, str(a.reference));
+      if (!ref) throw new Error('This voice has no recording yet. Add one in Voice → Voices.');
+      const wav = await gptSovits(studio).speak({ dir: str(a.dir), text: str(a.text), refAudio: ref, refText: str(a.referenceText) || undefined, lang: str(a.language) || undefined, speed: a.speed === undefined ? undefined : num(a.speed, 1) });
+      return { found: true, value: await saveMedia(db, studio, Buffer.from(wav), 'audio/wav', str(a.text).slice(0, 30) || 'speech') };
+    }
+    case 'stt_warm': return { found: true, value: await b.warmDictation(str(a.model), str(a.language) || undefined).catch(() => false) };
     default: return { found: false };
   }
 }

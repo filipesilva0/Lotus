@@ -3,12 +3,12 @@
 // The call itself runs in voice/call.ts, so it keeps going on other pages.
 
 import React, { useEffect, useRef } from 'react';
-import { BrainCircuit, Hand, Mic, MicOff, MessageSquare, Phone, PhoneOff } from 'lucide-react';
+import { BrainCircuit, Ear, Hand, Mic, MicOff, MessageSquare, Phone, PhoneOff } from 'lucide-react';
 import { Banner, Btn, cx } from '../../common/ui';
 import { usePanels } from '../../../lib/panels';
 import { AgentFace } from '../../common/AgentFace';
 import { CallLog } from '../../../voice/studio';
-import { callBlocker, endCall, interrupt, setCallMemory, setMuted, startCall, useCall } from '../../../voice/call';
+import { callBlocker, endCall, interrupt, setBargeIn, setCallMemory, setMuted, startCall, useCall } from '../../../voice/call';
 
 const PHASE: Record<string, string> = {
   idle: 'Ready', starting: 'Connecting…', listening: 'Listening', thinking: 'Thinking…', speaking: 'Speaking',
@@ -66,7 +66,7 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
         </div>
         <h2 className="mt-3 text-[18px] font-semibold">{live ? (c.muted ? 'Muted' : PHASE[c.phase]) : 'Talk with Lotus'}</h2>
         <p className="mt-1 text-[13px] text-[var(--color-text-muted)] max-w-md leading-relaxed">
-          {live ? (c.phase === 'listening' && !c.muted ? 'Speak whenever you like. Lotus answers when you pause.' : c.phase === 'speaking' ? 'Press Interrupt to cut in.' : ' ')
+          {live ? (c.phase === 'listening' && !c.muted ? 'Speak whenever you like. Lotus answers when you pause.' : c.phase === 'speaking' || c.phase === 'thinking' ? (c.bargeIn && !c.muted ? 'Just start talking to cut in.' : 'Press Interrupt to cut in.') : ' ')
             : `A voice call with ${model || 'your chat model'}, all on this computer. Lotus answers in the language you speak, with ${voice ?? 'your voice'}${memoryOn ? ', and remembers what matters for later calls and chats' : ''}.`}
         </p>
       </div>
@@ -100,10 +100,15 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
           </button>
         )}
       </div>
-      <div className="shrink-0 flex justify-center pb-4">
+      <div className="shrink-0 flex flex-wrap justify-center gap-x-1 pb-4">
         <button type="button" onClick={() => (live ? setCallMemory(!memoryOn) : onMemoryDefault(!memoryOn))} aria-pressed={memoryOn}
           className={cx('h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', memoryOn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
           <BrainCircuit className="w-3.5 h-3.5" />{memoryOn ? 'Memory on: remembers across calls and chats' : 'Memory off: this call is not remembered'}
+        </button>
+        <button type="button" onClick={() => setBargeIn(!c.bargeIn)} aria-pressed={c.bargeIn}
+          data-tip={c.bargeIn ? 'Lotus keeps listening while it talks and stops when you speak. Headphones work best; on speakers, speak up a little.' : 'Only the Interrupt button stops Lotus.'}
+          className={cx('tip h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', c.bargeIn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
+          <Ear className="w-3.5 h-3.5" />{c.bargeIn ? 'Interrupt by voice: on' : 'Interrupt by voice: off'}
         </button>
       </div>
     </div>

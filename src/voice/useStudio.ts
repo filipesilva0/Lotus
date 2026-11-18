@@ -11,6 +11,7 @@ import { deleteMedia, loadMedia, saveMedia } from '../lib/core';
 import { builtinsNow, InstalledModel, useBuiltins } from '../lib/builtins';
 import { entryById } from '../models/library';
 import { builtinSpeech } from './voice';
+import { GSV_KEY, gsvModel } from './gptsovits';
 import { applyEffects, clipSeconds, joinClips } from './render';
 import { HISTORY_EVENT } from './stt';
 import { chunkText, effectsNeutral, Segment, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
@@ -28,10 +29,10 @@ const write = (key: string, v: unknown) => kv.setItem(key, JSON.stringify(v));
 
 /** Installed voice models as the studio sees them. */
 export function voiceModels(models: InstalledModel[]): VoiceModel[] {
-  return models.filter((m) => m.kind === 'voice').map((m) => {
+  return [...models.filter((m) => m.kind === 'voice').map((m) => {
     const spec = m.entryId ? entryById(m.entryId)?.voice : undefined;
     return { id: m.id, title: m.title, entryId: m.entryId, speakers: spec?.speakers ?? [], clones: !!spec?.clones, needsReferenceText: !!spec?.needsReferenceText };
-  });
+  }), ...gsvModel()]; // GPT-SoVITS once its folder is picked (0.15.0)
 }
 
 /** The voice option in use right now, outside React (spoken notices, the island). */
@@ -68,7 +69,10 @@ export async function speakWith(v: VoiceOption, text: string, o: { speed?: numbe
 
 export function useStudio() {
   const b = useBuiltins();
-  const models = useMemo(() => voiceModels(b.models), [b.models]);
+  const [gsvTick, setGsvTick] = useState(0);
+  useEffect(() => { const on = () => setGsvTick((n) => n + 1); window.addEventListener(GSV_KEY, on); return () => window.removeEventListener(GSV_KEY, on); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const models = useMemo(() => voiceModels(b.models), [b.models, gsvTick]);
   const [mine, setMine] = useState<MyVoice[]>(() => read(MINE_KEY, []));
   const [selected, setSelectedRaw] = useState<string | null>(() => kv.getItem(SELECTED_KEY));
   const [stories, setStories] = useState<Story[]>(() => read(STORIES_KEY, []));
