@@ -2,7 +2,53 @@
 // the internet unless the user turned it on). Same search and page reader as Chat's Web mode.
 
 import type { Tool, ToolCtx } from '../agent/types';
-import { readPageWith, searchWebWith, type WebIO } from '../../../src/chat/webCore';
+import { DuckDuckGoBlocked, readPageWith, searchWebWith, type WebIO, type WebResult } from '../../../src/chat/webCore';
+
+// DuckDuckGo answers a burst of searches with a captcha (0.14.5: Work's agents searched at once and all
+// but the first failed). So searches through it go one at a time with a gap, the same query within
+// 10 minutes reuses its results, and after a captcha Lotus waits before the next try.
+export const DDG_GAP_MS = { value: 1500 };
+export const DDG_COOLDOWN_MS = { value: 20_000 };
+const CACHE_MS = 10 * 60_000;
+let ddgQueue: Promise<unknown> = Promise.resolve();
+let ddgNext = 0;
+const cache = new Map<string, { at: number; results: WebResult[] }>();
+const inFlight = new Map<string, Promise<WebResult[]>>();
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((done, fail) => {
+  if (ms <= 0) { done(); return; }
+  const t = setTimeout(done, ms);
+  signal?.addEventListener('abort', () => { clearTimeout(t); fail(new DOMException('Stopped', 'AbortError')); }, { once: true });
+});
+
+/** Runs DuckDuckGo searches one after another, spaced out; one retry after a cooldown if it is refused. */
+export function throttledSearch(key: string, run: () => Promise<WebResult[]>, signal?: AbortSignal): Promise<WebResult[]> {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve(hit.results);
+  const going = inFlight.get(key);
+  if (going) return going; // two agents asking the same thing at once share one search
+  const job = ddgQueue.catch(() => undefined).then(async () => {
+    for (let attempt = 0; ; attempt++) {
+      await sleep(ddgNext - Date.now(), signal);
+      try {
+        const results = await run();
+        ddgNext = Date.now() + DDG_GAP_MS.value;
+        cache.set(key, { at: Date.now(), results });
+        if (cache.size > 200) cache.delete(cache.keys().next().value!);
+        return results;
+      } catch (e) {
+        if (!(e instanceof DuckDuckGoBlocked)) { ddgNext = Date.now() + DDG_GAP_MS.value; throw e; }
+        ddgNext = Date.now() + DDG_COOLDOWN_MS.value;
+        if (attempt >= 1) throw e;
+      }
+    }
+  });
+  ddgQueue = job;
+  inFlight.set(key, job);
+  void job.finally(() => inFlight.delete(key)).catch(() => undefined);
+  return job;
+}
+
+export const __resetWebThrottle = () => { cache.clear(); inFlight.clear(); ddgNext = 0; ddgQueue = Promise.resolve(); };
 
 const io = (ctx: ToolCtx): WebIO => ({
   fetch: (url, init) => ctx.fetch(url, init),
@@ -23,7 +69,10 @@ export const webSearch: Tool = {
   describe: (a) => `Search the web for “${String(a.query)}”`,
   async run(a, ctx) {
     const p = provider(ctx);
-    const results = await searchWebWith(io(ctx), String(a.query), { ...p, limit: 6, signal: ctx.signal });
+    const q = String(a.query);
+    const results = p.provider === 'duckduckgo'
+      ? await throttledSearch(q.trim().toLowerCase().replace(/\s+/g, ' '), () => searchWebWith(io(ctx), q, { ...p, limit: 6, signal: ctx.signal }), ctx.signal)
+      : await searchWebWith(io(ctx), q, { ...p, limit: 6, signal: ctx.signal });
     return {
       ok: true,
       text: results.length ? results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n') : 'No results.',

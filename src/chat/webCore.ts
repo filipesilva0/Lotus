@@ -43,6 +43,20 @@ export function parseDuckDuckGo(html: string, limit = 8): WebResult[] {
   return out;
 }
 
+/** Parses DuckDuckGo's "lite" results page (a plain table; used when the normal page is refused). */
+export function parseDuckDuckGoLite(html: string, limit = 8): WebResult[] {
+  const out: WebResult[] = [];
+  const links = [...html.matchAll(/<a\b([^>]*\bclass=['"]result-link['"][^>]*)>([\s\S]*?)<\/a>/gi)];
+  const snippets = [...html.matchAll(/class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/gi)].map((m) => stripTags(m[1]));
+  links.forEach((m, i) => {
+    const href = /\bhref=['"]([^'"]+)['"]/i.exec(m[1])?.[1];
+    const url = href ? ddgTarget(href) : null;
+    if (!url || out.length >= limit || out.some((r) => r.url === url)) return;
+    out.push({ title: stripTags(m[2]), url, snippet: snippets[i] ?? '' });
+  });
+  return out;
+}
+
 /** Readable text of an HTML page: drops scripts, styles, navigation and markup; prefers <article>/<main>. */
 export function readableText(html: string, max = 6000): { title: string; text: string } {
   const title = stripTags(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '');
@@ -61,6 +75,9 @@ export function readableText(html: string, max = 6000): { title: string; text: s
     .split('\n').map((l) => l.trim()).filter((l) => l.length > 1).join('\n');
   return { title, text: text.length > max ? `${text.slice(0, max)}…` : text };
 }
+
+/** DuckDuckGo answered with a captcha or nothing readable: too many searches in a short time. */
+export class DuckDuckGoBlocked extends Error {}
 
 export interface SearchOpts { provider: 'duckduckgo' | 'searxng'; searxngUrl: string; limit?: number; signal?: AbortSignal }
 
@@ -89,9 +106,22 @@ export async function searchWebWith(io: WebIO, query: string, o: SearchOpts): Pr
       body: `q=${encodeURIComponent(q)}&kl=wt-wt`,
     });
   } catch (e) { throw new Error(`Web search could not reach DuckDuckGo. Check the internet connection. (${(e as Error).message})`); }
-  if (!res.ok) throw new Error(`DuckDuckGo answered ${res.status}. Try again in a minute, or use SearXNG in Settings → Chat.`);
-  const results = parseDuckDuckGo(await res.text(), o.limit ?? 8);
-  if (!results.length) throw new Error('DuckDuckGo returned no readable results (it may be asking for a captcha). Try again later, or use SearXNG in Settings → Chat.');
+  let results = res.ok ? parseDuckDuckGo(await res.text(), o.limit ?? 8) : [];
+  if (!results.length) {
+    // Refused or a captcha page (many searches in a row, e.g. several Work agents): try the lite page once.
+    try {
+      const lite = await io.fetch('https://lite.duckduckgo.com/lite/', {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA, Accept: 'text/html' },
+        body: `q=${encodeURIComponent(q)}&kl=wt-wt`,
+      });
+      if (lite.ok) results = parseDuckDuckGoLite(await lite.text(), o.limit ?? 8);
+    } catch { /* fall through to the message below */ }
+  }
+  if (!results.length) {
+    if (!res.ok) throw new Error(`DuckDuckGo answered ${res.status}. Try again in a minute, or use SearXNG in Settings → Chat.`);
+    throw new DuckDuckGoBlocked('DuckDuckGo returned no readable results (it may be asking for a captcha). Try again later, or use SearXNG in Settings → Chat.');
+  }
   return results;
 }
 
