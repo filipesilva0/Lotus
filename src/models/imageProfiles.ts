@@ -206,6 +206,15 @@ export interface SdRun {
    */
   autoFit?: boolean;
   /**
+   * With auto-fit: how much free video memory (GiB) sd.cpp must leave untouched (0.14.2). 1 GiB was not
+   * enough on an 8 GB card: SDXL at 768×1344 cached its 4.9 GB of weights, then found 0.8 GB for a
+   * 1.5 GB step (Windows plus sd.cpp's own CUDA buffers use ~2.5 GB). Default 2; the retry uses 3.
+   */
+  reserveGb?: number;
+  /** false → `--batched-cfg off` (only when the installed sd-cli has the switch): the prompt and the
+   * negative prompt run one after the other, so a step needs less working memory. */
+  batchedCfg?: boolean;
+  /**
    * Decode the image in tiles only (Apple silicon: the GPU shares the Mac's memory, so moving weights
    * to the CPU gains nothing, but a full-size VAE decode is the step that ran out of Metal memory).
    */
@@ -267,11 +276,12 @@ export function sdcppArgs(p: ImageProfile, run: SdRun, path: (folder: ImageFolde
   // until each part is needed and decode the image in tiles.
   if (f.mainFolder === 'diffusion_models') args.push('--diffusion-fa');
   if (run.lowVram) {
-    // With auto-fit, keep 1 GiB of the free video memory spare for the desktop and other apps, and let
-    // sd.cpp leave the rest of the weights in RAM; older builds only have --offload-to-cpu.
-    if (run.autoFit) args.push('--max-vram', '-1', '--vae-tiling');
+    // With auto-fit, keep some free video memory spare (the desktop, other apps and sd.cpp's own CUDA
+    // buffers) and let sd.cpp leave the rest of the weights in RAM; older builds only have --offload-to-cpu.
+    if (run.autoFit) args.push('--max-vram', String(-Math.max(1, Math.min(6, run.reserveGb ?? 2))), '--vae-tiling');
     else args.push('--offload-to-cpu', '--vae-tiling');
   } else if (run.vaeTiling) args.push('--vae-tiling');
+  if (run.batchedCfg === false) args.push('--batched-cfg', 'off');
   add('-o', run.output);
   return args;
 }

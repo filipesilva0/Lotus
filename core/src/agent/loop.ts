@@ -113,7 +113,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     const keep = shown;
     const sep = !shown.trim() ? '' : shown.endsWith('\n\n') ? '' : shown.endsWith('\n') ? '\n' : '\n\n';
     let firstToken = true;
-    const filter = mode === 'tags' ? new TagFilter() : null;
+    let filter = mode === 'tags' ? new TagFilter() : null;
     const show = (t: string) => {
       if (!t) return;
       const text = firstToken ? sep + t.replace(/^\s+/, '') : t;
@@ -128,6 +128,8 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       result = await chatTurn({ ...d.llm, think, numPredict: d.llm.numPredict ?? TURN_TOKENS, model: req.model, signal: d.signal }, messages, mode === 'native' ? wireTools(req.tools) : null, {
         token: (t) => show(filter ? filter.push(t) : t),
         thinking: (t) => d.emit({ kind: 'thinking', text: t }),
+        // What was shown this turn was the model's thinking (`</think>` with no opening tag): take it back.
+        retract: () => { d.emit({ kind: 'reset', keep: keep.length }); shown = keep; firstToken = true; if (filter) filter = new TagFilter(); },
       });
     } catch (e) {
       if (e instanceof ToolsUnsupported && mode === 'native') {

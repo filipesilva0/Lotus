@@ -329,6 +329,7 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
     expect(listTasks(db).some((t) => t.title === 'Buy milk')).toBe(true); // phase 2: the tasks table, not kv
     const sent = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(sent[0].argv).toContain('--jinja');
+    expect(sent[0].argv[sent[0].argv.indexOf('--reasoning-format') + 1]).toBe('deepseek'); // 0.14.2
     expect(sent[0].argv[sent[0].argv.indexOf('-m') + 1]).toBe(join(studio, 'Models', 'chat', 'qwen3-8b', 'Qwen3-8B-Q4_K_M.gguf'));
     expect(sent[0].body.tools.length).toBeGreaterThan(3);
     expect(sent[1].body.messages.find((m: { role: string }) => m.role === 'tool')).toMatchObject({ tool_call_id: 'call_1' });
@@ -343,7 +344,7 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
     expect(sdArgs[sdArgs.indexOf('--vae') + 1]).toBe(join(studio, 'Models', 'image', 'vae', 'vae-ft-mse-840000-ema-pruned.safetensors'));
     // No GPU: low-memory mode. This sd-cli has auto-fit, so it keeps 1 GiB spare instead of --offload-to-cpu (0.9.2).
     expect(sdArgs).not.toContain('--offload-to-cpu');
-    expect(sdArgs[sdArgs.indexOf('--max-vram') + 1]).toBe('-1');
+    expect(sdArgs[sdArgs.indexOf('--max-vram') + 1]).toBe('-2');
     // 0.9.5: one folder per generation, named from the prompt, with numbered outputs.
     expect(img.dir).toBe('A lotus flower');
     expect(img.images.map((m: { path: string }) => m.path)).toEqual(['Images/A lotus flower/Output 1.png', 'Images/A lotus flower/Output 2.png']);

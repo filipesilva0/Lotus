@@ -252,3 +252,63 @@ describe('routines in the core', () => {
     expect(h.board.configure({ limit: 99 }).limit).toBe(8);
   });
 });
+
+// ── 0.14.2: thinking that arrives inside the answer ─────────────────────────
+
+import { ThinkSplit } from '../src/agent/llm';
+import { runAgent } from '../src/agent/loop';
+import { Registry } from '../src/agent/registry';
+import { ALL_TOOLS } from '../src/agent/service';
+
+function split(chunks: string[]) {
+  const out = { answer: '', thinking: '', retracted: [] as string[] };
+  const s = new ThinkSplit({ token: (t) => { out.answer += t; }, thinking: (t) => { out.thinking += t; }, retract: (was) => { out.retracted.push(was); out.answer = ''; } });
+  for (const c of chunks) s.push(c);
+  s.end();
+  return { ...out, visible: s.visible };
+}
+
+describe('thinking inside the answer (0.14.2)', () => {
+  test('a <think> block, split across chunks, goes to thinking', () => {
+    const r = split(['<thi', 'nk>I should add a ta', 'sk.</thi', 'nk>\n\nDone: I added it.']);
+    expect(r.thinking).toBe('I should add a task.');
+    expect(r.answer).toBe('Done: I added it.');
+    expect(r.visible).toBe('Done: I added it.');
+  });
+  test('leading spaces before <think>, and no thinking at all', () => {
+    expect(split(['  \n<think>x</think>Hi']).answer).toBe('Hi');
+    expect(split(['Hel', 'lo <b', '>world</b>']).answer).toBe('Hello <b>world</b>');
+    expect(split(['<', 'p>hi</p>']).answer).toBe('<p>hi</p>');
+  });
+  test('</think> without an opening tag: what was shown becomes thinking', () => {
+    const r = split(['The user wants a ', 'note. I will ', 'write it.</think>', 'Saved the note.']);
+    expect(r.retracted).toEqual(['The user wants a note. I will ']);
+    expect(r.thinking).toBe('The user wants a note. I will write it.');
+    expect(r.answer).toBe('Saved the note.');
+  });
+  test('an unfinished <think> (out of tokens) stays thinking', () => {
+    const r = split(['<think>still going']);
+    expect(r.thinking).toBe('still going');
+    expect(r.answer).toBe('');
+  });
+
+  test('in the agent: no thinking in the answer, and no claim-check redo caused by it', async () => {
+    __clearCapCache();
+    let n = 0;
+    const ol = fakeOllama(() => (++n === 1 ? { content: '<think>I added the task already? No, I will just answer.</think>The capital of France is Paris.' } : { content: 'unexpected second turn' }), { capabilities: ['completion'] });
+    stops.push(ol.stop);
+    const db = openDb(tmp('think-db'));
+    const events: { kind: string; text?: string }[] = [];
+    const out = await runAgent({ runId: 'r', model: 'm', messages: [{ role: 'user', content: 'Capital of France?' }], tools: ALL_TOOLS.filter((t) => t.name === 'task.add'), approval: 'auto', rules: [] }, {
+      llm: { backend: 'ollama', url: ol.url, fetch }, registry: new Registry(ALL_TOOLS),
+      ctx: { db, studio: tmp('think-studio'), folders: [], memoryOn: false, fetch, kvSet: () => undefined, kvGet: () => null },
+      signal: new AbortController().signal, emit: (e) => events.push(e as never), record: () => undefined, approve: async () => true,
+    });
+    expect(out.content).toBe('The capital of France is Paris.');
+    expect(out.unverified).toEqual([]);
+    expect(n).toBe(1); // no second turn
+    expect(events.filter((e) => e.kind === 'token').map((e) => e.text).join('')).not.toContain('think');
+    expect(events.some((e) => e.kind === 'reset')).toBe(false);
+    expect(events.filter((e) => e.kind === 'thinking').map((e) => e.text).join('')).toContain('I added the task already');
+  });
+});

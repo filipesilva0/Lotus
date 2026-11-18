@@ -301,12 +301,17 @@ describe('0.9.2: voices on sherpa-onnx 1.x, images with auto-fit, honest errors'
     const run = { prompt: 'x', width: 768, height: 1344, seed: 1, count: 1, steps: 50, cfg: 7, sampler: 'euler', scheduler: 'normal', output: '/o/x.png', lowVram: true };
     const fit = sdcppArgs(p, { ...run, autoFit: true }, path);
     expect(fit).not.toContain('--offload-to-cpu');
-    expect(fit[fit.indexOf('--max-vram') + 1]).toBe('-1');
+    expect(fit[fit.indexOf('--max-vram') + 1]).toBe('-2'); // 0.14.2: 2 GiB spare
     expect(fit).toContain('--vae-tiling');
     const old = sdcppArgs(p, { ...run, autoFit: false }, path);
     expect(old).toContain('--offload-to-cpu');
     expect(old).not.toContain('--max-vram');
     expect(sdcppArgs(p, { ...run, lowVram: false, autoFit: true }, path)).not.toContain('--max-vram');
+    // The retry after running out of memory (0.14.2, RTX 4060 log: 0.8 GB free for a 1.5 GB step).
+    const tight = sdcppArgs(p, { ...run, autoFit: true, reserveGb: 3, batchedCfg: false }, path);
+    expect(tight[tight.indexOf('--max-vram') + 1]).toBe('-3');
+    expect(tight[tight.indexOf('--batched-cfg') + 1]).toBe('off');
+    expect(fit).not.toContain('--batched-cfg');
   });
 
   test("the memory message gives sd-cli's real numbers (log from an RTX 4060, 0.9.1)", () => {

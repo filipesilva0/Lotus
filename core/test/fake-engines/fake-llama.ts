@@ -2,6 +2,7 @@
 // when tools are offered and the last message is the user's, else a plain reply. Writes each request
 // body to $FAKE_LOG (one JSON per line) so tests can check what Lotus sent.
 import { appendFileSync } from 'node:fs';
+if (process.argv.includes('--help')) { process.stdout.write('usage: llama-server [options]\n  --jinja\n  --reasoning-format FORMAT\n'); process.exit(0); }
 const arg = (n: string) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : undefined; };
 const port = Number(arg('--port'));
 const log = process.env.FAKE_LOG;

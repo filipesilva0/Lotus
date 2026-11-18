@@ -537,6 +537,9 @@ export class Builtins {
     const ctx = Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
     const args = ['-m', join(this.modelsDir, m.gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
     if (m.mmproj) args.push('--mmproj', join(this.modelsDir, m.mmproj));
+    // 0.14.2: llama-server separates thinking from the answer (<think>…</think> → reasoning_content) even
+    // for templates it doesn't recognise; before, a model's thinking streamed into Chat's answer.
+    if ((await this.sdcppHelp(exe)).includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
     const logPath = join(this.enginesDir, ENGINE_DIR.llama, 'server.log');
     mkdirSync(dirname(logPath), { recursive: true });
     this.chat = { state: 'starting', model: modelId, port, ctx };
@@ -591,15 +594,18 @@ export class Builtins {
   }
 
   private sdHelp = new Map<string, Promise<string>>();
-  /** sd-cli's --help text (cached per program), to use only the switches the installed build knows. */
+  /** A program's --help text (cached per program: sd-cli, llama-server), to use only the switches the installed build knows. */
   private sdcppHelp(exe: string): Promise<string> {
     let hit = this.sdHelp.get(exe);
     if (!hit) {
       hit = (async () => {
         try {
           const proc = Bun.spawn([exe, '--help'], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
+          // A program that doesn't stop after --help mustn't hold up a chat or an image.
+          const kill = setTimeout(() => { try { proc.kill(); } catch { /* gone */ } }, 8000);
           const [out, err] = await Promise.all([new Response(proc.stdout as ReadableStream).text(), new Response(proc.stderr as ReadableStream).text()]);
           await proc.exited;
+          clearTimeout(kill);
           return `${out}\n${err}`;
         } catch { return ''; }
       })();
@@ -623,13 +629,17 @@ export class Builtins {
     mkdirSync(outDir, { recursive: true });
     let lowVram = m.gpu === 'none' || (!m.unified && m.vramGb > 0 && m.vramGb < 12);
     const vaeTiling = m.unified && m.vramGb <= 32;
-    const autoFit = (await this.sdcppHelp(exe)).includes('--auto-fit');
+    const help = await this.sdcppHelp(exe);
+    const autoFit = help.includes('--auto-fit');
+    // Out of memory with the low-memory switches too (0.14.2): once more with 3 GiB spare and the CFG
+    // branches run one after the other (when this sd-cli has the switch).
+    let tight = false;
     const logPath = join(this.enginesDir, ENGINE_DIR.sd, 'last-run.log');
     let log = '';
     try {
      // Ran out of memory with the normal switches: try once more with the low-memory ones.
      for (let attempt = 0; ; attempt++) {
-      const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram, autoFit, vaeTiling: vaeTiling || attempt > 0 }, this.imagePath, o.loras ?? []);
+      const args = sdcppArgs(p, { ...run, output: join(outDir, 'lotus.png'), lowVram, autoFit, vaeTiling: vaeTiling || attempt > 0, ...(tight ? { reserveGb: 3, ...(help.includes('--batched-cfg') ? { batchedCfg: false } : {}) } : {}) }, this.imagePath, o.loras ?? []);
       log = '';
       const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
       const onAbort = () => { try { proc.kill(); } catch { /* gone */ } };
@@ -652,6 +662,7 @@ export class Builtins {
       if (code !== 0 || !made.length) {
         const oom = sdcppMemoryError(log, m.vramGb);
         if (oom && attempt === 0 && !lowVram) { lowVram = true; this.d.log?.('sd-cli ran out of memory; retrying with low-memory switches'); continue; }
+        if (oom && lowVram && autoFit && !tight && attempt < 2) { tight = true; this.d.log?.('sd-cli ran out of memory; retrying with more video memory spare'); continue; }
         if (oom) throw new Error(`${oom} The full log is in ${logPath}.`);
         const why = log.split(/[\r\n]+/).filter((l) => /error|fail|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
         throw new Error(`The built-in image engine didn't make an image${why ? `: ${why}` : ''}. The full log is in ${logPath}.`);

@@ -139,8 +139,78 @@ export function toOpenAi(messages: WireMsg[]): unknown[] {
 }
 
 /** One model turn. Streams text through onToken / onThinking; returns the text and any tool calls. */
-export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool[] | null, on: { token: (t: string) => void; thinking: (t: string) => void }): Promise<TurnResult> {
+/**
+ * Splits a reply's text into answer and thinking (0.14.2). Engines are meant to send thinking apart
+ * (Ollama `thinking`, llama-server `reasoning_content`), but a template the engine doesn't recognise
+ * streams `<think>…</think>` inside the answer: it showed in Chat, and its "I'll add…" tripped the
+ * claim check, which wiped the answer and asked again. Tags split across chunks are handled; a
+ * `</think>` with no opening tag (the template opened it in the prompt) turns what was shown so far
+ * into thinking (`retract`).
+ */
+export class ThinkSplit {
+  private buf = '';
+  private state: 'start' | 'content' | 'think' = 'start';
+  private opened = false;
+  private orphanDone = false;
+  /** The answer text sent so far (after any retract). */
+  visible = '';
+  constructor(private on: { token: (t: string) => void; thinking: (t: string) => void; retract?: (shown: string) => void }) {}
+
+  private content(t: string) { if (t) { this.visible += t; this.on.token(t); } }
+  private think(t: string) { if (t) this.on.thinking(t); }
+
+  push(t: string) {
+    this.buf += t;
+    for (;;) {
+      if (this.state === 'start') {
+        const s = this.buf.replace(/^\s+/, '');
+        if (!s || '<think>'.startsWith(s)) return;
+        if (s.startsWith('<think>')) { this.state = 'think'; this.opened = true; this.buf = s.slice(7); continue; }
+        this.state = 'content';
+        continue;
+      }
+      if (this.state === 'think') {
+        const i = this.buf.indexOf('</think>');
+        if (i >= 0) { this.think(this.buf.slice(0, i)); this.buf = this.buf.slice(i + 8).replace(/^\s+/, ''); this.state = 'content'; continue; }
+        const keep = this.partialTail(this.buf, '</think>');
+        this.think(this.buf.slice(0, this.buf.length - keep)); this.buf = this.buf.slice(this.buf.length - keep);
+        return;
+      }
+      const open = this.buf.indexOf('<think>');
+      const close = this.buf.indexOf('</think>');
+      if (close >= 0 && (open < 0 || close < open) && !this.opened && !this.orphanDone) {
+        // The template opened the thinking in the prompt: everything up to here was thinking.
+        this.orphanDone = true;
+        const was = this.visible;
+        this.visible = '';
+        this.on.retract?.(was);
+        this.think(was + this.buf.slice(0, close));
+        this.buf = this.buf.slice(close + 8).replace(/^\s+/, '');
+        continue;
+      }
+      if (open >= 0) { this.content(this.buf.slice(0, open)); this.buf = this.buf.slice(open + 7); this.state = 'think'; this.opened = true; continue; }
+      const keep = Math.max(this.partialTail(this.buf, '<think>'), this.partialTail(this.buf, '</think>'));
+      this.content(this.buf.slice(0, this.buf.length - keep)); this.buf = this.buf.slice(this.buf.length - keep);
+      return;
+    }
+  }
+
+  /** How many characters at the end of `s` could be the start of `tag`. */
+  private partialTail(s: string, tag: string): number {
+    for (let n = Math.min(tag.length - 1, s.length); n > 0; n--) if (tag.startsWith(s.slice(-n))) return n;
+    return 0;
+  }
+
+  end() {
+    if (this.state === 'think') this.think(this.buf); else this.content(this.state === 'start' ? this.buf.replace(/^\s+/, '') : this.buf);
+    this.buf = '';
+  }
+}
+
+export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool[] | null, on0: { token: (t: string) => void; thinking: (t: string) => void; retract?: (shown: string) => void }): Promise<TurnResult> {
   const t0 = Date.now();
+  const split = new ThinkSplit(on0);
+  const on = { token: (t: string) => split.push(t), thinking: on0.thinking };
   if (o.backend === 'llamacpp') {
     const native = !!(o.nativeTools && tools?.length);
     const body: Record<string, unknown> = {
@@ -161,12 +231,11 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
         // Room for the prompt plus a reply, rounded up to a whole 4K.
         const ctx = Math.ceil((need + Math.max(2048, o.numPredict ?? 0)) / 4096) * 4096;
         const url = await o.growCtx(ctx);
-        return chatTurn({ ...o, url, growCtx: undefined }, messages, tools, on);
+        return chatTurn({ ...o, url, growCtx: undefined }, messages, tools, on0);
       }
       if (need) throw new Error(`This conversation (${need} tokens) is longer than the model's context window. Raise Context Window in Settings, or start a new chat.`);
       throw new Error(`The llama.cpp server answered ${res.status}: ${text.slice(0, 200)}`);
     }
-    let content = '';
     const parts = new Map<number, { name: string; args: string }>();
     let promptTokens: number | undefined, evalTokens: number | undefined;
     for await (const l of lines(res, o.signal)) {
@@ -177,7 +246,7 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
         const j = JSON.parse(d) as { choices?: { delta?: { content?: string | null; reasoning_content?: string; tool_calls?: { index?: number; function?: { name?: string; arguments?: string } }[] } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } };
         const delta = j.choices?.[0]?.delta;
         if (delta?.reasoning_content) on.thinking(delta.reasoning_content);
-        if (delta?.content) { content += delta.content; on.token(delta.content); }
+        if (delta?.content) on.token(delta.content);
         for (const tc of delta?.tool_calls ?? []) {
           const k = tc.index ?? 0;
           const cur = parts.get(k) ?? { name: '', args: '' };
@@ -193,6 +262,8 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
       try { args = p.args ? JSON.parse(p.args) : {}; } catch { args = {}; }
       return { name: p.name, args: args && typeof args === 'object' ? (args as Record<string, unknown>) : {} };
     });
+    split.end();
+    const content = split.visible;
     const ms = Date.now() - t0;
     return { content, calls, promptTokens, evalTokens, tokensPerSec: evalTokens && ms ? Math.round((evalTokens / (ms / 1000)) * 10) / 10 : undefined, durationMs: ms };
   }
@@ -214,7 +285,6 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     if (res.status === 404 && /not found/i.test(msg)) throw new Error(`Ollama doesn't have the model ${o.model}. Download it in Settings → Models, or pick another model.`);
     throw new Error(`Ollama answered ${res.status}: ${msg}`);
   }
-  let content = '';
   const calls: WireCall[] = [];
   let promptTokens: number | undefined, evalTokens: number | undefined, tps: number | undefined;
   for await (const l of lines(res, o.signal)) {
@@ -223,7 +293,7 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
     if (j.error) throw new Error(`Ollama: ${j.error}`);
     const m = j.message;
     if (m?.thinking) on.thinking(m.thinking);
-    if (m?.content) { content += m.content; on.token(m.content); }
+    if (m?.content) on.token(m.content);
     for (const c of m?.tool_calls ?? []) {
       const name = String(c.function?.name ?? '');
       let args = c.function?.arguments;
@@ -235,5 +305,6 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
       if (j.eval_count && j.eval_duration) tps = Math.round((j.eval_count / (j.eval_duration / 1e9)) * 10) / 10;
     }
   }
-  return { content, calls, promptTokens, evalTokens, tokensPerSec: tps, durationMs: Date.now() - t0 };
+  split.end();
+  return { content: split.visible, calls, promptTokens, evalTokens, tokensPerSec: tps, durationMs: Date.now() - t0 };
 }
