@@ -141,7 +141,7 @@ const Plan: React.FC<{ item: WorkItem; busy: boolean }> = ({ item, busy }) => {
  * A row opens to show the agent's own steps and what it returned.
  */
 const STATUS_WORD: Record<HelperInfo['status'], string> = { queued: 'Waiting its turn', running: 'Working', done: 'Done', error: 'Failed', stopped: 'Stopped' };
-const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: boolean; onDecide: (s: AgentStep, allow: boolean) => void }> = ({ agents, steps, live, onDecide }) => {
+const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: boolean; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void }> = ({ agents, steps, live, onDecide }) => {
   const [open, setOpen] = useState<string | null>(null);
   const p = agentProgress(agents);
   return (
@@ -179,7 +179,7 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
               </button>
               {isOpen && (
                 <div className="px-3 pb-3 pl-[50px]">
-                  {mine.length ? <AgentSteps steps={mine as never} onDecide={live ? (s, allow) => onDecide(s as unknown as AgentStep, allow) : undefined} /> : <p className="text-[12px] text-[var(--color-text-muted)]">No steps yet.</p>}
+                  {mine.length ? <AgentSteps steps={mine as never} onDecide={live ? (s, allow, always) => onDecide(s as unknown as AgentStep, allow, always) : undefined} /> : <p className="text-[12px] text-[var(--color-text-muted)]">No steps yet.</p>}
                   {h.result && <div className="mt-2 text-[13px] leading-relaxed"><p className="text-[12px] font-semibold text-[var(--color-text-muted)] mb-0.5">Returned</p><MarkdownLite text={h.result} onDark={false} /></div>}
                 </div>
               )}
@@ -191,7 +191,7 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
   );
 };
 
-const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry }) => {
+const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry }) => {
   const steps = m.steps ?? [];
   const [copied, flash] = useFlash();
   const agents = m.agents ?? [];
@@ -210,7 +210,7 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
           const out: React.ReactNode[] = [];
           let seg: AgentStep[] = [];
           let k = 0;
-          const flush = () => { if (seg.length) out.push(<AgentSteps key={`s${out.length}`} steps={seg as never} onDecide={live ? (s, allow) => onDecide(s as unknown as AgentStep, allow) : undefined} />); seg = []; };
+          const flush = () => { if (seg.length) out.push(<AgentSteps key={`s${out.length}`} steps={seg as never} onDecide={live ? (s, allow, always) => onDecide(s as unknown as AgentStep, allow, always) : undefined} />); seg = []; };
           for (const st of own) {
             seg.push(st);
             if (st.tool !== 'agent.delegate' || agents.length) continue;
@@ -221,7 +221,7 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
             if (h) out.push(
               <div key={`h${k}`} className="my-2 ml-1.5 pl-3 border-l-2 border-[var(--sep)]">
                 <p className="flex items-center gap-2 text-[12px] font-semibold mb-1"><AgentFace name={h.name} size={16} animate={live && st.status === 'running'} mood={live && st.status === 'running' ? 'thinking' : undefined} />{h.name}<span className="font-normal text-[var(--color-text-muted)] truncate">· {h.goal}</span></p>
-                <AgentSteps steps={h.steps as never} onDecide={live ? (s, allow) => onDecide(s as unknown as AgentStep, allow) : undefined} />
+                <AgentSteps steps={h.steps as never} onDecide={live ? (s, allow, always) => onDecide(s as unknown as AgentStep, allow, always) : undefined} />
                 {!h.steps.length && <p className="text-[12px] text-[var(--color-text-muted)]">Starting…</p>}
               </div>,
             );
@@ -455,7 +455,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                   {item.messages.map((m, i) => m.role === 'user'
                     ? <Request key={m.id} m={m} busy={work.busy} onEdit={(t) => void work.edit(m.id, t).catch((e) => setNotice((e as Error).message))} />
                     : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} busy={work.busy} reasoning={settings.reasoningBlockMode ?? 'collapsed'}
-                        onDecide={(s, allow) => void work.decide(s, allow)} onArtifact={setOpenArtifact} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
+                        onDecide={(s, allow, always) => void work.decide(s, allow, always)} onArtifact={setOpenArtifact} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
                 </div>
               </>
             )}

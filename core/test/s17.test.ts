@@ -3,6 +3,7 @@
 // encoders) and the agent's native tool calls through llama-server. GitHub and Hugging Face are faked;
 // the engines are small scripts that behave like the real programs (tests/fake-engines).
 
+import { listTasks } from '../src/board';
 import { afterAll, describe, expect, test } from 'bun:test';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -325,7 +326,7 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
     expect(run?.status).toBe('done');
     expect(run?.steps.map((s) => [s.tool, s.status])).toEqual([['task.add', 'done']]);
     expect(run?.reply).toContain('Buy milk');
-    expect((JSON.parse(kvGet(db, 'lotus.tasks.v1') || '[]') as { title: string }[]).some((t: { title: string }) => t.title === 'Buy milk')).toBe(true);
+    expect(listTasks(db).some((t) => t.title === 'Buy milk')).toBe(true); // phase 2: the tasks table, not kv
     const sent = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
     expect(sent[0].argv).toContain('--jinja');
     expect(sent[0].argv[sent[0].argv.indexOf('-m') + 1]).toBe(join(studio, 'Models', 'chat', 'qwen3-8b', 'Qwen3-8B-Q4_K_M.gguf'));

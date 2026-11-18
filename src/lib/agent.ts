@@ -7,7 +7,7 @@ import { storeMode } from './store';
 export type StepStatus = 'waiting' | 'running' | 'done' | 'error' | 'denied';
 export interface AgentStep {
   id: string; runId: string; tool: string; label: string; args: Record<string, unknown>; status: StepStatus;
-  detail?: string; ask?: string; media?: string[]; data?: Record<string, unknown>; started: number; finished?: number;
+  detail?: string; ask?: string; always?: string; media?: string[]; data?: Record<string, unknown>; started: number; finished?: number;
 }
 export type AgentEvent =
   | { kind: 'token'; text: string }
@@ -44,6 +44,8 @@ export interface AgentStart {
   workId?: string;
   /** A task or routine run nobody may be watching: approvals and questions give up after a while, saying so. */
   unattended?: boolean;
+  /** Run history: where the run came from when it isn't plain Chat (Work and the island are told apart by workId / chatId 'island'). */
+  source?: 'call';
 }
 
 export interface ToolInfo { name: string; label: string; description: string; risk: 'read' | 'write' | 'risky' }
@@ -80,9 +82,21 @@ export async function runAgent(a: AgentStart, on: (e: AgentEvent) => void, signa
   } finally { off(); }
 }
 
-export const decideStep = (runId: string, stepId: string, allow: boolean) => rpc<boolean>('agent_decide', { runId, stepId, allow });
+/** Allow / Deny a waiting step; `always` also saves the step's Always-allow rule (Settings → Tools lists them). */
+export const decideStep = (runId: string, stepId: string, allow: boolean, always = false) => rpc<boolean>('agent_decide', { runId, stepId, allow, always });
 
 export const listTools = (folders: string[] = []) => rpc<{ tools: ToolInfo[]; folders: string[]; studio: string }>('agent_tools', { folders });
+
+/** Run history (Tasks → Activity, phase 2). */
+export type RunSource = 'chat' | 'work' | 'island' | 'task' | 'routine' | 'call';
+export interface RunSummary {
+  id: string; chatId: string | null; created: number; finished: number | null; model: string; mode: string | null;
+  status: 'running' | 'done' | 'error' | 'stopped'; prompt: string; reply: string | null; unverified: string[];
+  source: RunSource | null; ref: string | null; steps?: number;
+}
+export type RunDetail = Omit<RunSummary, 'steps'> & { steps: AgentStep[] };
+export const listRuns = (f: { limit?: number; source?: RunSource; ref?: string; query?: string; before?: number } = {}) => rpc<RunSummary[]>('agent_runs', f);
+export const getRun = (runId: string) => rpc<RunDetail | null>('agent_run', { runId });
 
 /** Answers an agent's ask.user question (typed, a picked option, or spoken). */
 export const answerAsk = (runId: string, askId: string, answer: string) => rpc<boolean>('agent_answer', { runId, askId, answer });

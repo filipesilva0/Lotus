@@ -17,7 +17,7 @@ const EXAMPLES: { name: string; prompt: string; schedule: string; action: Routin
 
 const fmt = (t?: number) => (t ? new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 
-const Editor: React.FC<{ r: Routine }> = ({ r }) => {
+const Editor: React.FC<{ r: Routine; onShowRuns?: (r: Routine) => void }> = ({ r, onShowRuns }) => {
   const [name, setName] = useState(r.name);
   const [prompt, setPrompt] = useState(r.prompt);
   const [cron, setCron] = useState(r.schedule);
@@ -88,7 +88,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
         </Section>
         {err && <div className="px-4 pt-3"><Banner tone="error">{err}</Banner></div>}
         <div className="px-4 py-3 flex justify-end"><Btn variant="primary" disabled={!dirty || !!cronErr || !prompt.trim()} onClick={save}>Save Changes</Btn></div>
-        <Section title={`Runs${r.runs.length ? ` · ${r.runs.length}` : ''}`}>
+        <Section title={`Runs${r.runs.length ? ` · ${r.runs.length}` : ''}`} action={onShowRuns && r.runs.some((x) => x.runId) ? <Btn size="sm" variant="ghost" onClick={() => onShowRuns(r)}>Steps in Activity</Btn> : undefined}>
           {!r.runs.length && <p className="text-[13px] text-[var(--color-text-muted)]">No runs yet. Next run: {fmt(r.enabled ? r.nextRun : undefined)}.</p>}
           <ul className="space-y-1.5">
             {r.runs.map((run, i) => (
@@ -108,7 +108,7 @@ const Editor: React.FC<{ r: Routine }> = ({ r }) => {
   );
 };
 
-export const RoutinesView: React.FC<{ list: Routine[] }> = ({ list }) => {
+export const RoutinesView: React.FC<{ list: Routine[]; onShowRuns?: (r: Routine) => void }> = ({ list, onShowRuns }) => {
   const [sel, setSel] = useState<string | null>(list[0]?.id ?? null);
   const cur = list.find((r) => r.id === sel) ?? list[0];
   const add = (ex?: typeof EXAMPLES[number]) => {
@@ -134,7 +134,7 @@ export const RoutinesView: React.FC<{ list: Routine[] }> = ({ list }) => {
           {!list.length && <p className="px-2 py-3 text-[12px] text-[var(--color-text-muted)]">No routines yet.</p>}
         </div>
       </SidebarPane>
-      {cur ? <Editor key={cur.id} r={cur} /> : (
+      {cur ? <Editor key={cur.id} r={cur} onShowRuns={onShowRuns} /> : (
         <div className="flex-1 flex">
           <Empty icon={<AlarmClock className="w-5 h-5" />} className="flex-1" title="Scheduled routines"
             body="Lotus can run instructions on a schedule with your local model: a morning briefing, a weekly checklist, a task it then works through. They run while Lotus is open."

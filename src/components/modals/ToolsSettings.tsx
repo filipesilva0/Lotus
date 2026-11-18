@@ -10,6 +10,8 @@ import { Btn, IconBtn, Segmented, TextArea } from '../common/ui';
 import { agentAvailable, listTools, type ToolInfo } from '../../lib/agent';
 import { DEFAULT_DENY } from '../../agents/toolDefaults';
 import { isTauri } from '../../lib/http';
+import { kv } from '../../lib/store';
+import { ALLOW_KEY, describeAllow, parseAllow } from '../../lib/allowRules';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
@@ -31,6 +33,14 @@ export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) 
   const [error, setError] = useState<string | null>(null);
   const [deny, setDeny] = useState(s.agentDeny.join('\n'));
   const live = agentAvailable();
+  // Always-allow rules: saved by the core when you press Always Allow on a permission request.
+  const [allow, setAllow] = useState<string[]>(() => parseAllow(kv.getItem(ALLOW_KEY)));
+  useEffect(() => {
+    const on = (e: StorageEvent) => { if (e.key === ALLOW_KEY) setAllow(parseAllow(kv.getItem(ALLOW_KEY))); };
+    window.addEventListener('storage', on);
+    return () => window.removeEventListener('storage', on);
+  }, []);
+  const saveAllow = (next: string[]) => { setAllow(next); kv.setItem(ALLOW_KEY, JSON.stringify(next)); };
 
   useEffect(() => {
     if (!live) return;
@@ -78,6 +88,26 @@ export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) 
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="py-3.5 border-b border-[var(--sep)] space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <span className="text-[13px] font-semibold">Always allowed</span>
+            <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">What you answered with Always Allow. Lotus does these without asking, in every mode; Never allow rules still come first, and emptying a file always asks.</p>
+          </div>
+          {allow.length > 0 && <Btn size="sm" variant="ghost" onClick={() => saveAllow([])}>Remove All</Btn>}
+        </div>
+        {allow.length ? (
+          <ul className="space-y-1">
+            {allow.map((r) => (
+              <li key={r} className="text-[12px] flex items-center gap-2 h-7 pl-2 rounded-[8px] bg-[var(--hover)]">
+                <span className="truncate flex-1" title={r}>{describeAllow(r)}</span>
+                <IconBtn label={`Ask again for ${describeAllow(r)}`} className="!w-6 !h-6" onClick={() => saveAllow(allow.filter((x) => x !== r))}><X className="w-3.5 h-3.5" /></IconBtn>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-[12px] text-[var(--color-text-muted)]">Nothing yet. Press Always Allow on a permission request to add one.</p>}
       </div>
 
       <div className="py-3.5 border-b border-[var(--sep)] space-y-2">

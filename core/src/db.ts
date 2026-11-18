@@ -5,11 +5,14 @@
 //   0  what the Rust memory module created: memories, skills, *_fts tables
 //   1  adds kv (what the web layer kept in localStorage/IndexedDB), meta and media
 //   2  adds agent_runs and agent_steps (session 15: every tool call the agent makes, with its result)
+//   3  agent_runs.source/ref (run history, phase 2); tasks, routines and routine_runs tables (they were
+//      JSON in kv: `lotus.tasks.v1`, `lotus.routines.v1`; imported once, the kv keys are left as they were)
 // New versions append a step to MIGRATIONS; never edit a step that has shipped.
 
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { createBoardTables } from './board';
 
 export interface Db {
   sql: Database;
@@ -84,6 +87,13 @@ const MIGRATIONS: ((sql: Database) => void)[] = [
     )`);
     sql.run('CREATE INDEX IF NOT EXISTS agent_steps_run ON agent_steps(run_id, seq)');
     sql.run('CREATE INDEX IF NOT EXISTS agent_runs_created ON agent_runs(created)');
+  },
+  // 2 → 3
+  (sql) => {
+    sql.run('ALTER TABLE agent_runs ADD COLUMN source TEXT'); // 'chat' | 'work' | 'island' | 'task' | 'routine' | 'call'
+    sql.run('ALTER TABLE agent_runs ADD COLUMN ref TEXT');    // the task or routine id, the Work id
+    sql.run('CREATE INDEX IF NOT EXISTS agent_runs_source ON agent_runs(source, created)');
+    createBoardTables(sql);
   },
 ];
 

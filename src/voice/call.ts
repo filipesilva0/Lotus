@@ -261,7 +261,7 @@ async function* replyStream(turns: { role: 'system' | 'user' | 'assistant'; cont
   const push = (x: string | { keep: number }) => { queue.push(x); wake?.(); };
   const sys = turns[0]?.role === 'system' ? `${turns[0].content}\n\nOn this call you can use your tools when the user asks for something they can do; say briefly what you did, in one or two spoken sentences.` : '';
   const msgs = sys ? [{ role: 'system' as const, content: sys }, ...turns.slice(1)] : turns;
-  void runAgent({ model: o.model, prompt: o.prompt.slice(0, 400), messages: msgs, memoryOn: o.memoryOn, options: { temperature: o.temperature, numCtx: o.numCtx } }, (e) => {
+  void runAgent({ model: o.model, prompt: o.prompt.slice(0, 400), messages: msgs, memoryOn: o.memoryOn, source: 'call', options: { temperature: o.temperature, numCtx: o.numCtx } }, (e) => {
     if (e.kind === 'token') push(e.text);
     else if (e.kind === 'reset') push({ keep: e.keep });
   }, o.signal).catch((e) => { failed = e; }).finally(() => { end = true; wake?.(); });

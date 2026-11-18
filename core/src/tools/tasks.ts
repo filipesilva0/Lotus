@@ -1,4 +1,4 @@
-// task.add / task.list / task.move: the Tasks page's board (`lotus.tasks.v1`), with the same rules
+// task.add / task.list / task.move: the Tasks page's board (lotus.db `tasks` since phase 2), with the same rules
 // the board uses (tasks/kanban.ts). Changes reach open windows like any other saved change, so the
 // board updates while you watch.
 
@@ -17,10 +17,11 @@ const STATUS_ALIASES: Record<string, Status> = {
 const colName = (s: Status) => COLUMNS.find((c) => c.id === s)?.title ?? s;
 const uid = (p: string) => `${p}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
-export function readTasks(ctx: Pick<ToolCtx, 'kvGet'>): Task[] {
+export function readTasks(ctx: Pick<ToolCtx, 'kvGet' | 'board'>): Task[] {
+  if (ctx.board) return ctx.board.tasks();
   try { const v = JSON.parse(ctx.kvGet(TASKS_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
-const save = (ctx: ToolCtx, list: Task[]) => ctx.kvSet(TASKS_KEY, JSON.stringify(list));
+const save = (ctx: ToolCtx, list: Task[]) => (ctx.board ? ctx.board.setTasks(list) : ctx.kvSet(TASKS_KEY, JSON.stringify(list)));
 
 /** Finds a task by id, exact title, or a unique title match. */
 export function findTask(all: Task[], ref: string): Task | { error: string } {

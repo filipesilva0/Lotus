@@ -9,7 +9,7 @@
 
 import { chatTurn, ChatOpts, ollamaCapabilities, ToolsUnsupported, WireMsg } from './llm';
 import { checkArgs, fromWire, Registry, toWire, wireTools } from './registry';
-import { decide, Rule } from './policy';
+import { alwaysRuleFor, decide, Rule } from './policy';
 import { claimText, unbackedClaims } from './claims';
 import { parseTags, TagFilter, tagInstructions } from './tags';
 import { analysePrompt, isNoIssues, reviewPrompt, reviewFix, stepsDigest } from './think';
@@ -24,6 +24,8 @@ export interface AgentRequest {
   tools: Tool[];
   approval: ApprovalMode;
   rules: Rule[];
+  /** Allow rules (Always allow), read at each call so one saved mid-run counts for the rest of it. */
+  allow?: () => Rule[];
   maxTurns?: number;
   /** Ollama capabilities when the caller already knows them (tests). */
   capabilities?: string[];
@@ -235,7 +237,7 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
   step.args = Object.keys(args).length ? args : rawArgs;
   if (error) { update({ status: 'error', detail: error, finished: Date.now() }); return `Error: ${error} Fix the arguments and try again.`; }
 
-  const verdict = decide(tool, args, req.approval, req.rules);
+  const verdict = decide(tool, args, req.approval, req.rules, req.allow?.() ?? []);
   if (verdict.decision === 'deny') {
     update({ status: 'denied', detail: `Blocked by your rule “${verdict.rule}”`, finished: Date.now() });
     return `The user's settings block this (${verdict.rule}). Don't try it again; tell the user it is blocked.`;
@@ -244,17 +246,18 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
   try { harm = tool.destructive ? tool.destructive(args, d.ctx) : null; } catch { harm = null; }
   if (verdict.decision === 'ask' || harm) {
     const what = tool.describe ? tool.describe(args) : `${tool.label}`;
-    update({ status: 'waiting', ask: harm ? `${harm}. ${what}` : what });
+    // A destructive call (emptying a file…) asks every time, so it offers no "Always allow".
+    update({ status: 'waiting', ask: harm ? `${harm}. ${what}` : what, always: harm ? undefined : alwaysRuleFor(tool.name, args) ?? undefined });
     const allowed = await d.approve({ ...step });
     if (allowed === 'timeout') {
-      update({ status: 'denied', ask: undefined, detail: `No answer within ${Math.round(APPROVAL_WAIT_MS.value / 60_000)} minutes, so Lotus didn't do it`, finished: Date.now() });
+      update({ status: 'denied', ask: undefined, always: undefined, detail: `No answer within ${Math.round(APPROVAL_WAIT_MS.value / 60_000)} minutes, so Lotus didn't do it`, finished: Date.now() });
       return 'Nobody answered the permission request in time (the user may be away), so it was not done. Do not do it another way; say in your answer that it is waiting for their permission next time.';
     }
     if (!allowed) {
-      update({ status: 'denied', ask: undefined, detail: d.signal.aborted ? 'Stopped' : 'You said no', finished: Date.now() });
+      update({ status: 'denied', ask: undefined, always: undefined, detail: d.signal.aborted ? 'Stopped' : 'You said no', finished: Date.now() });
       return 'The user denied this action. Do not do it another way; tell them it was not done.';
     }
-    update({ status: 'running', ask: undefined });
+    update({ status: 'running', ask: undefined, always: undefined });
   } else update({});
 
   let r: ToolResult;

@@ -27,7 +27,7 @@ interface Props {
   /** Yes / No on an image the reply proposed (0.10.1). */
   onImage?: (msgId: string, proposal: ImageProposal, yes: boolean) => void;
   /** Allow / Deny on an agent step that needs permission. */
-  onStep?: (msgId: string, step: ChatToolCall, allow: boolean) => void;
+  onStep?: (msgId: string, step: ChatToolCall, allow: boolean, always?: boolean) => void;
 }
 
 export const ThinkingDrawer: React.FC<{ m: ChatMessage; mode: 'collapsed' | 'expanded' | 'hidden' }> = ({ m, mode }) => {
@@ -89,7 +89,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
               </div>
               <div className={cx('min-w-0 max-w-[85%]', user && 'flex flex-col items-end')}>
                 {!user && <ThinkingDrawer m={m} mode={reasoningMode} />}
-                {!user && <AgentSteps steps={(m.tools ?? []).filter((t) => t.tool)} onDecide={m.isStreaming && onStep ? (t, allow) => onStep(m.id, t, allow) : undefined} />}
+                {!user && <AgentSteps steps={(m.tools ?? []).filter((t) => t.tool)} onDecide={m.isStreaming && onStep ? (t, allow, always) => onStep(m.id, t, allow, always) : undefined} />}
                 {editing === m.id ? (
                   <div className="w-[min(560px,80vw)] space-y-2">
                     <TextArea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} rows={3} aria-label="Edit message" />

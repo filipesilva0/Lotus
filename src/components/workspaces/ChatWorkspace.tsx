@@ -184,7 +184,7 @@ export const ChatWorkspace: React.FC<Props> = ({ chat, settings, onSettings, mod
             onAnswer={(id, text) => void chat.answerPoll(id, text)}
             onInstall={(id, target, allow) => void chat.decideInstall(id, target, allow)}
             onImage={(id, proposal, yes) => { chat.decideImage(id, yes); if (yes) onCreateImage?.(proposal); }}
-            onStep={(id, step, allow) => chat.decideAgentStep(id, step, allow)} />
+            onStep={(id, step, allow, always) => chat.decideAgentStep(id, step, allow, always)} />
         )}
         {offline && (settings.llmBackend === 'builtin' ? <BuiltinNotice kind="chat" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" /> : <EngineNotice id="ollama" purpose="to chat" className="max-w-[808px] w-full mx-auto px-6 pb-1" />)}
         <Composer model={settings.selectedModel} streaming={chat.isStreaming} disabled={offline} sendOnEnter={settings.sendOnEnter}

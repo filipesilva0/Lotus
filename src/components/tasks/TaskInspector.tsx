@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Bot, Check, ChevronDown, Globe, Loader2, Play, RotateCcw, Square, Trash2, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, Globe, History, Loader2, Play, RotateCcw, Square, Trash2, X } from 'lucide-react';
 import { blockedBy, blockersOf, COLUMNS, Priority, Status, Task, TaskLink } from '../../tasks/kanban';
 import { tasks as store } from '../../tasks/store';
 import { uid } from '../../lib/persist';
+import { agentAvailable } from '../../lib/agent';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { InspectorPane, PaneBar, Section } from '../common/Pane';
 import { Banner, Btn, Checkbox, IconBtn, Label, Segmented, Select, TextArea, TextInput, cx } from '../common/ui';
 
 const PRIORITIES: Priority[] = ['urgent', 'high', 'normal', 'low'];
 
-export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => void }> = ({ task: t, all, onClose }) => {
+export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => void; /** Tasks → Activity for this task (with the core). */ onShowRuns?: () => void }> = ({ task: t, all, onClose, onShowRuns }) => {
   const [title, setTitle] = useState(t.title);
   const [desc, setDesc] = useState(t.description);
   const [editDesc, setEditDesc] = useState(!t.description);
@@ -38,6 +39,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
     <InspectorPane label="Task details" className="!w-[360px]">
       <PaneBar>
         <span className="text-[13px] font-semibold flex-1 truncate">Task</span>
+        {onShowRuns && agentAvailable() && (t.run || t.result) && <IconBtn label="See this task’s runs in Activity" onClick={onShowRuns}><History className="w-4 h-4" /></IconBtn>}
         <IconBtn label="Delete task" onClick={() => { store.remove(t.id); onClose(); }}><Trash2 className="w-4 h-4" /></IconBtn>
         <IconBtn label="Close details" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
       </PaneBar>

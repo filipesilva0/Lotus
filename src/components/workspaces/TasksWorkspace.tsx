@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCommand } from '../../lib/commands';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
-import { AlarmClock, BookOpen, Bot, Brain, Cpu, Flower2, Puzzle, SquareKanban, Plus, X } from 'lucide-react';
+import { AlarmClock, BookOpen, Bot, Brain, Cpu, Flower2, History, Puzzle, SquareKanban, Plus, X } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { tasks as store, useTasks } from '../../tasks/store';
 import { useAgentPool, agentPool } from '../../agents/pool';
@@ -13,21 +13,28 @@ import { LibraryPane } from '../library/LibraryPane';
 import { KanbanBoard } from '../tasks/KanbanBoard';
 import { TaskInspector } from '../tasks/TaskInspector';
 import { RoutinesView } from '../tasks/RoutinesView';
+import { ActivityView } from '../tasks/ActivityView';
 import { SkillsView } from '../tasks/SkillsView';
 import { ScalingCard } from '../hardware/ScalingCard';
 import { PendingApprovals } from '../tasks/PendingApprovals';
 
-export type TasksTab = 'board' | 'routines' | 'skills' | 'memory' | 'soul' | 'plugins';
+export type TasksTab = 'board' | 'routines' | 'activity' | 'skills' | 'memory' | 'soul' | 'plugins';
 type Tab = TasksTab;
-const TABS: Tab[] = ['board', 'routines', 'skills', 'memory', 'soul', 'plugins'];
+const TABS: Tab[] = ['board', 'routines', 'activity', 'skills', 'memory', 'soul', 'plugins'];
 
 const KIND: Record<string, string> = { task: 'Task', routine: 'Routine', skill: 'Skill', memory: 'Memory', other: 'Agent' };
 
 /** Background agents: what is running and waiting, against the VRAM-safe limit. */
 const AgentsButton: React.FC = () => {
   const pool = useAgentPool();
+  const board = useTasks();
   const hw = useHardware();
-  const running = pool.jobs.filter((j) => j.status === 'running');
+  // The window's own background jobs (memory, skills) and the tasks and routines the core runs (phase 2).
+  const jobs = [
+    ...board.jobs.map((j) => ({ id: j.id, kind: j.key.split(':')[0], label: j.label, status: j.status, stop: () => store.stopJob(j.key) })),
+    ...pool.jobs.map((j) => ({ id: j.id, kind: j.kind as string, label: j.label, status: j.status, stop: () => agentPool.cancel(j.id) })),
+  ];
+  const running = jobs.filter((j) => j.status === 'running');
   return (
     <Popover align="right" className="!w-[380px] !max-h-[520px]" trigger={(_o, t) => (
       <button type="button" onClick={t} aria-haspopup="dialog" title="Background agents and video memory"
@@ -42,14 +49,14 @@ const AgentsButton: React.FC = () => {
           <ScalingCard compact className="!shadow-none !bg-transparent !p-1.5" />
           <div>
             <p className="px-1.5 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Jobs</p>
-            {!pool.jobs.length && <p className="px-1.5 pb-1 text-[12px] text-[var(--color-text-muted)]">Nothing running.</p>}
-            {pool.jobs.map((j) => (
+            {!jobs.length && <p className="px-1.5 pb-1 text-[12px] text-[var(--color-text-muted)]">Nothing running.</p>}
+            {jobs.map((j) => (
               <div key={j.id} className="flex items-center gap-2 px-1.5 py-1 text-[12px]">
                 <span className={j.status === 'running' ? 'w-1.5 h-1.5 rounded-full bg-[var(--c-green)] animate-pulse' : 'w-1.5 h-1.5 rounded-full bg-[var(--color-text-muted)] opacity-50'} aria-hidden="true" />
-                <span className="text-[var(--color-text-muted)] w-[54px] shrink-0">{KIND[j.kind]}</span>
+                <span className="text-[var(--color-text-muted)] w-[54px] shrink-0">{KIND[j.kind] ?? 'Agent'}</span>
                 <span className="flex-1 truncate">{j.label}</span>
                 <span className="text-[12px] text-[var(--color-text-muted)]">{j.status === 'running' ? 'running' : 'waiting'}</span>
-                <IconBtn label={`Stop ${j.label}`} className="!w-5 !h-5" onClick={() => agentPool.cancel(j.id)}><X className="w-3 h-3" /></IconBtn>
+                <IconBtn label={`Stop ${j.label}`} className="!w-5 !h-5" onClick={j.stop}><X className="w-3 h-3" /></IconBtn>
               </div>
             ))}
           </div>
@@ -72,6 +79,9 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
   const { tasks, routines, notice } = useTasks();
   const [sel, setSel] = useState<string | null>(null);
   const cur = tasks.find((t) => t.id === sel) ?? null;
+  // Activity for one task or routine (its inspector's "See Runs").
+  const [focus, setFocus] = useState<{ ref: string; label: string } | null>(null);
+  const showRuns = (ref: string, label: string) => { setFocus({ ref, label }); setTab('activity'); };
   const newTask = () => { setTab('board'); const t = store.add({ title: 'New task', status: 'todo' }); setSel(t.id); };
   useCommand('new-task', newTask);
 
@@ -80,6 +90,7 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
   const SECTIONS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'board', label: 'Board', icon: <SquareKanban className="w-4 h-4" /> },
     { id: 'routines', label: 'Routines', icon: <AlarmClock className="w-4 h-4" /> },
+    { id: 'activity', label: 'Activity', icon: <History className="w-4 h-4" /> },
     { id: 'skills', label: 'Skills', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" /> },
     { id: 'soul', label: 'Soul', icon: <Flower2 className="w-4 h-4" /> },
@@ -108,10 +119,11 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
       {tab === 'board' && (
         <div className="flex-1 min-h-0 flex">
           <KanbanBoard all={tasks} selected={sel} onSelect={setSel} />
-          {cur && <TaskInspector key={cur.id} task={cur} all={tasks} onClose={() => setSel(null)} />}
+          {cur && <TaskInspector key={cur.id} task={cur} all={tasks} onClose={() => setSel(null)} onShowRuns={() => showRuns(cur.id, `“${cur.title}”`)} />}
         </div>
       )}
-      {tab === 'routines' && <RoutinesView list={routines} />}
+      {tab === 'routines' && <RoutinesView list={routines} onShowRuns={(r) => showRuns(r.id, `“${r.name}”`)} />}
+      {tab === 'activity' && <ActivityView focus={focus} onClearFocus={() => setFocus(null)} />}
       {tab === 'skills' && skillView === 'yours' && <SkillsView settings={settings} onSettings={onSettings} />}
       {tab === 'skills' && skillView === 'all' && <LibraryPane tab="skills" settings={settings} onSettings={onSettings} folder={folder} />}
       {(tab === 'memory' || tab === 'soul' || tab === 'plugins') && <LibraryPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}

@@ -22,6 +22,7 @@ import { KvChange, kvAll, kvApply, kvMigrate } from './kv';
 import * as mem from './memory';
 import { deleteMedia, listMedia, MAX_MEDIA, MediaKind, mimeFor, newImageFolder, resolveMedia, saveMedia } from './media';
 import { AgentService, type StartArgs } from './agent/service';
+import { BoardService, boardRpc } from './scheduler';
 import { readHardware } from './hardware';
 import { Builtins } from './engines/manager';
 import { builtinRpc } from './engines/rpc';
@@ -41,6 +42,8 @@ export interface CoreOptions {
   fetch?: typeof fetch;
   /** Tests: a fixed machine and fake GitHub / Hugging Face addresses for the built-in engines. */
   builtins?: Partial<ConstructorParameters<typeof Builtins>[0]>;
+  /** Run the routine scheduler and task auto-runner (default on; tests may turn it off). */
+  scheduler?: boolean;
 }
 
 const DEFAULT_ORIGINS = ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost', 'http://127.0.0.1:3000', 'http://localhost:3000'];
@@ -82,11 +85,11 @@ function sameToken(a: string, b: string): boolean {
 function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json): { found: boolean; value?: unknown } {
   switch (method) {
     case 'agent_start': return { found: true, value: agent.start(a as unknown as StartArgs) };
-    case 'agent_decide': return { found: true, value: agent.decide(str(a.runId), str(a.stepId), a.allow === true) };
+    case 'agent_decide': return { found: true, value: agent.decide(str(a.runId), str(a.stepId), a.allow === true, a.always === true) };
     case 'agent_stop': return { found: true, value: agent.stop(str(a.runId)) };
     case 'agent_tools': return { found: true, value: { tools: agent.describeTools(), folders: agent.folders(Array.isArray(a.folders) ? a.folders.map(String) : []), studio: o.studio } };
     case 'agent_run': return { found: true, value: agent.run(str(a.runId)) };
-    case 'agent_runs': return { found: true, value: agent.list(num(a.limit, 50)) };
+    case 'agent_runs': return { found: true, value: agent.list(num(a.limit, 50), { source: a.source ? str(a.source) : undefined, ref: a.ref ? str(a.ref) : undefined, query: a.query ? str(a.query) : undefined, before: a.before ? num(a.before, 0) : undefined }) };
     case 'agent_answer': return { found: true, value: agent.answer(str(a.runId), str(a.askId), str(a.answer)) };
     case 'work_artifacts': return { found: true, value: agent.artifacts(str(a.workId)) };
     case 'work_artifact': return { found: true, value: agent.artifactText(str(a.workId), str(a.file)) };
@@ -97,7 +100,7 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
   }
 }
 
-export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins };
+export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService };
 
 export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
@@ -140,6 +143,10 @@ export function startServer(o: CoreOptions): CoreServer {
   const builtins = new Builtins({ studio: o.studio, broadcast, kvGet: (k) => kvGet(o.db, k), kvSet: kvSetCore, fetch: o.fetch, log, ...o.builtins });
   try { builtins.ensureFolders(); } catch (e) { log(`could not create the Models folders: ${(e as Error).message}`); }
   const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins });
+  // Phase 2: the task board, routines and their scheduler live here, next to the agent.
+  const board = new BoardService({ db: o.db, agent, broadcast, log });
+  agent.board = board;
+  if (o.scheduler !== false) board.start();
 
   const server = Bun.serve<{ id: number }, never>({
     hostname: '127.0.0.1',
@@ -224,6 +231,8 @@ export function startServer(o: CoreOptions): CoreServer {
           if (!fn) {
             const b = await builtinRpc(builtins, o.db, o.studio, method, args, broadcast);
             if (b.found) return json(req, { result: b.value ?? null });
+            const bd = boardRpc(board, method, args);
+            if (bd.found) return json(req, { result: bd.value ?? null });
             const r = agentRpc(agent, o, method, args);
             if (!r.found) return fail(req, 404, `The core has no method called ${method}.`);
             return json(req, { result: r.value ?? null });
@@ -243,5 +252,5 @@ export function startServer(o: CoreOptions): CoreServer {
       message() { /* clients only listen */ },
     },
   });
-  return Object.assign(server, { agent, builtins });
+  return Object.assign(server, { agent, builtins, board });
 }

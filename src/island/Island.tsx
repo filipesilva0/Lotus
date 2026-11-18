@@ -9,6 +9,7 @@ import { useActivity, useAgents } from './hooks';
 import { Activity, Mood, loadIsland, mainSettings } from './state';
 import { onCoreEvent } from '../lib/core';
 import { answerAsk, decideStep } from '../lib/agent';
+import { describeAllow } from '../lib/allowRules';
 import { kv } from '../lib/store';
 import { AgentFace } from '../components/common/AgentFace';
 
@@ -29,7 +30,7 @@ import { AgentFace } from '../components/common/AgentFace';
  */
 
 type Ask = { runId: string; askId: string; question: string; options: string[] };
-type Perm = { runId: string; stepId: string; text: string };
+type Perm = { runId: string; stepId: string; text: string; always?: string };
 type VoiceState = 'idle' | 'speaking' | 'listening' | 'transcribing';
 const KIND_WORD: Record<Activity['kind'], string> = { image: 'Images', voice: 'Voice', chat: 'Chat', download: 'Download', research: 'Research', build: 'Work' };
 
@@ -79,7 +80,7 @@ export const Island: React.FC = () => {
     if (e.kind === 'ask') setAsks((l) => [...l, { runId: e.runId, askId: e.askId, question: e.question, options: e.options ?? [] }]);
     else if (e.kind === 'answered') setAsks((l) => l.filter((a) => !(a.runId === e.runId && a.askId === e.askId)));
     else if (e.kind === 'step') {
-      if (e.step?.status === 'waiting') setPerms((l) => (l.some((p) => p.stepId === e.step.id) ? l : [...l, { runId: e.runId, stepId: e.step.id, text: e.step.ask ?? e.step.label }]));
+      if (e.step?.status === 'waiting') setPerms((l) => (l.some((p) => p.stepId === e.step.id) ? l : [...l, { runId: e.runId, stepId: e.step.id, text: e.step.ask ?? e.step.label, always: e.step.always }]));
       else setPerms((l) => l.filter((p) => p.stepId !== e.step?.id));
     } else if (e.kind === 'done' || e.kind === 'error') {
       setAsks((l) => l.filter((a) => a.runId !== e.runId));
@@ -260,6 +261,7 @@ export const Island: React.FC = () => {
               </div>
               <div className="mt-auto flex justify-end gap-2">
                 <button className={`${btn} bg-white/10 hover:bg-white/20`} onClick={() => void decideStep(perm.runId, perm.stepId, false)}><X className="w-3.5 h-3.5" />Deny</button>
+                {perm.always && <button className={`${btn} bg-white/10 hover:bg-white/20`} title={`Stops asking for ${describeAllow(perm.always)}`} onClick={() => void decideStep(perm.runId, perm.stepId, true, true)}>Always Allow</button>}
                 <button className={`${btn} bg-[var(--color-accent-vibrant)] hover:brightness-110`} onClick={() => void decideStep(perm.runId, perm.stepId, true)}><Check className="w-3.5 h-3.5" />Allow</button>
               </div>
             </div>

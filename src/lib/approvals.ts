@@ -4,7 +4,7 @@
 import { useSyncExternalStore } from 'react';
 import { onCoreEvent } from './core';
 
-export interface PendingPerm { runId: string; stepId: string; text: string }
+export interface PendingPerm { runId: string; stepId: string; text: string; always?: string }
 export interface PendingAsk { runId: string; askId: string; question: string; options: string[] }
 interface State { perms: PendingPerm[]; asks: PendingAsk[] }
 
@@ -19,7 +19,7 @@ export function applyAgentEvent(s: State, e: Record<string, any>): State { // es
   if (e.kind === 'answered') return { ...s, asks: s.asks.filter((a) => !(a.runId === e.runId && a.askId === e.askId)) };
   if (e.kind === 'step' && e.step) {
     const rest = s.perms.filter((p) => p.stepId !== e.step.id);
-    return e.step.status === 'waiting' ? { ...s, perms: [...rest, { runId: e.runId, stepId: e.step.id, text: String(e.step.ask ?? e.step.label ?? '') }] } : rest.length === s.perms.length ? s : { ...s, perms: rest };
+    return e.step.status === 'waiting' ? { ...s, perms: [...rest, { runId: e.runId, stepId: e.step.id, text: String(e.step.ask ?? e.step.label ?? ''), ...(e.step.always ? { always: String(e.step.always) } : {}) }] } : rest.length === s.perms.length ? s : { ...s, perms: rest };
   }
   if (e.kind === 'done' || e.kind === 'error') return { perms: s.perms.filter((p) => p.runId !== e.runId), asks: s.asks.filter((a) => a.runId !== e.runId) };
   return s;

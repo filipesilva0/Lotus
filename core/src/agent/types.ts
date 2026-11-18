@@ -53,6 +53,16 @@ export interface ToolCtx {
   deploy?: (jobs: { goal: string; name?: string }[], context: string) => Promise<{ name: string; content: string; steps: number; ok: boolean }[]>;
   /** The built-in engines (session 17): image.generate uses them when Settings → Engines picks Built in. */
   builtins?: import('../engines/manager').Builtins;
+  /** The task board and routines in lotus.db (phase 2). Without it (older tests) the tools use kv. */
+  board?: BoardAccess;
+}
+
+/** What the task and routine tools need from the board: whole lists in, whole lists out. */
+export interface BoardAccess {
+  tasks(): import('../../../src/tasks/kanban').Task[];
+  setTasks(list: import('../../../src/tasks/kanban').Task[]): void;
+  routines(): import('../board').Routine[];
+  setRoutines(list: import('../board').Routine[]): void;
 }
 
 export interface Tool {
@@ -86,6 +96,8 @@ export interface Step {
   detail?: string;
   /** Set while the step waits for Allow / Deny. */
   ask?: string;
+  /** While waiting: the rule "Always allow" would save (absent when it can't be offered). */
+  always?: string;
   media?: string[];
   data?: Record<string, unknown>;
   started: number;

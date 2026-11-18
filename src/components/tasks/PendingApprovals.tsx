@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { usePending } from '../../lib/approvals';
 import { answerAsk, decideStep } from '../../lib/agent';
 import { Banner, Btn, TextInput } from '../common/ui';
+import { describeAllow } from '../../lib/allowRules';
 
 /** What Lotus's agents are waiting for you to answer (tasks and routines run while nobody watches). */
 export const PendingApprovals: React.FC<{ className?: string }> = ({ className }) => {
@@ -13,6 +14,7 @@ export const PendingApprovals: React.FC<{ className?: string }> = ({ className }
       {perms.map((p) => (
         <Banner key={p.stepId} tone="warn" action={<span className="flex gap-1.5 shrink-0">
           <Btn size="sm" onClick={() => void decideStep(p.runId, p.stepId, false).catch(() => undefined)}>Deny</Btn>
+          {p.always && <Btn size="sm" title={`Stops asking for ${describeAllow(p.always)}`} onClick={() => void decideStep(p.runId, p.stepId, true, true).catch(() => undefined)}>Always Allow</Btn>}
           <Btn size="sm" variant="primary" onClick={() => void decideStep(p.runId, p.stepId, true).catch(() => undefined)}>Allow</Btn>
         </span>}>
           Lotus is waiting for your permission: {p.text}

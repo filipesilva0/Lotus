@@ -261,7 +261,7 @@ export function useChat(settings: LotusSettings) {
       // shows each step with its real result. Thinking mode runs there too (analysis → tools → review,
       // core/src/agent/think.ts); the multi-pass pipeline below is only for the browser preview or tools off.
       if (s.agentTools !== false && agentAvailable()) {
-        const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, media: st.media });
+        const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, always: st.status === 'waiting' ? st.always : undefined, media: st.media });
         setRaw({ request: { agent: true, model: o.model, messages: turns.length, web: !!o.web, memory: memOn }, response: null, at: Date.now() });
         const done = await runAgent({
           model: o.model, prompt: o.query ?? '', chatId: sid,
@@ -467,11 +467,11 @@ export function useChat(settings: LotusSettings) {
   }, [activeId, patchMsg]);
 
   /** Allow or Deny on an agent step that asked for permission. */
-  const decideAgentStep = useCallback((msgId: string, step: ChatToolCall, allow: boolean) => {
+  const decideAgentStep = useCallback((msgId: string, step: ChatToolCall, allow: boolean, always = false) => {
     if (!step.runId) return;
     const sid = ref.current.find((x) => x.messages.some((m) => m.id === msgId))?.id ?? activeId;
-    patchMsg(sid, msgId, (m) => ({ tools: m.tools?.map((t) => (t.id === step.id ? { ...t, status: allow ? 'running' : 'denied', ask: undefined, detail: allow ? undefined : 'You said no' } : t)) }));
-    void decideStep(step.runId, step.id, allow).catch(() => undefined);
+    patchMsg(sid, msgId, (m) => ({ tools: m.tools?.map((t) => (t.id === step.id ? { ...t, status: allow ? 'running' : 'denied', ask: undefined, always: undefined, detail: allow ? undefined : 'You said no' } : t)) }));
+    void decideStep(step.runId, step.id, allow, always).catch(() => undefined);
   }, [activeId, patchMsg]);
 
   const switchTo = useCallback((msgId: string, dir: -1 | 1) => {

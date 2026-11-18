@@ -1,17 +1,19 @@
 // routine.add / routine.list / routine.remove (0.10.1): scheduled routines ("cron jobs") on the Tasks
-// page (`lotus.routines.v1`). Each run, Lotus does the routine's instructions and keeps the answer,
+// page (lotus.db `routines` since phase 2). Each run, Lotus does the routine's instructions and keeps the answer,
 // posts it to the board, or turns it into a task. The window's scheduler runs them; saves reach it
-// like any other saved change.
+// like any other saved change (the core's scheduler runs them since phase 2).
 
 import type { Tool, ToolCtx } from '../agent/types';
 import { cronFromPreset, describeCron, nextRun, validateCron } from '../../../src/tasks/cron';
 
 export const ROUTINES_KEY = 'lotus.routines.v1';
+const saveRoutines = (ctx: ToolCtx, list: SavedRoutine[]) => (ctx.board ? ctx.board.setRoutines(list as never) : ctx.kvSet(ROUTINES_KEY, JSON.stringify(list)));
 const uid = (p: string) => `${p}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
 interface SavedRoutine { id: string; name: string; prompt: string; schedule: string; enabled: boolean; action: 'log' | 'card' | 'task'; web: boolean; catchUp: boolean; nextRun?: number; runs: unknown[]; created: number }
 
-export function readRoutines(ctx: Pick<ToolCtx, 'kvGet'>): SavedRoutine[] {
+export function readRoutines(ctx: Pick<ToolCtx, 'kvGet' | 'board'>): SavedRoutine[] {
+  if (ctx.board) return ctx.board.routines() as SavedRoutine[];
   try { const v = JSON.parse(ctx.kvGet(ROUTINES_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
@@ -63,7 +65,7 @@ export const routineAdd: Tool = {
     const all = readRoutines(ctx);
     const action = a.result === 'card' ? 'card' : a.result === 'task' ? 'task' : 'log';
     const r: SavedRoutine = { id: uid('rt'), name, prompt, schedule: sch.cron, enabled: true, action, web: a.web === true, catchUp: false, runs: [], created: Date.now(), nextRun: nextRun(sch.cron, new Date())?.getTime() };
-    ctx.kvSet(ROUTINES_KEY, JSON.stringify([...all, r]));
+    saveRoutines(ctx, [...all, r]);
     const when = describeCron(sch.cron);
     const next = r.nextRun ? new Date(r.nextRun).toLocaleString() : 'never';
     return { ok: true, text: `Scheduled routine ${r.id} “${name}”: ${when} (cron ${sch.cron}); next run ${next}.`, summary: `Scheduled “${name}”: ${when}`, data: { routineId: r.id } };
@@ -95,7 +97,7 @@ export const routineRemove: Tool = {
     const hit = all.filter((r) => r.id === String(a.routine).trim() || r.name.toLowerCase() === ref);
     const found = hit.length ? hit : all.filter((r) => r.name.toLowerCase().includes(ref));
     if (found.length !== 1) return { ok: false, text: found.length ? `“${a.routine}” matches ${found.length} routines: ${found.map((r) => `${r.name} (${r.id})`).join(', ')}. Use the id.` : `No routine matches “${a.routine}”.`, summary: 'Routine not found' };
-    ctx.kvSet(ROUTINES_KEY, JSON.stringify(all.filter((r) => r.id !== found[0].id)));
+    saveRoutines(ctx, all.filter((r) => r.id !== found[0].id));
     return { ok: true, text: `Deleted the routine “${found[0].name}”.`, summary: `Deleted “${found[0].name}”` };
   },
 };

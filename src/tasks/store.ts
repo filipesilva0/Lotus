@@ -1,6 +1,13 @@
-// Task board and routines: shared state (lotus.db through `kv`: `lotus.tasks.v1`, `lotus.routines.v1`), the
-// auto-runner for tasks assigned to Lotus, and the routine scheduler. Lives outside React so routines
-// keep firing whichever page is open (and while the window is hidden in the tray).
+// Task board and routines: shared state for the Tasks page.
+//
+// With the core (the desktop app, phase 2): the board lives in lotus.db's tasks/routines tables and the
+// core runs the scheduler and the task agent. This store shows what the core sends ({ type: 'board' }
+// events), applies each change here first with the same Kanban rules (so the page answers at once and
+// `add` can return the new task), then sends it to the core, whose next event is the truth. It also
+// tells the core which model, context and how many parallel jobs the VRAM auto-scaler allows.
+//
+// Without the core (browser preview, tests): the old way, kv (`lotus.tasks.v1`, `lotus.routines.v1`),
+// the auto-runner and a 20-second scheduler here.
 
 import { useSyncExternalStore } from 'react';
 import { agentPool } from '../agents/pool';
@@ -15,11 +22,15 @@ import { nextRun, validateCron } from './cron';
 import { runTaskAgent } from './runner';
 import { kv } from '../lib/store';
 import { agentAvailable, runAgent } from '../lib/agent';
+import { coreReady, onCoreEvent, rpc } from '../lib/core';
+import { storeMode } from '../lib/store';
+import { currentLimit, modelForJob } from '../agents/pool';
+import { effectiveNumCtx, hardware } from '../hardware/monitor';
 
 const TASKS_KEY = 'lotus.tasks.v1';
 const ROUTINES_KEY = 'lotus.routines.v1';
 
-export interface RoutineRun { at: number; ok: boolean; output: string; ms: number; taskId?: string }
+export interface RoutineRun { at: number; ok: boolean; output: string; ms: number; taskId?: string; /** The agent run (Tasks → Activity). */ runId?: string }
 export interface Routine {
   id: string;
   name: string;
@@ -43,26 +54,109 @@ export interface Routine {
 const read = <T,>(k: string): T[] => { try { return JSON.parse(kv.getItem(k) || '[]'); } catch { return []; } };
 const write = (k: string, v: unknown) => { try { kv.setItem(k, JSON.stringify(v)); } catch { /* quota */ } };
 
-interface State { tasks: Task[]; routines: Routine[]; notice: string | null }
-let state: State = {
-  // A run that was in progress when Lotus closed did not finish.
-  tasks: read<Task>(TASKS_KEY).map((t) => (t.run && (t.run.state === 'running' || t.run.state === 'queued') ? { ...t, run: { ...t.run, state: 'failed', error: 'Lotus closed before this run finished.' } } : t)),
-  routines: read<Routine>(ROUTINES_KEY).map((r) => ({ ...r, running: false })),
-  notice: null,
-};
+/** A job the core is running or has queued (task or routine), for the Tasks page's agents list. */
+export interface BoardJob { id: string; key: string; label: string; priority: number; status: 'running' | 'queued'; queuedAt: number }
+
+interface State { tasks: Task[]; routines: Routine[]; notice: string | null; jobs: BoardJob[]; /** The core's board has arrived. */ ready: boolean }
+let state: State = { tasks: [], routines: [], notice: null, jobs: [], ready: false };
 const subs = new Set<() => void>();
-function set(p: Partial<State>) {
-  state = { ...state, ...p };
-  if (p.tasks) write(TASKS_KEY, state.tasks);
-  if (p.routines) write(ROUTINES_KEY, state.routines.map((r) => ({ ...r, running: undefined })));
+
+/** 'core' once the core answered; 'local' in a plain browser; null while we don't know yet. */
+let backend: 'core' | 'local' | null = null;
+const viaCore = () => backend === 'core';
+
+function loadLocal() {
+  backend = 'local';
+  state = {
+    ...state, ready: true,
+    // A run that was in progress when Lotus closed did not finish.
+    tasks: read<Task>(TASKS_KEY).map((t) => (t.run && (t.run.state === 'running' || t.run.state === 'queued') ? { ...t, run: { ...t.run, state: 'failed', error: 'Lotus closed before this run finished.' } } : t)),
+    routines: read<Routine>(ROUTINES_KEY).map((r) => ({ ...r, running: false })),
+  };
   subs.forEach((f) => f());
-  if (p.tasks) queueMicrotask(autoRun);
 }
 
-// The agent (in the core) adds and moves tasks too: its saves arrive as storage events. Take them
-// without writing them back.
+function set(p: Partial<State>) {
+  state = { ...state, ...p };
+  if (!viaCore()) {
+    if (p.tasks) write(TASKS_KEY, state.tasks);
+    if (p.routines) write(ROUTINES_KEY, state.routines.map((r) => ({ ...r, running: undefined })));
+  }
+  subs.forEach((f) => f());
+  if (p.tasks && !viaCore()) queueMicrotask(autoRun);
+}
+
+/** Sends a change to the core; a refusal shows as the board notice and the core's state comes back. */
+function send(method: string, args: Record<string, unknown>) {
+  void rpc<{ error?: string } | null>(method, args).then((r) => {
+    if (r && typeof r === 'object' && 'error' in r && r.error) { set({ notice: r.error }); void refresh(); }
+  }, (e: unknown) => { set({ notice: `Couldn't save that: ${(e as Error).message}` }); void refresh(); });
+}
+
+async function refresh() {
+  const b = await rpc<{ tasks: Task[]; routines: Routine[]; jobs: BoardJob[] }>('board_get');
+  took(b.tasks, b.routines, b.jobs);
+}
+
+/** What the core sent. Tasks Lotus just finished and routines that just ran become activity pills (and skills). */
+function took(tasks?: Task[], routines?: Routine[], jobs?: BoardJob[]) {
+  if (tasks && state.ready) {
+    const before = new Map(state.tasks.map((t) => [t.id, t.run?.state]));
+    for (const t of tasks) {
+      if (t.run?.state === 'done' && before.has(t.id) && before.get(t.id) !== 'done') {
+        reportActivity({ id: `task-${t.id}`, kind: 'chat', label: `Task done: ${t.title}`, done: true });
+        queueMicrotask(() => learnFromTask(t.id));
+      } else if (t.run?.state === 'running' && before.get(t.id) !== 'running') reportActivity({ id: `task-${t.id}`, kind: 'chat', label: `Task: ${t.title}` });
+    }
+  }
+  if (routines && state.ready) {
+    const before = new Map(state.routines.map((r) => [r.id, r]));
+    for (const r of routines) {
+      const old = before.get(r.id);
+      if (old && r.runs[0] && r.runs[0].at !== old.runs[0]?.at) reportActivity({ id: `routine-${r.id}`, kind: 'chat', label: `Routine ${r.runs[0].ok ? 'done' : 'failed'}: ${r.name}`, done: true });
+      else if (old && r.running && !old.running) reportActivity({ id: `routine-${r.id}`, kind: 'chat', label: `Routine: ${r.name}` });
+    }
+  }
+  state = { ...state, ...(tasks ? { tasks } : {}), ...(routines ? { routines } : {}), ...(jobs ? { jobs } : {}), ready: true };
+  subs.forEach((f) => f());
+}
+
+let booted = false;
+/** Finds out whether the core is there, then loads the board from it (or from kv without it). */
+function boot() {
+  if (booted) return;
+  booted = true;
+  if (typeof window === 'undefined') { loadLocal(); return; }
+  void coreReady().then(async (info) => {
+    if (!info || storeMode() !== 'core') { loadLocal(); return; }
+    backend = 'core';
+    onCoreEvent((e) => {
+      const b = e as { type: string; tasks?: Task[]; routines?: Routine[]; jobs?: BoardJob[] };
+      if (b.type === 'board') took(b.tasks, b.routines, b.jobs);
+      else if (b.type === 'hello') void refresh().catch(() => undefined); // the core restarted
+    });
+    try { await refresh(); } catch (e) { set({ notice: `Couldn't load the task board: ${(e as Error).message}`, ready: true }); }
+    configureCore();
+    hardware.subscribe(configureCore);
+  }, () => loadLocal());
+}
+
+let lastConfig = '';
+/** The window's VRAM auto-scaler decides the model, context and parallel jobs; the core runs them. */
+function configureCore() {
+  const s = hasLiveSettings() ? liveSettings() : null;
+  const c = { model: modelForJob('task', s, hardware.get().agentModel), numCtx: effectiveNumCtx(), limit: currentLimit() };
+  const k = JSON.stringify(c);
+  if (k === lastConfig) return;
+  lastConfig = k;
+  void rpc('board_config', c).catch(() => { lastConfig = ''; });
+}
+
+// Without the core, the agent's saves (a browser preview has none) and other windows' arrive as
+// storage events. Take them without writing them back.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
+    if (viaCore()) return;
     // Routines the agent scheduled from a chat (0.10.1): keep the ones running here as running.
     if (e.key === ROUTINES_KEY) {
       const running = new Set(state.routines.filter((r) => r.running).map((r) => r.id));
@@ -84,31 +178,50 @@ const patchRoutine = (id: string, fn: (r: Routine) => Routine) => set({ routines
 // ── tasks ───────────────────────────────────────────────────────────────────
 
 export const tasks = {
-  get: () => state,
-  subscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
+  get: () => { boot(); return state; },
+  subscribe: (fn: () => void) => { boot(); subs.add(fn); return () => { subs.delete(fn); }; },
   add(p: Partial<Task> & { title: string }): Task {
     const t = newTask(uid('task'), p, state.tasks);
     set({ tasks: [...state.tasks, t] });
+    if (viaCore()) send('task_add', { ...p, id: t.id });
     return t;
   },
-  patch: patchTask,
-  remove(id: string) { const t = state.tasks.find((x) => x.id === id); if (t?.run?.jobId) agentPool.cancel(t.run.jobId); set({ tasks: removeTask(state.tasks, id) }); },
+  patch(id: string, fn: (t: Task) => Task) {
+    const old = state.tasks.find((t) => t.id === id);
+    patchTask(id, fn);
+    const now = state.tasks.find((t) => t.id === id);
+    if (viaCore() && old && now) {
+      // Only what changed, so a change the core made meanwhile (a log line, a step result) isn't undone.
+      const diff: Partial<Task> = {};
+      for (const k of Object.keys(now) as (keyof Task)[]) if (k !== 'run' && k !== 'updated' && JSON.stringify(now[k]) !== JSON.stringify(old[k])) (diff as Record<string, unknown>)[k] = now[k];
+      if (Object.keys(diff).length) send('task_patch', { id, patch: diff });
+    }
+  },
+  remove(id: string) {
+    const t = state.tasks.find((x) => x.id === id);
+    if (viaCore()) send('task_remove', { id });
+    else if (t?.run?.jobId) agentPool.cancel(t.run.jobId);
+    set({ tasks: removeTask(state.tasks, id) });
+  },
   move(id: string, status: Status, beforeId?: string | null) {
     const r = moveTask(state.tasks, id, status, beforeId);
     if (r.error) { set({ notice: r.error }); return false; }
     set({ tasks: r.tasks, notice: null });
+    if (viaCore()) send('task_move', { id, status, beforeId: beforeId ?? null });
     return true;
   },
   link(from: string, type: TaskLink['type'], to: string) {
     const r = addLink(state.tasks, from, type, to);
     set(r.error ? { notice: r.error } : { tasks: r.tasks, notice: null });
+    if (!r.error && viaCore()) send('task_link', { from, type, to });
     return !r.error;
   },
-  unlink: (from: string, to: string) => set({ tasks: removeLink(state.tasks, from, to) }),
+  unlink: (from: string, to: string) => { set({ tasks: removeLink(state.tasks, from, to) }); if (viaCore()) send('task_unlink', { from, to }); },
   clearNotice: () => set({ notice: null }),
 
   /** Starts the agent on a task now (priority 0 because the user asked). */
   run(id: string, priority: 0 | 1 = 0) {
+    if (viaCore()) { send('task_run', { id }); return; }
     const t = state.tasks.find((x) => x.id === id);
     if (!t || t.run?.state === 'running' || t.run?.state === 'queued') return;
     const blockers = blockersOf(id, state.tasks);
@@ -132,9 +245,20 @@ export const tasks = {
       patchTask(id, (x) => ({ ...x, run: { state: 'failed', jobId, error: stopped ? 'Stopped' : (e as Error).message, startedAt: x.run?.startedAt, finishedAt: Date.now() }, log: [...x.log, { at: Date.now(), text: stopped ? 'Stopped' : `Failed: ${(e as Error).message}`, kind: 'error' }] }));
     });
   },
-  stop(id: string) { const t = state.tasks.find((x) => x.id === id); if (t?.run?.jobId) agentPool.cancel(t.run.jobId); },
+  stop(id: string) {
+    if (viaCore()) { send('task_stop', { id }); return; }
+    const t = state.tasks.find((x) => x.id === id); if (t?.run?.jobId) agentPool.cancel(t.run.jobId);
+  },
   /** Clears a failed run so the auto-runner may pick the task up again. */
-  retry(id: string) { patchTask(id, (t) => ({ ...t, run: undefined })); tasks.run(id); },
+  retry(id: string) {
+    if (viaCore()) { send('task_retry', { id }); return; }
+    patchTask(id, (t) => ({ ...t, run: undefined })); tasks.run(id);
+  },
+  /** Stops a job the core is running (the agents list). */
+  stopJob(key: string) {
+    if (key.startsWith('task:')) send('task_stop', { id: key.slice(5) });
+    else if (key.startsWith('routine:')) send('routine_stop', { id: key.slice(8) });
+  },
 };
 
 /** A finished multi-step task is a good candidate for a skill (when skills are on). */
@@ -177,6 +301,7 @@ export const routines = {
     if (err) return err;
     const r: Routine = { id: uid('rt'), enabled: true, action: 'log', web: false, catchUp: false, runs: [], created: Date.now(), ...p, nextRun: nextRun(p.schedule, new Date())?.getTime() };
     set({ routines: [...state.routines, r] });
+    if (viaCore()) send('routine_add', { ...p, id: r.id });
     return r;
   },
   update(id: string, p: Partial<Routine>): string | null {
@@ -186,12 +311,14 @@ export const routines = {
       if (p.schedule !== undefined || p.enabled) next.nextRun = nextRun(next.schedule, new Date())?.getTime();
       return next;
     });
+    if (viaCore()) send('routine_update', { id, patch: p });
     return null;
   },
-  remove: (id: string) => set({ routines: state.routines.filter((r) => r.id !== id) }),
+  remove: (id: string) => { set({ routines: state.routines.filter((r) => r.id !== id) }); if (viaCore()) send('routine_remove', { id }); },
 
   /** Runs a routine now (scheduled = from the timer). */
   run(id: string, scheduled = false) {
+    if (viaCore()) { set({ routines: state.routines.map((x) => (x.id === id ? { ...x, running: true } : x)) }); send('routine_run', { id }); return; }
     const r = state.routines.find((x) => x.id === id);
     if (!r || r.running) return;
     const started = Date.now();
@@ -243,9 +370,14 @@ export function dueRoutines(list: Routine[], at: number): Routine[] {
 }
 
 let schedulerOn = false;
-/** Starts the routine scheduler (idempotent). Missed runs are skipped unless the routine asks to catch up. */
+/**
+ * Starts the board (idempotent). With the core, the core schedules and runs everything; without it,
+ * this window does: missed runs are skipped unless the routine asks to catch up.
+ */
 export function startScheduler() {
-  if (schedulerOn) return;
+  boot();
+  if (backend === null) { void coreReady().then(() => queueMicrotask(startScheduler)); return; }
+  if (viaCore() || schedulerOn) return;
   schedulerOn = true;
   const at = Date.now();
   for (const r of state.routines) {

@@ -3,6 +3,7 @@
 // A step that needs permission shows what it is about to do with Deny / Allow.
 
 import React, { useEffect, useState } from 'react';
+import { describeAllow } from '../../lib/allowRules';
 import { AlertCircle, Ban, Check, Loader2, ShieldQuestion } from 'lucide-react';
 import type { ChatToolCall } from '../../types/lotus';
 import { loadMedia } from '../../lib/core';
@@ -35,7 +36,7 @@ const Icon: React.FC<{ s: ChatToolCall['status'] }> = ({ s }) => {
 export const AgentSteps: React.FC<{
   steps: ChatToolCall[];
   /** Allow / Deny for a waiting step (absent when the reply is no longer live). */
-  onDecide?: (step: ChatToolCall, allow: boolean) => void;
+  onDecide?: (step: ChatToolCall, allow: boolean, always?: boolean) => void;
 }> = ({ steps, onDecide }) => {
   if (!steps.length) return null;
   return (
@@ -52,10 +53,11 @@ export const AgentSteps: React.FC<{
           {t.status === 'waiting' && (
             <div className="ml-5.5 mt-1.5 rounded-[8px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] px-3 py-2 max-w-[460px]" role="group" aria-label="Permission request">
               <p className="text-[13px] text-[var(--color-text-main)] break-words">{t.ask ?? t.label}</p>
-              <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{t.tool}. You can change what needs asking in Settings → Tools.</p>
+              <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{t.always ? <>Always Allow stops asking for {describeAllow(t.always)}.</> : <>{t.tool}.</>} You can change what needs asking in Settings → Tools.</p>
               {onDecide ? (
                 <div className="flex justify-end gap-2 mt-2">
                   <Btn size="sm" variant="secondary" onClick={() => onDecide(t, false)}>Deny</Btn>
+                  {t.always && <Btn size="sm" variant="secondary" onClick={() => onDecide(t, true, true)}>Always Allow</Btn>}
                   <Btn size="sm" variant="primary" onClick={() => onDecide(t, true)}>Allow</Btn>
                 </div>
               ) : <p className="text-[12px] text-[var(--color-text-muted)] mt-1.5">This request ended without an answer, so nothing was done.</p>}

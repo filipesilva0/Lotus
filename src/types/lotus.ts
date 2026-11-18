@@ -7,6 +7,8 @@ export interface ChatToolCall {
   /** Agent steps (session 15): the tool's name, the run it belongs to, what it is about to do (while waiting
    *  for Allow / Deny) and the images or audio it saved (Lotus Studio paths). Older lookup steps have none. */
   tool?: string; runId?: string; ask?: string; media?: string[];
+  /** While waiting: the rule "Always Allow" would save (absent when it isn't offered). */
+  always?: string;
 }
 export interface ChatMemoryEvent { kind: 'memory' | 'instruction'; text: string; itemId: string; status: 'saved' | 'confirmed' | 'forgotten' }
 export interface ChatFileRef { name: string; kind: 'image' | 'text'; url?: string }

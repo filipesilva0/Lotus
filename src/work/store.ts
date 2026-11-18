@@ -216,7 +216,7 @@ export function useWork(settings: LotusSettings) {
     setAsks((l) => l.filter((x) => x !== a));
     await answerAsk(a.runId, a.askId, text);
   }, []);
-  const decide = useCallback((step: AgentStep, allow: boolean) => decideStep(step.runId, step.id, allow), []);
+  const decide = useCallback((step: AgentStep, allow: boolean, always = false) => decideStep(step.runId, step.id, allow, always), []);
   /** Edit a request: send the new text in its place (what came after it is replaced). */
   const edit = useCallback((msgId: string, text: string, workId = activeId) => send(text, workId, [], msgId), [activeId, send]);
   /** Try again: send the request before this reply once more. */
