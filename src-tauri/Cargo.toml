@@ -35,6 +35,10 @@ tauri-plugin-single-instance = "~2.4.5"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.55"
+# Microphone permission for Lotus's own pages (src/mic.rs). Already in the build through wry; the same
+# versions, pinned so the bindings match the ones wry hands us.
+webview2-com = "=0.38.2"
+windows-core = "=0.61.2"
 
 # macOS: place the traffic lights in Lotus's title bar (src/mac_chrome.rs). Already in the build
 # through tao; same versions, only the AppKit classes we call are switched on.

@@ -19,7 +19,8 @@ export async function listMics(): Promise<{ id: string; label: string }[]> {
 }
 
 /** An error with the browser's error name kept, so micErrorMessage can explain it. */
-class MicError extends Error { constructor(public micName: string, public found: number, cause?: unknown) { super(micErrorText(micName, micOs(), found)); this.name = micName; this.cause = cause; } }
+// The details at the end (0.14.1) are what the window's engine said, so a report can say exactly what failed.
+class MicError extends Error { constructor(public micName: string, public found: number, cause?: unknown) { super(`${micErrorText(micName, micOs(), found)} (Details: ${micName || 'no error name'}, ${found} microphone${found === 1 ? '' : 's'} listed.)`); this.name = micName; this.cause = cause; } }
 
 /**
  * Opens a microphone: the one picked in Settings, else the default, else any listed one (0.10.1).

@@ -6,6 +6,7 @@ mod hooks;
 mod island;
 mod lotusd;
 mod mac_chrome;
+mod mic;
 mod paths;
 mod setup;
 mod updates;
@@ -194,6 +195,10 @@ pub fn run() {
             app.state::<lotusd::Core>().start(app.handle());
             hooks::start(app.handle().clone());
             mac_chrome::place_traffic_lights(app.handle());
+            // Windows: Lotus's own pages may use the microphone (WebView2 left the request unanswered, T63).
+            for label in ["main", "island"] {
+                if let Some(w) = app.get_webview_window(label) { mic::allow_microphone(&w); }
+            }
 
             // Safety net: macOS (WKWebView) and Linux (WebKitGTK) can pause a hidden page, so the web
             // layer's main_ready may never arrive and only the island would be visible. Show the main
