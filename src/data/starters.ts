@@ -3,7 +3,7 @@
 // A click fills the message box; nothing is sent until the user presses Send.
 
 export interface Starter { title: string; text: string }
-export interface StarterGroup { id: string; label: string; items: Starter[] }
+export interface StarterGroup { id: string; label: string; items: Starter[]; /** Images: the kind of model these examples need (0.15.1). */ style?: 'photo' | 'anime' }
 
 export const CHAT_STARTERS: StarterGroup[] = [
   { id: 'write', label: 'Write', items: [
@@ -56,7 +56,7 @@ export const WORK_STARTERS: StarterGroup[] = [
 ];
 
 export const IMAGE_STARTERS: StarterGroup[] = [
-  { id: 'photo', label: 'Photo', items: [
+  { id: 'photo', label: 'Photo', style: 'photo', items: [
     { title: 'Portrait', text: 'Close-up portrait of an elderly fisherman with a weathered face and a knitted cap, soft window light from the left, shallow depth of field, 85mm lens, natural skin texture, muted colours, photorealistic' },
     { title: 'Product Shot', text: 'Studio product photo of a [product] on a matte stone pedestal, soft diffused lighting, gentle shadow, pastel background, centred composition, sharp focus, commercial photography' },
     { title: 'Landscape', text: 'Misty mountain valley at sunrise, a winding river catching golden light, pine forest in the foreground, dramatic clouds, wide-angle landscape photography, high detail' },
