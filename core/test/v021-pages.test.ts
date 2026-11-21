@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { PAGES, WORKSPACES, pageShortcut, pageFromName, VIEW_TITLES } from '../../src/components/rail/pages';
-import { APP_PALETTE, PALETTES, applyThemeToDocument } from '../../src/styles/theme';
+import { APP_PALETTE, PALETTES, SURFACES, accentTokens } from '../../src/styles/palettes';
 
 const SRC = join(import.meta.dir, '../../src');
 const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
@@ -74,16 +74,6 @@ const lum = (hex: string) => {
 };
 const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
 
-function themeVars(dark: boolean): Record<string, string> {
-  const vars: Record<string, string> = {};
-  const style = { setProperty: (k: string, v: string) => { vars[k] = v; }, fontSize: '', colorScheme: '' };
-  const g = globalThis as unknown as { document?: unknown };
-  const before = g.document;
-  g.document = { documentElement: { style, classList: { add() {}, remove() {} } }, body: { style: {} } };
-  try { applyThemeToDocument(APP_PALETTE, 'jakarta', 'md', dark); } finally { g.document = before; }
-  return vars;
-}
-
 describe('one accent', () => {
   test('nothing picks an accent per page any more', () => {
     const hits = allSource.filter(({ s }) => /PAGE_PALETTE|PETAL_ORDER|hueForPage|PAGE_HUES|STEP_PALETTE/.test(s)).map(({ p }) => p);
@@ -94,17 +84,24 @@ describe('one accent', () => {
   test('the Appearance pane no longer explains page colours', () => {
     expect(read('components/modals/SettingsModal.tsx')).not.toMatch(/Accent colours|petal/i);
   });
+  test('the window really uses these tokens', () => {
+    const t = read('styles/theme.ts');
+    expect(t).toContain('const accent = accentTokens(paletteKey, darkMode);');
+    expect(t).toContain("root.style.setProperty('--color-accent-fill', accent.fill);");
+    expect(t).toContain("root.style.setProperty('--color-bg-panel', SURFACES.dark.panel);");
+  });
   test('the accent is Lotus blue', () => {
     expect(APP_PALETTE).toBe('blue');
   });
   for (const dark of [false, true]) {
     const mode = dark ? 'dark' : 'light';
     test(`${mode}: white labels on filled buttons keep 4.5:1, and the accent stands out from the window (3:1)`, () => {
-      const v = themeVars(dark);
-      expect(ratio(v['--color-accent-fill'], '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
-      expect(ratio(v['--color-accent-vibrant'], v['--color-bg-panel'])).toBeGreaterThanOrEqual(3);
-      expect(ratio(v['--color-accent-vibrant'], v['--color-bg-base'])).toBeGreaterThanOrEqual(3);
-      expect(v['--color-accent-vibrant']).toBe(dark ? PALETTES.blue.vibrantLight : PALETTES.blue.vibrant);
+      const a = accentTokens(APP_PALETTE, dark);
+      const s = dark ? SURFACES.dark : SURFACES.light;
+      expect(ratio(a.fill, '#FFFFFF')).toBeGreaterThanOrEqual(4.5);
+      expect(ratio(a.vibrant, s.panel)).toBeGreaterThanOrEqual(3);
+      expect(ratio(a.vibrant, s.base)).toBeGreaterThanOrEqual(3);
+      expect(a.vibrant).toBe(dark ? PALETTES.blue.vibrantLight : PALETTES.blue.vibrant);
     });
   }
   test('focus rings and text selection still use the accent (0.20 fixes kept)', () => {
