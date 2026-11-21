@@ -11,15 +11,17 @@ import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
 
-export type JobKind = 'task' | 'routine' | 'skill' | 'memory' | 'rename' | 'other';
+import { modelForJob, type JobKind } from './jobModel';
+import { builtinsNow } from '../lib/builtins';
 
-/** Housekeeping jobs that use the Background tasks model (Settings → General) when one is set. */
-export const BACKGROUND_KINDS: JobKind[] = ['memory', 'skill', 'rename'];
+export { BACKGROUND_KINDS, modelForJob, type JobKind } from './jobModel';
 
-/** Which model a job runs on: the user's background model for housekeeping, else the scaler's pick. */
-export function modelForJob(kind: JobKind, s: { backgroundModel?: string; selectedModel?: string } | null, agentModel: string): string {
-  if (BACKGROUND_KINDS.includes(kind) && s?.backgroundModel) return s.backgroundModel;
-  return agentModel || s?.selectedModel || '';
+/** The model the built-in engine holds (it runs one at a time), or null on another engine or when none is loaded. */
+export function builtinLoadedModel(): string | null {
+  const s = hasLiveSettings() ? liveSettings() : null;
+  if (s?.llmBackend !== 'builtin') return null;
+  const c = builtinsNow().chat;
+  return (c.state === 'ready' || c.state === 'starting') && c.model ? c.model : null;
 }
 
 export interface JobInfo {
@@ -76,7 +78,7 @@ function start(e: Entry<unknown>) {
   e.info.startedAt = Date.now();
   running.set(e.info.id, e);
   const s = hasLiveSettings() ? liveSettings() : null;
-  const model = modelForJob(e.info.kind, s, hardware.get().agentModel);
+  const model = modelForJob(e.info.kind, s, hardware.get().agentModel, builtinLoadedModel());
   if (e.info.priority < 2) reportActivity({ id: `agent-${e.info.id}`, kind: 'chat', label: e.info.label });
   e.fn({ signal: e.ctrl.signal, model, numCtx: effectiveNumCtx() })
     .then((v) => e.resolve(v), (err) => e.reject(err))

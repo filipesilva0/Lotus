@@ -19,7 +19,10 @@ export interface ChatOpts {
   temperature?: number; topP?: number; topK?: number; numCtx?: number; seed?: number; numPredict?: number; stop?: string[];
   /** Chat's right panel (STATE #11): sent to both engines. */
   frequencyPenalty?: number; presencePenalty?: number;
-  /** Ollama: ask a thinking model to think (true) or not (false); undefined leaves the model's default. */
+  /**
+   * Ask a thinking model to think (true) or not (false); undefined leaves the model's default.
+   * Ollama takes `think`; llama-server takes the chat template's `enable_thinking` switch.
+   */
   think?: boolean;
   signal: AbortSignal;
   fetch: (url: string, init?: RequestInit) => Promise<Response>;
@@ -219,6 +222,9 @@ export async function chatTurn(o: ChatOpts, messages: WireMsg[], tools: WireTool
       frequency_penalty: o.frequencyPenalty, presence_penalty: o.presencePenalty,
     };
     if (native) body.tools = tools;
+    // Without this, llama-server renders the template with thinking on, so Think off did nothing and a
+    // reasoning model (Gemma 4 12B on an 8 GB card) reasoned for minutes before a one-line answer.
+    if (o.think !== undefined) body.chat_template_kwargs = { enable_thinking: o.think };
     let res: Response;
     try { res = await firstByte(o, `${o.url}/v1/chat/completions`, { method: 'POST', headers: headers(o), body: JSON.stringify(body) }); }
     catch (e) { throw reachError(o, e); }

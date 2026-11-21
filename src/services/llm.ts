@@ -10,6 +10,7 @@ import { engineChoice } from '../lib/engineDefaults';
 import { kv } from '../lib/store';
 import { authHeaderFromToken, llamacppToken } from './engineConfig';
 import { builtinsNow, ensureChat } from '../lib/builtins';
+import { llamaOpts } from './thinkSwitch';
 
 let builtinUrl = '';
 export const llamacpp = new LlamaCppService(
@@ -34,13 +35,12 @@ export const llm = {
   name: () => (backend() === 'builtin' ? 'Lotus' : backend() === 'llamacpp' ? 'llama-server' : 'Ollama'),
   streamChat(turns: ChatTurn[], o: ChatOptions, onStats?: (s: ChatStats) => void): AsyncGenerator<string, void, unknown> {
     if (backend() !== 'ollama') {
-      const { think: _t, ...rest } = o;
-      return (async function* () { await ready(o.model); yield* llamacpp.streamChat(turns, rest, onStats); })();
+      return (async function* () { await ready(o.model); yield* llamacpp.streamChat(turns, llamaOpts(o), onStats); })();
     }
     return ollamaClient.streamChat(turns, o, onStats);
   },
   async chatOnce(turns: ChatTurn[], o: ChatOptions & { json?: boolean }) {
-    if (backend() !== 'ollama') { const { think: _t, ...rest } = o; await ready(o.model); return llamacpp.chatOnce(turns, rest); }
+    if (backend() !== 'ollama') { await ready(o.model); return llamacpp.chatOnce(turns, llamaOpts(o)); }
     return ollamaClient.chatOnce(turns, o);
   },
   checkHealth: async () => {
