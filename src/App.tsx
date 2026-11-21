@@ -1,6 +1,7 @@
 /**
  * @license
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: FSL-1.1-ALv2
+ * Copyright 2026 filipesilva0. See LICENSE.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -45,6 +46,8 @@ import { installMacMenu, matchesShortcut, menuSignature } from './lib/nativeMenu
 import { focusPageSearch, runCommand, type PageCommand } from './lib/commands';
 import { AlertHost, flushUndo, takeUndoIfIdle } from './components/common/Alerts';
 import { CoreNotice } from './components/common/CoreNotice';
+import { CrashReportCard } from './components/common/CrashReportCard';
+import { copyDiagnostics } from './lib/diagnostics';
 import { EnginesContext } from './components/common/EngineNotice';
 import { openExternal } from './lib/open';
 import { isTauri } from './lib/http';
@@ -455,6 +458,8 @@ export default function App() {
       { label: 'Setup Guide…', onSelect: () => setSetupOpen(true) },
       'separator',
       { label: 'Check for Updates…', onSelect: () => { void updates.check(); openSettings('updates'); } },
+      { label: 'Copy Diagnostics', onSelect: () => { void copyDiagnostics(settings); } },
+      { label: 'Privacy and Crash Reports…', onSelect: () => openSettings('licenses') },
     ] },
   ];
 
@@ -556,6 +561,7 @@ export default function App() {
       <AccountModal open={accountView !== null} view={accountView ?? 'signin'} onView={setAccountView} onClose={() => setAccountView(null)} sessions={chat.sessions} engines={eng.engines} />
       <AlertHost />
       <CoreNotice />
+      <CrashReportCard settings={settings} />
       <SettingsModal isOpen={isSettingsOpen} pane={settingsPane} onClose={closeSettings} models={models} settings={settings} onUpdateSettings={(n) => setSettings((s) => ({ ...s, ...n }))} updates={updates} />
     </div>
   );

@@ -1,6 +1,7 @@
 {
   "name": "lotusd",
   "private": true,
+  "license": "SEE LICENSE IN ../LICENSE",
   "version": "0.3.1",
   "type": "module",
   "description": "Lotus core: the local background process that owns Lotus's data (lotus.db, media files, memory).",

@@ -12,7 +12,8 @@ import { MicRecorder, micErrorMessage, toWav } from '../../../lib/audio';
 import { deleteMedia, saveMedia } from '../../../lib/core';
 import { installModel } from '../../../lib/builtins';
 import { builtinTranscribePath } from '../../../voice/voice';
-import { MyVoice, READING_SCRIPTS, VoiceOption, speakerLabel } from '../../../voice/studio';
+import { MyVoice, READING_SCRIPTS, VOICE_CONSENT, VOICE_CONSENT_NOTE, VoiceOption, canCloneVoice, speakerLabel } from '../../../voice/studio';
+import { VoiceConsent } from '../VoiceConsent';
 import { Studio, speakWith } from '../../../voice/useStudio';
 import { GSV_DOWNLOAD, GSV_ID, GSV_NOTE, useGptSovits } from '../../../voice/gptsovits';
 import { openExternal } from '../../../lib/open';
@@ -93,6 +94,7 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [getting, setGetting] = useState(false);
+  const [consent, setConsent] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const recRef = useRef<MicRecorder | null>(null); recRef.current = rec;
   useEffect(() => () => recRef.current?.cancel(), []);
@@ -118,11 +120,12 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
         studio.setSelected(v.id); onDone(v.id); return;
       }
       if (!sample || !chosen) throw new Error('Record or upload a few seconds of speech first.');
+      if (!consent) throw new Error('Tick the box to confirm you may copy this voice.');
       const saved = await saveMedia(sample, `voice-${name.trim() || 'sample'}`);
       let text = words.trim();
       // ZipVoice needs the exact words; write them with Whisper when they weren't typed.
       if (chosen.needsReferenceText && !text) { try { text = await builtinTranscribePath(saved.path); } catch { /* the voice asks for them */ } }
-      const v = studio.addVoice({ name: name.trim() || 'My Voice', model: chosen.id, reference: saved.path, referenceText: text || undefined });
+      const v = studio.addVoice({ name: name.trim() || 'My Voice', model: chosen.id, reference: saved.path, referenceText: text || undefined, consentAt: Date.now() });
       studio.setSelected(v.id); onDone(v.id);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
@@ -180,10 +183,11 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{chosen.title.replace(/\s*\(.*\)$/, '')} copies the voice better when these match the recording exactly.</p>
           </div>
         )}
+        <VoiceConsent checked={consent} onChange={setConsent} />
       </>)}
 
       {err && <Banner tone="error">{err}</Banner>}
-      <Btn variant="primary" loading={busy} disabled={how === 'clone' ? !sample || !chosen || !!rec : !preset} icon={<Check className="w-3.5 h-3.5" />} onClick={() => void create()}>Create Voice</Btn>
+      <Btn variant="primary" loading={busy} disabled={how === 'clone' ? !canCloneVoice({ hasSample: !!sample, consent }) || !chosen || !!rec : !preset} icon={<Check className="w-3.5 h-3.5" />} onClick={() => void create()}>Create Voice</Btn>
     </div>
   );
 };
@@ -216,7 +220,8 @@ const VoiceDetail: React.FC<{ studio: Studio; id: string; lastClip: string | nul
   };
   const swap = async (f?: File) => {
     if (!f || !v) return;
-    try { const saved = await saveMedia(await toWav(f), `voice-${v.name}`); if (v.reference) void deleteMedia(v.reference).catch(() => undefined); studio.patchVoice(v.id, { reference: saved.path, referenceText: undefined }); }
+    if (!await confirmAlert({ title: 'Use this recording?', message: `${VOICE_CONSENT}\n\n${VOICE_CONSENT_NOTE}`, confirm: 'I Confirm' })) return;
+    try { const saved = await saveMedia(await toWav(f), `voice-${v.name}`); if (v.reference) void deleteMedia(v.reference).catch(() => undefined); studio.patchVoice(v.id, { reference: saved.path, referenceText: undefined, consentAt: Date.now() }); }
     catch { setErr('Lotus couldn’t read that file. Try a WAV, MP3, M4A or OGG recording.'); }
   };
   return (

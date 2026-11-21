@@ -28,6 +28,7 @@ import { cleanDir, newImageFolder, resolveMedia, saveMedia } from '../media';
 import type { BuiltinId } from './assets';
 import type { Builtins } from './manager';
 import type { ImageFolder, ImageProfile, LoraUse } from '../../../src/models/imageProfiles';
+import { tagWav } from '../../../src/lib/wavTag';
 import { FAMILIES, settingsFor, sizeFor } from '../../../src/models/imageProfiles';
 import type { ModelKind } from '../../../src/models/library';
 import { comfyDesktopConfigDir, linkComfy } from './comfyLink';
@@ -149,7 +150,7 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
         ref = { audio, text: str(a.referenceText) || undefined, steps: a.steps === undefined ? undefined : num(a.steps, 0) || undefined };
       }
       const wav = await b.speak(str(a.voice), str(a.text), { speaker: num(a.speaker, 0), speed: num(a.speed, 1), ref });
-      try { return { found: true, value: await saveMedia(db, studio, readFileSync(wav), 'audio/wav', str(a.text).slice(0, 30) || 'speech') }; }
+      try { return { found: true, value: await saveMedia(db, studio, tagWav(new Uint8Array(readFileSync(wav))), 'audio/wav', str(a.text).slice(0, 30) || 'speech') }; }
       finally { try { rmSync(wav, { force: true }); } catch { /* temp */ } }
     }
     case 'stt_builtin': {
@@ -166,7 +167,7 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
       const ref = resolveMedia(studio, str(a.reference));
       if (!ref) throw new Error('This voice has no recording yet. Add one in Voice → Voices.');
       const wav = await gptSovits(studio).speak({ dir: str(a.dir), text: str(a.text), refAudio: ref, refText: str(a.referenceText) || undefined, lang: str(a.language) || undefined, speed: a.speed === undefined ? undefined : num(a.speed, 1) });
-      return { found: true, value: await saveMedia(db, studio, Buffer.from(wav), 'audio/wav', str(a.text).slice(0, 30) || 'speech') };
+      return { found: true, value: await saveMedia(db, studio, tagWav(new Uint8Array(wav)), 'audio/wav', str(a.text).slice(0, 30) || 'speech') };
     }
     case 'stt_warm': return { found: true, value: await b.warmDictation(str(a.model), str(a.language) || undefined).catch(() => false) };
     default: return { found: false };
