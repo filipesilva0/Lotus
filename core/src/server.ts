@@ -48,7 +48,7 @@ export interface CoreOptions {
   builtins?: Partial<ConstructorParameters<typeof Builtins>[0]>;
   /** Run the routine scheduler and task auto-runner (default on; tests may turn it off). */
   scheduler?: boolean;
-  /** Tests: Lotus Pro licence options (fake Polar, fixed clock, temp trial marker). */
+  /** Tests: Lotus Pro licence options (fake Freemius, fixed clock, temp trial marker). */
   licence?: Partial<LicenceOptions>;
 }
 

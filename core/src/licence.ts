@@ -1,17 +1,23 @@
 // Lotus Pro: licence keys, the 14-day trial and whether Pro features are unlocked (0.18.0).
 //
 // How it works (see the business model doc):
-//   1. Polar sells Pro and emails a key.
-//   2. The user pastes the key once. We activate it with Polar's customer-portal API, which needs no
-//      secret (only the shop's public organization id), and keep a record on this PC, signed with a key
-//      derived from this machine so the file only counts here.
+//   1. Freemius sells Pro and emails a key (Polar turned Lotus down on 2026-11-21: image generation).
+//   2. The user pastes the key once. We activate it with Freemius's public licence API, which needs no
+//      secret (only the product id), and keep a record on this PC, signed with a key derived from this
+//      machine so the file only counts here.
 //   3. After that Lotus works offline. When online it rechecks every 30 days; a recheck that can't reach
-//      Polar changes nothing. Only a clear "this key or activation is gone" answer turns Pro off.
-//   4. 3 activations per key (set on the Polar product). "Remove this PC" frees this one; the others are
-//      managed in Polar's customer portal.
+//      Freemius changes nothing. Only a clear "this licence or activation is gone" turns Pro off.
+//   4. 3 activations per key (the plan's quota in Freemius). "Remove this PC" frees this one; the others
+//      are managed in the buyer's Freemius account.
+//
+// Freemius endpoints used (https://api.freemius.com, no Authorization header):
+//   POST /v1/products/{id}/licenses/activate.json     { uid, license_key, title, version }
+//   GET  /v1/products/{id}/installs/{install}/license.json?uid=&license_key=
+//   POST /v1/products/{id}/licenses/deactivate.json   { uid, install_id, license_key }
+// `uid` is 32 characters, the same for every call from this PC.
 //
 // The launch switch: until `locks` is on, every Pro feature is unlocked for everyone, no trial starts and
-// nothing is for sale. The code still runs against Polar's sandbox for testing (LOTUS_POLAR_ENV=sandbox).
+// nothing is for sale. LOTUS_PRO_TEST=1 shows the Lotus Pro pane for testing with a sandbox product.
 //
 // No obfuscation, no always-online check: people who pirate weren't going to buy.
 
@@ -25,12 +31,12 @@ export interface ProConfig {
   locks: boolean;
   /** Where the Buy button goes. Empty: no Buy button (selling is off). */
   buyUrl: string;
-  /** Polar's customer portal, where buyers see their keys and remove old PCs. */
+  /** The buyer's Freemius account page, where they see their keys and remove old PCs. */
   portalUrl: string;
-  /** Polar shop (organization) id. Public, not a secret. Empty: keys can't be activated yet. */
-  organizationId: string;
-  /** 'production' or 'sandbox' (Polar's practice shop with fake payments). */
-  env: 'production' | 'sandbox';
+  /** Freemius product id. Public, not a secret. Empty: keys can't be activated yet. */
+  productId: string;
+  /** Test build: shows the Lotus Pro pane before launch (for a Freemius sandbox product). */
+  test: boolean;
 }
 
 /** What ships. Selling and the locks stay off until the launch release. */
@@ -38,15 +44,15 @@ export const PRO_CONFIG: ProConfig = {
   locks: false,
   buyUrl: '',
   portalUrl: '',
-  organizationId: '',
-  env: 'production',
+  productId: '',
+  test: false,
 };
 
-/** Testing only: point a build at Polar's sandbox without changing the code. */
+/** Testing only: point a build at a Freemius product (and show the Pro pane) without changing the code. */
 export function proConfigFromEnv(env: Record<string, string | undefined> = process.env, base: ProConfig = PRO_CONFIG): ProConfig {
   const c = { ...base };
-  if (env.LOTUS_POLAR_ENV === 'sandbox') c.env = 'sandbox';
-  if (env.LOTUS_POLAR_ORG) c.organizationId = env.LOTUS_POLAR_ORG;
+  if (env.LOTUS_PRO_TEST === '1') c.test = true;
+  if (env.LOTUS_FREEMIUS_PRODUCT && /^\d+$/.test(env.LOTUS_FREEMIUS_PRODUCT)) c.productId = env.LOTUS_FREEMIUS_PRODUCT;
   if (env.LOTUS_PRO_LOCKS === '1') c.locks = true;
   if (env.LOTUS_PRO_LOCKS === '0') c.locks = false;
   if (env.LOTUS_PRO_BUY_URL) c.buyUrl = env.LOTUS_PRO_BUY_URL;
@@ -73,7 +79,7 @@ export interface ProStatus {
   trialStartedAt: number | null;
   trialEndsAt: number | null;
   trialDaysLeft: number;
-  /** The key as Polar shows it (e.g. "****-ABCD"), never the full key. */
+  /** The key masked (e.g. "****-ABCD"), never the full key. */
   displayKey: string | null;
   limitActivations: number | null;
   lastCheckedAt: number | null;
@@ -83,19 +89,20 @@ export interface ProStatus {
   portalUrl: string;
   /** Keys can be activated (a shop id is set). */
   canActivate: boolean;
-  sandbox: boolean;
+  /** Test build (LOTUS_PRO_TEST=1). */
+  test: boolean;
 }
 
 interface LicenceRecord {
   key: string;
   displayKey: string;
-  activationId: string;
-  licenseKeyId: string;
+  installId: number;
   limitActivations: number | null;
+  /** When updates end (Freemius `expiration`); Pro features keep working after it. */
   expiresAt: string | null;
   activatedAt: number;
   checkedAt: number;
-  env: ProConfig['env'];
+  productId: string;
 }
 
 interface SignedFile<T> { v: 1; data: T; sig: string }
@@ -125,14 +132,16 @@ function defaultTrialMarker(): string {
   return join(base, 'Lotus Pro', 'trial.json');
 }
 
-const apiBase = (env: ProConfig['env']) => (env === 'sandbox' ? 'https://sandbox-api.polar.sh' : 'https://api.polar.sh');
+const API = 'https://api.freemius.com';
+const mask = (key: string) => `****-${key.replace(/[^A-Za-z0-9]/g, '').slice(-4).toUpperCase()}`;
 
 export class Licence {
   readonly config: ProConfig;
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
   private readonly secret: Buffer;
-  private readonly machineId: string;
+  /** Freemius's `uid`: 32 characters, stable for this PC. */
+  private readonly uid: string;
   private readonly file: string;
   private readonly trialFile: string;
   private readonly trialMarker: string;
@@ -146,7 +155,7 @@ export class Licence {
     this.now = o.now ?? Date.now;
     const machine = o.machine ?? defaultMachine();
     this.secret = createHash('sha256').update(`lotus-pro|${machine}`).digest();
-    this.machineId = createHash('sha256').update(`lotus-machine|${machine}`).digest('hex').slice(0, 24);
+    this.uid = createHash('sha256').update(`lotus-machine|${machine}`).digest('hex').slice(0, 32);
     this.file = join(o.dataDir, 'licence.json');
     this.trialFile = join(o.dataDir, 'trial.json');
     this.trialMarker = o.trialMarker ?? defaultTrialMarker();
@@ -179,8 +188,8 @@ export class Licence {
 
   private record(): LicenceRecord | null {
     const r = this.readSigned<LicenceRecord>(this.file);
-    // A record made against the sandbox doesn't count in a production build, and the other way round.
-    return r && r.env === this.config.env ? r : null;
+    // A record made for another product (a test build's sandbox product) doesn't count here.
+    return r && typeof r.installId === 'number' && r.productId === this.config.productId ? r : null;
   }
 
   // ---- trial ----------------------------------------------------------------------------------
@@ -230,8 +239,8 @@ export class Licence {
       problem: this.problem,
       buyUrl: c.buyUrl,
       portalUrl: c.portalUrl,
-      canActivate: !!c.organizationId,
-      sandbox: c.env === 'sandbox',
+      canActivate: !!c.productId,
+      test: c.test,
     };
   }
 
@@ -241,15 +250,15 @@ export class Licence {
     return this.status().unlocked;
   }
 
-  // ---- Polar ----------------------------------------------------------------------------------
+  // ---- Freemius -------------------------------------------------------------------------------
 
-  private async polar(path: 'activate' | 'validate' | 'deactivate', body: Record<string, unknown>): Promise<Response> {
-    if (!this.config.organizationId) throw new LicenceError('Licence keys are not set up in this build yet.');
+  private async call(method: 'GET' | 'POST', path: string, body?: Record<string, unknown>): Promise<Response> {
+    if (!this.config.productId) throw new LicenceError('Licence keys are not set up in this build yet.');
     try {
-      return await this.fetchFn(`${apiBase(this.config.env)}/v1/customer-portal/license-keys/${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ organization_id: this.config.organizationId, ...body }),
+      return await this.fetchFn(`${API}/v1/products/${this.config.productId}/${path}`, {
+        method,
+        headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(20_000),
       });
     } catch {
@@ -257,39 +266,73 @@ export class Licence {
     }
   }
 
-  private static async detail(res: Response): Promise<string> {
-    try { const j = (await res.json()) as { detail?: unknown }; return typeof j.detail === 'string' ? j.detail : ''; } catch { return ''; }
+  private static async error(res: Response): Promise<{ code: string; message: string }> {
+    try {
+      const j = (await res.json()) as { error?: { code?: unknown; message?: unknown } };
+      return { code: String(j.error?.code ?? ''), message: String(j.error?.message ?? '') };
+    } catch { return { code: '', message: '' }; }
+  }
+
+  private validatePath(installId: number, key: string) {
+    return `installs/${installId}/license.json?${new URLSearchParams({ uid: this.uid, license_key: key })}`;
+  }
+
+  /** The licence as Freemius sees it from this install; null when it says the licence is gone. */
+  private async fetchLicence(installId: number, key: string): Promise<{ quota: number | null; expiration: string | null } | null | 'unknown'> {
+    const res = await this.call('GET', this.validatePath(installId, key));
+    if (res.status === 404 || res.status === 402) return null;
+    if (!res.ok) return 'unknown';
+    try {
+      const j = (await res.json()) as { quota?: number | null; expiration?: string | null; is_cancelled?: boolean };
+      if (j.is_cancelled) return null;
+      return { quota: typeof j.quota === 'number' ? j.quota : null, expiration: j.expiration ?? null };
+    } catch { return 'unknown'; }
   }
 
   /** Paste a key: activate it for this PC and keep the signed record. */
-  async activate(rawKey: string, label?: string): Promise<ProStatus> {
+  async activate(rawKey: string, label?: string, version = ''): Promise<ProStatus> {
     const key = rawKey.trim();
     if (key.length < 8) throw new LicenceError("That doesn't look like a Lotus Pro key. Copy the whole key from your purchase email.");
-    const res = await this.polar('activate', {
-      key,
-      label: (label || hostname() || 'This PC').slice(0, 100),
-      meta: { app: 'lotus', machine: this.machineId },
+    const res = await this.call('POST', 'licenses/activate.json', {
+      uid: this.uid,
+      license_key: key,
+      title: (label || hostname() || 'This PC').slice(0, 100),
+      ...(version ? { version } : {}),
     });
-    if (res.status === 404) throw new LicenceError("That key wasn't found. Check that you copied all of it.");
-    if (res.status === 403) {
-      const d = (await Licence.detail(res)).toLowerCase();
-      if (d.includes('limit')) throw new LicenceError('This key is already used on 3 PCs. Remove one of them in your Polar account, then try again.');
-      throw new LicenceError('This key is no longer active (it may have been refunded or turned off).');
+    let installId: number | null = null;
+    if (res.ok) {
+      try { installId = Number(((await res.json()) as { install_id?: unknown }).install_id) || null; } catch { /* below */ }
+      if (!installId) throw new LicenceError('The licence server gave an answer Lotus did not understand.');
+    } else {
+      const e = await Licence.error(res);
+      if (e.code === 'license_activated') {
+        // Already active on this PC (a reinstall): take the install it names.
+        installId = Number(/install (\d+)/.exec(e.message)?.[1]) || null;
+        if (!installId) throw new LicenceError('This key is already in use on another PC. Remove that PC in your Freemius account, then try again.');
+      } else if (e.code === 'invalid_license_key' || res.status === 404) {
+        throw new LicenceError("That key wasn't found. Check that you copied all of it.");
+      } else if (e.code === 'license_utilized') {
+        throw new LicenceError('This key is already used on 3 PCs. Remove one of them in your Freemius account, then try again.');
+      } else if (e.code === 'license_expired') {
+        throw new LicenceError('This key has expired. Check your Freemius account, or write to support.');
+      } else {
+        throw new LicenceError(`The licence server answered with an error (${res.status}${e.message ? `: ${e.message}` : ''}). Try again in a minute.`);
+      }
     }
-    if (!res.ok) throw new LicenceError(`The licence server answered with an error (${res.status}). Try again in a minute.`);
-    const j = (await res.json()) as { id?: string; license_key_id?: string; license_key?: { display_key?: string; limit_activations?: number | null; expires_at?: string | null } };
-    if (!j.id) throw new LicenceError('The licence server gave an answer Lotus did not understand.');
+    // Quota and expiry come from the licence itself (the activation answer doesn't carry them).
+    let info: Awaited<ReturnType<Licence['fetchLicence']>> = 'unknown';
+    try { info = await this.fetchLicence(installId, key); } catch { /* offline right after activating: fine */ }
+    if (info === null) throw new LicenceError('This key is no longer active (it may have been refunded or cancelled).');
     const now = this.now();
     const rec: LicenceRecord = {
       key,
-      displayKey: j.license_key?.display_key || `****-${key.slice(-4).toUpperCase()}`,
-      activationId: j.id,
-      licenseKeyId: j.license_key_id ?? '',
-      limitActivations: j.license_key?.limit_activations ?? null,
-      expiresAt: j.license_key?.expires_at ?? null,
+      displayKey: mask(key),
+      installId,
+      limitActivations: info !== 'unknown' ? info.quota : null,
+      expiresAt: info !== 'unknown' ? info.expiration : null,
       activatedAt: now,
       checkedAt: now,
-      env: this.config.env,
+      productId: this.config.productId,
     };
     this.writeSigned(this.file, rec);
     this.problem = null;
@@ -297,43 +340,41 @@ export class Licence {
   }
 
   /**
-   * Every 30 days when online. Can't reach Polar → nothing changes. A clear "not found" (key revoked,
-   * refunded, or this PC removed elsewhere) → back to Free, with a note saying why.
+   * Every 30 days when online. Can't reach Freemius → nothing changes. A clear "gone" (refunded, cancelled,
+   * or this PC removed in the account) → back to Free, with a note saying why.
    */
   async recheck(force = false): Promise<ProStatus> {
     if (this.checking) { await this.checking; return this.status(); }
     const rec = this.record();
-    if (!rec || !this.config.organizationId) return this.status();
+    if (!rec || !this.config.productId) return this.status();
     if (!force && this.now() - rec.checkedAt < RECHECK_DAYS * DAY) return this.status();
     this.checking = (async () => {
-      let res: Response;
-      try { res = await this.polar('validate', { key: rec.key, activation_id: rec.activationId }); } catch { return; }
-      if (res.status === 404) {
+      let info: Awaited<ReturnType<Licence['fetchLicence']>>;
+      try { info = await this.fetchLicence(rec.installId, rec.key); } catch { return; }
+      if (info === null) {
         this.forget();
-        this.problem = 'Your Lotus Pro key is no longer active on this PC (it was removed, refunded or turned off). Paste a key to turn Pro back on.';
+        this.problem = 'Your Lotus Pro key is no longer active on this PC (it was removed, refunded or cancelled). Paste a key to turn Pro back on.';
         return;
       }
-      if (!res.ok) return; // a server hiccup is not the user's problem
-      let expiresAt = rec.expiresAt;
-      try { expiresAt = ((await res.json()) as { expires_at?: string | null }).expires_at ?? null; } catch { /* keep */ }
-      this.writeSigned(this.file, { ...rec, expiresAt, checkedAt: this.now() });
+      if (info === 'unknown') return; // a server hiccup is not the user's problem
+      this.writeSigned(this.file, { ...rec, limitActivations: info.quota, expiresAt: info.expiration, checkedAt: this.now() });
       this.problem = null;
     })();
     try { await this.checking; } finally { this.checking = null; }
     return this.status();
   }
 
-  /** "Remove this PC": frees one of the key's 3 activations. Works even if Polar can't be reached. */
+  /** "Remove this PC": frees one of the key's 3 activations. Works even if Freemius can't be reached. */
   async deactivate(): Promise<ProStatus> {
     const rec = this.record();
     if (!rec) return this.status();
     let freed = false;
     try {
-      const res = await this.polar('deactivate', { key: rec.key, activation_id: rec.activationId });
-      freed = res.status === 204 || res.status === 404 || res.ok;
+      const res = await this.call('POST', 'licenses/deactivate.json', { uid: this.uid, install_id: rec.installId, license_key: rec.key });
+      freed = res.ok || res.status === 404;
     } catch { /* offline */ }
     this.forget();
-    this.problem = freed ? null : "Pro is off on this PC, but Lotus couldn't reach the licence server to free its slot. Remove this PC in your Polar account.";
+    this.problem = freed ? null : "Pro is off on this PC, but Lotus couldn't reach the licence server to free its slot. Remove this PC in your Freemius account.";
     return this.status();
   }
 

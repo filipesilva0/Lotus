@@ -1,5 +1,5 @@
 // Settings → Lotus Pro (0.18.0): paste a key, see the plan, remove this PC.
-// Only shown once the launch switch is on, or in a build pointed at Polar's practice shop.
+// Only shown once the launch switch is on, or in a test build (LOTUS_PRO_TEST=1).
 
 import React, { useState } from 'react';
 import { Btn, Banner, TextInput } from '../common/ui';
@@ -24,7 +24,7 @@ export const ProSettings: React.FC = () => {
 
   return (
     <div className="space-y-4 pt-2">
-      {pro.sandbox && <Banner tone="info">Test mode: this build uses Polar's practice shop, so only test keys work.</Banner>}
+      {pro.test && <Banner tone="info">Test build: Lotus Pro isn't on sale yet.</Banner>}
       {pro.problem && <Banner tone="warn">{pro.problem}</Banner>}
       <section className="space-y-1">
         <p className="text-[13px] font-medium">{headline}</p>
@@ -53,7 +53,7 @@ export const ProSettings: React.FC = () => {
             <Btn variant="primary" disabled={!key.trim() || !pro.canActivate} loading={busy === 'add'} onClick={() => void run('add', () => activateKey(key))}>Turn on Pro</Btn>
           </div>
           {!pro.canActivate && <p className="text-[12px] text-[var(--color-text-muted)]">Keys can't be added in this build yet.</p>}
-          <p className="text-[12px] text-[var(--color-text-muted)]">Each key works on 3 PCs. To move it, remove an old PC here or in your Polar account.</p>
+          <p className="text-[12px] text-[var(--color-text-muted)]">Each key works on 3 PCs. To move it, remove an old PC here or in your Freemius account.</p>
           {pro.buyUrl && <Btn variant="secondary" onClick={() => void openExternal(pro.buyUrl)}>Get Lotus Pro</Btn>}
         </section>
       )}

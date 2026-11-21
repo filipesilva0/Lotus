@@ -1,4 +1,4 @@
-// 0.18.0: Lotus Pro licence keys (Polar), the 14-day trial and the launch switch.
+// Lotus Pro licence keys (Freemius since 0.18.1; Polar declined Lotus), the 14-day trial and the launch switch.
 
 import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,29 +7,30 @@ import { join } from 'node:path';
 import { Licence, PRO_CONFIG, proConfigFromEnv, type ProConfig } from '../src/licence';
 
 const DAY = 86_400_000;
-const ORG = '11111111-2222-3333-4444-555555555555';
-const live: ProConfig = { ...PRO_CONFIG, locks: true, organizationId: ORG, env: 'sandbox' };
+const PRODUCT = '12345';
+const live: ProConfig = { ...PRO_CONFIG, locks: true, productId: PRODUCT };
+const KEY = 'sk_LotusTestKey_WXYZ';
 
-interface Call { url: string; body: Record<string, unknown> }
+interface Call { method: string; url: string; body: Record<string, unknown> }
+type Kind = 'activate' | 'validate' | 'deactivate';
 
-/** A fake Polar: answers per path, records each call. */
-function fakePolar(answers: Partial<Record<'activate' | 'validate' | 'deactivate', () => Response>>): { fetch: typeof globalThis.fetch; calls: Call[] } {
+/** A fake Freemius: answers per endpoint, records each call. */
+function fakeFreemius(answers: Partial<Record<Kind, () => Response>>): { fetch: typeof globalThis.fetch; calls: Call[] } {
   const calls: Call[] = [];
   const fakeFetch = (async (url: string, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
-    calls.push({ url, body });
-    const path = url.split('/').pop() as 'activate' | 'validate' | 'deactivate';
-    const a = answers[path];
+    const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
+    calls.push({ method: init?.method ?? 'GET', url, body });
+    const kind: Kind = url.includes('/licenses/activate.json') ? 'activate' : url.includes('/licenses/deactivate.json') ? 'deactivate' : 'validate';
+    const a = answers[kind];
     if (!a) throw new TypeError('fetch failed');
     return a();
   }) as unknown as typeof fetch;
   return { fetch: fakeFetch, calls };
 }
 
-const activated = () => new Response(JSON.stringify({
-  id: 'act-1', license_key_id: 'lk-1', label: 'PC', meta: {}, created_at: '2026-11-21T00:00:00Z', modified_at: null,
-  license_key: { display_key: '****-WXYZ', limit_activations: 3, expires_at: null, status: 'granted' },
-}), { status: 200 });
+const activated = () => new Response(JSON.stringify({ user_id: 1, install_id: 777, install_api_token: 'tok', license_plan_id: 9, license_plan_name: 'pro' }), { status: 200 });
+const licence = (extra: Record<string, unknown> = {}) => () => new Response(JSON.stringify({ id: 5, quota: 3, activated: 1, expiration: null, is_cancelled: false, ...extra }), { status: 200 });
+const fsError = (status: number, code: string, message = '') => () => new Response(JSON.stringify({ error: { code, message, type: 'x', http: status } }), { status });
 
 function setup(config: ProConfig, fetch?: typeof globalThis.fetch, machine = 'pc-a') {
   const dir = mkdtempSync(join(tmpdir(), 'lotus-pro-'));
@@ -54,9 +55,10 @@ describe('launch switch off (what 0.18.0 ships)', () => {
     expect(s.trialStartedAt).toBeNull();
     expect(s.canActivate).toBe(false);
   });
-  test('the sandbox can be chosen from the environment for testing', () => {
-    const c = proConfigFromEnv({ LOTUS_POLAR_ENV: 'sandbox', LOTUS_POLAR_ORG: ORG, LOTUS_PRO_LOCKS: '1' });
-    expect(c).toMatchObject({ env: 'sandbox', organizationId: ORG, locks: true });
+  test('a test build can be set up from the environment', () => {
+    const c = proConfigFromEnv({ LOTUS_PRO_TEST: '1', LOTUS_FREEMIUS_PRODUCT: PRODUCT, LOTUS_PRO_LOCKS: '1' });
+    expect(c).toMatchObject({ test: true, productId: PRODUCT, locks: true });
+    expect(proConfigFromEnv({ LOTUS_FREEMIUS_PRODUCT: 'abc' }).productId).toBe('');
   });
 });
 
@@ -94,78 +96,110 @@ describe('trial', () => {
 });
 
 describe('licence keys', () => {
-  test('activate sends the key, the shop id and a label, and unlocks Pro', async () => {
-    const p = fakePolar({ activate: activated });
+  test('activate sends the 32-character uid, the key and a title, then reads the quota', async () => {
+    const p = fakeFreemius({ activate: activated, validate: licence() });
     const { mk } = setup(live, p.fetch);
-    const s = await mk().activate('  LOTUS-ABCD-EFGH-WXYZ  ', 'Desk PC');
-    expect(p.calls[0].url).toBe('https://sandbox-api.polar.sh/v1/customer-portal/license-keys/activate');
-    expect(p.calls[0].body).toMatchObject({ key: 'LOTUS-ABCD-EFGH-WXYZ', organization_id: ORG, label: 'Desk PC' });
+    const s = await mk().activate(`  ${KEY}  `, 'Desk PC');
+    expect(p.calls[0].method).toBe('POST');
+    expect(p.calls[0].url).toBe(`https://api.freemius.com/v1/products/${PRODUCT}/licenses/activate.json`);
+    expect(p.calls[0].body).toMatchObject({ license_key: KEY, title: 'Desk PC' });
+    expect(String(p.calls[0].body.uid)).toMatch(/^[0-9a-f]{32}$/);
+    expect(p.calls[1].url).toStartWith(`https://api.freemius.com/v1/products/${PRODUCT}/installs/777/license.json?uid=`);
     expect(s).toMatchObject({ plan: 'pro', unlocked: true, displayKey: '****-WXYZ', limitActivations: 3 });
   });
-  test('works offline after activation and survives a restart', async () => {
-    const p = fakePolar({ activate: activated });
+  test('the uid is the same for every call from one PC, and differs on another', async () => {
+    const a = fakeFreemius({ activate: activated, validate: licence() });
+    await setup(live, a.fetch, 'pc-a').mk().activate(KEY);
+    await setup(live, a.fetch, 'pc-a').mk().activate(KEY);
+    const b = fakeFreemius({ activate: activated, validate: licence() });
+    await setup(live, b.fetch, 'pc-b').mk().activate(KEY);
+    expect(a.calls[0].body.uid).toBe(a.calls[2].body.uid);
+    expect(a.calls[0].body.uid).not.toBe(b.calls[0].body.uid);
+  });
+  test('works offline after activation (even if the quota could not be read) and survives a restart', async () => {
+    const p = fakeFreemius({ activate: activated });
     const { mk } = setup(live, p.fetch);
-    await mk().activate('LOTUS-ABCD-EFGH-WXYZ');
-    const again = mk();
-    expect(again.status().plan).toBe('pro');
+    expect((await mk().activate(KEY)).plan).toBe('pro');
+    expect(mk().status()).toMatchObject({ plan: 'pro', limitActivations: null });
   });
   test('the record copied to another PC does not count', async () => {
-    const p = fakePolar({ activate: activated });
+    const p = fakeFreemius({ activate: activated, validate: licence() });
     const { mk } = setup(live, p.fetch);
-    await mk('pc-a').activate('LOTUS-ABCD-EFGH-WXYZ');
+    await mk('pc-a').activate(KEY);
     expect(mk('pc-b').status().plan).toBe('free');
   });
-  test('plain-words errors: unknown key, 3 PCs used, refunded, offline', async () => {
-    const cases: [() => Response, RegExp][] = [
-      [() => new Response('{"error":"ResourceNotFound","detail":"Not found"}', { status: 404 }), /wasn't found/],
-      [() => new Response('{"error":"NotPermitted","detail":"License key has reached its activation limit"}', { status: 403 }), /already used on 3 PCs/],
-      [() => new Response('{"error":"NotPermitted","detail":"License key is revoked"}', { status: 403 }), /no longer active/],
+  test('a reinstall on the same PC picks up its existing install', async () => {
+    const p = fakeFreemius({ activate: fsError(400, 'license_activated', 'License is already activated on install 4242.'), validate: licence() });
+    const { mk } = setup(live, p.fetch);
+    const s = await mk().activate(KEY);
+    expect(s.plan).toBe('pro');
+    expect(p.calls[1].url).toContain('/installs/4242/license.json');
+  });
+  test('plain-words errors: unknown key, 3 PCs used, expired, cancelled, offline', async () => {
+    const cases: [Partial<Record<Kind, () => Response>>, RegExp][] = [
+      [{ activate: fsError(404, 'invalid_license_key', 'Invalid license key.') }, /wasn't found/],
+      [{ activate: fsError(402, 'license_utilized', 'Your license quota of 3 production site(s) has been reached.') }, /already used on 3 PCs/],
+      [{ activate: fsError(402, 'license_expired', 'Your license has expired.') }, /expired/],
+      [{ activate: activated, validate: licence({ is_cancelled: true }) }, /no longer active/],
     ];
-    for (const [answer, msg] of cases) {
-      const { mk } = setup(live, fakePolar({ activate: answer }).fetch);
-      await expect(mk().activate('LOTUS-ABCD-EFGH')).rejects.toThrow(msg);
+    for (const [answers, msg] of cases) {
+      const { mk } = setup(live, fakeFreemius(answers).fetch);
+      await expect(mk().activate(KEY)).rejects.toThrow(msg);
+      expect(mk().status().plan).toBe('free');
     }
-    const { mk } = setup(live, fakePolar({}).fetch);
-    await expect(mk().activate('LOTUS-ABCD-EFGH')).rejects.toThrow(/couldn't reach/);
+    const { mk } = setup(live, fakeFreemius({}).fetch);
+    await expect(mk().activate(KEY)).rejects.toThrow(/couldn't reach/);
     await expect(mk().activate('abc')).rejects.toThrow(/doesn't look like/);
   });
-  test('no shop id yet: activation says so', async () => {
-    const { mk } = setup({ ...live, organizationId: '' });
-    await expect(mk().activate('LOTUS-ABCD-EFGH')).rejects.toThrow(/not set up/);
+  test('no product id yet: activation says so', async () => {
+    const { mk } = setup({ ...live, productId: '' });
+    await expect(mk().activate(KEY)).rejects.toThrow(/not set up/);
   });
 });
 
 describe('30-day recheck', () => {
-  test('not before 30 days, then validates with the activation id', async () => {
+  test('not before 30 days, then checks the licence of this install', async () => {
     let validated = 0;
-    const p = fakePolar({ activate: activated, validate: () => { validated++; return new Response('{"expires_at":null}', { status: 200 }); } });
+    const p = fakeFreemius({ activate: activated, validate: () => { validated++; return licence({ quota: 5 })(); } });
     const { mk, clock } = setup(live, p.fetch);
     const l = mk();
-    await l.activate('LOTUS-ABCD-EFGH-WXYZ');
+    await l.activate(KEY);
+    validated = 0;
     await l.recheck();
     expect(validated).toBe(0);
     clock.advance(31 * DAY);
     const s = await l.recheck();
     expect(validated).toBe(1);
-    expect(p.calls.at(-1)?.body).toMatchObject({ key: 'LOTUS-ABCD-EFGH-WXYZ', activation_id: 'act-1' });
+    expect(p.calls.at(-1)?.url).toContain(`license_key=${KEY}`);
+    expect(s.limitActivations).toBe(5);
     expect(s.lastCheckedAt).toBe(Date.parse('2026-11-21T12:00:00Z') + 31 * DAY);
   });
   test('offline or a server error never locks the user out', async () => {
-    let mode: 'down' | '500' = 'down';
-    const p = fakePolar({ activate: activated, validate: () => { if (mode === 'down') throw new TypeError('fetch failed'); return new Response('oops', { status: 500 }); } });
+    let mode: 'ok' | 'down' | '500' = 'ok';
+    const p = fakeFreemius({ activate: activated, validate: () => { if (mode === 'down') throw new TypeError('fetch failed'); return mode === '500' ? new Response('oops', { status: 500 }) : licence()(); } });
     const { mk, clock } = setup(live, p.fetch);
     const l = mk();
-    await l.activate('LOTUS-ABCD-EFGH-WXYZ');
+    await l.activate(KEY);
+    mode = 'down';
     clock.advance(400 * DAY);
     expect((await l.recheck()).plan).toBe('pro');
     mode = '500';
     expect((await l.recheck()).plan).toBe('pro');
   });
-  test('a key that was refunded or removed turns Pro off with a note', async () => {
-    const p = fakePolar({ activate: activated, validate: () => new Response('{"error":"ResourceNotFound"}', { status: 404 }) });
+  test('updates ending (expiration passed) keeps Pro on: buyers keep what they paid for', async () => {
+    const p = fakeFreemius({ activate: activated, validate: licence({ expiration: '2026-01-01 00:00:00' }) });
     const { mk } = setup(live, p.fetch);
     const l = mk();
-    await l.activate('LOTUS-ABCD-EFGH-WXYZ');
+    await l.activate(KEY);
+    expect((await l.recheck(true)).plan).toBe('pro');
+  });
+  test('a licence that was refunded or this PC removed turns Pro off with a note', async () => {
+    let gone = false;
+    const p = fakeFreemius({ activate: activated, validate: () => (gone ? fsError(404, 'not_found')() : licence()()) });
+    const { mk } = setup(live, p.fetch);
+    const l = mk();
+    await l.activate(KEY);
+    gone = true;
     const s = await l.recheck(true);
     expect(s.plan).toBe('free');
     expect(s.problem).toMatch(/no longer active/);
@@ -173,23 +207,26 @@ describe('30-day recheck', () => {
 });
 
 describe('remove this PC', () => {
-  test('deactivates with Polar and goes back to Free', async () => {
-    const p = fakePolar({ activate: activated, deactivate: () => new Response(null, { status: 204 }) });
+  test('deactivates with Freemius and goes back to Free', async () => {
+    const p = fakeFreemius({ activate: activated, validate: licence(), deactivate: licence() });
     const { mk } = setup(live, p.fetch);
     const l = mk();
-    await l.activate('LOTUS-ABCD-EFGH-WXYZ');
+    await l.activate(KEY);
     const s = await l.deactivate();
-    expect(p.calls.at(-1)?.body).toMatchObject({ key: 'LOTUS-ABCD-EFGH-WXYZ', activation_id: 'act-1', organization_id: ORG });
+    expect(p.calls.at(-1)?.url).toBe(`https://api.freemius.com/v1/products/${PRODUCT}/licenses/deactivate.json`);
+    expect(p.calls.at(-1)?.body).toMatchObject({ license_key: KEY, install_id: 777, uid: p.calls[0].body.uid });
     expect(s).toMatchObject({ plan: 'free', problem: null });
   });
   test('offline: Pro still turns off here, and the note says to free the slot online', async () => {
-    const p = fakePolar({ activate: activated });
+    let online = true;
+    const p = fakeFreemius({ activate: activated, validate: licence(), deactivate: () => { if (!online) throw new TypeError('down'); return licence()(); } });
     const { mk } = setup(live, p.fetch);
     const l = mk();
-    await l.activate('LOTUS-ABCD-EFGH-WXYZ');
+    await l.activate(KEY);
+    online = false;
     const s = await l.deactivate();
     expect(s.plan).toBe('free');
-    expect(s.problem).toMatch(/Remove this PC in your Polar account/);
+    expect(s.problem).toMatch(/Remove this PC in your Freemius account/);
   });
 });
 
