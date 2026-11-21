@@ -12,7 +12,8 @@ import { Builtins, MAX_CHAT_CTX, MIN_CHAT_CTX } from '../src/engines/manager';
 
 const dirs: string[] = [];
 const tmp = (tag: string) => { const d = mkdtempSync(join(tmpdir(), `lotus-ctxfit-${tag}-`)); dirs.push(d); return d; };
-afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+// Windows keeps an open database file locked, so a leftover temp folder is not an error.
+afterAll(() => { for (const d of dirs) { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows */ } } });
 
 // ── A small GGUF writer (metadata only; the tensor count is 0) ──────────────────────────────────────
 type V = { t: 'u32'; v: number } | { t: 'str'; v: string } | { t: 'f32'; v: number } | { t: 'arr-u32'; v: number[] } | { t: 'arr-bool'; v: boolean[] } | { t: 'arr-str'; v: string[] } | { t: 'bool'; v: boolean };
