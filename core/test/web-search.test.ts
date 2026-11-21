@@ -222,7 +222,10 @@ describe('searches through the core', () => {
 
     __resetWebThrottle();
     const never = net(() => ({ status: 403, body: 'Forbidden' }));
-    await expect(webSearch.run({ query: 'never' }, never.ctx())).rejects.toThrow(/Every search engine refused/);
+    // 0.20.0: the error says what each engine answered, and no longer sends the user to SearXNG.
+    const err = await webSearch.run({ query: 'never' }, never.ctx()).catch((e: Error) => e);
+    expect(String(err)).toMatch(/DuckDuckGo refused the search \(answer 403\); Bing refused.*Wikipedia refused/);
+    expect(String(err)).not.toMatch(/SearXNG/);
   });
 
   test("the user's SearXNG is used when chosen", async () => {
@@ -230,7 +233,7 @@ describe('searches through the core', () => {
     const ctx = { fetch: async (url: string) => { calls.push(url); return Response.json({ results: [{ title: 'S', url: 'https://s.example', content: 'from searx' }] }); },
       kvGet: () => JSON.stringify({ webSearchProvider: 'searxng', searxngUrl: 'http://127.0.0.1:8888/' }), signal: new AbortController().signal } as never;
     const r = await webSearch.run({ query: 'lotus' }, ctx);
-    expect(r.summary).toBe('1 results · SearXNG');
+    expect(r.summary).toBe('1 result · SearXNG');
     expect(calls[0]).toStartWith('http://127.0.0.1:8888/search?q=lotus&format=json');
   });
 

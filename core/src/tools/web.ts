@@ -4,6 +4,7 @@
 import type { Tool, ToolCtx } from '../agent/types';
 import { EngineHealth, ENGINE_LABEL, metaSearch, providerOf, readPageWith, SearchBlocked, searchWebWith, type EngineId, type WebIO, type WebResult } from '../../../src/chat/webCore';
 import { kvGet } from '../kv';
+import { stripMarkdown } from '../../../src/chat/webQuery';
 import type { Db } from '../db';
 
 // Every web search in Lotus goes through here (the agent's web.search, and Chat's Web button, tasks and
@@ -12,7 +13,8 @@ import type { Db } from '../db';
 // and all but the first failed; 0.15.0: about a third of chat searches failed). So:
 //   - searches go one at a time with a short gap, and the same query within 10 minutes reuses its results;
 //   - Lotus Search asks the next engine when one refuses, and rests the refused one (webCore.ts);
-//   - if every engine refused, one more try after a pause.
+//   - if every engine refused, one more try after a pause (unless they are all resting now);
+//   - 0.20.0: while every engine rests, searches fail at once with when Lotus will try again.
 export const SEARCH_GAP_MS = { value: 1000 };
 export const RETRY_AFTER_MS = { value: 8000 };
 /** @deprecated names from 0.14.5, kept for tests and callers. */
@@ -40,6 +42,7 @@ export function throttledSearch(key: string, run: () => Promise<Found>, signal?:
   const going = inFlight.get(key);
   if (going) return going; // two agents asking the same thing at once share one search
   const job = queue.catch(() => undefined).then(async () => {
+    let first: unknown = null;
     for (let attempt = 0; ; attempt++) {
       await sleep(next - Date.now(), signal);
       try {
@@ -52,8 +55,12 @@ export function throttledSearch(key: string, run: () => Promise<Found>, signal?:
         return found;
       } catch (e) {
         if (!(e instanceof SearchBlocked)) { next = Date.now() + SEARCH_GAP_MS.value; throw e; }
+        // Every engine resting: nothing was asked, so no retry. A retry that finds them resting reports
+        // the first try's error, which says what each engine answered.
+        if (e.resting) { next = Date.now() + SEARCH_GAP_MS.value; throw first ?? e; }
         next = Date.now() + RETRY_AFTER_MS.value * (attempt + 1);
         if (attempt >= 1) throw e;
+        first = e;
       }
     }
   });
@@ -101,13 +108,14 @@ export const webSearch: Tool = {
   parameters: { type: 'object', properties: { query: { type: 'string', description: 'A complete search query that makes sense on its own: name the subject from earlier in the conversation (write "RTX 4060 yellow edition price", not "the yellow one").' } }, required: ['query'] },
   describe: (a) => `Search the web for “${String(a.query)}”`,
   async run(a, ctx) {
-    const q = String(a.query);
+    const q = stripMarkdown(String(a.query)) || String(a.query);
     const { results, provider } = await findOnWeb(io(ctx), ctx.kvGet, q, 6, ctx.signal);
     return {
       ok: true,
       text: results.length ? results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n') : 'No results.',
-      summary: `${results.length} results · ${provider}`,
-      data: { results: results.map((r) => ({ title: r.title, url: r.url })) },
+      summary: results.length ? `${results.length} result${results.length === 1 ? '' : 's'} · ${provider}` : `No results · ${provider}`,
+      // 0.20.0: an empty search is shown as "nothing found", not with a green check.
+      data: { results: results.map((r) => ({ title: r.title, url: r.url })), ...(results.length ? {} : { empty: true }) },
     };
   },
 };

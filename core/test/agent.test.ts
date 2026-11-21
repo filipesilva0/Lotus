@@ -482,7 +482,9 @@ describe('agent loop', () => {
     expect(ol.requests.length).toBe(6);
     expect(ol.requests[5].tools ?? []).toEqual([]);
     expect(out.steps.length).toBe(2);
-    expect(out.content).toContain('stopped after several tool steps');
+    // 0.20.0: no answer means not finished, and the note says so in plain words.
+    expect(out.content).toContain("couldn't finish this");
+    expect(out.finished).toBe(false);
   });
 });
 

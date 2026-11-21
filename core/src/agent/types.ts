@@ -114,7 +114,7 @@ export type AgentEvent =
   | { kind: 'reset'; keep: number }
   | { kind: 'step'; step: Step }
   | { kind: 'stats'; tokensPerSec: number; durationMs: number; promptTokens?: number; evalTokens?: number }
-  | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags' }
+  | { kind: 'done'; content: string; unverified: string[]; steps: number; mode: 'native' | 'tags'; /** 0.20.0: the model never answered; content is Lotus's note. */ unfinished?: boolean }
   | { kind: 'error'; message: string }
   /** The agent asked the user something (ask.user) and waits; answer with agent_answer. */
   | { kind: 'ask'; askId: string; question: string; options: string[] }

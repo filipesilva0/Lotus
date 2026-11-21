@@ -6,6 +6,7 @@ import { agentPool } from '../agents/pool';
 import { llm } from '../services/llm';
 import { CHAT_TITLER_SKILL } from '../skills/system';
 import type { ChatSession } from '../types/lotus';
+export { shouldRename, withFinishedReply } from './renameRules';
 
 /** Turns a model reply into a usable title, or '' if it is not one. */
 export function cleanTitle(raw: string): string {
@@ -13,13 +14,6 @@ export function cleanTitle(raw: string): string {
   t = t.replace(/^(title|chat title)\s*[:\-–]\s*/i, '').replace(/^["'“”‘’*#`\s]+|["'“”‘’*`.\s]+$/g, '').replace(/\s+/g, ' ');
   if (!t || t.length > 60) t = t.slice(0, 60).replace(/\s+\S*$/, '');
   return t.length >= 2 ? t : '';
-}
-
-/** True right after the first reply of a chat whose title Lotus chose itself. */
-export function shouldRename(s: Pick<ChatSession, 'title' | 'autoTitle' | 'messages'>): boolean {
-  if (!s.autoTitle || s.title !== s.autoTitle) return false;
-  const replies = s.messages.filter((m) => m.role === 'assistant' && m.content.trim() && !m.isStreaming);
-  return replies.length === 1 && s.messages.some((m) => m.role === 'user' && m.content.trim());
 }
 
 export function titleTurns(s: Pick<ChatSession, 'messages'>) {
