@@ -11,6 +11,7 @@ import { LotusPlugin, fromFileText, plugins, toFile, usePlugins, validatePlugin 
 import { draftPlugin, DraftResult } from '../../plugins/creator';
 import type { LotusSettings } from '../../types/lotus';
 import { count } from '../../lib/plural';
+import { openExternal } from '../../lib/open';
 
 export type LibraryTab = 'skills' | 'memory' | 'soul' | 'plugins';
 
@@ -62,7 +63,7 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
       return [
         ...SYSTEM_SKILLS.map<Doc>((s) => ({ id: s.id, group: 'System skills', title: s.name, subtitle: s.description, badge: s.usedBy, text: systemSkillFile(s), readOnly: 'Built into Lotus. This is the exact text the feature sends.', icon: <Lock className="w-3.5 h-3.5" /> })),
         ...mem.skills.map<Doc>((s) => ({ id: s.id, group: 'Your skills', title: s.name, subtitle: s.description, badge: `${s.origin === 'auto' ? 'Learned' : 'Yours'} · v${s.version}${s.enabled ? '' : ' · off'}`, text: skillFile(s), readOnly: 'Edit or switch it off in Tasks → Skills.', icon: <Sparkles className="w-3.5 h-3.5" /> })),
-        ...installed.flatMap((p) => p.skills.map<Doc>((k, i) => ({ id: `plg:${p.id}:${i}`, group: 'Plugin skills', title: k.name, subtitle: k.description, badge: `${p.name}${p.enabled ? '' : ' · off'}`, text: pluginSkillFile(k, p), readOnly: 'Part of a plugin. Edit it in Tasks → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> }))),
+        ...installed.flatMap((p) => p.skills.map<Doc>((k, i) => ({ id: `plg:${p.id}:${i}`, group: 'Plugin skills', title: k.name, subtitle: k.description, badge: `${p.name}${p.enabled ? '' : ' · off'}`, text: pluginSkillFile(k, p), readOnly: p.origin === 'builtin' ? 'Part of a plugin built into Lotus. Switch it on or off in Tasks → Plugins.' : 'Part of a plugin. Edit it in Tasks → Plugins.', icon: <Puzzle className="w-3.5 h-3.5" /> }))),
       ];
     }
     if (tab === 'memory') {
@@ -156,6 +157,17 @@ const PluginsPane: React.FC = () => {
   const [importMsg, setImportMsg] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   useEffect(() => { if (sel !== 'new' && !list.some((p) => p.id === sel)) setSel(list[0]?.id ?? 'new'); }, [list, sel]);
   const cur = list.find((p) => p.id === sel);
+  const mine = list.filter((p) => p.origin !== 'builtin');
+  const builtin = list.filter((p) => p.origin === 'builtin');
+  const row = (p: LotusPlugin) => (
+    <div key={p.id} className={cx('flex items-center gap-2 px-2 py-1.5 rounded-[8px]', p.id === sel ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
+      <button type="button" onClick={() => setSel(p.id)} aria-current={p.id === sel ? 'true' : undefined} className="flex-1 min-w-0 flex items-start gap-2 text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] rounded-[6px]">
+        <Puzzle className={cx('w-3.5 h-3.5 mt-0.5 shrink-0', p.enabled ? 'text-[var(--petal-green)]' : 'text-[var(--color-text-muted)]')} />
+        <span className="min-w-0"><span className="block text-[13px] font-medium truncate">{p.name}</span><span className="block text-[12px] text-[var(--color-text-muted)] truncate">{p.description}</span></span>
+      </button>
+      <Toggle size="sm" checked={p.enabled} onChange={(v) => plugins.setEnabled(p.id, v)} ariaLabel={`${p.name} on`} />
+    </div>
+  );
 
   const onImport = async (f: File) => {
     try {
@@ -171,17 +183,11 @@ const PluginsPane: React.FC = () => {
         className={cx('w-full flex items-center gap-2 px-2 h-9 rounded-[8px] text-left text-[13px] font-medium focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]', sel === 'new' ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
         <span className="w-6 h-6 rounded-[6px] inline-flex items-center justify-center bg-[var(--color-accent-fill)] text-white"><Plus className="w-3.5 h-3.5" /></span>Create a plugin
       </button>
-      <p className="px-2 pt-3 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Installed</p>
-      {!list.length && <p className="px-2 py-1 text-[12px] text-[var(--color-text-muted)]">No plugins yet. Describe one and Lotus drafts it, or import a .lotus-plugin.json file.</p>}
-      {list.map((p) => (
-        <div key={p.id} className={cx('flex items-center gap-2 px-2 py-1.5 rounded-[8px]', p.id === sel ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
-          <button type="button" onClick={() => setSel(p.id)} className="flex-1 min-w-0 flex items-start gap-2 text-left focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] rounded-[6px]">
-            <Puzzle className={cx('w-3.5 h-3.5 mt-0.5 shrink-0', p.enabled ? 'text-[var(--petal-green)]' : 'text-[var(--color-text-muted)]')} />
-            <span className="min-w-0"><span className="block text-[13px] font-medium truncate">{p.name}</span><span className="block text-[12px] text-[var(--color-text-muted)] truncate">{p.description}</span></span>
-          </button>
-          <Toggle size="sm" checked={p.enabled} onChange={(v) => plugins.setEnabled(p.id, v)} ariaLabel={`${p.name} on`} />
-        </div>
-      ))}
+      <p className="px-2 pt-3 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Yours</p>
+      {!mine.length && <p className="px-2 py-1 text-[12px] text-[var(--color-text-muted)]">No plugins of your own yet. Describe one and Lotus drafts it, or import a .lotus-plugin.json file.</p>}
+      {mine.map(row)}
+      <p className="px-2 pt-3 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Built into Lotus</p>
+      {builtin.map(row)}
       <div className="flex-1" />
       <input ref={file} type="file" accept=".json,application/json" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void onImport(f); }} />
       {importMsg && <Banner tone={importMsg.tone} className="mx-1 mb-2">{importMsg.text}</Banner>}
@@ -249,7 +255,7 @@ const PluginDetail: React.FC<{ p: LotusPlugin }> = ({ p }) => {
   return (
     <div className="p-5 flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <span className="text-[12px] text-[var(--color-text-muted)]">{p.origin === 'imported' ? 'Imported' : 'Created'} {new Date(p.created).toLocaleDateString()}</span>
+        <span className="text-[12px] text-[var(--color-text-muted)]">{p.origin === 'builtin' ? `Built into Lotus · by ${p.author}` : `${p.origin === 'imported' ? 'Imported' : 'Created'} ${new Date(p.created).toLocaleDateString()}`}</span>
         <div className="flex-1" />
         <label className="inline-flex items-center gap-2 text-[13px]">{p.enabled ? 'On' : 'Off'}<Toggle checked={p.enabled} onChange={(v) => plugins.setEnabled(p.id, v)} ariaLabel={`${p.name} on`} /></label>
       </div>
@@ -260,7 +266,13 @@ const PluginDetail: React.FC<{ p: LotusPlugin }> = ({ p }) => {
           <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={() => { setEditing(false); setErrs([]); }}>Cancel</Btn><Btn variant="primary" onClick={save}>Save Changes</Btn></div>
         </div>
       ) : <PluginSummary p={p} />}
-      {!editing && (
+      {p.credit && (
+        <p className="pt-3 border-t border-[var(--sep)] text-[12px] text-[var(--color-text-muted)] flex items-start gap-1.5">
+          <Lock className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{p.credit.note}{p.credit.url && <> <button type="button" className="underline hover:text-[var(--color-text-main)]" onClick={() => void openExternal(p.credit!.url!)}>Original project</button></>} Built-in plugins can’t be edited or removed; switch one off if you don’t want it.</span>
+        </p>
+      )}
+      {!editing && p.origin !== 'builtin' && (
         <div className="flex items-center gap-2 pt-3 border-t border-[var(--sep)]">
           <Btn onClick={() => { setJson(JSON.stringify(toFile(p), null, 2)); setEditing(true); }}>Edit</Btn>
           <Btn icon={<Download className="w-3.5 h-3.5" />} onClick={exportFile}>Export</Btn>
@@ -274,7 +286,7 @@ const PluginDetail: React.FC<{ p: LotusPlugin }> = ({ p }) => {
   );
 };
 
-const IDEAS = ['A daily stand-up helper: /standup turns my notes into Yesterday / Today / Blockers', 'Physiotherapy exercise explainer that always adds safety notes and asks about pain level', 'Code reviewer: /review checks a diff for bugs, naming and missing tests'];
+const IDEAS = ['A daily stand-up helper: /standup turns my notes into Yesterday / Today / Blockers', 'Physiotherapy exercise explainer that always adds safety notes and asks about pain level', 'Recipe helper: /recipe turns what is in my fridge into a dinner idea with steps'];
 
 /** The plugin creator: describe → Lotus drafts with the plugin-creator skill → review → install. */
 const PluginCreator: React.FC<{ onInstalled: (id: string) => void }> = ({ onInstalled }) => {

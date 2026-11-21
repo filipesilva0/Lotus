@@ -3,6 +3,7 @@
 // Each one is the text the feature really uses (imported, not copied), so the viewer never drifts.
 
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
+import { BUILTIN_PLUGINS } from '../plugins/builtin';
 
 export interface SystemSkill {
   id: string;
@@ -21,7 +22,7 @@ You design plugins for Lotus, a local AI studio. A plugin is DATA, not code: it 
 
 ## What a plugin can contain
 - **instructions**: standing guidance added to the system prompt while the plugin is on. Write it in the second person ("When the user …, you …"). Keep it under 1,500 characters and specific.
-- **commands**: slash commands. \`name\` is lowercase letters, digits and dashes (e.g. "standup"). \`prompt\` is the message sent when the user runs it; put \`{{input}}\` where the user's text goes. Never use these names: new, clear, incognito, search, think, web, memory, model, temp, seed, system, pin, plugins, library.
+- **commands**: slash commands. \`name\` is lowercase letters, digits and dashes (e.g. "standup"). \`prompt\` is the message sent when the user runs it; put \`{{input}}\` where the user's text goes. Never use these names: new, clear, incognito, research, search, think, web, memory, model, temp, seed, system, pin, plugins, library, ${BUILTIN_PLUGINS.flatMap((p) => p.commands.map((c) => c.name)).join(', ')}.
 - **skills**: reference notes loaded only when a question matches them. Each has \`name\`, \`description\`, \`whenToUse\` (a sentence with the words a matching question would contain) and a Markdown \`body\` with steps, checks and pitfalls.
 
 ## How to work
