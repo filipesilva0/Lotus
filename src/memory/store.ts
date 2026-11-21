@@ -8,6 +8,7 @@ import { useSyncExternalStore } from 'react';
 import { onCoreEvent, rpc } from '../lib/core';
 import { kv, storeMode } from '../lib/store';
 import { MemoryItem } from '../types/lotus';
+import { skillFits } from './skillMatch';
 
 export interface Skill {
   id: string;
@@ -137,7 +138,7 @@ function webBackend(): Backend {
     listSkills: async () => load<Skill>(SK),
     putSkill: async (s) => { const cur = load<Skill>(SK).filter((x) => x.id !== s.id); save(SK, [s, ...cur]); return undefined; },
     deleteSkill: async (id) => save(SK, load<Skill>(SK).filter((x) => x.id !== id)),
-    searchSkills: async (query, limit) => { const w = queryWords(query); return load<Skill>(SK).map((s) => ({ id: s.id, s: matchScore(w, `${s.name} ${s.name} ${s.whenToUse} ${s.description}`) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.id); },
+    searchSkills: async (query, limit) => { const w = queryWords(query); return load<Skill>(SK).filter((s) => skillFits(query, s)).map((s) => ({ id: s.id, s: matchScore(w, `${s.name} ${s.name} ${s.whenToUse} ${s.description}`) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.id); },
   };
 }
 

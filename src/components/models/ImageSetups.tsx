@@ -6,6 +6,7 @@ import { Tip } from '../common/Tip';
 import { fmtSize, hasImageFile, removeImageFile, useBuiltins, useProfiles } from '../../lib/builtins';
 import { FAMILIES, FAMILY_ORDER, guessFamily, missingFor, slotFolder, suggestFile, type ImageFamily, type ImageFolder, type ImageProfile, type Slot } from '../../models/imageProfiles';
 import { uid } from '../../lib/persist';
+import { count } from '../../lib/plural';
 
 /*
  * Models → Image Setups (session 17). An image model is often several files: the model itself, the
@@ -80,7 +81,7 @@ export const ImageSetups: React.FC<{ q: string }> = ({ q }) => {
               <Card key={p.id} className={cx('p-0 overflow-hidden', open && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
                 <button type="button" className="w-full flex items-center gap-3 px-3.5 py-2.5 text-left hover:bg-[var(--hover)]" aria-expanded={open} onClick={() => setOpenId(open ? null : p.id)}>
                   <span className="flex-1 min-w-0"><span className="block text-[14px] font-semibold truncate">{p.name}</span>
-                    <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{FAMILIES[p.family].label} · {[p.files.model, p.files.vae, p.files.llm, p.files.clip_l, p.files.t5xxl].filter(Boolean).length} files</span></span>
+                    <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{FAMILIES[p.family].label} · {count([p.files.model, p.files.vae, p.files.llm, p.files.clip_l, p.files.t5xxl].filter(Boolean).length, 'file')}</span></span>
                   {missing.length
                     ? <span className="inline-flex items-center gap-1 text-[12px] text-[var(--c-orange)] font-medium"><AlertCircle className="w-3.5 h-3.5" />Needs {missing.map((s) => (s === 'model' ? 'the model file' : FAMILIES[p.family].slots.find((x) => x.slot === s)?.label ?? s)).join(', ')}</span>
                     : <span className="inline-flex items-center gap-1 text-[12px] text-[var(--c-green)] font-medium"><Check className="w-3.5 h-3.5" />Ready</span>}

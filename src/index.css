@@ -212,6 +212,12 @@ html.no-glass body { background: var(--color-bg-base); }
 .tip[data-tip]:focus-visible::after { transition-delay: 0s; }
 .tip[data-tip-side="right"]:hover::after, .tip[data-tip-side="right"]:focus-visible::after { transform: translate(0, -50%); }
 .tip[data-tip]:disabled::after, .tip[aria-expanded="true"]::after { display: none; }
+/* Opt-in variants (0.19 critique #17, composer tips cut off):
+   data-tip-wrap: a longer sentence wraps onto a few lines instead of ending in "…".
+   data-tip-align="end": the tip lines up with the control's right edge (controls at the right end of a box). */
+.tip[data-tip-wrap]::after { white-space: normal; width: max-content; max-width: 280px; overflow: visible; text-overflow: clip; text-align: left; }
+.tip[data-tip-align="end"]::after { left: auto; right: 0; transform: translate(0, 2px); }
+.tip[data-tip-align="end"]:hover::after, .tip[data-tip-align="end"]:focus-visible::after { transform: translate(0, 0); }
 
 /* ── Symbol effects (SF Symbols-style, see components/common/Symbol.tsx) ── */
 @keyframes sym-pulse   { 0%,100% { opacity: 1; } 50% { opacity: .35; } }

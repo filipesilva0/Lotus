@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Bot, Check, ChevronDown, Globe, History, Loader2, Play, RotateCcw, Square, Trash2, X } from 'lucide-react';
-import { blockedBy, blockersOf, COLUMNS, Priority, Status, Task, TaskLink } from '../../tasks/kanban';
+import { blockedBy, blockersOf, COLUMNS, Priority, runAction, Status, Task, TaskLink } from '../../tasks/kanban';
 import { tasks as store } from '../../tasks/store';
 import { uid } from '../../lib/persist';
 import { agentAvailable } from '../../lib/agent';
@@ -23,6 +23,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
 
   const patch = (fn: (x: Task) => Task) => store.patch(t.id, fn);
   const running = t.run?.state === 'running' || t.run?.state === 'queued';
+  const action = runAction(t);
   const blockers = blockersOf(t.id, all);
   const blocks = blockedBy(t.id, all);
   const relates = t.links.filter((l) => l.type === 'relates').map((l) => all.find((x) => x.id === l.to)).filter((x): x is Task => !!x);
@@ -40,7 +41,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
       <PaneBar>
         <span className="text-[13px] font-semibold flex-1 truncate">Task</span>
         {onShowRuns && agentAvailable() && (t.run || t.result) && <IconBtn label="See this task’s runs in Activity" onClick={onShowRuns}><History className="w-4 h-4" /></IconBtn>}
-        <IconBtn label="Delete task" onClick={() => { store.remove(t.id); onClose(); }}><Trash2 className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Delete task" onClick={() => { store.removeWithUndo(t.id); onClose(); }}><Trash2 className="w-4 h-4" /></IconBtn>
         <IconBtn label="Close details" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
       </PaneBar>
       <div className="flex-1 overflow-y-auto">
@@ -56,14 +57,16 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
           <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug">
             {t.assignee === 'lotus' ? 'Lotus starts this when it is in To do and nothing blocks it, plans steps if there are none, works through them and moves it to Review.' : 'You do this one. Assign it to Lotus to have the local model work on it.'}
           </p>
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            {running
-              ? <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={() => store.stop(t.id)}>Stop</Btn>
-              : t.run?.state === 'failed'
-                ? <Btn variant="primary" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => store.retry(t.id)} disabled={blockers.length > 0}>Try Again</Btn>
-                : <Btn variant="primary" icon={<Play className="w-3.5 h-3.5" />} onClick={() => store.run(t.id)} disabled={blockers.length > 0 || t.status === 'done'}>{t.result ? 'Run again' : 'Run with Lotus'}</Btn>}
-            <Checkbox checked={!!t.web} onChange={(v) => patch((x) => ({ ...x, web: v }))} label="Search the web first" />
-          </div>
+          {action && (
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              {action === 'stop'
+                ? <Btn variant="secondary" icon={<Square className="w-3 h-3" fill="currentColor" />} onClick={() => store.stop(t.id)}>Stop</Btn>
+                : action === 'retry'
+                  ? <Btn variant="primary" icon={<RotateCcw className="w-3.5 h-3.5" />} onClick={() => store.retry(t.id)} disabled={blockers.length > 0}>Try Again</Btn>
+                  : <Btn variant="primary" icon={<Play className="w-3.5 h-3.5" />} onClick={() => store.run(t.id)} disabled={blockers.length > 0 || t.status === 'done'}>{t.result ? 'Run again' : 'Run with Lotus'}</Btn>}
+              <Checkbox checked={!!t.web} onChange={(v) => patch((x) => ({ ...x, web: v }))} label="Search the web first" />
+            </div>
+          )}
           {running && <p className="mt-2 text-[12px] inline-flex items-center gap-1.5 text-[var(--color-accent-vibrant)]"><Loader2 className="w-3.5 h-3.5 animate-spin" />{t.run?.state === 'queued' ? 'Waiting for a free agent slot (limited by video memory).' : t.log[t.log.length - 1]?.text}</p>}
           {t.run?.state === 'failed' && t.run.error && t.run.error !== 'Stopped' && <Banner tone="error" className="mt-2">{t.run.error}</Banner>}
           {blockers.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Waiting for {blockers.map((b) => `“${b.title}”`).join(', ')}.</p>}

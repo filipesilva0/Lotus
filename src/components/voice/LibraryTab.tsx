@@ -6,6 +6,7 @@ import { tagWavBlob } from '../../lib/wavTag';
 import { Btn, Card, TextInput, Select, Empty, Banner, Spinner, IconBtn, cx } from '../common/ui';
 import { AudioPlayer } from './AudioPlayer';
 import { VoiceData } from './useVoiceData';
+import { confirmAlert } from '../common/Alerts';
 
 const PAGE = 25;
 
@@ -42,6 +43,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
     setItems((c) => c.map((x) => (x.id === g.id ? { ...x, is_favorited: !x.is_favorited } : x)));
   };
   const del = async (g: Generation) => {
+    if (!await confirmAlert({ title: 'Delete this clip?', message: 'Its audio is removed from Voicebox.', confirm: 'Delete' })) return;
     await voicebox.deleteGeneration(g.id).catch((e) => setErr(e.message));
     setItems((c) => c.filter((x) => x.id !== g.id));
     setTotal((t) => Math.max(0, t - 1));

@@ -29,9 +29,14 @@ export const EdgeMeter: React.FC<{ value: number | null; label: string; title: s
   const v = value === null ? 0 : Math.max(0, Math.min(1, value));
   const tone = v >= critAt ? 'var(--c-red)' : v >= warnAt ? 'var(--c-orange)' : 'var(--color-accent-vibrant)';
   return (
-    <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} title={title}
-      className="absolute top-0 left-6 right-6 h-[3px] rounded-b-full bg-[var(--hover)] overflow-hidden">
-      <div className="h-full rounded-b-full transition-[width] duration-300" style={{ width: `${v * 100}%`, background: tone }} />
+    // A native `title` here drew an empty black box in the desktop app (WebView2 can't paint native
+    // tips over the see-through window), so the reading is a Lotus tip, shown below the line. The
+    // track clips the bar; the outer strip is a slightly taller hover target and is not clipped.
+    <div role="meter" aria-label={label} aria-valuetext={title} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)} data-tip={title} data-tip-side="below" data-tip-wrap=""
+      className="tip absolute top-0 left-6 right-6 h-[6px]">
+      <div className="h-[3px] rounded-b-full bg-[var(--hover)] overflow-hidden">
+        <div className="h-full rounded-b-full transition-[width] duration-300" style={{ width: `${v * 100}%`, background: tone }} />
+      </div>
     </div>
   );
 };
@@ -54,8 +59,8 @@ const focusRing = 'focus:outline-none focus-visible:outline-[3px] focus-visible:
 
 /** Labelled on/off control inside the box (Think, Web, Research, Plan first…). */
 export const ModeButton: React.FC<{ on: boolean; onClick: () => void; icon: React.ReactNode; label: string; title: string; disabled?: boolean }> = ({ on, onClick, icon, label, title, disabled }) => (
-  <button type="button" aria-pressed={on} onClick={onClick} title={title} disabled={disabled}
-    className={cx('h-8 inline-flex items-center gap-1.5 px-2.5 rounded-full text-[13px] transition-colors duration-100 disabled:opacity-40', focusRing,
+  <button type="button" aria-pressed={on} onClick={onClick} data-tip={title} data-tip-wrap="" aria-description={title} disabled={disabled}
+    className={cx('tip h-8 inline-flex items-center gap-1.5 px-2.5 rounded-full text-[13px] transition-colors duration-100 disabled:opacity-40', focusRing,
       on ? 'is-selected font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
     {icon}<span>{label}</span>
   </button>
@@ -72,15 +77,15 @@ export const RoundIcon: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> &
 
 /** Text action in the tray (Choose folder, Library, Styles…). */
 export const TrayButton: React.FC<{ onClick: () => void; icon: React.ReactNode; label: string; title: string; disabled?: boolean }> = ({ onClick, icon, label, title, disabled }) => (
-  <button type="button" onClick={onClick} title={title} disabled={disabled}
-    className={cx('h-7 inline-flex items-center gap-1.5 px-2 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] disabled:opacity-40', focusRing)}>
+  <button type="button" onClick={onClick} data-tip={title} data-tip-wrap="" aria-description={title} disabled={disabled}
+    className={cx('tip h-7 inline-flex items-center gap-1.5 px-2 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)] disabled:opacity-40', focusRing)}>
     {icon}<span>{label}</span>
   </button>
 );
 
 /** Icon-only switch in the tray (Memory, Incognito…); the name shows as a tip on hover or focus. */
-export const TrayToggle: React.FC<{ on: boolean; onClick: () => void; icon: React.ReactNode; tip: string; disabled?: boolean }> = ({ on, onClick, icon, tip, disabled }) => (
-  <button type="button" aria-pressed={on} aria-label={tip} data-tip={tip} onClick={onClick} disabled={disabled}
+export const TrayToggle: React.FC<{ on: boolean; onClick: () => void; icon: React.ReactNode; tip: string; disabled?: boolean; align?: 'end' }> = ({ on, onClick, icon, tip, disabled, align }) => (
+  <button type="button" aria-pressed={on} aria-label={tip} data-tip={tip} data-tip-wrap="" data-tip-align={align} onClick={onClick} disabled={disabled}
     className={cx('tip w-7 h-7 inline-flex items-center justify-center rounded-[8px] transition-colors duration-100 disabled:opacity-40', focusRing,
       on ? 'is-selected' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
     {icon}

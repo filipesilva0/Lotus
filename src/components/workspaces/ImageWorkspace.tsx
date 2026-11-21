@@ -24,6 +24,7 @@ import { LoraPicker } from '../images/LoraPicker';
 import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
 import { FAMILIES, RESOLUTIONS, imageStage, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
+import { putBack, takeOut } from '../../lib/undoList';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
@@ -196,6 +197,15 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   gRef.current = g;
   const [hiddenGen, setHiddenGen] = useState<Set<string>>(() => new Set());
   const unhideGen = (id: string) => setHiddenGen((h) => { const n = new Set(h); n.delete(id); return n; });
+  /** Deletes one image of a generation, with Undo (it comes back in the same place). */
+  const deleteImage = (v: { id: string }) => {
+    const sid = g.active.id;
+    const s0 = g.active;
+    const { item, index } = takeOut(s0.versions, v.id);
+    if (!item) return;
+    g.removeVersion(sid, v.id);
+    offerUndo('Image deleted', () => gRef.current.patch(sid, (x) => ({ ...x, versions: putBack(x.versions, item, index), index })), () => undefined);
+  };
   const deleteGen = (id: string) => {
     const s = g.sessions.find((x) => x.id === id);
     if (!s?.versions.length) { g.remove(id); return; }
@@ -459,7 +469,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                   {styles.map((s) => (
                     <li key={s.id} className="flex items-start gap-2 p-2 rounded-[8px] bg-[var(--hover)]">
                       <span className="flex-1 min-w-0"><span className="block text-[13px] font-medium">@{handle(s)}</span><span className="block text-[12px] text-[var(--color-text-muted)] line-clamp-2">{s.prompt}</span></span>
-                      <IconBtn label={`Delete style ${s.name}`} className="!w-6 !h-6" onClick={() => setStyles((l) => l.filter((x) => x.id !== s.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                      <IconBtn label={`Delete style ${s.name}`} className="!w-6 !h-6" onClick={() => { const { index } = takeOut(styles, s.id); setStyles((l) => takeOut(l, s.id).rest); offerUndo(`Style “${s.name}” deleted`, () => setStyles((l) => putBack(l, s, index)), () => undefined); }}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                     </li>
                   ))}
                   {!styles.length && <p className="text-[13px] text-[var(--color-text-muted)]">No styles yet. Write the prompt text you reuse, then save it here.</p>}
@@ -474,7 +484,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 {cur.sampler && <KV k="Sampler" v={cur.sampler} />}{cur.denoise !== undefined && <KV k="Strength" v={`${Math.round(cur.denoise * 100)}%`} />}
                 <KV k="Model" v={<span title={cur.checkpoint}>{prettyModelName(cur.checkpoint)}</span>} />{cur.loras?.length ? <KV k="LoRA" v={cur.loras.map((l) => `${l.name} ×${l.strength}`).join(', ')} mono /> : null}<KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
                 {cur.negativePrompt && <KV k="Negative" v={cur.negativePrompt} />}
-                <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => g.removeVersion(g.active.id, cur.id)}>Delete This Image</Btn>
+                <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => deleteImage(cur)}>Delete This Image</Btn>
               </Section>
             ) : <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Generate an image to see its details.</p>)}
           </div>

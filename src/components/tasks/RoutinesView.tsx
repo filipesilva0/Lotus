@@ -51,7 +51,7 @@ const Editor: React.FC<{ r: Routine; onShowRuns?: (r: Routine) => void }> = ({ r
         <span className="text-[13px] font-semibold flex-1 truncate">{r.name}</span>
         <Toggle size="sm" checked={r.enabled} onChange={(v) => store.update(r.id, { enabled: v })} ariaLabel={r.enabled ? 'Routine on' : 'Routine off'} />
         <Btn size="sm" icon={r.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} disabled={r.running} onClick={() => store.run(r.id)}>Run Now</Btn>
-        <IconBtn label="Delete routine" className="hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]" onClick={() => store.remove(r.id)}><Trash2 className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Delete routine" className="hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]" onClick={() => store.removeWithUndo(r.id)}><Trash2 className="w-4 h-4" /></IconBtn>
       </PaneBar>
       {/* 0.20: the editor is a centred column, so a wide window doesn't leave its right half empty. */}
       <div className="flex-1 overflow-y-auto"><div className="w-full max-w-[760px] mx-auto">

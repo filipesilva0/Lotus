@@ -9,6 +9,7 @@ import { transcribe } from '../../voice/voice';
 import { isTauri } from '../../lib/http';
 import { folderName } from '../../chat/folder';
 import { useFileIntake } from '../../lib/fileDrop';
+import { attachWithDialog } from '../../lib/pickFiles';
 
 export interface SlashCommand { name: string; args?: string; help: string }
 export const SLASH: SlashCommand[] = [
@@ -171,7 +172,8 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
   // Shared prompt-box parts (components/common/PromptBox.tsx), so every page's input looks and works the same.
   const modeBtn = (on: boolean, onClick: () => void, icon: React.ReactNode, label: string, title: string) => <ModeButton on={on} onClick={onClick} icon={icon} label={label} title={title} />;
   const trayBtn = (onClick: () => void, icon: React.ReactNode, label: string, title: string) => <TrayButton onClick={onClick} icon={icon} label={label} title={title} />;
-  const trayToggle = (on: boolean, onClick: () => void, icon: React.ReactNode, tip: string, disabled?: boolean) => <TrayToggle on={on} onClick={onClick} icon={icon} tip={tip} disabled={disabled} />;
+  // These sit at the right end of the box: their tips open to the left so they aren't cut off.
+  const trayToggle = (on: boolean, onClick: () => void, icon: React.ReactNode, tip: string, disabled?: boolean) => <TrayToggle on={on} onClick={onClick} icon={icon} tip={tip} disabled={disabled} align="end" />;
 
   return (
     <div className="px-6 pb-4 pt-2 shrink-0">
@@ -208,9 +210,9 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
           </>}
           status={<>
             {trayToggle(memoryOn, onToggleMemory, <BrainCircuit className="w-4 h-4" />,
-              incognito ? 'Memory: incognito chats never use it' : memoryOn ? 'Memory on: recalls and keeps learning. Click to pause it for this chat' : 'Memory paused for this chat. Click to resume', incognito)}
+              incognito ? 'Memory is off in incognito chats' : memoryOn ? 'Memory on · click to pause for this chat' : 'Memory paused · click to resume', incognito)}
             {trayToggle(incognito, onToggleIncognito, <EyeOff className="w-4 h-4" />,
-              incognito ? "Incognito on: this chat isn't saved and creates no memories" : "Incognito: don't save this chat or create memories")}
+              incognito ? 'Incognito on · not saved, no memories' : 'Incognito · don’t save this chat')}
           </>} />}>
             {/* Context used, as a thin bar along the top edge (no text; the numbers are in the tip). */}
             <EdgeMeter value={contextUsed} label="Context used" title={contextTitle} />
@@ -240,7 +242,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               <input ref={dirInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true"
                 {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                 onChange={(e) => { const l = e.target.files; if (l?.length) void attachFolder(l); e.target.value = ''; }} />
-              <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+              <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
               </>}
               chips={<>
               {modeBtn(thinkingOn, onToggleThinking, <Brain className="w-4 h-4" />, 'Think',

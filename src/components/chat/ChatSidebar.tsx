@@ -7,6 +7,7 @@ import { ChatFolder, ChatSession } from '../../types/lotus';
 import { Btn, IconBtn, TextInput, cx } from '../common/ui';
 import { MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
 import { uid } from '../../lib/persist';
+import { offerUndo } from '../common/Alerts';
 
 interface Props {
   sessions: ChatSession[]; activeId: string; folders: ChatFolder[];
@@ -121,9 +122,13 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
                   <span className="flex-1 truncate">{f.name}</span>
                   <span className="text-[12px] tabular-nums">{sessions.filter((s) => s.folderId === f.id).length}</span>
                   <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex group-focus-within:inline-flex" onClick={(e) => {
-                    e.stopPropagation(); onFolders(folders.filter((x) => x.id !== f.id));
-                    sessions.filter((s) => s.folderId === f.id).forEach((s) => onPatch(s.id, (x) => ({ ...x, folderId: undefined })));
+                    e.stopPropagation();
+                    const before = folders;
+                    const moved = sessions.filter((s) => s.folderId === f.id).map((s) => s.id);
+                    onFolders(folders.filter((x) => x.id !== f.id));
+                    moved.forEach((id) => onPatch(id, (x) => ({ ...x, folderId: undefined })));
                     if (folder === f.id) setFolder(null);
+                    offerUndo(`Project “${f.name}” deleted`, () => { onFolders(before); moved.forEach((id) => onPatch(id, (x) => ({ ...x, folderId: f.id }))); }, () => undefined);
                   }}><X className="w-3 h-3" /></IconBtn>
                 </div>
               ))}

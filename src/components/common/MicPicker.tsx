@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Mic, RefreshCw } from 'lucide-react';
 import { Btn, IconBtn, Select } from './ui';
 import { listMics, micErrorMessage, openMic, preferredMic, setPreferredMic } from '../../lib/audio';
+import { count } from '../../lib/plural';
 
 export const MicPicker: React.FC = () => {
   const [mics, setMics] = useState<{ id: string; label: string }[]>([]);
@@ -60,7 +61,7 @@ export const MicPicker: React.FC = () => {
       </div>
       {state.kind === 'checking' && <p role="status" className="text-[12px] text-[var(--color-text-muted)]">Say something…</p>}
       {state.text && <p role="status" className={state.kind === 'error' ? 'text-[12px] text-[var(--c-red)] leading-snug' : 'text-[12px] text-[var(--color-text-muted)] leading-snug'}>{state.text}</p>}
-      <p className="text-[12px] text-[var(--color-text-muted)]">{mics.filter((m) => m.id !== 'default' && m.id !== 'communications').length} microphone{mics.length === 1 ? '' : 's'} found. Used for calls, recordings, dictation and spoken answers.</p>
+      <p className="text-[12px] text-[var(--color-text-muted)]">{count(mics.filter((m) => m.id !== 'default' && m.id !== 'communications').length, 'microphone')} found. Used for calls, recordings, dictation and spoken answers.</p>
     </div>
   );
 };

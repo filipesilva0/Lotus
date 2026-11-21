@@ -17,7 +17,8 @@ import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { extractJson, llm } from '../services/llm';
 import { readPage, searchWeb } from '../chat/webSearch';
 import { considerSkill } from '../memory/learn';
-import { addLink, blockersOf, moveTask, newTask, nextRunnable, removeLink, removeTask, Status, Task, TaskLink } from './kanban';
+import { addLink, blockersOf, moveTask, newTask, nextRunnable, removeLink, removeTask, restoreTask, snapshotTask, Status, Task, TaskLink, type RemovedTask } from './kanban';
+import { offerUndo } from '../components/common/Alerts';
 import { nextRun, validateCron } from './cron';
 import { runTaskAgent } from './runner';
 import { kv } from '../lib/store';
@@ -203,6 +204,18 @@ export const tasks = {
     else if (t?.run?.jobId) agentPool.cancel(t.run.jobId);
     set({ tasks: removeTask(state.tasks, id) });
   },
+  /** Undo of `remove`: puts the task back (see kanban.ts restoreTask). */
+  restore(r: RemovedTask) {
+    set({ tasks: restoreTask(state.tasks, r) });
+    if (viaCore()) send('task_restore', r as unknown as Record<string, unknown>);
+  },
+  /** Deletes a task with an Undo note (0.19 critique #14). */
+  removeWithUndo(id: string) {
+    const snap = snapshotTask(state.tasks, id);
+    if (!snap) return;
+    tasks.remove(id);
+    offerUndo(`Task “${snap.task.title}” deleted`, () => tasks.restore(snap), () => undefined);
+  },
   move(id: string, status: Status, beforeId?: string | null) {
     const r = moveTask(state.tasks, id, status, beforeId);
     if (r.error) { set({ notice: r.error }); return false; }
@@ -315,6 +328,16 @@ export const routines = {
     return null;
   },
   remove: (id: string) => { set({ routines: state.routines.filter((r) => r.id !== id) }); if (viaCore()) send('routine_remove', { id }); },
+  /** Deletes a routine with an Undo note; Undo adds it back with the same settings. */
+  removeWithUndo(id: string) {
+    const r = state.routines.find((x) => x.id === id);
+    if (!r) return;
+    routines.remove(id);
+    offerUndo(`Routine “${r.name}” deleted`, () => {
+      const { id: _i, running: _r, runs: _runs, lastRun: _l, nextRun: _n, created: _c, ...rest } = r;
+      routines.add(rest);
+    }, () => undefined);
+  },
 
   /** Runs a routine now (scheduled = from the timer). */
   run(id: string, scheduled = false) {

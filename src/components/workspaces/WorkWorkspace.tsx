@@ -9,7 +9,7 @@ import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AudioLines, Brain, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, agentProgress, helpersOf, planOf } from '../../work/store';
-import { agentsFinishedNote } from '../../work/interrupted';
+import { interruptedNote, stoppedNote } from '../../work/interrupted';
 import { ThinkingDrawer } from '../chat/ChatStream';
 import type { ChatMessage } from '../../types/lotus';
 import { useFileIntake } from '../../lib/fileDrop';
@@ -35,6 +35,7 @@ import { listen, matchOption, speak, voiceState, VoiceState, hush } from '../../
 import { revealPath } from '../../lib/open';
 import type { ModelOption } from './ChatWorkspace';
 import type { LotusSettings } from '../../types/lotus';
+import { attachWithDialog } from '../../lib/pickFiles';
 
 
 const KIND_ICON: Record<string, React.ReactNode> = {
@@ -198,7 +199,7 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
   );
 };
 
-const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry }) => {
+const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void; savedFiles: number }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry, savedFiles }) => {
   const steps = m.steps ?? [];
   const [copied, flash] = useFlash();
   const agents = m.agents ?? [];
@@ -253,12 +254,12 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
             <AlertCircle className="w-4 h-4 mt-0.5 text-[var(--c-orange)] shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0 text-[13px] leading-snug">
               <p className="font-semibold">Interrupted</p>
-              <p className="text-[var(--color-text-muted)]">Lotus closed before this work finished. {agentsFinishedNote(m)} Files it already saved are kept.</p>
+              <p className="text-[var(--color-text-muted)]">{interruptedNote(m, savedFiles)}</p>
             </div>
             {!busy && <Btn size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={onRetry}>Try again</Btn>}
           </div>
         )}
-        {m.stopped && !m.interrupted && !m.content && !m.error && <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Stopped.</p>}
+        {m.stopped && !m.interrupted && !m.content && !m.error && <p role="status" className="mt-1 text-[13px] text-[var(--color-text-muted)]">{stoppedNote(m)}</p>}
         {m.unverified?.length ? <UnverifiedNote items={m.unverified} /> : null}
         {!live && (m.content || m.error || (m.stopped && !m.interrupted)) && (
           <div className="mt-1.5 flex items-center gap-0.5 text-[var(--color-text-muted)]">
@@ -475,7 +476,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                   {item.messages.map((m, i) => m.role === 'user'
                     ? <Request key={m.id} m={m} busy={work.busy} onEdit={(t) => void work.edit(m.id, t).catch((e) => setNotice((e as Error).message))} />
                     : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} busy={work.busy} reasoning={settings.reasoningBlockMode ?? 'collapsed'}
-                        onDecide={(s, allow, always) => void work.decide(s, allow, always)} onArtifact={setOpenArtifact} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
+                        onDecide={(s, allow, always) => void work.decide(s, allow, always)} onArtifact={setOpenArtifact} savedFiles={work.artifacts.length} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
                 </div>
               </>
             )}
@@ -527,7 +528,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
               <PromptRow
                 attach={<>
                 <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
-                <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+                <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
                 </>}
                 chips={<>
                 <ModeButton on={!!item.think} onClick={() => work.patch(item.id, (x) => ({ ...x, think: !x.think }))} icon={<Brain className="w-4 h-4" />} label="Think" title="Let the model think before it acts; its reasoning shows above the reply (slower, often better plans)" />

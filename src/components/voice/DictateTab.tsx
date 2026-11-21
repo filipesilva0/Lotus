@@ -5,6 +5,7 @@ import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { emitEvent } from '../../lib/bus';
 import { Btn, Card, Select, Label, Banner, Empty, Spinner, IconBtn, useFlash, cx } from '../common/ui';
 import { kv } from '../../lib/store';
+import { confirmAlert } from '../common/Alerts';
 
 export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModels: () => void }> = ({ onSpeak, onOpenModels }) => {
   const [recording, setRecording] = useState(false);
@@ -70,7 +71,7 @@ export const DictateTab: React.FC<{ onSpeak: (text: string) => void; onOpenModel
           <Empty icon={<Mic className="w-5 h-5" />} title="No dictations yet" body="Your transcripts will appear here, ready to copy, speak back, or send to chat." />
         ) : items.map((c) => <CaptureCard key={c.id} c={c} onSpeak={onSpeak}
           onChange={(n) => setItems((cur) => cur.map((x) => (x.id === n.id ? n : x)))}
-          onDelete={async () => { await voicebox.deleteCapture(c.id).catch(() => undefined); setItems((cur) => cur.filter((x) => x.id !== c.id)); }} />)}
+          onDelete={async () => { if (!await confirmAlert({ title: 'Delete this recording?', message: 'Its audio and text are removed from Voicebox.', confirm: 'Delete' })) return; await voicebox.deleteCapture(c.id).catch(() => undefined); setItems((cur) => cur.filter((x) => x.id !== c.id)); }} />)}
       </div>
     </div>
   );
