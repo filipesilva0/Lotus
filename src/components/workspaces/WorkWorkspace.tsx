@@ -9,6 +9,7 @@ import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, AudioLines, Brain, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, agentProgress, helpersOf, planOf } from '../../work/store';
+import { agentsFinishedNote } from '../../work/interrupted';
 import { ThinkingDrawer } from '../chat/ChatStream';
 import type { ChatMessage } from '../../types/lotus';
 import { useFileIntake } from '../../lib/fileDrop';
@@ -141,18 +142,21 @@ const Plan: React.FC<{ item: WorkItem; busy: boolean }> = ({ item, busy }) => {
  * A row opens to show the agent's own steps and what it returned.
  */
 const STATUS_WORD: Record<HelperInfo['status'], string> = { queued: 'Waiting its turn', running: 'Working', done: 'Done', error: 'Failed', stopped: 'Stopped' };
-const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: boolean; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void }> = ({ agents, steps, live, onDecide }) => {
+const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: boolean; interrupted?: boolean; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void }> = ({ agents, steps, live, interrupted, onDecide }) => {
   const [open, setOpen] = useState<string | null>(null);
   const p = agentProgress(agents);
+  // A cut-off reply counts only the agents that really finished (stopped ones are not done).
+  const finished = interrupted ? agents.filter((h) => h.status === 'done').length : p.done;
   return (
     <div className="my-3 rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] overflow-hidden" aria-label="Agents">
       <div className="px-3 pt-2.5 pb-2">
         <p className="flex items-center gap-2 text-[12px] font-semibold text-[var(--color-text-muted)]">
-          <span className="flex-1">{p.total === 1 ? '1 agent' : `${p.total} agents`} · {p.done} of {p.total} done</span>
-          {p.running > 0 && <span className="font-normal">{p.running} working</span>}
+          <span className="flex-1">{p.total === 1 ? '1 agent' : `${p.total} agents`} · {interrupted ? `${finished} of ${p.total} finished` : `${p.done} of ${p.total} done`}</span>
+          {live && p.running > 0 && <span className="font-normal">{p.running} working</span>}
+          {interrupted && <span className="font-normal">Cut off</span>}
         </p>
-        <div className="mt-1.5 h-1 rounded-full bg-[var(--hover)] overflow-hidden" role="progressbar" aria-label="Agents done" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={p.done}>
-          <div className="h-full rounded-full bg-[var(--color-accent-vibrant)] transition-[width] duration-300" style={{ width: `${p.total ? (p.done / p.total) * 100 : 0}%` }} />
+        <div className="mt-1.5 h-1 rounded-full bg-[var(--hover)] overflow-hidden" role="progressbar" aria-label="Agents done" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={finished}>
+          <div className="h-full rounded-full bg-[var(--color-accent-vibrant)] transition-[width] duration-300" style={{ width: `${p.total ? (finished / p.total) * 100 : 0}%` }} />
         </div>
       </div>
       <ul>
@@ -168,7 +172,7 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
                 <span className="flex-1 min-w-0">
                   <span className="flex items-center gap-1.5 text-[13px]"><span className="font-semibold truncate">{h.name}</span><span className="text-[var(--color-text-muted)] truncate">· {h.goal}</span></span>
                   <span className={cx('block text-[12px] truncate', h.status === 'error' ? 'text-[var(--c-red)]' : 'text-[var(--color-text-muted)]')}>
-                    {h.status === 'running' && live ? `${h.current ?? 'Working'}…` : h.status === 'running' ? 'Stopped' : STATUS_WORD[h.status]}{h.steps ? ` · ${h.steps} step${h.steps === 1 ? '' : 's'}` : ''}
+                    {h.status === 'running' && live ? `${h.current ?? 'Working'}…` : h.status === 'running' ? 'Stopped' : interrupted && h.status === 'stopped' ? 'Cut off when Lotus closed' : STATUS_WORD[h.status]}{h.steps ? ` · ${h.steps} step${h.steps === 1 ? '' : 's'}` : ''}
                   </span>
                 </span>
                 {h.status === 'done' ? <Check className="w-4 h-4 text-[var(--c-green)] shrink-0" aria-label="Done" />
@@ -204,7 +208,7 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
       <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-muted)] mb-1"><AgentFace size={18} animate={live} mood={live ? 'thinking' : m.error ? 'sad' : undefined} />Lotus</p>
       <div className="min-w-0">
         <ThinkingDrawer m={{ id: m.id, role: 'assistant', content: m.content, timestamp: '', thinking: m.thinking, thinkingMs: m.thinkingMs, isStreaming: live && m.thinkingMs === undefined } as ChatMessage} mode={reasoning} />
-        {agents.length > 0 && <AgentsPanel agents={agents} steps={steps} live={live} onDecide={onDecide} />}
+        {agents.length > 0 && <AgentsPanel agents={agents} steps={steps} live={live} interrupted={m.interrupted} onDecide={onDecide} />}
         {(() => {
           // Each helper's steps sit right under the step that started it, with the helper's own face.
           const out: React.ReactNode[] = [];
@@ -241,8 +245,20 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
         {m.content && <div className="text-[14px] leading-relaxed"><MarkdownLite text={m.content} onDark={false} /></div>}
         {live && !m.content && !steps.length && <p className="text-[13px] text-[var(--color-text-muted)]">Thinking about how to do this…</p>}
         {m.error && <p className="mt-1 text-[13px] text-[var(--c-red)]">{m.error}</p>}
+        {m.interrupted && !live && (
+          // 0.15.1: Lotus (the app or its core) closed while this was running; it can't pick up where it left off.
+          <div role="status" className="mt-2 flex items-start gap-2.5 rounded-[10px] px-3 py-2.5 bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)]">
+            <AlertCircle className="w-4 h-4 mt-0.5 text-[var(--c-orange)] shrink-0" aria-hidden="true" />
+            <div className="flex-1 min-w-0 text-[13px] leading-snug">
+              <p className="font-semibold">Interrupted</p>
+              <p className="text-[var(--color-text-muted)]">Lotus closed before this work finished. {agentsFinishedNote(m)} Files it already saved are kept.</p>
+            </div>
+            {!busy && <Btn size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={onRetry}>Try again</Btn>}
+          </div>
+        )}
+        {m.stopped && !m.interrupted && !m.content && !m.error && <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Stopped.</p>}
         {m.unverified?.length ? <UnverifiedNote items={m.unverified} /> : null}
-        {!live && (m.content || m.error) && (
+        {!live && (m.content || m.error || (m.stopped && !m.interrupted)) && (
           <div className="mt-1.5 flex items-center gap-0.5 text-[var(--color-text-muted)]">
             <IconBtn label={copied ? 'Copied' : 'Copy'} className="!w-6 !h-6" onClick={() => { void navigator.clipboard.writeText(m.content); flash(); }}>{copied ? <Check className="w-3.5 h-3.5 text-[var(--c-green)]" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
             {!busy && <IconBtn label="Try again" className="!w-6 !h-6" onClick={onRetry}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>}
