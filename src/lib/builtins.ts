@@ -5,6 +5,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { coreReady, onCoreEvent, rpc } from './core';
 import { kv } from './store';
+import { hasLiveSettings, liveSettings } from './liveSettings';
 import type { ImageFolder, ImageProfile } from '../models/imageProfiles';
 import type { ModelKind } from '../models/library';
 
@@ -12,7 +13,9 @@ export type BuiltinId = 'llama' | 'sd' | 'sherpa';
 export interface Machine { os: 'windows' | 'macos' | 'linux'; arch: 'x64' | 'arm64'; gpu: 'nvidia' | 'amd' | 'intel' | 'apple' | 'none'; gpuName: string; vramGb: number; unified: boolean; ramGb: number }
 export interface EngineInfo { id: BuiltinId; name: string; role: string; licence: string; installed: boolean; /** Installed, but a release Lotus can't use (sherpa-onnx 2.x). */ outdated?: boolean; note?: string | null; version: string | null; flavour: string | null; folder: string }
 export interface Job { id: string; kind: 'engine' | 'model'; target: string; label: string; state: 'running' | 'done' | 'error' | 'stopped'; done: number; total: number; step: string; error?: string; started: number }
-export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string }
+/** How the core sized the built-in chat engine's context (core/src/engines/chatFit.ts). */
+export interface ChatFit { ctx: number; fits: boolean; budgetMb: number | null; baseMb: number; kvMb: number; kvPerToken: number; measured: boolean }
+export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string; ctx?: number; auto?: boolean; fit?: ChatFit }
 export interface InstalledModel { id: string; kind: ModelKind; title: string; files: string[]; gguf?: string; mmproj?: string; dir?: string; entryId?: string; custom?: boolean; source?: string; bytes: number; at: number }
 export type ImageFiles = Record<ImageFolder, { file: string; bytes: number }[]>;
 
@@ -80,7 +83,14 @@ export const installCustomModel = (a: { source: string; kind: ModelKind; folder?
 export const removeModel = (id: string) => rpc('models_remove', { id }).then(refreshBuiltins);
 export const removeImageFile = (folder: ImageFolder, file: string) => rpc('image_file_remove', { folder, file }).then(refreshBuiltins);
 export const cancelJob = (jobId: string) => rpc('job_cancel', { jobId });
-export const ensureChat = (model: string, ctx?: number) => rpc<{ url: string }>('chat_ensure', { model, ctx }).then((r) => r.url);
+/** Auto-scale on (the default): the core sizes the context to free video memory itself. */
+function autoContext(): boolean {
+  try { return (hasLiveSettings() ? liveSettings().autoScale : JSON.parse(kv.getItem('lotus.settings.v1') || '{}').autoScale) !== false; } catch { return true; }
+}
+/** Starts (or reuses) the built-in chat engine. `ctx` only counts when auto-scaling is off. */
+export const ensureChat = (model: string, ctx?: number) => rpc<{ url: string }>('chat_ensure', autoContext() ? { model, auto: true } : { model, ctx }).then((r) => r.url);
+/** The context Auto would give this model right now, and why. */
+export const chatFit = (model: string) => rpc<ChatFit>('chat_fit', { model });
 export const stopChat = () => rpc('chat_stop');
 
 export const engineReady = (s: State, id: BuiltinId) => !!s.engines.find((e) => e.id === id)?.installed;

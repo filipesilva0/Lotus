@@ -21,6 +21,9 @@ import type { Subprocess } from 'bun';
 import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
+import { fitChatCtx, MB, memoryMb, type ChatFit } from './chatFit';
+import { readGgufInfo } from './gguf';
+import { gpuMemory } from '../hardware';
 import { SttServers } from './sttServer';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
 import { missingFor, sdcppArgs, sdcppProgress, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
@@ -44,7 +47,15 @@ export interface InstalledModel {
 export type JobState = 'running' | 'done' | 'error' | 'stopped';
 export interface Job { id: string; kind: 'engine' | 'model'; target: string; label: string; state: JobState; done: number; total: number; step: string; error?: string; started: number }
 
-export interface ChatServer { state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string; port?: number; ctx?: number }
+export interface ChatServer {
+  state: 'stopped' | 'starting' | 'ready' | 'error'; model?: string; url?: string; error?: string; port?: number; ctx?: number;
+  /** The context was sized to free memory (Auto), or grown because a conversation needed more. */
+  auto?: boolean; grown?: boolean;
+  /** How the context was sized (shown in Settings). */
+  fit?: ChatFit;
+  /** Estimated memory this server holds, in MB. */
+  memMb?: number;
+}
 
 /**
  * Smallest context the built-in chat engine starts with: Lotus's system prompt and tool list alone are
@@ -62,6 +73,8 @@ interface Deps {
   log?: (m: string) => void;
   /** Tests: a fixed machine and where to look for releases. */
   machine?: () => Promise<Machine>;
+  /** Tests: a fixed video-memory reading. */
+  gpuMemory?: () => Promise<{ usedMb: number; totalMb: number } | null>;
   githubApi?: string;
   hfBase?: string;
 }
@@ -519,33 +532,91 @@ export class Builtins {
   // ── Chat (llama-server) ──────────────────────────────────────────────
   chatStatus() { return this.chat; }
 
-  /** Starts llama-server with this model (or reuses the running one) and returns its address. */
-  ensureChat(modelId: string, o: { ctx?: number } = {}): Promise<string> {
+  /**
+   * Starts llama-server with this model (or reuses the running one) and returns its address.
+   * `auto`: size the context to the memory free for it (Settings → Auto). `grow`: a conversation
+   * needs this much context; keep it even if it is more than fits.
+   */
+  ensureChat(modelId: string, o: { ctx?: number; auto?: boolean; grow?: boolean } = {}): Promise<string> {
+    const running = this.chat.state === 'ready' && this.chat.model === modelId && this.chatProc && this.chatProc.exitCode === null && this.chat.url ? this.chat.url : null;
+    if (this.chatStarting && this.chat.model === modelId) return this.chatStarting;
+    if (o.auto) {
+      if (running && (this.chat.auto || this.chat.grown)) return Promise.resolve(running);
+      return (async () => {
+        // A server started by hand with a context too big for the GPU is restarted at the size that fits.
+        if (running) { try { if ((this.chat.ctx ?? 0) <= (await this.chatFit(modelId)).ctx) return running; } catch { return running; } }
+        return this.launchChat(modelId, o);
+      })();
+    }
     // Reuse the running server unless it was started with a smaller context than this asks for.
     const want = Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
-    if (this.chat.state === 'ready' && this.chat.model === modelId && this.chatProc && this.chatProc.exitCode === null && this.chat.url && (this.chat.ctx ?? 0) >= want) return Promise.resolve(this.chat.url);
+    if (running && (this.chat.ctx ?? 0) >= want) return Promise.resolve(running);
+    return this.launchChat(modelId, o);
+  }
+
+  private launchChat(modelId: string, o: { ctx?: number; auto?: boolean; grow?: boolean }): Promise<string> {
     if (this.chatStarting && this.chat.model === modelId) return this.chatStarting;
     this.chatStarting = this.startChat(modelId, o).finally(() => { this.chatStarting = null; });
     return this.chatStarting;
   }
 
-  private async startChat(modelId: string, o: { ctx?: number }): Promise<string> {
-    this.stopChat(false);
+  /** Video memory kept for other apps (Settings → Auto-scale), in MB. */
+  private reserveMb(): number {
+    try { const v = Number(JSON.parse(this.d.kvGet('lotus.settings.v1') || '{}').vramReserveMb); if (Number.isFinite(v) && v >= 0) return Math.min(v, 16384); } catch { /* default */ }
+    return 1024;
+  }
+
+  /** Memory the chat model may use right now, in MB; null when it can't be told (no GPU reading, no GPU). */
+  private async chatBudgetMb(): Promise<number | null> {
+    const reserve = this.reserveMb();
+    // What our own running server holds is free for the model that replaces it.
+    const own = this.chatProc && this.chatProc.exitCode === null ? this.chat.memMb ?? 0 : 0;
+    const gpu = await (this.d.gpuMemory ?? gpuMemory)().catch(() => null);
+    if (gpu) return gpu.totalMb - gpu.usedMb + own - reserve;
+    const mc = await this.machine();
+    // Apple silicon: Metal lets one app use about 70 % of the shared memory.
+    if (mc.unified) return mc.ramGb * 1024 * 0.7 - reserve;
+    // A GPU with no live reading (Intel, AMD on Windows): its size minus what the desktop usually takes.
+    if (mc.vramGb > 0) return mc.vramGb * 1024 - 512 - reserve;
+    return null;
+  }
+
+  private modelFiles(modelId: string) {
     const m = this.manifest()[modelId];
     if (!m?.gguf) throw new Error(`${modelId} isn't downloaded for the built-in engine. Get it in Settings → Models.`);
+    const size = (rel?: string) => { try { return rel ? statSync(join(this.modelsDir, rel)).size / MB : 0; } catch { return 0; } };
+    return { m, gguf: m.gguf, info: readGgufInfo(join(this.modelsDir, m.gguf)), weightsMb: size(m.gguf) + size(m.mmproj), hasVision: !!m.mmproj };
+  }
+
+  /** The context the built-in chat engine can give this model on this computer right now. */
+  async chatFit(modelId: string): Promise<ChatFit> {
+    const f = this.modelFiles(modelId);
+    return fitChatCtx({ info: f.info, weightsMb: f.weightsMb, hasVision: f.hasVision, budgetMb: await this.chatBudgetMb(), min: MIN_CHAT_CTX, max: MAX_CHAT_CTX });
+  }
+
+  private async startChat(modelId: string, o: { ctx?: number; auto?: boolean; grow?: boolean }): Promise<string> {
+    const prev = this.chatProc;
+    this.stopChat(false);
+    const { m, gguf, info, weightsMb, hasVision } = this.modelFiles(modelId);
+    // Measure free memory only once the old server has let go of its share.
+    if (prev && o.auto) { await Promise.race([prev.exited, Bun.sleep(5000)]); await Bun.sleep(500); }
+    let fit: ChatFit | undefined;
+    try { fit = await this.chatFit(modelId); } catch { fit = undefined; }
+    const ctx = o.auto && fit ? fit.ctx : Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
+    const memMb = memoryMb(info, weightsMb, hasVision, ctx);
     const exe = this.exe('llama', 'llama-server');
     const port = await freePort();
-    const ctx = Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
-    const args = ['-m', join(this.modelsDir, m.gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
+    const args = ['-m', join(this.modelsDir, gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
     if (m.mmproj) args.push('--mmproj', join(this.modelsDir, m.mmproj));
     // 0.14.2: llama-server separates thinking from the answer (<think>…</think> → reasoning_content) even
     // for templates it doesn't recognise; before, a model's thinking streamed into Chat's answer.
     if ((await this.sdcppHelp(exe)).includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
     const logPath = join(this.enginesDir, ENGINE_DIR.llama, 'server.log');
     mkdirSync(dirname(logPath), { recursive: true });
-    this.chat = { state: 'starting', model: modelId, port, ctx };
+    const how = { auto: !!o.auto, grown: !!o.grow, fit, memMb };
+    this.chat = { state: 'starting', model: modelId, port, ctx, ...how };
     this.emit();
-    this.d.log?.(`llama-server: ${m.gguf} on ${port}`);
+    this.d.log?.(`llama-server: ${gguf} on ${port}, context ${ctx}${fit?.budgetMb != null ? ` (about ${memMb} MB of ${fit.budgetMb} MB free${fit.fits ? '' : '; the model is bigger than that, so part of it runs on the CPU'})` : ''}`);
     const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: Bun.file(logPath), stderr: Bun.file(logPath), stdin: 'ignore', windowsHide: true });
     this.chatProc = proc;
     const url = `http://127.0.0.1:${port}`;
@@ -558,7 +629,7 @@ export class Builtins {
         if (this.chatProc === proc) { this.chat = { state: 'error', model: modelId, error: msg }; this.chatProc = null; this.emit(); }
         throw new Error(msg);
       }
-      try { const r = await f(`${url}/health`, { signal: AbortSignal.timeout(2000) }); if (r.ok) { this.chat = { state: 'ready', model: modelId, url, port, ctx }; this.emit(); return url; } } catch { /* loading */ }
+      try { const r = await f(`${url}/health`, { signal: AbortSignal.timeout(2000) }); if (r.ok) { this.chat = { state: 'ready', model: modelId, url, port, ctx, ...how }; this.emit(); return url; } } catch { /* loading */ }
       await Bun.sleep(400);
     }
     this.stopChat();

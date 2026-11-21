@@ -101,6 +101,17 @@ function amdSysfs(): GpuLive[] {
   return out;
 }
 
+/**
+ * Video memory of the biggest GPU right now (NVIDIA through nvidia-smi, AMD on Linux), for sizing the
+ * chat engine's context. Null when nothing can be read.
+ */
+export async function gpuMemory(): Promise<{ usedMb: number; totalMb: number } | null> {
+  let gpus = await nvidia();
+  if (!gpus.length) { try { gpus = amdSysfs(); } catch { gpus = []; } }
+  const best = gpus.filter((g) => g.memTotalMb && g.memUsedMb !== null).sort((a, b) => (b.memTotalMb ?? 0) - (a.memTotalMb ?? 0))[0];
+  return best ? { usedMb: best.memUsedMb!, totalMb: best.memTotalMb! } : null;
+}
+
 // CPU load: the difference between two os.cpus() samples.
 let prev: { idle: number; total: number }[] | null = null;
 export function cpuLoad(sample = cpus()): { total: number; perCore: number[] } {
