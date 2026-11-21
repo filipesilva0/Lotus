@@ -19,6 +19,8 @@ import { useWork } from './work/store';
 import { startVoiceController } from './voice/controller';
 import { useResearch } from './research/store';
 import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
+import { AssistantWorkspace } from './components/workspaces/AssistantWorkspace';
+import { PAGES, pageFromName, pageShortcut } from './components/rail/pages';
 import { setLiveSettings } from './lib/liveSettings';
 import { hardware, startHardwareMonitor } from './hardware/monitor';
 import { contextItemFromText } from './chat/helpers';
@@ -36,9 +38,9 @@ import { useGallery, DEFAULT_PARAMS, type ImageParams } from './hooks/useGallery
 import { setImageChoices } from './chat/imageChoices';
 import { pickProfile, proposalParams, type ImageProposal } from './chat/imageProposal';
 import { useUpdates } from './hooks/useUpdates';
-import { applyThemeToDocument, PAGE_PALETTE } from './styles/theme';
+import { applyThemeToDocument, APP_PALETTE } from './styles/theme';
 import { emitEvent, invokeNative, onEvent } from './lib/bus';
-import { hueForPage, KEY_PETAL_HUE, petal } from './agents/avatars';
+import { KEY_PETAL_HUE, LOTUS_LOOK, petal } from './agents/avatars';
 import { WelcomeSetup } from './components/setup/WelcomeSetup';
 import { loadSetup } from './setup/state';
 import { useSetupJobs } from './setup/jobs';
@@ -52,7 +54,6 @@ import { EnginesContext } from './components/common/EngineNotice';
 import { openExternal } from './lib/open';
 import { isTauri } from './lib/http';
 import { chromeOs } from './components/common/TitleBar';
-import type { ColorPalette } from './types/lotus';
 import { kv } from './lib/store';
 import { engineReady, hasImageFile, useBuiltins, useProfiles } from './lib/builtins';
 import { entryById, LIBRARY, preferredChatModel } from './models/library';
@@ -159,7 +160,6 @@ function loadSettings(): LotusSettings {
 export default function App() {
   // First run: the Welcome guide fills the window until it is finished or skipped (session 10).
   const [setupOpen, setSetupOpen] = useState(() => !loadSetup().done);
-  const [setupAccent, setSetupAccent] = useState<ColorPalette>('blue');
   const [currentView, setCurrentViewRaw] = useState<ViewMode>('chat');
   const [enginesTab, setEnginesTab] = useState<'engines' | 'models'>('engines');
   const [settings, setSettings] = useState<LotusSettings>(loadSettings);
@@ -190,9 +190,9 @@ export default function App() {
     return () => window.removeEventListener('lotus:open-settings', h);
   }, [openSettings]);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
-  // 0.11.0: skills, memory, soul and plugins are tabs of the Tasks page.
-  const [tasksRequest, setTasksRequest] = useState<{ tab: LibraryTab; n: number } | null>(null);
-  const setLibrary = useCallback((tab: LibraryTab) => { setTasksRequest({ tab, n: Date.now() }); setCurrentView('tasks'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // 0.21: skills, memory, soul and plugins are sections of the Assistant page (they were Tasks tabs).
+  const [assistantRequest, setAssistantRequest] = useState<{ tab: LibraryTab; n: number } | null>(null);
+  const setLibrary = useCallback((tab: LibraryTab) => { setAssistantRequest({ tab, n: Date.now() }); setCurrentView('assistant'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Each page's left panel (its list) and right panel (its inspector), toggled from the title bar.
   // v2 (session 16): inspectors start closed; sidebars keep what v1 saved.
@@ -341,17 +341,18 @@ export default function App() {
   // One identity everywhere (0.20): the name on replies, calls and Talk comes from the Soul.
   useEffect(() => { setSoul(settings.systemPrompt); }, [settings.systemPrompt]);
 
-  // Petal, the mascot, wears the page's petal colour too (here and on the island).
+  // 0.21: pages no longer have their own colours. Petal, the mascot, keeps its own pink on every page
+  // (and on the island, which may still remember an old page colour).
   useEffect(() => {
-    const h = hueForPage(currentView);
+    const h = LOTUS_LOOK.hue ?? 330;
     petal.set(h);
     kv.setItem(KEY_PETAL_HUE, String(h));
     void emitEvent('petal:hue', h).catch(() => undefined);
-  }, [currentView]);
-  // Each page wears its own petal colour as the accent (no accent setting since session 8).
+  }, []);
+  // One accent across the whole app, the setup guide included.
   useEffect(() => {
-    applyThemeToDocument(setupOpen ? setupAccent : PAGE_PALETTE[currentView], settings.fontFamily, settings.fontSize, dark);
-  }, [currentView, settings.fontFamily, settings.fontSize, dark, setupOpen, setupAccent]);
+    applyThemeToDocument(APP_PALETTE, settings.fontFamily, settings.fontSize, dark);
+  }, [settings.fontFamily, settings.fontSize, dark]);
   useEffect(() => { void applyWindowGlass(settings.appearance, dark); }, [settings.appearance, dark]);
 
   // The window starts hidden to avoid a white flash; show it once we have painted.
@@ -398,7 +399,7 @@ export default function App() {
 
   useEffect(() => {
     const offs: (() => void)[] = [];
-    void onEvent<string | null>('main:navigate', (v) => { if (v === 'chat' || v === 'work' || v === 'images' || v === 'voice' || v === 'tasks' || v === 'engines') setCurrentView(v); else if (v === 'builder') setCurrentView('work'); else if (v === 'research') setCurrentView('chat'); }).then((u) => offs.push(u));
+    void onEvent<string | null>('main:navigate', (v) => { const page = pageFromName(v); if (page) setCurrentView(page); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
@@ -467,12 +468,8 @@ export default function App() {
       { label: 'Back', shortcut: 'Alt+Left', mac: 'Cmd+[', onSelect: goBack, disabled: !past.length },
       { label: 'Forward', shortcut: 'Alt+Right', mac: 'Cmd+]', onSelect: goForward, disabled: !future.length },
       'separator',
-      { label: 'Chat', shortcut: 'Ctrl+1', checked: currentView === 'chat', onSelect: go('chat') },
-      { label: 'Work', shortcut: 'Ctrl+2', checked: currentView === 'work', onSelect: go('work') },
-      { label: 'Images', shortcut: 'Ctrl+3', checked: currentView === 'images', onSelect: go('images') },
-      { label: 'Voice', shortcut: 'Ctrl+4', checked: currentView === 'voice', onSelect: go('voice') },
-      { label: 'Tasks', shortcut: 'Ctrl+5', checked: currentView === 'tasks', onSelect: go('tasks') },
-      { label: 'Engines & Models', shortcut: 'Ctrl+6', checked: currentView === 'engines', onSelect: go('engines') },
+      // Ctrl+1 … follow the rail order (components/rail/pages.ts).
+      ...PAGES.map((p) => ({ label: p.label, shortcut: pageShortcut(p.id), checked: currentView === p.id, onSelect: go(p.id) })),
     ] },
     { label: 'Help', items: [
       { label: 'Lotus Help', shortcut: 'F1', mac: 'Cmd+Shift+/', onSelect: openHelp },
@@ -524,7 +521,6 @@ export default function App() {
         onOpenAccount={setAccountView}
         engines={eng.engines}
         updateAvailable={updates.state.kind === 'available'}
-        dark={dark}
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden mb-2 mr-2 rounded-[12px] bg-[var(--color-bg-panel)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]">
@@ -547,7 +543,8 @@ export default function App() {
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
           onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} />}
 
-        {currentView === 'tasks' && <TasksWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} ollamaUp={ollamaUp} request={tasksRequest} folder={chat.active?.folder} />}
+        {currentView === 'tasks' && <TasksWorkspace settings={settings} ollamaUp={ollamaUp} />}
+        {currentView === 'assistant' && <AssistantWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} request={assistantRequest} folder={chat.active?.folder} />}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}
         </div>
@@ -560,7 +557,7 @@ export default function App() {
   if (setupOpen) {
     return (
       <div className="h-screen w-screen relative overflow-hidden">
-        <WelcomeSetup eng={eng} onAccent={setSetupAccent} onClose={(st) => {
+        <WelcomeSetup eng={eng} onClose={(st) => {
           setSetupOpen(false); void eng.refresh();
           // The guide's choice between Lotus's own engines and Ollama / ComfyUI / Voicebox (session 17).
           if (st.own === true) setSettings((x) => ({ ...x, llmBackend: 'builtin', imageEngine: 'builtin', voiceEngine: 'builtin' }));

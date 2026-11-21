@@ -1,4 +1,4 @@
-// One assistant identity (0.20). The Soul (Settings → system prompt, Tasks → Soul) already reaches every
+// One assistant identity (0.20). The Soul (Settings → system prompt, Assistant → Soul) already reaches every
 // surface: Chat, Work, voice calls and the island all send it first. What differed was the name on screen:
 // Chat had no label, Work, Call and Talk said "Lotus" even when the Soul said "You are Aura". The name
 // shown everywhere now comes from the Soul, so the label and the voice always match.

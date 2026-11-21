@@ -1,5 +1,5 @@
 // Built-in ("system") skills: the instructions Lotus itself gives the model for its own features.
-// They are read-only and shown in Tasks → Skills (All), so the user can see exactly what is sent.
+// They are read-only and shown in Assistant → Skills (All), so the user can see exactly what is sent.
 // Each one is the text the feature really uses (imported, not copied), so the viewer never drifts.
 
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
@@ -55,7 +55,7 @@ export const SYSTEM_SKILLS: SystemSkill[] = [
     id: 'sys-plugin-creator',
     name: 'plugin-creator',
     description: 'Turns a plain-language idea into a Lotus plugin (instructions, slash commands and skills).',
-    whenToUse: 'Tasks → Plugins → Create with Lotus.',
+    whenToUse: 'Assistant → Plugins → Create with Lotus.',
     body: PLUGIN_CREATOR_SKILL,
     usedBy: 'Plugin creator',
   },

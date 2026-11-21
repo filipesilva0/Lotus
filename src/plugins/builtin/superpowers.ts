@@ -204,7 +204,7 @@ Do not delegate a part that needs the user's answer, or a tiny step you can do f
       whenToUse: 'Write, create or improve a Lotus skill (a reusable procedure for later) and test that the skill works.',
       body: `# Writing skills
 
-A skill is a short procedure Lotus loads when a request matches it (Tasks → Skills).
+A skill is a short procedure Lotus loads when a request matches it (Assistant → Skills).
 
 ## Steps
 1. Start from a real case: what went wrong or took long without the skill?

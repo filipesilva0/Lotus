@@ -1,26 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useCommand } from '../../lib/commands';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
-import { AlarmClock, BookOpen, Bot, Brain, Cpu, Flower2, History, Puzzle, SquareKanban, Plus, X } from 'lucide-react';
+import { AlarmClock, Bot, Cpu, History, SquareKanban, Plus, X } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { tasks as store, useTasks } from '../../tasks/store';
 import { useAgentPool, agentPool } from '../../agents/pool';
 import { useHardware } from '../../hardware/monitor';
 import { usePersisted } from '../../lib/persist';
 import { Popover, SidebarPane } from '../common/Pane';
-import { Banner, Btn, IconBtn, Segmented, cx } from '../common/ui';
-import { LibraryPane } from '../library/LibraryPane';
+import { Banner, Btn, IconBtn, cx } from '../common/ui';
 import { KanbanBoard } from '../tasks/KanbanBoard';
 import { TaskInspector } from '../tasks/TaskInspector';
 import { RoutinesView } from '../tasks/RoutinesView';
 import { ActivityView } from '../tasks/ActivityView';
-import { SkillsView } from '../tasks/SkillsView';
 import { ScalingCard } from '../hardware/ScalingCard';
 import { PendingApprovals } from '../tasks/PendingApprovals';
 
-export type TasksTab = 'board' | 'routines' | 'activity' | 'skills' | 'memory' | 'soul' | 'plugins';
+export type TasksTab = 'board' | 'routines' | 'activity';
 type Tab = TasksTab;
-const TABS: Tab[] = ['board', 'routines', 'activity', 'skills', 'memory', 'soul', 'plugins'];
+const TABS: Tab[] = ['board', 'routines', 'activity'];
 
 const KIND: Record<string, string> = { task: 'Task', routine: 'Routine', skill: 'Skill', memory: 'Memory', other: 'Agent' };
 
@@ -67,15 +65,14 @@ const AgentsButton: React.FC = () => {
 };
 
 /**
- * Tasks: a Kanban board the user and Lotus share, scheduled routines, and (0.11.0) the library:
- * skills, memory, soul and plugins, which used to be a sheet opened from the profile menu.
+ * Tasks: a Kanban board the user and Lotus share, scheduled routines, and the activity of both.
+ * 0.21: skills, memory, soul and plugins moved to their own page, Assistant (AssistantWorkspace.tsx).
  */
-export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; ollamaUp: boolean | null; request?: { tab: TasksTab; n: number } | null; folder?: string }> = ({ settings, onSettings, ollamaUp, request, folder }) => {
+export const TasksWorkspace: React.FC<{ settings: LotusSettings; ollamaUp: boolean | null; request?: { tab: TasksTab; n: number } | null }> = ({ settings, ollamaUp, request }) => {
+  // A tab saved before 0.21 may be one that moved to Assistant; the board is shown instead.
   const [saved, setTab] = usePersisted<Tab>('lotus.tasks.tab.v1', 'board');
   const tab: Tab = TABS.includes(saved) ? saved : 'board';
-  // Another place (a chat's /library, the View menu) asked for one of these tabs.
   useEffect(() => { if (request) setTab(request.tab); }, [request?.n]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [skillView, setSkillView] = usePersisted<'yours' | 'all'>('lotus.tasks.skillView.v1', 'yours');
   const { tasks, routines, notice } = useTasks();
   const [sel, setSel] = useState<string | null>(null);
   const cur = tasks.find((t) => t.id === sel) ?? null;
@@ -91,10 +88,6 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
     { id: 'board', label: 'Board', icon: <SquareKanban className="w-4 h-4" /> },
     { id: 'routines', label: 'Routines', icon: <AlarmClock className="w-4 h-4" /> },
     { id: 'activity', label: 'Activity', icon: <History className="w-4 h-4" /> },
-    { id: 'skills', label: 'Skills', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'memory', label: 'Memory', icon: <Brain className="w-4 h-4" /> },
-    { id: 'soul', label: 'Soul', icon: <Flower2 className="w-4 h-4" /> },
-    { id: 'plugins', label: 'Plugins', icon: <Puzzle className="w-4 h-4" /> },
   ];
   const navBtn = (on: boolean) => cx('w-full h-9 px-2.5 flex items-center gap-2.5 rounded-[8px] text-[13px] text-left', on ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]');
 
@@ -105,7 +98,6 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
         <nav className="px-2 space-y-0.5" aria-label="Tasks sections">
           {SECTIONS.map((t) => <button key={t.id} type="button" aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)} className={navBtn(tab === t.id)}>{t.icon}{t.label}</button>)}
         </nav>
-        {tab === 'skills' && <div className="px-3 pt-3"><Segmented<'yours' | 'all'> label="Which skills" value={skillView} onChange={setSkillView} options={[{ id: 'yours', label: 'Yours' }, { id: 'all', label: 'All' }]} /></div>}
         <div className="flex-1" />
         <div className="px-2 py-2 border-t border-[var(--sep)]"><AgentsButton /></div>
       </SidebarPane>
@@ -124,9 +116,6 @@ export const TasksWorkspace: React.FC<{ settings: LotusSettings; onSettings: (p:
       )}
       {tab === 'routines' && <RoutinesView list={routines} onShowRuns={(r) => showRuns(r.id, `“${r.name}”`)} />}
       {tab === 'activity' && <ActivityView focus={focus} onClearFocus={() => setFocus(null)} />}
-      {tab === 'skills' && skillView === 'yours' && <SkillsView settings={settings} onSettings={onSettings} />}
-      {tab === 'skills' && skillView === 'all' && <LibraryPane tab="skills" settings={settings} onSettings={onSettings} folder={folder} />}
-      {(tab === 'memory' || tab === 'soul' || tab === 'plugins') && <LibraryPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}
       </div>
     </div>
   );

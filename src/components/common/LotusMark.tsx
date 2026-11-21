@@ -3,8 +3,8 @@ import lotusIcon from '../../assets/lotus-petals.png';
 
 /**
  * The Lotus mark: the user's own five-petal artwork (blue, red, orange, yellow, green), unchanged.
- * Each petal stands for one page and its accent colour: Chat, Work, Images, Voice, Tasks
- * (styles/theme.ts PAGE_PALETTE / PETAL_ORDER). Never redraw it; the user owns the art.
+ * Until 0.21 each petal was also one page's accent colour; the app now uses one accent everywhere.
+ * Never redraw it; the user owns the art.
  */
 export const LotusMark: React.FC<{ size?: number; className?: string; label?: string }> = ({ size = 30, className, label }) => (
   <img src={lotusIcon} alt={label ?? ''} width={size} height={size} draggable={false}
