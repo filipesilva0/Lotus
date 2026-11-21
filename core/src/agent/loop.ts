@@ -11,6 +11,7 @@ import { chatTurn, ChatOpts, ollamaCapabilities, ToolsUnsupported, WireMsg } fro
 import { checkArgs, fromWire, Registry, toWire, wireTools } from './registry';
 import { alwaysRuleFor, decide, Rule } from './policy';
 import { claimText, unbackedClaims } from './claims';
+import { checkReferences, claimsSources, cleanReferences, refusalText, SeenSources, urlsIn } from './sources';
 import { parseTags, TagFilter, tagInstructions } from './tags';
 import { callsInText } from './textCalls';
 import { analysePrompt, isNoIssues, reviewPrompt, reviewFix, stepsDigest } from './think';
@@ -51,6 +52,12 @@ export interface AgentOutcome { content: string; steps: Step[]; unverified: stri
 const RULES = `\n\nWhen the user asks you to do something one of your tools can do (files, tasks, images, memory, web, the computer, the browser), use the tool; don't describe how they could do it themselves. Never say you did something unless a tool call in this conversation did it and its result said so. If a tool fails or is denied, say so plainly.`;
 
 const MAX_CALLS_PER_TURN = 6;
+/** 0.16.5: web searches one run may make. The 0.16.0 test saw a model search 8 times for the Formula 1
+ *  results and the Lisbon weather, run out of steps and never answer. After this many it is told to answer. */
+export const MAX_SEARCHES = 5;
+/** Asked when a run used up its tool steps without answering: one more turn, with no tools, to answer from what it found. */
+export const FINAL_ANSWER_PROMPT = "(Lotus) You have used all your tool steps, so you can't call any more tools. Answer the user's request now, using only what the tool results above say. If something couldn't be found or done, say so plainly. Don't mention tools or steps.";
+const NO_SOURCES_CLAIM = 'cite sources (none were found)';
 /** How long an unattended run (a task, a routine) waits for Allow / Deny; interactive runs wait until answered or stopped. */
 export const APPROVAL_WAIT_MS = { value: 15 * 60_000 };
 /** A turn stops after this many tokens (thinking included) unless the user set a limit, so a model that
@@ -110,6 +117,13 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   let reviewed = !req.think;
   let lastCall = '';
   let repeats = 0;
+  let searches = 0;
+  let sourcesNudged = false;
+  /** Web addresses that really came back from a tool (or that the user gave), for "no invented references". */
+  const seen = new SeenSources();
+  seen.add(urlsIn(req.messages.map((m) => m.content).join('\n')));
+  /** Documents already sent back once for made-up links; the second try is saved cleaned. */
+  const refused = new Set<string>();
   const maxTurns = req.maxTurns ?? 8;
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -179,6 +193,16 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       // Final answer. Check its claims against the steps that really succeeded.
       const ok = steps.filter((s) => s.status === 'done');
       const missing = unbackedClaims(turnText, ok);
+      // "…done, with a Reference List" when no search or page returned anything (0.16.0 Work test).
+      const noSources = steps.length > 0 && seen.size === 0 && claimsSources(turnText);
+      if (noSources && !sourcesNudged && turn < maxTurns - 1) {
+        sourcesNudged = true;
+        d.emit({ kind: 'reset', keep: keep.length });
+        shown = keep;
+        messages.push({ role: 'assistant', content: result.content });
+        messages.push({ role: 'user', content: '(Lotus check) Your reply mentions references, sources or citations, but no web search or page in this work returned any sources. Answer again without claiming references, and say plainly that it was written without sources.' });
+        continue;
+      }
       if (missing.length && !nudged && turn < maxTurns - 1 && req.tools.length) {
         nudged = true;
         d.emit({ kind: 'reset', keep: keep.length });
@@ -199,7 +223,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
           continue;
         }
       }
-      return { content: shown.trim(), steps, unverified: missing.map(claimText), mode };
+      return { content: shown.trim(), steps, unverified: [...missing.map(claimText), ...(noSources ? [NO_SOURCES_CLAIM] : [])], mode };
     }
 
     // Tool calls.
@@ -213,9 +237,31 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       const sig = `${call.name}:${JSON.stringify(call.args)}`;
       repeats = sig === lastCall ? repeats + 1 : 0;
       lastCall = sig;
-      const text = repeats >= 2
-        ? 'You already made this exact call twice. Stop calling it and answer with what you have.'
-        : await runStep(call.name, call.args, req, d, steps, images);
+      const tool = fromWire(call.name);
+      let text: string;
+      if (repeats >= 2) text = 'You already made this exact call twice. Stop calling it and answer with what you have.';
+      else if (tool === 'web.search' && ++searches > MAX_SEARCHES) {
+        text = `You have already searched ${MAX_SEARCHES} times. Don't search again: answer now with what the results above say, and say plainly what you couldn't find.`;
+      } else {
+        let args = call.args;
+        let refusal: string | null = null;
+        if (tool === 'artifact.write' && typeof args.content === 'string') {
+          const file = String(args.filename ?? '');
+          const check = checkReferences(file, args.content, seen);
+          if (check.invented.length || check.refsWithoutSources) {
+            const key = file.toLowerCase();
+            if (!refused.has(key)) { refused.add(key); refusal = refusalText(check); }
+            else args = { ...args, content: cleanReferences(file, args.content, check) };
+          }
+        }
+        if (refusal) text = refusal;
+        else {
+          const before = steps.length;
+          text = await runStep(call.name, args, req, d, steps, images);
+          const step = steps.length > before ? steps[steps.length - 1] : null;
+          if (step?.status === 'done') seen.add(sourcesOf(step, text));
+        }
+      }
       if (mode === 'native') messages.push({ role: 'tool', tool_name: toWire(call.name), content: text });
       else results.push(`Tool result for ${call.name}:\n${text}`);
     }
@@ -230,9 +276,47 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     if (images.length) messages.push({ role: 'user', content: '(Lotus) The screenshot you asked for is attached. Coordinates you give to computer.click are pixels in this image.', images: [images[images.length - 1]] });
   }
 
+  // Out of turns without a final answer (0.16.0: "I stopped… without a final answer" after 8 searches):
+  // one more turn without tools, so the model answers from what it found.
+  if (steps.length && !d.signal.aborted) {
+    const keep = shown;
+    try {
+      messages.push({ role: 'user', content: FINAL_ANSWER_PROMPT });
+      const filter = mode === 'tags' ? new TagFilter() : null;
+      let text = '';
+      const r = await chatTurn({ ...d.llm, think, numPredict: d.llm.numPredict ?? TURN_TOKENS, model: req.model, signal: d.signal }, messages, null, {
+        token: (t) => { text += filter ? filter.push(t) : t; },
+        thinking: (t) => d.emit({ kind: 'thinking', text: t }),
+        retract: () => { text = ''; },
+      });
+      if (filter) text += filter.end();
+      const parsed = mode === 'tags' ? parseTags(r.content).text : r.content;
+      let answer = (text.trim() ? text : parsed).trim();
+      // A model that still writes a tool call gets no say here.
+      if (textCall(answer) || callsInText(answer, (n) => req.tools.some((t) => t.name === fromWire(n)))) answer = '';
+      if (answer) {
+        // Text from earlier turns ("Let me search again…") is replaced by the answer.
+        d.emit({ kind: 'reset', keep: 0 });
+        shown = answer;
+        d.emit({ kind: 'token', text: answer });
+      }
+    } catch {
+      shown = keep; // no final answer after all: the note below says so
+    }
+  }
+
   const ok = steps.filter((s) => s.status === 'done');
   const content = shown.trim() || (d.signal.aborted ? '' : 'I stopped after several tool steps without a final answer. The steps above show what was done.');
   return { content, steps, unverified: unbackedClaims(content, ok).map(claimText), mode };
+}
+
+/** Web addresses a finished step really returned: search results and pages read, a helper's sources,
+ *  and links in what a file or page said. A helper's own written answer doesn't count (it may be made up). */
+export function sourcesOf(step: Step, text: string): string[] {
+  const data = (step.data ?? {}) as { results?: { url?: string }[]; url?: string; sources?: { url?: string }[] };
+  const fromData = [...(data.results ?? []), ...(data.sources ?? []), ...(data.url ? [{ url: data.url }] : [])].map((r) => String(r.url ?? '')).filter(Boolean);
+  if (step.tool === 'agent.delegate' || step.tool === 'agents.deploy' || step.tool === 'artifact.write' || step.tool === 'artifact.read') return fromData;
+  return [...fromData, ...urlsIn(text)];
 }
 
 /** One tool call: checks, approval, run, record. Returns the text the model reads. */

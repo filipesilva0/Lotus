@@ -55,7 +55,7 @@ const DDG_LITE = `<table><tr>
 <tr><td>&nbsp;</td><td>&nbsp;</td></tr></table>`;
 
 const BING_HREF = 'https://www.bing.com/ck/a?!&amp;&amp;p=3df401fbd3f8c92b9516b1cbe0a3d68dJmltdHM9MTc5NTIxOTIwMA&amp;ptn=3&amp;ver=2&amp;hsh=4&amp;fclid=2fa5732d-ef5a&amp;u=a1aHR0cHM6Ly93d3cubnZpZGlhLmNvbS9lbi11cy9nZWZvcmNlL3J0eC8&amp;ntb=1';
-const BING_PAGE = `<ol id="b_results" class=""><li class="b_algo" data-id iid=SERP.5316><link rel="stylesheet" href="https://r.bing.com/rp/x.br.css"/><div class="b_tpcn"><a class="tilk" aria-label="nvidia.com" RedirectUrl="" tabindex="-1" target="_blank" href="${BING_HREF}" h="ID=SERP,5126.1"><div class="tpic"></div><div class="tptxt"><div class="tptt">nvidia.com</div><div class="tpmeta"><div class="b_attribution" tabindex="-1"><cite>https://www.nvidia.com <span class="b_ctdif">&gt; en-us &gt; geforce &gt; rtx</span></cite></div></div></div></a></div><h2><a target="_blank" href="${BING_HREF}" h="ID=SERP,5126.2">GeForce <strong>RTX</strong> | Ultimate Ray Tracing &amp; AI | <strong>NVIDIA</strong></a></h2><div class="b_caption"><p class="b_lineclamp2" data-rslinkclamp-iid="">Upgrade to advanced AI with NVIDIA GeForce RTX™ GPUs and accelerate your gaming. …<a class="b_algoReadMore" target="_blank" href="${BING_HREF}" h="ID=SERP,5126.3">Read more</a></p></div><div elementtiming=frp.MiddleOfPage aria-hidden="true" tabindex="-1"> &nbsp; </div></li><li class="b_algo" data-id iid=SERP.5317><h2><a target="_blank" href="https://www.techpowerup.com/gpu-specs/geforce-rtx-4060.c4107">RTX 4060 Specs</a></h2><div class="b_caption"><p class="b_lineclamp3">Nov 3, 2025 · 8 GB GDDR6 on a 128-bit bus.</p></div></li><li class="b_algo"><h2><a href="https://example.org/three">Third</a></h2><div class="b_caption"><p>Plain caption</p></div></li></ol>`;
+const BING_PAGE = `<ol id="b_results" class=""><li class="b_algo" data-id iid=SERP.5316><link rel="stylesheet" href="https://r.bing.com/rp/x.br.css"/><div class="b_tpcn"><a class="tilk" aria-label="nvidia.com" RedirectUrl="" tabindex="-1" target="_blank" href="${BING_HREF}" h="ID=SERP,5126.1"><div class="tpic"></div><div class="tptxt"><div class="tptt">nvidia.com</div><div class="tpmeta"><div class="b_attribution" tabindex="-1"><cite>https://www.nvidia.com <span class="b_ctdif">&gt; en-us &gt; geforce &gt; rtx</span></cite></div></div></div></a></div><h2><a target="_blank" href="${BING_HREF}" h="ID=SERP,5126.2">GeForce <strong>RTX</strong> | Ultimate Ray Tracing &amp; AI | <strong>NVIDIA</strong></a></h2><div class="b_caption"><p class="b_lineclamp2" data-rslinkclamp-iid="">Upgrade to advanced AI with NVIDIA GeForce RTX™ GPUs and accelerate your gaming. …<a class="b_algoReadMore" target="_blank" href="${BING_HREF}" h="ID=SERP,5126.3">Read more</a></p></div><div elementtiming=frp.MiddleOfPage aria-hidden="true" tabindex="-1"> &nbsp; </div></li><li class="b_algo" data-id iid=SERP.5317><h2><a target="_blank" href="https://www.techpowerup.com/gpu-specs/geforce-rtx-4060.c4107">RTX 4060 Specs</a></h2><div class="b_caption"><p class="b_lineclamp3">Nov 3, 2025 · 8 GB GDDR6 on a 128-bit bus.</p></div></li><li class="b_algo"><h2><a href="https://example.org/three">RTX 4060 deals</a></h2><div class="b_caption"><p>Plain caption</p></div></li></ol>`;
 
 const WIKI = { batchcomplete: '', continue: { sroffset: 3 }, query: { searchinfo: { totalhits: 27 }, search: [
   { ns: 0, title: 'GeForce RTX 40 series', pageid: 71802991, snippet: 'The <span class="searchmatch">RTX</span> 40 series…' },
@@ -111,7 +111,7 @@ describe('result pages', () => {
     expect(parseBing(BING_PAGE)).toEqual([
       { title: 'GeForce RTX | Ultimate Ray Tracing & AI | NVIDIA', url: 'https://www.nvidia.com/en-us/geforce/rtx/', snippet: 'Upgrade to advanced AI with NVIDIA GeForce RTX™ GPUs and accelerate your gaming. …' },
       { title: 'RTX 4060 Specs', url: 'https://www.techpowerup.com/gpu-specs/geforce-rtx-4060.c4107', snippet: '8 GB GDDR6 on a 128-bit bus.' },
-      { title: 'Third', url: 'https://example.org/three', snippet: 'Plain caption' },
+      { title: 'RTX 4060 deals', url: 'https://example.org/three', snippet: 'Plain caption' },
     ]);
   });
 
@@ -174,8 +174,17 @@ describe('Lotus Search falls back between engines', () => {
 
   test('few results are topped up from the next engine, without duplicates', async () => {
     const n = net((e) => (e === 'ddg' ? { body: DDG_PAGE(1, 'x') } : good(e)));
-    const r = await metaSearch(n.io, 'rare thing', { limit: 6, health: new EngineHealth() });
+    const r = await metaSearch(n.io, 'rtx 4060', { limit: 6, health: new EngineHealth() });
     expect(r.results.map((x) => x.url)).toEqual(['https://www.x0.example/page', 'https://www.nvidia.com/en-us/geforce/rtx/', 'https://www.techpowerup.com/gpu-specs/geforce-rtx-4060.c4107', 'https://example.org/three']);
+  });
+
+  test('0.16.5: Bing pages that have nothing to do with the query are dropped, and the next engine is asked', async () => {
+    const junk = `<ol id="b_results"><li class="b_algo"><h2><a href="https://www.msn.com/en-us">MSN | Outlook, Office, Skype</a></h2><div class="b_caption"><p>Your customizable start page.</p></div></li><li class="b_algo"><h2><a href="https://www.youtube.com/">YouTube</a></h2><div class="b_caption"><p>Enjoy the videos you love.</p></div></li></ol>`;
+    const n = net((e) => (e === 'ddg' ? { body: DDG_CAPTCHA } : e === 'bing' ? { body: junk } : good(e)));
+    const r = await metaSearch(n.io, 'formula 1 results', { limit: 6, health: new EngineHealth() });
+    expect(r.results.some((x) => /msn|youtube/.test(x.url))).toBe(false);
+    expect(n.calls.map((c) => c.engine)).toEqual(['ddg', 'bing', 'lite', 'wiki']);
+    expect(r.tried.find((t) => t.engine === 'bing')).toEqual({ engine: 'bing', count: 0, dropped: 2 });
   });
 
   test('every engine refusing is a SearchBlocked; no internet says so plainly', async () => {

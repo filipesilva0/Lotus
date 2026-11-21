@@ -126,7 +126,7 @@ export const agentDelegate: Tool = {
     if (!ctx.delegate) return { ok: false, text: 'Helper agents are only available in Work mode.', summary: 'Not available here' };
     ctx.progress('Helper is working…');
     const r = await ctx.delegate(String(a.goal), String(a.context ?? ''), a.name ? String(a.name) : undefined);
-    return { ok: r.ok, text: r.content || 'The helper returned nothing.', summary: `${a.name ? String(a.name).slice(0, 40) : 'Helper'} finished · ${r.steps} step${r.steps === 1 ? '' : 's'}` };
+    return { ok: r.ok, data: r.sources ? { sources: r.sources } : undefined, text: r.content || 'The helper returned nothing.', summary: `${a.name ? String(a.name).slice(0, 40) : 'Helper'} finished · ${r.steps} step${r.steps === 1 ? '' : 's'}` };
   },
 };
 
@@ -160,11 +160,16 @@ export const agentsDeploy: Tool = {
     ctx.progress(`${jobs.length} agents working…`);
     const out = await ctx.deploy(jobs, String(a.context ?? ''));
     const ok = out.filter((r) => r.ok).length;
+    const sources = out.flatMap((r) => r.sources ?? []);
+    // 0.16.0: every researcher came back empty and the brief still got a made-up reference list.
+    const none = out.some((r) => r.sources) && !sources.length
+      ? '\n\n(Lotus) None of the agents found any web sources. Don\'t invent references, links or a reference list: say plainly in what you write that it was made without sources.'
+      : '';
     return {
       ok: ok > 0,
-      text: out.map((r) => `### ${r.name}${r.ok ? '' : ' (failed)'}\n${r.content || 'Returned nothing.'}`).join('\n\n'),
+      text: out.map((r) => `### ${r.name}${r.ok ? '' : ' (failed)'}\n${r.content || 'Returned nothing.'}`).join('\n\n') + none,
       summary: `${ok} of ${out.length} agents finished · ${out.map((r) => r.name).join(', ')}`.slice(0, 160),
-      data: { agents: out.map((r) => ({ name: r.name, ok: r.ok, steps: r.steps })) },
+      data: { agents: out.map((r) => ({ name: r.name, ok: r.ok, steps: r.steps })), sources },
     };
   },
 };
