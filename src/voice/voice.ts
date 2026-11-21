@@ -19,6 +19,7 @@ import { deleteMedia, loadMedia, rpc, saveMedia, type SavedMedia } from '../lib/
 import { builtinsNow, refreshBuiltins } from '../lib/builtins';
 import { playThroughLoop, stopPlayback } from './echo';
 import { GSV_ID, gsvSpeech } from './gptsovits';
+import { proUnlocked } from '../lib/pro';
 
 /** Settings → Engines → Voice, and the built-in voice and dictation models picked there. */
 export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: number; dictation: string; language: string } {
@@ -187,7 +188,9 @@ export async function speak(text: string, profile = voicePrefs().profile): Promi
   if (!t) return false;
   hush();
   setState('speaking');
-  try { return (await viaBuiltin(t)) || (await viaVoicebox(t, profile)) || (await viaSystem(t)); } finally { if (state === 'speaking') setState('idle'); }
+  // 0.18.0: Voicebox voices you made (cloned or described) are Lotus Pro; without it, its default voice.
+  const own = proUnlocked() ? profile : '';
+  try { return (await viaBuiltin(t)) || (await viaVoicebox(t, own)) || (await viaSystem(t)); } finally { if (state === 'speaking') setState('idle'); }
 }
 
 /**

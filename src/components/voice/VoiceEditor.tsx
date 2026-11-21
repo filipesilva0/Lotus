@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { usePro } from '../../lib/pro';
+import { TryPro } from '../pro/TryPro';
 import { Mic, Upload, Square, Trash2, Wand2 } from 'lucide-react';
 import {
   voicebox, VoiceProfile, VoiceType, LANGUAGES, TTS_ENGINES, PresetVoice, ProfileSample, fmtDuration, TtsEngine,
@@ -106,7 +108,9 @@ export const VoiceEditor: React.FC<{
   };
 
   const clone = type === 'cloned';
-  const valid =
+  // 0.18.0: cloning and describing a voice are Lotus Pro (always unlocked until Pro launches).
+  const proLocked = !usePro().unlocked && !editing && type !== 'preset';
+  const valid = !proLocked &&
     name.trim().length > 0 &&
     (type !== 'designed' || designPrompt.trim().length > 0) &&
     (type !== 'preset' || !!presetVoice) &&
@@ -151,6 +155,7 @@ export const VoiceEditor: React.FC<{
             { id: 'cloned', label: 'Clone a voice' }, { id: 'preset', label: 'Built-in voice' }, { id: 'designed', label: 'Describe a voice' },
           ]} />
         )}
+        {proLocked && <TryPro feature={clone ? 'voice-clone' : 'voice-design'} />}
 
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Name</Label><TextInput autoFocus value={name} maxLength={100} placeholder="e.g. Narrator" onChange={(e) => setName(e.target.value)} /></div>

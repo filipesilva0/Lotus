@@ -28,6 +28,7 @@ import { Builtins } from './engines/manager';
 import { builtinRpc } from './engines/rpc';
 import { kvGet } from './kv';
 import { webSearchRpc } from './tools/web';
+import { Licence, type LicenceOptions } from './licence';
 
 export const VERSION = '0.3.1';
 
@@ -45,6 +46,8 @@ export interface CoreOptions {
   builtins?: Partial<ConstructorParameters<typeof Builtins>[0]>;
   /** Run the routine scheduler and task auto-runner (default on; tests may turn it off). */
   scheduler?: boolean;
+  /** Tests: Lotus Pro licence options (fake Polar, fixed clock, temp trial marker). */
+  licence?: Partial<LicenceOptions>;
 }
 
 const DEFAULT_ORIGINS = ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost', 'http://127.0.0.1:3000', 'http://localhost:3000'];
@@ -85,6 +88,18 @@ function sameToken(a: string, b: string): boolean {
   return d === 0;
 }
 
+/** Lotus Pro (0.18.0): licence key, trial, and whether Pro features are unlocked. */
+async function proRpc(lic: Licence, method: string, a: Json): Promise<{ found: boolean; value?: unknown }> {
+  switch (method) {
+    case 'pro_status': return { found: true, value: lic.status() };
+    case 'pro_chat_ok': return { found: true, value: lic.noteChatSuccess() };
+    case 'pro_activate': return { found: true, value: await lic.activate(str(a.key), a.label ? str(a.label) : undefined) };
+    case 'pro_recheck': return { found: true, value: await lic.recheck(a.force === true) };
+    case 'pro_deactivate': return { found: true, value: await lic.deactivate() };
+    default: return { found: false };
+  }
+}
+
 /** Agent methods: they need the running service (events, approvals), not just the database. */
 function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json): { found: boolean; value?: unknown } {
   switch (method) {
@@ -104,7 +119,7 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
   }
 }
 
-export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService };
+export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService; licence: Licence };
 
 export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
@@ -151,6 +166,15 @@ export function startServer(o: CoreOptions): CoreServer {
   const board = new BoardService({ db: o.db, agent, broadcast, log });
   agent.board = board;
   if (o.scheduler !== false) board.start();
+  const licence = new Licence({ dataDir: o.db.dir, fetch: o.fetch, log, ...o.licence });
+  // The 30-day recheck: once shortly after start, then daily. It never blocks anything when offline.
+  if (o.scheduler !== false) {
+    const recheck = () => { licence.recheck().then((s) => broadcast({ type: 'pro', status: s })).catch(() => undefined); };
+    const first = setTimeout(recheck, 30_000);
+    const daily = setInterval(recheck, 86_400_000);
+    (first as { unref?: () => void }).unref?.();
+    (daily as { unref?: () => void }).unref?.();
+  }
 
   const server = Bun.serve<{ id: number }, never>({
     hostname: '127.0.0.1',
@@ -235,6 +259,11 @@ export function startServer(o: CoreOptions): CoreServer {
           if (!fn) {
             const b = await builtinRpc(builtins, o.db, o.studio, method, args, broadcast);
             if (b.found) return json(req, { result: b.value ?? null });
+            const pr = await proRpc(licence, method, args);
+            if (pr.found) {
+              if (method !== 'pro_status') broadcast({ type: 'pro', status: pr.value });
+              return json(req, { result: pr.value ?? null });
+            }
             const bd = boardRpc(board, method, args);
             if (bd.found) return json(req, { result: bd.value ?? null });
             const r = agentRpc(agent, o, method, args);
@@ -256,5 +285,5 @@ export function startServer(o: CoreOptions): CoreServer {
       message() { /* clients only listen */ },
     },
   });
-  return Object.assign(server, { agent, builtins, board });
+  return Object.assign(server, { agent, builtins, board, licence });
 }

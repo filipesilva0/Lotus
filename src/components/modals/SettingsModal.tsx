@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { chromeOs } from '../common/TitleBar';
-import { X, Cpu, MessageSquare, Volume2, Palette, Shield, Download, SunMoon, Sparkles, Server, Sun, Moon, Wrench, SlidersHorizontal } from 'lucide-react';
+import { X, Cpu, Gem, MessageSquare, Volume2, Palette, Shield, Download, SunMoon, Sparkles, Server, Sun, Moon, Wrench, SlidersHorizontal } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
@@ -14,6 +14,8 @@ import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAg
 import type { Updates } from '../../hooks/useUpdates';
 import { ToolsPanel } from './ToolsSettings';
 import { kv } from '../../lib/store';
+import { ProSettings } from '../pro/ProSettings';
+import { usePro } from '../../lib/pro';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -38,7 +40,8 @@ export type SettingsTab =
   | 'island'
   | 'appearance'
   | 'updates'
-  | 'licenses';
+  | 'licenses'
+  | 'pro';
 
 /** One setting: name and a sentence on the left, its control on the right (same look in every pane). */
 const Row: React.FC<{ title: string; hint?: React.ReactNode; children?: React.ReactNode }> = ({ title, hint, children }) => (
@@ -68,6 +71,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (pane) return pane;
     try { const saved = kv.getItem(PANE_KEY); return !saved || saved === 'inference' ? 'general' : (saved as SettingsTab); } catch { return 'general'; }
   });
+  // Lotus Pro's pane appears once Pro is launched (or in a test build pointed at Polar's practice shop).
+  const pro = usePro();
+  const showPro = pro.locks || pro.sandbox;
   const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { kv.setItem(PANE_KEY, t); } catch { /* memory only */ } };
   useEffect(() => { if (isOpen && pane) setActiveTabRaw(pane); }, [isOpen, pane]);
   useEffect(() => {
@@ -89,6 +95,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'updates', label: 'Updates', icon: Download },
     { id: 'licenses', label: 'Legal', icon: Shield },
+    ...(showPro ? [{ id: 'pro' as SettingsTab, label: 'Lotus Pro', icon: Gem }] : []),
   ];
   const paneName = tabs.find((t) => t.id === activeTab)?.label ?? 'Settings';
   const mac = chromeOs() === 'macos';
@@ -226,6 +233,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === 'voice' && <VoiceSettingsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
             {activeTab === 'updates' && <UpdatesPanel u={updates} />}
+
+            {activeTab === 'pro' && <ProSettings />}
 
             {activeTab === 'licenses' && (
               <div className="space-y-3 pt-2">

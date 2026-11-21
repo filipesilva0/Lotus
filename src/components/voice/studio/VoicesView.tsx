@@ -16,6 +16,8 @@ import { MyVoice, READING_SCRIPTS, VoiceOption, speakerLabel } from '../../../vo
 import { Studio, speakWith } from '../../../voice/useStudio';
 import { GSV_DOWNLOAD, GSV_ID, GSV_NOTE, useGptSovits } from '../../../voice/gptsovits';
 import { openExternal } from '../../../lib/open';
+import { usePro } from '../../../lib/pro';
+import { TryPro } from '../../pro/TryPro';
 
 const TEST_LINE = 'Hello! This is how I sound in Lotus. I can read your notes, stories and messages aloud.';
 
@@ -80,6 +82,7 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
   const cloners = studio.models.filter((m) => m.clones);
   const presetModels = studio.models.filter((m) => !m.clones);
   const [how, setHow] = useState<'clone' | 'preset'>('clone');
+  const proOk = usePro().unlocked; // 0.18.0: cloning is Lotus Pro (unlocked until Pro launches)
   const [name, setName] = useState('');
   const [model, setModel] = useState(cloners[0]?.id ?? '');
   const [preset, setPreset] = useState(studio.options.find((o) => !o.mine)?.id ?? '');
@@ -134,6 +137,7 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
         <p className="text-[13px] text-[var(--color-text-muted)] mt-1">Copy a voice from a few seconds of clear speech, or start from a built-in voice and give it your own sound.</p>
       </div>
       <Segmented2 value={how} onChange={setHow} />
+      {how === 'clone' && <TryPro feature="voice-clone" />}
       <div><H>Name</H><TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder={how === 'clone' ? 'e.g. My Voice, Grandpa, Narrator' : 'e.g. Calm Narrator'} aria-label="Voice name" /></div>
 
       {how === 'preset' ? (
@@ -183,7 +187,7 @@ const NewVoice: React.FC<{ studio: Studio; onDone: (id: string) => void; onOpenM
       </>)}
 
       {err && <Banner tone="error">{err}</Banner>}
-      <Btn variant="primary" loading={busy} disabled={how === 'clone' ? !sample || !chosen || !!rec : !preset} icon={<Check className="w-3.5 h-3.5" />} onClick={() => void create()}>Create Voice</Btn>
+      <Btn variant="primary" loading={busy} disabled={how === 'clone' ? !proOk || !sample || !chosen || !!rec : !preset} icon={<Check className="w-3.5 h-3.5" />} onClick={() => void create()}>Create Voice</Btn>
     </div>
   );
 };

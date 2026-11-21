@@ -169,6 +169,12 @@ export default function App() {
   const [settingsPane, setSettingsPane] = useState<SettingsTab | null>(null);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
   const openSettings = useCallback((pane: SettingsTab | null = null) => { setSettingsPane(pane); setIsSettingsOpen(true); }, []);
+  // "Try Pro" cards (and other deep links) open a Settings pane by name.
+  useEffect(() => {
+    const h = (e: Event) => openSettings(((e as CustomEvent).detail as SettingsTab) ?? null);
+    window.addEventListener('lotus:open-settings', h);
+    return () => window.removeEventListener('lotus:open-settings', h);
+  }, [openSettings]);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
   // 0.11.0: skills, memory, soul and plugins are tabs of the Tasks page.
   const [tasksRequest, setTasksRequest] = useState<{ tab: LibraryTab; n: number } | null>(null);

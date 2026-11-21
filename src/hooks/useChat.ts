@@ -28,6 +28,7 @@ import { imageChoices } from '../chat/imageChoices';
 import { installTarget } from '../setup/jobs';
 import { shouldRename, suggestTitle } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
+import { noteChatSuccess } from '../lib/pro';
 import { kv, storeMode } from '../lib/store';
 import { agentAvailable, decideStep, runAgent, type AgentStep } from '../lib/agent';
 
@@ -358,6 +359,8 @@ export function useChat(settings: LotusSettings) {
 
     if (!ctrl.signal.aborted && acc) afterReply(sid, aiId, o, usedSkillIds);
     if (!ctrl.signal.aborted && acc) autoRename(sid);
+    // 0.18.0: the first chat that works starts the Pro trial (nothing happens while Pro isn't launched).
+    if (!ctrl.signal.aborted && acc) noteChatSuccess();
 
     if (setRef.current.autoReadResponses && acc && !ctrl.signal.aborted) {
       try {

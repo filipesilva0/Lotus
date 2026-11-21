@@ -14,6 +14,7 @@ import { builtinSpeech } from './voice';
 import { GSV_KEY, gsvModel } from './gptsovits';
 import { applyEffects, clipSeconds, joinClips } from './render';
 import { HISTORY_EVENT } from './stt';
+import { proUnlocked, usePro } from '../lib/pro';
 import { chunkText, effectsNeutral, Segment, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
 
 export const MINE_KEY = 'lotus.voice.mine.v1';
@@ -37,7 +38,7 @@ export function voiceModels(models: InstalledModel[]): VoiceModel[] {
 
 /** The voice option in use right now, outside React (spoken notices, the island). */
 export function currentVoice(): VoiceOption | null {
-  return pickVoice(voiceOptions(voiceModels(builtinsNow().models), read<MyVoice[]>(MINE_KEY, [])), kv.getItem(SELECTED_KEY));
+  return pickVoice(voiceOptions(voiceModels(builtinsNow().models), read<MyVoice[]>(MINE_KEY, []), { proLocked: !proUnlocked() }), kv.getItem(SELECTED_KEY));
 }
 
 /**
@@ -92,7 +93,8 @@ export function useStudio() {
     return () => { window.removeEventListener('storage', on); window.removeEventListener(HISTORY_EVENT, reload); };
   }, []);
 
-  const options = useMemo(() => voiceOptions(models, mine), [models, mine]);
+  const pro = usePro();
+  const options = useMemo(() => voiceOptions(models, mine, { proLocked: !pro.unlocked }), [models, mine, pro.unlocked]);
   const voice = pickVoice(options, selected);
   const setSelected = useCallback((id: string) => { setSelectedRaw(id); kv.setItem(SELECTED_KEY, id); }, []);
 
