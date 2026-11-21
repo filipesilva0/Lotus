@@ -1,6 +1,7 @@
 import { RETHINK_CHOICES, canRethink } from '../../chat/rethink';
 import React, { useEffect, useState } from 'react';
-import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, FolderOpen, RefreshCw, Sparkles } from 'lucide-react';
+import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizontal, Trash2, X, ExternalLink, Dices, FolderOpen, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
+import { DEFAULT_TEMPERATURE, temperatureWarning } from '../../chat/sampling';
 import type { ContextFile } from '../../context/discover';
 import { useMemoryStore } from '../../memory/store';
 import { useHardware } from '../../hardware/monitor';
@@ -201,7 +202,7 @@ const ResearchTab: React.FC<Pick<Props, 'session' | 'searchOn' | 'onToggleSearch
       {withWork.map((m) => (
         <Section key={m.id} title={`Reply at ${m.timestamp}`}>
           <div className="space-y-1.5 mb-2">
-            {m.tools?.map((t) => <p key={t.id} className="text-[12px]"><span className={cx('inline-block w-1.5 h-1.5 rounded-full mr-1.5', t.status === 'done' ? 'bg-[var(--c-green)]' : t.status === 'error' ? 'bg-[var(--c-red)]' : 'bg-[var(--c-orange)]')} /><span className="font-medium">{t.label}</span><span className="text-[var(--color-text-muted)]"> · {t.detail}</span></p>)}
+            {m.tools?.map((t) => <p key={t.id} className="text-[12px]"><span className={cx('inline-block w-1.5 h-1.5 rounded-full mr-1.5', t.status === 'done' && t.empty ? 'bg-[var(--color-text-muted)]' : t.status === 'done' ? 'bg-[var(--c-green)]' : t.status === 'error' ? 'bg-[var(--c-red)]' : 'bg-[var(--c-orange)]')} /><span className="font-medium">{t.label}</span><span className="text-[var(--color-text-muted)]"> · {t.detail}</span></p>)}
           </div>
           <div className="space-y-1.5">
             {m.sources?.map((s) => (
@@ -247,6 +248,12 @@ const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings:
       {canRethink(s.selectedModel) && <RethinkSection settings={s} onSettings={set} />}
       <Section title="Sampling" className="[&>div+div]:mb-4">
         <SliderField label="Temperature" value={s.temperature} min={0} max={2} step={0.05} onChange={(v) => set({ temperature: v })} format={(v) => v.toFixed(2)} />
+        {temperatureWarning(s.temperature) && (
+          <p role="status" className="-mt-2 mb-3 flex items-start gap-1.5 text-[12px] leading-snug text-[var(--c-orange)]">
+            <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" aria-hidden="true" />
+            <span className="text-[var(--color-text-main)]">{temperatureWarning(s.temperature)} <button type="button" className="text-[var(--color-accent-vibrant)] font-medium" onClick={() => set({ temperature: DEFAULT_TEMPERATURE })}>Reset to 0.7</button></span>
+          </p>
+        )}
         <SliderField label="Top-P" value={s.topP} min={0.05} max={1} step={0.01} onChange={(v) => set({ topP: v })} format={(v) => v.toFixed(2)} />
         <SliderField label="Top-K" value={s.topK} min={1} max={200} step={1} onChange={(v) => set({ topK: v })} />
         <SliderField label="Frequency penalty" value={s.frequencyPenalty} min={0} max={2} step={0.05} onChange={(v) => set({ frequencyPenalty: v })} format={(v) => v.toFixed(2)} />

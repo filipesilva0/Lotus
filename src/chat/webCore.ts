@@ -5,6 +5,9 @@
 export interface WebResult { title: string; url: string; snippet: string }
 export interface WebPage { url: string; title: string; text: string; error?: string }
 
+/** Wikimedia's User-Agent policy: a name and a way to reach the maker (https://meta.wikimedia.org/wiki/User-Agent_policy). */
+export const WIKI_UA = 'LotusLocalAI/1.0 (https://github.com/filipesilva0/Lotus; desktop assistant)';
+
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'", hellip: '…', mdash: '—', ndash: '–', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“' };
@@ -84,7 +87,8 @@ export function readableText(html: string, max = 6000): { title: string; text: s
 
 /** An engine refused the search: captcha, "too many requests", or a page with no readable results. */
 export class SearchBlocked extends Error {
-  constructor(message: string, readonly engine?: string) { super(message); }
+  /** `resting`: every engine is resting after refusing, so nothing was asked (no point retrying soon). */
+  constructor(message: string, readonly engine?: string, readonly resting = false) { super(message); }
 }
 /** Kept for older callers: DuckDuckGo's refusal is a SearchBlocked. */
 export const DuckDuckGoBlocked = SearchBlocked;
@@ -175,7 +179,8 @@ export async function searchEngine(io: WebIO, engine: EngineId, q: string, limit
       results = r.status === 200 ? parseBing(r.text, limit) : [];
       break;
     case 'wikipedia': {
-      r = await fetchText(io, `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=${limit}&srsearch=${encodeURIComponent(q)}`, { headers: { 'User-Agent': 'Lotus/0.1 (local desktop assistant)', Accept: 'application/json' } }, signal);
+      // Wikimedia refuses (403) clients whose User-Agent doesn't say who they are and how to reach them.
+      r = await fetchText(io, `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=${limit}&srsearch=${encodeURIComponent(q)}`, { headers: { 'User-Agent': WIKI_UA, 'Api-User-Agent': WIKI_UA, Accept: 'application/json' } }, signal);
       let j: unknown = null;
       try { j = JSON.parse(r.text); } catch { /* not JSON */ }
       results = r.status === 200 ? parseWikipedia(j, limit) : [];
@@ -184,8 +189,8 @@ export async function searchEngine(io: WebIO, engine: EngineId, q: string, limit
     }
   }
   if (results.length) return results;
-  if (looksBlocked(r.status, r.text)) throw new SearchBlocked(`${label} refused the search (${r.status === 200 ? 'it asked for a captcha' : `answer ${r.status}`}).`, engine);
-  if (r.status !== 200) throw new SearchBlocked(`${label} answered ${r.status}.`, engine);
+  if (looksBlocked(r.status, r.text)) throw new SearchBlocked(`${label} ${r.status === 200 ? 'asked for a captcha' : r.status === 429 ? 'said too many searches' : `refused the search (answer ${r.status})`}`, engine);
+  if (r.status !== 200) throw new SearchBlocked(`${label} answered ${r.status}`, engine);
   // A normal page with nothing on it: a real "no results", or a layout Lotus can't read any more.
   // Either way the next engine is worth asking, but this one needs no rest.
   return [];
@@ -201,6 +206,11 @@ export class EngineHealth {
   }
   ok(e: EngineId) { this.rest.delete(e); }
   resting(e: EngineId, now = Date.now()) { const r = this.rest.get(e); return !!r && r.until > now; }
+  /** When the first of `list` stops resting (ms since epoch), or 0 when one is ready now. */
+  readyAt(list: EngineId[] = ENGINE_ORDER, now = Date.now()): number {
+    if (list.some((e) => !this.resting(e, now))) return 0;
+    return Math.min(...list.map((e) => this.rest.get(e)!.until));
+  }
   /** Engines to ask, in order: rested ones first; if every one is resting, the one that recovers soonest. */
   order(list: EngineId[] = ENGINE_ORDER, now = Date.now()): EngineId[] {
     const ready = list.filter((e) => !this.resting(e, now));
@@ -256,7 +266,15 @@ export async function metaSearch(io: WebIO, query: string, o: { limit?: number; 
   if (!q) return { results: [], engine: null, tried };
   const out: WebResult[] = [];
   let engine: EngineId | null = null;
-  for (const e of o.health.order(o.engines ?? ENGINE_ORDER)) {
+  const list = o.engines ?? ENGINE_ORDER;
+  // 0.20.0 backoff: when every engine refused recently, ask none of them until the first one has rested.
+  // Before, Lotus kept asking the one that recovers soonest (DuckDuckGo), so a run saw 8 identical refusals.
+  const readyAt = o.health.readyAt(list);
+  if (readyAt) {
+    const min = Math.max(1, Math.ceil((readyAt - Date.now()) / 60_000));
+    throw new SearchBlocked(`Web search is paused: the search engines (${list.map((e) => ENGINE_LABEL[e]).join(', ')}) refused the last searches. Lotus tries again in about ${min} minute${min === 1 ? '' : 's'}.`, undefined, true);
+  }
+  for (const e of o.health.order(list)) {
     if (o.signal?.aborted) throw new DOMException('Stopped', 'AbortError');
     try {
       const raw = await searchEngine(io, e, q, limit, o.signal);
@@ -270,7 +288,8 @@ export async function metaSearch(io: WebIO, query: string, o: { limit?: number; 
     } catch (err) {
       if ((err as Error).name === 'AbortError' && o.signal?.aborted) throw err;
       if (err instanceof SearchBlocked) o.health.blocked(e);
-      tried.push({ engine: e, error: (err as Error).message, unreachable: err instanceof Unreachable || undefined, count: 0 });
+      const unreachable = err instanceof Unreachable;
+      tried.push({ engine: e, error: unreachable ? `${ENGINE_LABEL[e]} couldn't be reached (${(err as Error).message})` : (err as Error).message, unreachable: unreachable || undefined, count: 0 });
     }
   }
   if (out.length) return { results: out, engine, tried };
@@ -279,7 +298,8 @@ export async function metaSearch(io: WebIO, query: string, o: { limit?: number; 
     if (tried.every((t) => t.unreachable)) {
       throw new Error(`Web search couldn't reach any search engine. Check the internet connection. (${errs[0].error})`);
     }
-    throw new SearchBlocked(`Every search engine refused the search just now (${errs.map((t) => ENGINE_LABEL[t.engine]).join(', ')}). Lotus will try again shortly; you can also use SearXNG in Settings → Chat.`);
+    // Says what each engine answered, so the step log shows the fallback really ran.
+    throw new SearchBlocked(`Web search didn't work: ${errs.map((t) => t.error!.replace(/\.$/, '')).join('; ')}. Lotus rests these search engines for a few minutes, then tries again.`);
   }
   return { results: [], engine: null, tried };
 }

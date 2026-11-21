@@ -9,6 +9,8 @@ export interface ChatToolCall {
   tool?: string; runId?: string; ask?: string; media?: string[];
   /** While waiting: the rule "Always Allow" would save (absent when it isn't offered). */
   always?: string;
+  /** 0.20.0: the step worked but found nothing (a search with 0 results): shown grey, not green. */
+  empty?: boolean;
 }
 export interface ChatMemoryEvent { kind: 'memory' | 'instruction'; text: string; itemId: string; status: 'saved' | 'confirmed' | 'forgotten' }
 export interface ChatFileRef { name: string; kind: 'image' | 'text'; url?: string }

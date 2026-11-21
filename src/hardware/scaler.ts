@@ -165,6 +165,35 @@ export function chunkCharsFor(numCtx: number): number {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+export const BUILTIN_ONE_AT_A_TIME = "Lotus's own engine answers one request at a time, so background jobs and Work's agents take turns.";
+
+/**
+ * 0.20.0: the card's status word. "Plenty free" only when the model also fits: the 0.19 review saw
+ * "Plenty free" above a note saying the model runs partly on the CPU.
+ */
+export function statusOf(p: Pick<ScalePlan, 'pressure' | 'fit'>): { label: string; tone: 'red' | 'orange' | 'muted' } | null {
+  if (p.pressure === 'critical') return { label: 'Almost full', tone: 'red' };
+  if (p.fit === 'too-large') return { label: 'Model too big', tone: 'red' };
+  if (p.fit === 'partial') return { label: "Model doesn't fit", tone: 'orange' };
+  if (p.pressure === 'tight') return { label: 'Tight', tone: 'orange' };
+  if (p.pressure === 'ok') return { label: 'Plenty free', tone: 'muted' };
+  return null;
+}
+
+/**
+ * 0.20.0: one sentence on how many background agents really run at once, and why, so the setting
+ * ("at most 4"), the card ("1 allowed") and a Work run that asks for 3 agents tell one story.
+ */
+export function agentLimitText(p: Pick<ScalePlan, 'maxSubagents'>, cap: number, backend: ScaleInput['backend'], autoScale = true): string {
+  const n = p.maxSubagents;
+  const now = `Right now ${n === 1 ? 'one runs at a time' : `${n} run at once`}`;
+  if (n >= cap) return `${now}, your limit.`;
+  if (backend === 'builtin') return `${now}: Lotus's own engine answers one request at a time, so agents take turns.`;
+  if (!autoScale) return `${now}: auto-scaling is off.`;
+  if (backend === 'llamacpp') return `${now}: your server has ${n === 1 ? 'one slot' : `${n} slots`}.`;
+  return `${now}: that is what free video memory allows.`;
+}
+
 export function planScale(i: ScaleInput): ScalePlan {
   const notes: string[] = [];
   const g = i.hw?.gpu ?? null;
@@ -193,11 +222,14 @@ export function planScale(i: ScaleInput): ScalePlan {
     if (g) p.recommendedParamsB = recommendParams(g.totalMb - i.reserveMb);
     if (!f.measured) notes.push(`Video memory could not be measured on this computer, so Lotus uses ${f.ctx.toLocaleString()} tokens.`);
     else {
-      notes.push(`${((f.budgetMb ?? 0) / 1024).toFixed(1)} GB of video memory free for the model (${(i.reserveMb / 1024).toFixed(1)} GB kept for other apps); the model and its buffers take ${(f.baseMb / 1024).toFixed(1)} GB.`);
+      // 0.20.0: this is the reading from when the model loaded; the gauge above shows the live one, so the
+      // two numbers can differ (the 0.19 review saw 6.1 and 6.3 GB in one card and no explanation).
+      notes.push(`When the model loaded, ${((f.budgetMb ?? 0) / 1024).toFixed(1)} GB of video memory was free for it (${(i.reserveMb / 1024).toFixed(1)} GB kept for other apps); the model and its buffers take ${(f.baseMb / 1024).toFixed(1)} GB.`);
       notes.push(f.fits
         ? `Context set to ${f.ctx.toLocaleString()} tokens: the most that fits next to the model (${(f.kvMb / 1024).toFixed(1)} GB), so it runs fully on the GPU.`
         : `The model is bigger than the free video memory, so part of it runs on the CPU and replies are slower. The context stays at ${f.ctx.toLocaleString()} tokens to keep as much as possible on the GPU. ${p.recommendedParamsB ? `A model of about ${p.recommendedParamsB}B parameters or smaller would fit fully.` : 'A smaller model would fit fully.'}`);
     }
+    notes.push(BUILTIN_ONE_AT_A_TIME);
     return p;
   }
 

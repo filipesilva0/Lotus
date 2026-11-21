@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { describeAllow } from '../../lib/allowRules';
-import { AlertCircle, Ban, Check, Loader2, ShieldQuestion } from 'lucide-react';
+import { AlertCircle, Ban, Check, Circle, Loader2, ShieldQuestion } from 'lucide-react';
 import type { ChatToolCall } from '../../types/lotus';
 import { loadMedia } from '../../lib/core';
 import { Btn, cx } from '../common/ui';
@@ -25,7 +25,11 @@ const MediaThumb: React.FC<{ path: string; label: string }> = ({ path, label }) 
     : <img src={url} alt={label} className="max-w-[280px] max-h-[280px] rounded-[8px] shadow-[0_0_0_0.5px_var(--sep)]" />;
 };
 
-const Icon: React.FC<{ s: ChatToolCall['status'] }> = ({ s }) => {
+/** A step that worked but found nothing (0.20.0): Chat marks it `empty`, the core's steps carry data.empty. */
+export const isEmptyStep = (t: ChatToolCall & { data?: Record<string, unknown> }) => t.status === 'done' && (t.empty === true || t.data?.empty === true);
+
+const Icon: React.FC<{ s: ChatToolCall['status']; empty?: boolean }> = ({ s, empty }) => {
+  if (s === 'done' && empty) return <Circle className="w-3.5 h-3.5 mt-px shrink-0 text-[var(--color-text-muted)]" aria-label="Nothing found" />;
   if (s === 'running') return <Loader2 className="w-3.5 h-3.5 mt-px animate-spin shrink-0 text-[var(--color-text-muted)]" aria-label="Running" />;
   if (s === 'waiting') return <ShieldQuestion className="w-3.5 h-3.5 mt-px shrink-0 text-[var(--c-orange)]" aria-label="Waiting for you" />;
   if (s === 'error') return <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0 text-[var(--c-red)]" aria-label="Failed" />;
@@ -44,7 +48,7 @@ export const AgentSteps: React.FC<{
       {steps.map((t) => (
         <li key={t.id} className="text-[12px]">
           <div className="flex items-start gap-2">
-            <Icon s={t.status} />
+            <Icon s={t.status} empty={isEmptyStep(t)} />
             <span className={cx('min-w-0', t.status === 'denied' && 'text-[var(--color-text-muted)]')}>
               <span className="font-medium">{t.status === 'waiting' ? 'Needs your permission' : t.label}</span>
               {t.status !== 'waiting' && t.detail && <span className="text-[var(--color-text-muted)]"> · {t.detail}</span>}

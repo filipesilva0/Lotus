@@ -47,7 +47,12 @@ export interface AgentDeps {
   approve: (s: Step) => Promise<boolean | 'timeout'>;
 }
 
-export interface AgentOutcome { content: string; steps: Step[]; unverified: string[]; mode: 'native' | 'tags' }
+export interface AgentOutcome {
+  content: string; steps: Step[]; unverified: string[]; mode: 'native' | 'tags';
+  /** 0.20.0: false when the model never gave a final answer (it ran out of steps, or wrote nothing), so
+   *  the content is Lotus's own note about what went wrong. A run like that is not "Done". */
+  finished: boolean;
+}
 
 const RULES = `\n\nWhen the user asks you to do something one of your tools can do (files, tasks, images, memory, web, the computer, the browser), use the tool; don't describe how they could do it themselves. Never say you did something unless a tool call in this conversation did it and its result said so. If a tool fails or is denied, say so plainly.`;
 
@@ -58,6 +63,24 @@ export const MAX_SEARCHES = 5;
 /** Asked when a run used up its tool steps without answering: one more turn, with no tools, to answer from what it found. */
 export const FINAL_ANSWER_PROMPT = "(Lotus) You have used all your tool steps, so you can't call any more tools. Answer the user's request now, using only what the tool results above say. If something couldn't be found or done, say so plainly. Don't mention tools or steps.";
 const NO_SOURCES_CLAIM = 'cite sources (none were found)';
+/** 0.20.0: after this many web searches in a row fail, the run stops searching (the engines are refusing;
+ *  more searches only make them refuse longer). The 0.19 review saw 8 failed searches in one agent. */
+export const MAX_FAILED_SEARCHES = 2;
+
+/** The reply when the model never answered: what went wrong, in plain words, from the steps' own results. */
+export function unfinishedNote(steps: Step[], why: 'steps' | 'empty' = 'steps'): string {
+  const failed = steps.filter((s) => s.status === 'error');
+  const searches = steps.filter((s) => s.tool === 'web.search');
+  const badSearches = searches.filter((s) => s.status === 'error');
+  const lines = [why === 'steps' ? "I couldn't finish this: I ran out of steps before I had an answer." : "I couldn't finish this: the model stopped without writing an answer."];
+  if (searches.length && badSearches.length === searches.length) {
+    lines.push(`Web search didn't work: ${badSearches.length === 1 ? 'the search' : `all ${badSearches.length} searches`} failed (${badSearches[badSearches.length - 1].detail ?? 'no reason given'}).`);
+  } else if (failed.length) {
+    lines.push(`${failed.length} of ${steps.length} steps failed. The last error: ${failed[failed.length - 1].detail ?? 'no reason given'}.`);
+  }
+  lines.push('The steps above show what was done. You can try again, or ask for a smaller piece of the job.');
+  return lines.join(' ');
+}
 /** How long an unattended run (a task, a routine) waits for Allow / Deny; interactive runs wait until answered or stopped. */
 export const APPROVAL_WAIT_MS = { value: 15 * 60_000 };
 /** A turn stops after this many tokens (thinking included) unless the user set a limit, so a model that
@@ -118,6 +141,8 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   let lastCall = '';
   let repeats = 0;
   let searches = 0;
+  let failedSearches = 0;
+  let searchDown = '';
   let sourcesNudged = false;
   /** Web addresses that really came back from a tool (or that the user gave), for "no invented references". */
   const seen = new SeenSources();
@@ -223,7 +248,13 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
           continue;
         }
       }
-      return { content: shown.trim(), steps, unverified: [...missing.map(claimText), ...(noSources ? [NO_SOURCES_CLAIM] : [])], mode };
+      const content = shown.trim();
+      if (!content && steps.length && !d.signal.aborted) {
+        const note = unfinishedNote(steps, 'empty');
+        d.emit({ kind: 'token', text: note });
+        return { content: note, steps, unverified: [], mode, finished: false };
+      }
+      return { content, steps, unverified: [...missing.map(claimText), ...(noSources ? [NO_SOURCES_CLAIM] : [])], mode, finished: true };
     }
 
     // Tool calls.
@@ -240,7 +271,9 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       const tool = fromWire(call.name);
       let text: string;
       if (repeats >= 2) text = 'You already made this exact call twice. Stop calling it and answer with what you have.';
-      else if (tool === 'web.search' && ++searches > MAX_SEARCHES) {
+      else if (tool === 'web.search' && searchDown) {
+        text = `Web search is not working right now (${searchDown}). Don't search again in this reply: answer with what you already know or found, and say plainly that you couldn't search the web.`;
+      } else if (tool === 'web.search' && ++searches > MAX_SEARCHES) {
         text = `You have already searched ${MAX_SEARCHES} times. Don't search again: answer now with what the results above say, and say plainly what you couldn't find.`;
       } else {
         let args = call.args;
@@ -260,6 +293,13 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
           text = await runStep(call.name, args, req, d, steps, images);
           const step = steps.length > before ? steps[steps.length - 1] : null;
           if (step?.status === 'done') seen.add(sourcesOf(step, text));
+          if (tool === 'web.search' && step) {
+            failedSearches = step.status === 'error' ? failedSearches + 1 : 0;
+            if (failedSearches >= MAX_FAILED_SEARCHES) {
+              searchDown = step.detail ?? 'the search engines refused';
+              text += `\n\n(Lotus) ${failedSearches} searches in a row failed, so web search is off for the rest of this reply. Answer with what you have and say plainly that the web search failed.`;
+            }
+          }
         }
       }
       if (mode === 'native') messages.push({ role: 'tool', tool_name: toWire(call.name), content: text });
@@ -278,13 +318,15 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
 
   // Out of turns without a final answer (0.16.0: "I stopped… without a final answer" after 8 searches):
   // one more turn without tools, so the model answers from what it found.
+  let answeredAtEnd = false;
   if (steps.length && !d.signal.aborted) {
     const keep = shown;
     try {
       messages.push({ role: 'user', content: FINAL_ANSWER_PROMPT });
       const filter = mode === 'tags' ? new TagFilter() : null;
       let text = '';
-      const r = await chatTurn({ ...d.llm, think, numPredict: d.llm.numPredict ?? TURN_TOKENS, model: req.model, signal: d.signal }, messages, null, {
+      // No reasoning here: a long think could use up the turn's tokens and leave no answer again.
+      const r = await chatTurn({ ...d.llm, think: false, numPredict: d.llm.numPredict ?? TURN_TOKENS, model: req.model, signal: d.signal }, messages, null, {
         token: (t) => { text += filter ? filter.push(t) : t; },
         thinking: (t) => d.emit({ kind: 'thinking', text: t }),
         retract: () => { text = ''; },
@@ -298,6 +340,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
         // Text from earlier turns ("Let me search again…") is replaced by the answer.
         d.emit({ kind: 'reset', keep: 0 });
         shown = answer;
+        answeredAtEnd = true;
         d.emit({ kind: 'token', text: answer });
       }
     } catch {
@@ -306,8 +349,16 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   }
 
   const ok = steps.filter((s) => s.status === 'done');
-  const content = shown.trim() || (d.signal.aborted ? '' : 'I stopped after several tool steps without a final answer. The steps above show what was done.');
-  return { content, steps, unverified: unbackedClaims(content, ok).map(claimText), mode };
+  const answered = !!shown.trim() && (answeredAtEnd || !steps.length);
+  if (!answered && steps.length && !d.signal.aborted) {
+    const note = unfinishedNote(steps);
+    // Text from earlier turns ("Let me search again…") is not an answer: the note replaces it.
+    if (shown.trim()) d.emit({ kind: 'reset', keep: 0 });
+    d.emit({ kind: 'token', text: note });
+    return { content: note, steps, unverified: [], mode, finished: false };
+  }
+  const content = shown.trim();
+  return { content, steps, unverified: unbackedClaims(content, ok).map(claimText), mode, finished: answered };
 }
 
 /** Web addresses a finished step really returned: search results and pages read, a helper's sources,

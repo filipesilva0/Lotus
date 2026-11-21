@@ -89,7 +89,11 @@ export function looksLikeChoices(j: unknown): boolean {
   if (Array.isArray(j)) return j.length > 0 && j.every((q) => q && typeof q === 'object' && ('question' in q || 'q' in q));
   if (!j || typeof j !== 'object') return false;
   const o = j as Record<string, unknown>;
-  return Array.isArray(o.questions) || (typeof (o.question ?? o.q ?? o.prompt) === 'string' && Array.isArray(o.options ?? o.choices));
+  if (Array.isArray(o.questions)) return true;
+  if (typeof (o.question ?? o.q ?? o.prompt) !== 'string') return false;
+  // 0.20.0: a free-text question ({"question":"…","type":"text"}) is a card too. The 0.19 review saw one
+  // shown as raw JSON because only questions with options were recognised.
+  return Array.isArray(o.options ?? o.choices) || o.type === 'text' || o.type === 'single' || o.type === 'multi';
 }
 
 /**
@@ -98,7 +102,7 @@ export function looksLikeChoices(j: unknown): boolean {
  * because models sometimes ignore the exact format and the user saw raw JSON instead of the card.
  */
 function extractBlock(content: string): ParsedChoices | null {
-  const b = findCardBlock(content, ['choices', 'choice', 'options', 'poll', 'questions'], looksLikeChoices, /"(questions|options|choices)"\s*:/);
+  const b = findCardBlock(content, ['choices', 'choice', 'options', 'poll', 'questions'], looksLikeChoices, /"(questions|options|choices)"\s*:|^\s*\{\s*"question"\s*:/);
   if (!b) return null;
   if (b.pending) return { text: content.slice(0, b.start).replace(/\s+$/, ''), poll: null, pending: true };
   // Broken JSON: show the reply without the block rather than a wall of JSON.

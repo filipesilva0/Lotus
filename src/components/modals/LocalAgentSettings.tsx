@@ -4,6 +4,8 @@ import { LotusSettings } from '../../types/lotus';
 import { Toggle } from '../common/Toggle';
 import { Segmented, Stepper, TextInput, Btn } from '../common/ui';
 import { ScalingCard } from '../hardware/ScalingCard';
+import { useHardware } from '../../hardware/monitor';
+import { agentLimitText } from '../../hardware/scaler';
 import { llamacpp } from '../../services/llm';
 import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
 import { memoryStore, useMemoryStore } from '../../memory/store';
@@ -35,6 +37,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
     }
   };
   const [key, setKey] = useState(() => llamacppToken());
+  const hw = useHardware();
   return (
     <div className="space-y-4">
       <Row title="Chat engine" hint="What runs chat, Work, tasks, routines and memory learning. Lotus keeps its own engine and models in Lotus Studio; Ollama, or your own server (llama-server, LM Studio, vLLM), are there if you already use them.">
@@ -65,7 +68,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
       <Row title="Keep free for other apps" hint="Video memory Lotus leaves alone for Windows, browsers and games.">
         <Stepper label="Video memory to keep free" value={s.vramReserveMb} min={0} max={16384} step={256} onChange={(v) => set({ vramReserveMb: v })} unit="MB" />
       </Row>
-      <Row title="Most background agents at once" hint="An upper limit. The real limit is the lower of this and what free video memory allows.">
+      <Row title="Most background agents at once" hint={`An upper limit. ${agentLimitText(hw.plan, s.maxSubagents, s.llmBackend, s.autoScale)}`}>
         <Stepper label="Most background agents" value={s.maxSubagents} min={1} max={8} step={1} onChange={(v) => set({ maxSubagents: v })} />
       </Row>
       <ScalingCard />

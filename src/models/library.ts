@@ -464,6 +464,19 @@ export function fitOf(e: Pick<LibEntry, 'vramGb'>, vramGb: number | undefined, u
   return 'too-big';
 }
 
+/**
+ * 0.20.0: the chat model to select when none is chosen yet: the biggest installed one that fits this
+ * computer, not simply the first in the list (alphabetical order made Gemma 4 12B the default on 8 GB
+ * cards, where it only partly fits). Without a GPU reading, or when nothing known fits, the first.
+ */
+export function preferredChatModel<T>(list: T[], entryOf: (m: T) => Pick<LibEntry, 'vramGb'> | undefined, vramGb?: number, unified = false): T | undefined {
+  if (!list.length || !vramGb) return list[0];
+  const fitting = list.map((m) => ({ m, e: entryOf(m) }))
+    .filter((x) => x.e && fitOf(x.e, vramGb, unified) === 'fits')
+    .sort((a, b) => b.e!.vramGb - a.e!.vramGb);
+  return fitting[0]?.m ?? list[0];
+}
+
 export const FIT_LABEL: Record<Fit, string> = { fits: 'Fits this computer', tight: 'Tight fit, runs slower', 'too-big': 'Too big for this computer', unknown: 'Slow without a GPU' };
 
 /**
