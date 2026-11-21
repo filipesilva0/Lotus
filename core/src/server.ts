@@ -27,6 +27,7 @@ import { readHardware } from './hardware';
 import { Builtins } from './engines/manager';
 import { builtinRpc } from './engines/rpc';
 import { kvGet } from './kv';
+import { webSearchRpc } from './tools/web';
 
 export const VERSION = '0.3.1';
 
@@ -71,6 +72,9 @@ export const RPC: Record<string, Rpc> = {
   skills_search: (db, a) => mem.searchSkills(db, str(a.query), num(a.limit, 3)),
   // Live CPU / RAM / GPU readings (Engines & Models → Hardware & Runtime).
   hw_live: () => readHardware(),
+  // Chat's Web button, tasks and routines search through the core, so every search shares one queue,
+  // one cache and Lotus Search's engine fallback (tools/web.ts).
+  web_search: (db, a) => webSearchRpc(db, str(a.query), num(a.limit, 6)),
 };
 
 /** Constant-time comparison so the token can't be guessed byte by byte from timings. */

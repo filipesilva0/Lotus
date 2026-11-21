@@ -9,7 +9,8 @@ import { reportActivity } from '../lib/bus';
 import { uid, usePersisted } from '../lib/persist';
 import { addBranch, switchBranch } from '../chat/branching';
 import { contextItemFromText, contextPayload, detectMemory, estimateTokens, newSession, TEXT_EXT } from '../chat/helpers';
-import { queryFromMessage, readPage, searchWeb, webContextBlock, WebResult } from '../chat/webSearch';
+import { readPage, searchWebFull, webContextBlock, WebResult } from '../chat/webSearch';
+import { planSearch } from '../chat/searchPlan';
 import { STAGES, thinkingStream } from '../chat/thinking';
 import { rethinkRequest, rethinkRounds } from '../chat/rethink';
 import { effectiveNumCtx, hardware, modelCapabilities } from '../hardware/monitor';
@@ -177,17 +178,32 @@ export function useChat(settings: LotusSettings) {
         });
       }
 
-      // 1b. Optional web search: search, then open and read the top pages.
+      // 1b. Optional web search. First the chat model decides from the recent conversation whether this
+      //     message needs the web and writes a query that stands on its own (chat/searchPlan.ts), so a
+      //     follow-up like "and the yellow one?" is searched with its topic, and "thanks!" isn't searched.
+      //     Then search, and open and read the top pages.
       if (o.web && o.query) {
-        const q = queryFromMessage(o.query) || o.query;
-        const sid1 = tool('Searching the web', q);
+        const pid = tool('Web search', 'Checking whether this needs a search');
+        // A model that can't answer within 20 s (still loading, busy) leaves it to the rule.
+        const planSignal = AbortSignal.any([ctrl.signal, AbortSignal.timeout(20_000)]);
+        const earlier = history[history.length - 1]?.role === 'user' ? history.slice(0, -1) : history;
+        const plan = await planSearch(
+          earlier.map((m) => ({ role: m.role, content: m.content })), o.query,
+          async (turns) => (await llm.chatOnce(turns, { model: o.model, numCtx: Math.min(numCtx || 4096, 4096), temperature: 0, numPredict: 48, signal: planSignal, think: false })).content,
+        );
+        if (ctrl.signal.aborted) throw new DOMException('Stopped', 'AbortError');
+        toolDone(pid, 'done', plan.search ? `Search for: ${plan.query}` : 'Not needed for this message');
         let results: WebResult[] = [];
-        try {
-          results = (await searchWeb(q, { provider: s.webSearchProvider, searxngUrl: s.searxngUrl, limit: 6, signal: ctrl.signal })).slice(0, 6);
-          toolDone(sid1, 'done', `${results.length} results · ${s.webSearchProvider === 'searxng' ? 'SearXNG' : 'DuckDuckGo'}`);
-        } catch (e) {
-          if (ctrl.signal.aborted) throw e;
-          toolDone(sid1, 'error', (e as Error).message);
+        if (plan.search) {
+          const sid1 = tool('Searching the web', plan.query);
+          try {
+            const found = await searchWebFull(plan.query, { provider: s.webSearchProvider, searxngUrl: s.searxngUrl, limit: 6, signal: ctrl.signal });
+            results = found.results.slice(0, 6);
+            toolDone(sid1, 'done', `${results.length} results · ${found.provider}`);
+          } catch (e) {
+            if (ctrl.signal.aborted) throw e;
+            toolDone(sid1, 'error', (e as Error).message);
+          }
         }
         if (results.length) {
           const toRead = results.slice(0, Math.max(0, Math.min(5, s.webPagesToRead)));

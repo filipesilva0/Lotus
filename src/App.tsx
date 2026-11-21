@@ -103,7 +103,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
   autoScale: true,
   vramReserveMb: 1024,
   maxSubagents: 4,
-  webSearchProvider: 'duckduckgo',
+  webSearchProvider: 'auto',
   searxngUrl: 'http://127.0.0.1:8888',
   webPagesToRead: 3,
   autoMemory: true,

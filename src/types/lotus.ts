@@ -166,7 +166,8 @@ export interface LotusSettings {
   /** Upper bound for background agents, whatever the GPU allows. */
   maxSubagents: number;
   // ── Chat modes ──
-  webSearchProvider: 'duckduckgo' | 'searxng';
+  /** 'auto' = Lotus Search (several engines); 'duckduckgo', the old default, means the same now. */
+  webSearchProvider: 'auto' | 'duckduckgo' | 'searxng';
   searxngUrl: string;
   /** How many result pages Web search opens and reads. */
   webPagesToRead: number;

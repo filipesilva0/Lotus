@@ -2,81 +2,111 @@
 // the internet unless the user turned it on). Same search and page reader as Chat's Web mode.
 
 import type { Tool, ToolCtx } from '../agent/types';
-import { DuckDuckGoBlocked, readPageWith, searchWebWith, type WebIO, type WebResult } from '../../../src/chat/webCore';
+import { EngineHealth, ENGINE_LABEL, metaSearch, providerOf, readPageWith, SearchBlocked, searchWebWith, type EngineId, type WebIO, type WebResult } from '../../../src/chat/webCore';
+import { kvGet } from '../kv';
+import type { Db } from '../db';
 
-// DuckDuckGo answers a burst of searches with a captcha (0.14.5: Work's agents searched at once and all
-// but the first failed). So searches through it go one at a time with a gap, the same query within
-// 10 minutes reuses its results, and after a captcha Lotus waits before the next try.
-export const DDG_GAP_MS = { value: 1500 };
-export const DDG_COOLDOWN_MS = { value: 20_000 };
+// Every web search in Lotus goes through here (the agent's web.search, and Chat's Web button, tasks and
+// routines through the core's web_search method), so one place spaces them out and remembers results.
+// Free search engines answer bursts of searches with a captcha (0.14.5: Work's agents searched at once
+// and all but the first failed; 0.15.0: about a third of chat searches failed). So:
+//   - searches go one at a time with a short gap, and the same query within 10 minutes reuses its results;
+//   - Lotus Search asks the next engine when one refuses, and rests the refused one (webCore.ts);
+//   - if every engine refused, one more try after a pause.
+export const SEARCH_GAP_MS = { value: 1000 };
+export const RETRY_AFTER_MS = { value: 8000 };
+/** @deprecated names from 0.14.5, kept for tests and callers. */
+export const DDG_GAP_MS = SEARCH_GAP_MS;
+export const DDG_COOLDOWN_MS = RETRY_AFTER_MS;
 const CACHE_MS = 10 * 60_000;
-let ddgQueue: Promise<unknown> = Promise.resolve();
-let ddgNext = 0;
-const cache = new Map<string, { at: number; results: WebResult[] }>();
-const inFlight = new Map<string, Promise<WebResult[]>>();
+export const health = new EngineHealth();
+let queue: Promise<unknown> = Promise.resolve();
+let next = 0;
+const cache = new Map<string, { at: number; results: WebResult[]; engine: EngineId | null }>();
+const inFlight = new Map<string, Promise<Found>>();
 const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((done, fail) => {
   if (ms <= 0) { done(); return; }
   const t = setTimeout(done, ms);
   signal?.addEventListener('abort', () => { clearTimeout(t); fail(new DOMException('Stopped', 'AbortError')); }, { once: true });
 });
 
-/** Runs DuckDuckGo searches one after another, spaced out; one retry after a cooldown if it is refused. */
-export function throttledSearch(key: string, run: () => Promise<WebResult[]>, signal?: AbortSignal): Promise<WebResult[]> {
+export interface Found { results: WebResult[]; engine: EngineId | null }
+const keyOf = (q: string) => q.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** Runs searches one after another, spaced out; one more try after a pause if every engine refused. */
+export function throttledSearch(key: string, run: () => Promise<Found>, signal?: AbortSignal): Promise<Found> {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve(hit.results);
+  if (hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve({ results: hit.results, engine: hit.engine });
   const going = inFlight.get(key);
   if (going) return going; // two agents asking the same thing at once share one search
-  const job = ddgQueue.catch(() => undefined).then(async () => {
+  const job = queue.catch(() => undefined).then(async () => {
     for (let attempt = 0; ; attempt++) {
-      await sleep(ddgNext - Date.now(), signal);
+      await sleep(next - Date.now(), signal);
       try {
-        const results = await run();
-        ddgNext = Date.now() + DDG_GAP_MS.value;
-        cache.set(key, { at: Date.now(), results });
-        if (cache.size > 200) cache.delete(cache.keys().next().value!);
-        return results;
+        const found = await run();
+        next = Date.now() + SEARCH_GAP_MS.value;
+        if (found.results.length) {
+          cache.set(key, { at: Date.now(), ...found });
+          if (cache.size > 200) cache.delete(cache.keys().next().value!);
+        }
+        return found;
       } catch (e) {
-        if (!(e instanceof DuckDuckGoBlocked)) { ddgNext = Date.now() + DDG_GAP_MS.value; throw e; }
-        ddgNext = Date.now() + DDG_COOLDOWN_MS.value;
+        if (!(e instanceof SearchBlocked)) { next = Date.now() + SEARCH_GAP_MS.value; throw e; }
+        next = Date.now() + RETRY_AFTER_MS.value * (attempt + 1);
         if (attempt >= 1) throw e;
       }
     }
   });
-  ddgQueue = job;
+  queue = job;
   inFlight.set(key, job);
   void job.finally(() => inFlight.delete(key)).catch(() => undefined);
   return job;
 }
 
-export const __resetWebThrottle = () => { cache.clear(); inFlight.clear(); ddgNext = 0; ddgQueue = Promise.resolve(); };
+export const __resetWebThrottle = () => { cache.clear(); inFlight.clear(); next = 0; queue = Promise.resolve(); health.clear(); };
+
+function settingsOf(get: (k: string) => string | null): { provider: 'auto' | 'searxng'; searxngUrl: string } {
+  try {
+    const s = JSON.parse(get('lotus.settings.v1') || '{}') as { webSearchProvider?: string; searxngUrl?: string };
+    return { provider: providerOf(s.webSearchProvider), searxngUrl: s.searxngUrl || 'http://127.0.0.1:8888' };
+  } catch { return { provider: 'auto', searxngUrl: 'http://127.0.0.1:8888' }; }
+}
+
+/** One search with the user's provider: Lotus Search (throttled, several engines) or their SearXNG. */
+export async function findOnWeb(io: WebIO, get: (k: string) => string | null, query: string, limit: number, signal?: AbortSignal): Promise<Found & { provider: string }> {
+  const p = settingsOf(get);
+  if (p.provider === 'searxng') return { results: await searchWebWith(io, query, { ...p, limit, signal }), engine: null, provider: 'SearXNG' };
+  const found = await throttledSearch(`${limit}:${keyOf(query)}`, async () => {
+    const r = await metaSearch(io, query, { limit, signal, health });
+    return { results: r.results, engine: r.engine };
+  }, signal);
+  return { ...found, provider: found.engine ? ENGINE_LABEL[found.engine] : 'Lotus Search' };
+}
 
 const io = (ctx: ToolCtx): WebIO => ({
   fetch: (url, init) => ctx.fetch(url, init),
   timeout: (ms, outer) => AbortSignal.any([AbortSignal.timeout(ms), ctx.signal, ...(outer ? [outer] : [])]),
 });
 
-function provider(ctx: ToolCtx): { provider: 'duckduckgo' | 'searxng'; searxngUrl: string } {
-  try {
-    const s = JSON.parse(ctx.kvGet('lotus.settings.v1') || '{}') as { webSearchProvider?: string; searxngUrl?: string };
-    return { provider: s.webSearchProvider === 'searxng' ? 'searxng' : 'duckduckgo', searxngUrl: s.searxngUrl || 'http://127.0.0.1:8888' };
-  } catch { return { provider: 'duckduckgo', searxngUrl: 'http://127.0.0.1:8888' }; }
+/** The core's web_search method: Chat's Web button, tasks and routines search through the same queue. */
+export async function webSearchRpc(db: Db, query: string, limit: number, fetchFn: typeof fetch = fetch): Promise<{ results: WebResult[]; provider: string }> {
+  const plain: WebIO = { fetch: (url, init) => fetchFn(url, init), timeout: (ms, outer) => (outer ? AbortSignal.any([AbortSignal.timeout(ms), outer]) : AbortSignal.timeout(ms)) };
+  const r = await findOnWeb(plain, (k) => kvGet(db, k), query, Math.max(1, Math.min(10, limit || 6)));
+  return { results: r.results, provider: r.provider };
 }
 
 export const webSearch: Tool = {
   name: 'web.search', label: 'Searching the web', risk: 'read', // only offered when the user turned Web on for the chat
-  description: 'Search the web for current information. Returns titles, links and snippets; use web.read to open a page.',
-  parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search words.' } }, required: ['query'] },
+  description: 'Search the web for current information. Returns titles, links and snippets; use web.read to open a page. Only search when the answer needs facts you are not sure of or that may have changed; not for greetings, opinions, writing or maths.',
+  parameters: { type: 'object', properties: { query: { type: 'string', description: 'A complete search query that makes sense on its own: name the subject from earlier in the conversation (write "RTX 4060 yellow edition price", not "the yellow one").' } }, required: ['query'] },
   describe: (a) => `Search the web for “${String(a.query)}”`,
   async run(a, ctx) {
-    const p = provider(ctx);
     const q = String(a.query);
-    const results = p.provider === 'duckduckgo'
-      ? await throttledSearch(q.trim().toLowerCase().replace(/\s+/g, ' '), () => searchWebWith(io(ctx), q, { ...p, limit: 6, signal: ctx.signal }), ctx.signal)
-      : await searchWebWith(io(ctx), q, { ...p, limit: 6, signal: ctx.signal });
+    const { results, provider } = await findOnWeb(io(ctx), ctx.kvGet, q, 6, ctx.signal);
     return {
       ok: true,
       text: results.length ? results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.snippet}`).join('\n\n') : 'No results.',
-      summary: `${results.length} results · ${p.provider === 'searxng' ? 'SearXNG' : 'DuckDuckGo'}`,
+      summary: `${results.length} results · ${provider}`,
       data: { results: results.map((r) => ({ title: r.title, url: r.url })) },
     };
   },
