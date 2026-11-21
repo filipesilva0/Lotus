@@ -60,6 +60,12 @@ export interface LibEntry {
   /** Can call tools well (tested with Lotus's real tasks). */
   tools?: boolean;
   vision?: boolean;
+  /**
+   * Mixture-of-experts models (0.21.0): video memory needed when the experts stay in system memory
+   * (GB, estimate). Lotus's own engine then runs them on smaller cards, slower, if the computer has
+   * the system memory for the rest.
+   */
+  moeGpuGb?: number;
 }
 
 /**
@@ -148,15 +154,25 @@ export const CHAT_MODELS: LibEntry[] = [
     blurb: 'The bigger Qwen 3: more knowledge and steadier long answers than the 8B. Text only.', vramGb: 10.5, diskGb: 9,
     builtin: { gguf: { repo: 'unsloth/Qwen3-14B-GGUF', quant: 'Q4_K_M' } }, ollama: 'qwen3:14b' }),
   chat({ id: 'gpt-oss-20b', title: 'gpt-oss 20B', maker: 'OpenAI', licence: 'Apache-2.0', tags: ['Reasoning'],
-    blurb: 'OpenAI\'s open model: quick for its size because only part of it works on each word. Text only.', vramGb: 13, diskGb: 11.6,
+    blurb: 'OpenAI\'s open model: quick for its size because only part of it works on each word. Text only.', vramGb: 13, moeGpuGb: 3, diskGb: 11.6,
     builtin: { gguf: { repo: 'unsloth/gpt-oss-20b-GGUF', quant: 'Q4_K_M' } }, ollama: 'gpt-oss:20b' }),
   chat({ id: 'mistral-small-3.2-24b', title: 'Mistral Small 3.2 24B', maker: 'Mistral AI', licence: 'Apache-2.0', tags: ['Vision'], vision: true,
     blurb: 'A careful writer that follows instructions closely and reads images. Strong in European languages.', vramGb: 16.5, diskGb: 15.2,
     builtin: { gguf: { repo: 'unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'mistral-small3.2:24b' }),
 
   // Very large: 24–32 GB graphics cards, 32–48 GB Macs.
+  // Inkling 2 Mini (Thinking Machines Lab, 20 Nov 2026): 26.4B parameters, 3.4B used per word, reads
+  // images, 1M-token memory, Apache 2.0. Its middle layers run three times ("looped"), which llama.cpp
+  // learns in ggml-org/llama.cpp#32694 (not in a release yet on 21 Nov 2026; until then Lotus says the
+  // engine needs an update). Files: ggml-org's official mainline GGUF (IQ4_NL 17.6 GB, vision file
+  // Q8_0 0.35 GB). Unsloth's smaller files need Unsloth's own llama.cpp build, so they aren't used.
+  // On an 8 GB card it runs with its experts in system memory (about 32 GB of RAM).
+  chat({ id: 'inkling-2-mini', title: 'Inkling 2 Mini', maker: 'Thinking Machines Lab', licence: 'Apache-2.0', tags: ['Vision', 'Reasoning', 'Fast', 'New'], vision: true,
+    blurb: 'Thinking Machines\' new open model (November 2026): reads images, very long memory, only 3B of its 26B work on each word. On an 8 GB card it uses system memory too (32 GB of RAM). Needs the newest llama.cpp.',
+    vramGb: 19.5, moeGpuGb: 4, diskGb: 18,
+    builtin: { gguf: { repo: 'ggml-org/Inkling-2-Mini-GGUF', quant: 'IQ4_NL', mmproj: 'Inkling-2-Mini-Q8_0' } } }),
   chat({ id: 'gemma-4-26b-a4b', title: 'Gemma 4 26B A4B', maker: 'Google', licence: 'Apache-2.0', tags: ['Vision', 'Fast'], vision: true,
-    blurb: 'Nearly as smart as Gemma 4 31B but answers about as fast as a 4B model.', vramGb: 19.5, diskGb: 18.1,
+    blurb: 'Nearly as smart as Gemma 4 31B but answers about as fast as a 4B model.', vramGb: 19.5, moeGpuGb: 5, diskGb: 18.1,
     builtin: { gguf: { repo: 'unsloth/gemma-4-26B-A4B-it-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'gemma4:26b' }),
   chat({ id: 'qwen3.8-27b', title: 'Qwen 3.8 27B', maker: 'Alibaba', licence: 'Apache-2.0', tags: ['Vision', 'Reasoning', 'Coding'], vision: true,
     blurb: 'The strongest open model that fits one 24 GB card (August 2026): agents, coding, reasoning, images.', vramGb: 20, diskGb: 17.5,
@@ -168,16 +184,16 @@ export const CHAT_MODELS: LibEntry[] = [
     blurb: 'The February 2026 27B: strong reasoning and writing, reads images. Qwen 3.6 and 3.8 27B are newer.', vramGb: 20, diskGb: 17.7,
     builtin: { gguf: { repo: 'unsloth/Qwen3.5-27B-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'qwen3.5:27b' }),
   chat({ id: 'qwen3-coder-30b-a3b', title: 'Qwen 3 Coder 30B A3B', maker: 'Alibaba', licence: 'Apache-2.0', tags: ['Coding', 'Fast'],
-    blurb: 'A fast coding model: writes, fixes and explains code across a whole project. Text only.', vramGb: 20.5, diskGb: 18.6,
+    blurb: 'A fast coding model: writes, fixes and explains code across a whole project. Text only.', vramGb: 20.5, moeGpuGb: 3.5, diskGb: 18.6,
     builtin: { gguf: { repo: 'unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF', quant: 'Q4_K_M' } }, ollama: 'qwen3-coder:30b' }),
   chat({ id: 'gemma-4-31b', title: 'Gemma 4 31B', maker: 'Google', licence: 'Apache-2.0', tags: ['Vision', 'Reasoning'], vision: true,
     blurb: 'Google\'s largest open model: excellent writing and many languages, reads images.', vramGb: 21.5, diskGb: 19.5,
     builtin: { gguf: { repo: 'unsloth/gemma-4-31B-it-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'gemma4:31b' }),
   chat({ id: 'qwen3.6-35b-a3b', title: 'Qwen 3.6 35B A3B', maker: 'Alibaba', licence: 'Apache-2.0', tags: ['Vision', 'Coding', 'Fast'], vision: true,
-    blurb: 'Big knowledge, small-model speed: only 3B of its 35B work on each word. Needs a 32 GB card or Mac to fit well.', vramGb: 24.5, diskGb: 23,
+    blurb: 'Big knowledge, small-model speed: only 3B of its 35B work on each word. Needs a 32 GB card or Mac to fit well.', vramGb: 24.5, moeGpuGb: 4.5, diskGb: 23,
     builtin: { gguf: { repo: 'unsloth/Qwen3.6-35B-A3B-GGUF', quant: 'Q4_K_M', mmproj: 'F16' } }, ollama: 'qwen3.6:35b-a3b' }),
   chat({ id: 'nemotron-3.5-lightning-30b', title: 'Nemotron 3.5 Lightning 30B', maker: 'NVIDIA', licence: 'OpenMDW-1.1', tags: ['Fast', 'Reasoning'],
-    blurb: 'NVIDIA\'s fast agent model (August 2026) with a very long memory. Text only; needs 32 GB.', vramGb: 27, diskGb: 25.3,
+    blurb: 'NVIDIA\'s fast agent model (August 2026) with a very long memory. Text only; needs 32 GB.', vramGb: 27, moeGpuGb: 4, diskGb: 25.3,
     builtin: { gguf: { repo: 'unsloth/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF', quant: 'Q4_K_M' } }, ollama: 'nemotron-3.5-lightning:30b' }),
 
   // Workstation: 48 GB+ graphics memory, 64–128 GB Macs. Hugging Face splits these into parts.
@@ -452,7 +468,7 @@ export type Fit = 'fits' | 'tight' | 'too-big' | 'unknown';
  * Without a GPU, `ramGb` (the computer's memory) decides whether a model can load at all: the system
  * and other apps keep about 40%. Models that run on the processor (voice, dictation) always fit.
  */
-export function fitOf(e: Pick<LibEntry, 'vramGb'>, vramGb: number | undefined, unified = false, ramGb?: number): Fit {
+export function fitOf(e: Pick<LibEntry, 'vramGb'> & { moeGpuGb?: number }, vramGb: number | undefined, unified = false, ramGb?: number): Fit {
   if (e.vramGb <= 0.5) return 'fits';
   if (!vramGb || vramGb <= 0) {
     if (ramGb && ramGb > 0 && e.vramGb > ramGb * 0.6) return 'too-big';
@@ -461,6 +477,9 @@ export function fitOf(e: Pick<LibEntry, 'vramGb'>, vramGb: number | undefined, u
   const usable = unified ? vramGb * 0.75 : vramGb;
   if (e.vramGb <= usable * 0.9) return 'fits';
   if (e.vramGb <= usable * 1.25) return 'tight';
+  // 0.21.0: a mixture-of-experts model keeps its experts in system memory when the card is too small.
+  // That needs the rest of the model in RAM next to Windows and other apps (about 8 GB).
+  if (!unified && e.moeGpuGb && e.moeGpuGb <= usable * 0.9 && (!ramGb || e.vramGb - usable + 8 <= ramGb)) return 'tight';
   return 'too-big';
 }
 

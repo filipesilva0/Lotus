@@ -5,7 +5,7 @@
 //
 // Format: https://github.com/ggml-org/ggml/blob/master/docs/gguf.md
 
-import { closeSync, openSync, readSync } from 'node:fs';
+import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 
 export interface GgufInfo {
   arch: string;
@@ -17,7 +17,17 @@ export interface GgufInfo {
   /** KV-cache bytes per cached token for sliding-window layers (they keep at most `swaWindow` tokens). */
   kvSwaBytes: number;
   swaWindow: number;
+  /** Mixture-of-experts models: experts per layer (0 for ordinary models). */
+  expertCount?: number;
+  /**
+   * Bytes of expert weights in each layer (index = layer), read from the file's tensor list. These are
+   * the weights llama.cpp's --n-cpu-moe keeps in system memory; empty when the file has none.
+   */
+  expertBytes?: number[];
 }
+
+/** One tensor in the file: its name and where its data starts (bytes after the data section's start). */
+export interface GgufTensor { name: string; offset: number }
 
 type Val = number | bigint | string | boolean | Val[] | { skipped: number };
 
@@ -46,6 +56,8 @@ class Reader {
     this.fileAt += n - inBuf;
     this.buf = Buffer.alloc(0); this.at = 0;
   }
+  /** Position in the file of the next byte to read. */
+  pos() { return this.fileAt - (this.buf.length - this.at); }
   u32() { this.need(4); const v = this.buf.readUInt32LE(this.at); this.at += 4; return v; }
   u64() { this.need(8); const v = this.buf.readBigUInt64LE(this.at); this.at += 8; return v; }
   scalar(t: number): number | bigint | boolean {
@@ -95,15 +107,18 @@ class Reader {
   }
 }
 
-/** The metadata key/value pairs of a GGUF file (large arrays such as the tokenizer's are reduced to their length). */
-export function readGgufMeta(path: string): Map<string, Val> {
+/**
+ * The metadata of a GGUF file (large arrays such as the tokenizer's are reduced to their length) and,
+ * with `tensors`, its tensor list with each tensor's size in bytes (from the gaps between offsets).
+ */
+export function readGgufFile(path: string, tensors = false): { meta: Map<string, Val>; tensors: (GgufTensor & { bytes: number })[] } {
   const fd = openSync(path, 'r');
   try {
     const r = new Reader(fd);
     if (r.u32() !== 0x46554747) throw new Error('Not a GGUF file');
     const version = r.u32();
     if (version < 2) throw new Error('GGUF version 1 is not supported');
-    r.u64(); // tensor count
+    const tensorCount = Number(r.u64());
     const kvCount = Number(r.u64());
     const meta = new Map<string, Val>();
     for (let i = 0; i < kvCount; i++) {
@@ -113,8 +128,37 @@ export function readGgufMeta(path: string): Map<string, Val> {
       const keep = !key.startsWith('tokenizer.') || key === 'tokenizer.ggml.tokens';
       meta.set(key, r.value(t, keep && key !== 'tokenizer.chat_template'));
     }
-    return meta;
+    if (!tensors || tensorCount > 1_000_000) return { meta, tensors: [] };
+    const list: GgufTensor[] = [];
+    for (let i = 0; i < tensorCount; i++) {
+      const name = r.str();
+      const dims = r.u32();
+      if (dims > 8) throw new Error('GGUF: bad tensor');
+      for (let d = 0; d < dims; d++) r.u64();
+      r.u32(); // type
+      list.push({ name, offset: Number(r.u64()) });
+    }
+    const align = toNum(meta.get('general.alignment')) || 32;
+    const dataStart = Math.ceil(r.pos() / align) * align;
+    const dataEnd = fstatSync(fd).size - dataStart;
+    // A tensor's size is the distance to the next tensor's data (padding included, at most `align` bytes).
+    const sorted = [...list].sort((a, b) => a.offset - b.offset);
+    const out = sorted.map((t, i) => ({ ...t, bytes: Math.max(0, (i + 1 < sorted.length ? sorted[i + 1].offset : dataEnd) - t.offset) }));
+    return { meta, tensors: out };
   } finally { closeSync(fd); }
+}
+
+/** The metadata key/value pairs of a GGUF file (large arrays such as the tokenizer's are reduced to their length). */
+export function readGgufMeta(path: string): Map<string, Val> { return readGgufFile(path).meta; }
+
+/** Expert weights per layer, from tensor names such as blk.7.ffn_up_exps.weight (what --n-cpu-moe moves). */
+export function expertBytesByLayer(tensors: { name: string; bytes: number }[], layers: number): number[] {
+  const out: number[] = Array(layers).fill(0);
+  for (const t of tensors) {
+    const m = /^blk\.(\d+)\.ffn_[a-z_]*exps\b/.exec(t.name);
+    if (m && Number(m[1]) < layers) out[Number(m[1])] += t.bytes;
+  }
+  return out.some((b) => b > 0) ? out : [];
 }
 
 const toNum = (v: Val | undefined): number => (typeof v === 'number' ? v : typeof v === 'bigint' ? Number(v) : typeof v === 'boolean' ? Number(v) : 0);
@@ -129,7 +173,7 @@ const SWA_PATTERN: Record<string, { n: number; denseFirst?: boolean }> = {
 };
 
 /** Works out KV-cache sizes from the metadata. Null when the file doesn't describe its attention. */
-export function ggufInfo(meta: Map<string, Val>): GgufInfo | null {
+export function ggufInfo(meta: Map<string, Val>, tensors: { name: string; bytes: number }[] = []): GgufInfo | null {
   const arch = String(meta.get('general.architecture') ?? '');
   if (!arch) return null;
   const k = (name: string) => meta.get(`${arch}.${name}`);
@@ -175,7 +219,10 @@ export function ggufInfo(meta: Map<string, Val>): GgufInfo | null {
   }
   const tokens = meta.get('tokenizer.ggml.tokens');
   const vocab = toNum(k('vocab_size')) || (Array.isArray(tokens) ? tokens.length : tokens && typeof tokens === 'object' ? (tokens as { skipped: number }).skipped : 0);
-  return { arch, layers: layersAll, ctxTrain: toNum(k('context_length')), vocab, kvFullBytes: full * 2, kvSwaBytes: slid * 2, swaWindow: slid ? window : 0 };
+  const expertCount = toNum(k('expert_count'));
+  const experts = expertCount ? expertBytesByLayer(tensors, layersAll) : [];
+  return { arch, layers: layersAll, ctxTrain: toNum(k('context_length')), vocab, kvFullBytes: full * 2, kvSwaBytes: slid * 2, swaWindow: slid ? window : 0,
+    ...(expertCount ? { expertCount, expertBytes: experts } : {}) };
 }
 
 const cache = new Map<string, GgufInfo | null>();
@@ -183,7 +230,10 @@ const cache = new Map<string, GgufInfo | null>();
 export function readGgufInfo(path: string): GgufInfo | null {
   if (cache.has(path)) return cache.get(path)!;
   let info: GgufInfo | null = null;
-  try { info = ggufInfo(readGgufMeta(path)); } catch { info = null; }
+  try { const f = readGgufFile(path, true); info = ggufInfo(f.meta, f.tensors); } catch {
+    // A tensor list Lotus can't read still leaves the context sizing working.
+    try { info = ggufInfo(readGgufMeta(path)); } catch { info = null; }
+  }
   cache.set(path, info);
   return info;
 }
