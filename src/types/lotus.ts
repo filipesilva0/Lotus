@@ -1,5 +1,5 @@
 /** Pages. Five workspaces, one per petal of the logo (Research moved into Chat in session 8), plus Engines & Models. */
-export type ViewMode = 'chat' | 'work' | 'images' | 'voice' | 'tasks' | 'engines';
+export type ViewMode = 'chat' | 'work' | 'images' | 'voice' | 'tasks' | 'assistant' | 'engines';
 
 export interface ChatSource { n: number; title: string; url: string; repo?: string; year?: number }
 export interface ChatToolCall {

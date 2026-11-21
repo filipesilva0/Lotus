@@ -11,7 +11,6 @@ import { EngineId, engineUrl, setEngineUrl, setEngineToken, engineToken, isRemot
 import { setSavedExe, testEngine, EngineTest } from '../../services/engineControl';
 import { browseModelsDir, findModelsDir } from '../../services/downloadService';
 import type { useEngines } from '../../hooks/useEngines';
-import type { ColorPalette } from '../../types/lotus';
 import {
   Arch, COMFY_DESKTOP_URL, DICTATION_PICK, DesktopOs, ENGINES, ENGINE_ORDER, IMAGE_PICKS, Pick, TIERS, Tier,
   VOICEBOX_MANIFEST, VOICE_PICKS, afterOpenHint, fitFor, installerFor, isComfyDesktopPath, selectionGb, suggestedTier,
@@ -40,10 +39,6 @@ interface SetupInfo {
   found: Partial<Record<EngineId, string | null>>;
 }
 
-/** The accent follows the petal of what the screen is about; general screens use the first petal. */
-const STEP_PALETTE: Record<StepId, ColorPalette> = {
-  welcome: 'blue', folder: 'blue', engines: 'blue', install: 'blue', chat: 'blue', images: 'red', voice: 'amber', done: 'green',
-};
 type ModelStep = 'chat' | 'images' | 'voice';
 /**
  * Ollama's chat choices: the three picks for this kind of computer from the one catalog (T71), as
@@ -70,10 +65,9 @@ type InstallPhase =
 export interface WelcomeSetupProps {
   eng: Eng;
   onClose: (s: SetupState) => void;
-  onAccent: (p: ColorPalette) => void;
 }
 
-export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAccent }) => {
+export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose }) => {
   const [info, setInfo] = useState<SetupInfo | null>(null);
   const [studioDir, setStudioDir] = useState('');
   const [want, setWant] = useState<Record<EngineId, boolean>>({ ollama: true, comfyui: false, voicebox: false });
@@ -153,7 +147,6 @@ export const WelcomeSetup: React.FC<WelcomeSetupProps> = ({ eng, onClose, onAcce
   const modelEngines = ownMode ? (['ollama', 'comfyui', 'voicebox'] as EngineId[]) : modelScreenEngines(want, (id) => haveEngine(id) || !!remoteOn[id], remoteOn);
   const steps = visibleSteps(toInstall.length > 0 || ENGINE_ORDER.some((id) => phase[id].kind !== 'idle'), modelEngines);
   const idx = Math.max(0, steps.indexOf(stepId));
-  useEffect(() => { onAccent(STEP_PALETTE[stepId]); }, [stepId, onAccent]);
 
   // ── Installing engines ─────────────────────────────────────────────────
   const setP = useCallback((id: EngineId, p: InstallPhase) => setPhase((s) => ({ ...s, [id]: p })), []);

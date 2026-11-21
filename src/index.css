@@ -175,7 +175,7 @@ html.no-glass body { background: var(--color-bg-base); }
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-accent-vibrant) 75%, transparent);
 }
 
-/* Info notes: text with no control (where something lives, what a page colour means). Styled apart from
+/* Info notes: text with no control (where something lives, what a setting means). Styled apart from
    setting rows so nobody looks for a missing switch. */
 .info-note { border-radius: 8px; background: color-mix(in srgb, var(--color-text-main) 5%, transparent); }
 

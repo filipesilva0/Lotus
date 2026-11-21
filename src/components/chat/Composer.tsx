@@ -205,7 +205,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
                 <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => onClearFolder?.()}><X className="w-3 h-3" /></IconBtn>
               </span>
             ) : trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', isTauri ? `Let ${name} work in a folder: it opens, searches and edits the files it needs (saving asks first)` : "Attach a folder: its text and code files join this chat's context")}
-            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Skills', `The skills, memory and soul ${name} uses (Tasks page)`)}
+            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Skills', `The skills, memory and soul ${name} uses (Assistant page)`)}
             {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
           </>}
           status={<>

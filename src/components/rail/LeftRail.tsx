@@ -1,13 +1,15 @@
 import React from 'react';
-import { MessageSquare, Image as ImageIcon, AudioLines, Server, Settings as SettingsIcon, Briefcase, SquareKanban } from 'lucide-react';
+import { Server, Settings as SettingsIcon } from 'lucide-react';
 import { ProfileButton } from '../account/ProfileButton';
 import type { AccountView } from '../account/AccountModal';
 import { LotusMark } from '../common/LotusMark';
-import { PAGE_PALETTE, PALETTES } from '../../styles/theme';
 import { Symbol } from '../common/Symbol';
 import { ViewMode } from '../../types/lotus';
 import type { EngineState } from '../../hooks/useEngines';
 import type { EngineId } from '../../services/engineConfig';
+import { PAGES, WORKSPACES, VIEW_TITLES } from './pages';
+
+export { VIEW_TITLES };
 
 export type EngineHealth = 'checking' | 'ok' | 'attention' | 'idle';
 
@@ -44,13 +46,7 @@ interface LeftRailProps {
   engines: Record<EngineId, EngineState>;
   /** A newer version was found (only ever true after a real check). */
   updateAvailable?: boolean;
-  /** Effective appearance, so each page icon can wear the right shade of its petal colour. */
-  dark: boolean;
 }
-
-export const VIEW_TITLES: Record<ViewMode, string> = {
-  chat: 'Chat', work: 'Work', images: 'Images', voice: 'Voice', tasks: 'Tasks', engines: 'Engines',
-};
 
 const row =
   'tip group relative w-full flex items-center justify-center h-11 rounded-[12px] select-none transition-colors duration-100 ' +
@@ -60,18 +56,12 @@ const idle = 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-
 /**
  * App switcher: an icon-only column on the window field. Session 8: it is always folded (the wide
  * version and its toggle were removed; the title bar's panel buttons now control each page's own
- * left and right panels). The selected page's icon wears its petal colour; names show as tips.
+ * left and right panels). The selected page's icon wears the app's one accent (0.21: pages no longer
+ * have their own colours); names show as tips. The order and icons come from ./pages.ts.
  */
-export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenAccount, engines, updateAvailable = false, dark }) => {
-  const nav = [
-    { id: 'chat' as ViewMode, glyph: MessageSquare, label: 'Chat' },
-    { id: 'work' as ViewMode, glyph: Briefcase, label: 'Work' },
-    { id: 'images' as ViewMode, glyph: ImageIcon, label: 'Images' },
-    { id: 'voice' as ViewMode, glyph: AudioLines, label: 'Voice' },
-    { id: 'tasks' as ViewMode, glyph: SquareKanban, label: 'Tasks' },
-  ];
+export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, onOpenSettings, onOpenAccount, engines, updateAvailable = false }) => {
   const { health, label: healthLabel } = engineHealth(engines);
-  const petal = (id: ViewMode) => { const p = PALETTES[PAGE_PALETTE[id]]; return dark ? p.vibrantLight : p.vibrant; };
+  const engines_ = PAGES.find((p) => p.id === 'engines')!;
   const dot = (cls: string) => <span aria-hidden="true" className={`absolute -top-0.5 -right-1 w-2 h-2 rounded-full ${cls}`} />;
 
   const item = (id: ViewMode, glyph: typeof Server, label: string, aria?: string, badge?: React.ReactNode) => {
@@ -81,7 +71,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
         aria-current={on ? 'page' : undefined}
         className={`${row} ${on ? 'bg-[var(--color-bg-card)] text-[var(--color-text-main)] shadow-[0_0_0_0.5px_var(--sep),var(--shadow-1)]' : idle}`}>
         <span className="relative inline-flex">
-          <Symbol glyph={glyph} size={22} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? petal(id) : 'currentColor'} effect={on ? 'bounce' : undefined} />
+          <Symbol glyph={glyph} size={22} weight={on ? 'medium' : 'regular'} mode="hierarchical" tone={on ? 'var(--color-accent-vibrant)' : 'currentColor'} effect={on ? 'bounce' : undefined} />
           {badge}
         </span>
       </button>
@@ -90,17 +80,17 @@ export const LeftRail: React.FC<LeftRailProps> = ({ currentView, onSelectView, o
 
   return (
     <aside className="shrink-0 w-[68px] flex flex-col select-none" aria-label="Pages">
-      {/* The five-petal mark: one petal per page (Chat, Work, Images, Voice, Tasks). */}
+      {/* The Lotus mark (the user's own five-petal artwork). */}
       <div className="h-14 shrink-0 flex items-center justify-center">
         <LotusMark size={32} label="Lotus" />
       </div>
 
       <nav className="flex flex-col gap-1 px-3" aria-label="Workspaces">
-        {nav.map((n) => item(n.id, n.glyph, n.label))}
+        {WORKSPACES.map((n) => item(n.id, n.glyph, n.label, n.title))}
       </nav>
 
       <div className="mt-auto flex flex-col gap-1 px-3 pb-3">
-        {item('engines', Server, 'Engines & Models', `Engines and models. ${healthLabel}`, dot(DOT[health]))}
+        {item('engines', engines_.glyph, engines_.label, `Engines and models. ${healthLabel}`, dot(DOT[health]))}
         <button type="button" onClick={onOpenSettings} data-tip={updateAvailable ? 'Settings · update available' : 'Settings'} data-tip-side="right"
           aria-label={updateAvailable ? 'Settings. An update is available' : 'Settings'} className={`${row} ${idle}`}>
           <span className="relative inline-flex">

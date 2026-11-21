@@ -48,14 +48,9 @@ Local-first. No account needed and no telemetry. Turn off your Wi-Fi and it keep
 
 <a name="features"></a>
 
-## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> Five petals, five pages
+## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> The pages
 
-Each petal of the logo is a page, and each page wears its petal's colour.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/petals-dark.png">
-  <img alt="Five cards: Chat in blue, Work in red, Images in orange, Voice in yellow, Tasks in green." src="docs/assets/petals-light.png" width="100%">
-</picture>
+Chat, Work, Images, Voice, Tasks and Assistant sit down the left side of the window, in that order (<kbd>Ctrl</kbd> <kbd>1</kbd> to <kbd>Ctrl</kbd> <kbd>6</kbd>), with Engines & Models at the foot.
 
 ### <img src="docs/assets/petal-chat.svg" width="16" height="16"> Chat
 
@@ -100,11 +95,18 @@ Everything voice, with Lotus's own engine and no extra install.
 
 ### <img src="docs/assets/petal-tasks.svg" width="16" height="16"> Tasks
 
-Everything Lotus does on its own, and everything it has learned.
+Everything Lotus does on its own.
 
 - **Board.** Assign a card to Lotus and its agent plans the steps, works through them and leaves the result in Review. Cards can block each other, so work happens in order.
 - **Routines** run on a schedule while Lotus is open, and can catch up on runs they missed.
-- **Skills**, **Memory**, **Soul** (the instructions that shape Lotus's personality) and **Plugins** each have their own tab. Read, edit or delete anything.
+- **Activity** lists every run, with each step and its result.
+
+### <img src="docs/assets/petal-lotus.svg" width="16" height="16"> Assistant
+
+Everything that shapes the assistant itself.
+
+- **Memory**: what it remembers about you. **Soul**: its name and personality. **Skills**: procedures it has learned. **Plugins**: extra abilities you add.
+- Read, edit or delete anything.
 
 <br>
 
@@ -191,6 +193,7 @@ Models download in the background. Everything else lives in **Engines & Models**
 
 | Shortcut | Action |
 |---|---|
+| <kbd>Ctrl</kbd> <kbd>1</kbd> … <kbd>Ctrl</kbd> <kbd>7</kbd> | Go to Chat, Work, Images, Voice, Tasks, Assistant, Engines & Models |
 | <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Space</kbd> | Open the island chat |
 | <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>D</kbd> | Start or stop dictation |
 | <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd> | Show or hide the island |

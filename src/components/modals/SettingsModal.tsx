@@ -4,9 +4,8 @@ import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
 import { Segmented, Select, IconBtn, InfoNote, SettingRow } from '../common/ui';
-import { PALETTES, FONTS, PAGE_PALETTE, PETAL_ORDER } from '../../styles/theme';
+import { FONTS } from '../../styles/theme';
 import type { FontFamily } from '../../types/lotus';
-import { VIEW_TITLES } from '../rail/LeftRail';
 import { PrivacyPanel } from './PrivacyPanel';
 import { UpdatesPanel } from './UpdatesPanel';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAgentSettings';
@@ -203,20 +202,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         { id: 'dark', label: 'Dark', icon: <Moon className="w-3.5 h-3.5" aria-hidden="true" /> },
                       ]}
                     />
-                  </div>
-
-                  <div className="py-3">
-                    <InfoNote title="Accent colours">
-                      Each page uses its own petal of the Lotus mark, so there is nothing to choose here.
-                      <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                        {PETAL_ORDER.map((id) => (
-                          <span key={id} className="inline-flex items-center gap-1.5 text-[var(--color-text-main)]">
-                            <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full" style={{ background: `var(--petal-${PALETTES[PAGE_PALETTE[id]].name.toLowerCase()})` }} />
-                            {VIEW_TITLES[id]}<span className="sr-only"> {PALETTES[PAGE_PALETTE[id]].name.toLowerCase()}</span>
-                          </span>
-                        ))}
-                      </span>
-                    </InfoNote>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-3">
