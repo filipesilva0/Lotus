@@ -44,6 +44,8 @@ describe('launch switch off (what 0.18.0 ships)', () => {
   test('the shipped config keeps selling and locks off', () => {
     expect(PRO_CONFIG.locks).toBe(false);
     expect(PRO_CONFIG.buyUrl).toBe('');
+    expect(PRO_CONFIG.productId).toBe('45920');
+    expect(PRO_CONFIG.publicKey).toStartWith('pk_');
   });
   test('everything is unlocked and no trial starts', () => {
     const { mk } = setup({ ...PRO_CONFIG });
@@ -53,12 +55,12 @@ describe('launch switch off (what 0.18.0 ships)', () => {
     const s = l.noteChatSuccess();
     expect(s.plan).toBe('free');
     expect(s.trialStartedAt).toBeNull();
-    expect(s.canActivate).toBe(false);
+    expect(s.canActivate).toBe(true); // the Freemius product is set up; the pane stays hidden until launch
   });
   test('a test build can be set up from the environment', () => {
     const c = proConfigFromEnv({ LOTUS_PRO_TEST: '1', LOTUS_FREEMIUS_PRODUCT: PRODUCT, LOTUS_PRO_LOCKS: '1' });
     expect(c).toMatchObject({ test: true, productId: PRODUCT, locks: true });
-    expect(proConfigFromEnv({ LOTUS_FREEMIUS_PRODUCT: 'abc' }).productId).toBe('');
+    expect(proConfigFromEnv({ LOTUS_FREEMIUS_PRODUCT: 'abc' }).productId).toBe(PRO_CONFIG.productId); // not a number: ignored
   });
 });
 
