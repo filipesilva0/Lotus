@@ -23,7 +23,7 @@
     ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>Lotus AI Studio</DisplayName>
-    <PublisherDisplayName>Lotus</PublisherDisplayName>
+    <PublisherDisplayName>Lotus Local AI Studio</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
