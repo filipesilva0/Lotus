@@ -2,6 +2,7 @@
 // arrange lines on four tracks (overlaps allowed), play them together and export one WAV.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ProGate } from '../../pro/TryPro';
 import { ArrowDown, ArrowUp, Download, FileText, ListPlus, Play, RefreshCw, Square, Trash2, Wand2 } from 'lucide-react';
 import { Banner, Btn, Empty, IconBtn, Segmented, Select, TextArea, cx } from '../../common/ui';
 import { SliderField } from '../../common/Pane';
@@ -22,7 +23,7 @@ type By = 'line' | 'paragraph';
 
 export const newStory = (): Story => ({ id: uid('story'), name: 'Untitled Story', items: [], gap: 0.4, created: Date.now(), updated: Date.now() });
 
-export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onStory: (id: string) => void }> = ({ studio, storyId, onStory }) => {
+const StoriesViewInner: React.FC<{ studio: Studio; storyId: string | null; onStory: (id: string) => void }> = ({ studio, storyId, onStory }) => {
   const story = studio.stories.find((s) => s.id === storyId) ?? null;
   const [script, setScript] = useState('');
   const [by, setByRaw] = useState<By>(() => (kv.getItem('lotus.voice.storyBy') as By) || 'paragraph');
@@ -184,3 +185,7 @@ export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onS
     </div>
   );
 };
+
+
+/** 0.18.0: multi-voice Stories with export are Lotus Pro (unlocked until Pro launches). */
+export const StoriesView: React.FC<{ studio: Studio; storyId: string | null; onStory: (id: string) => void }> = (p) => <ProGate feature="stories" className="m-6"><StoriesViewInner {...p} /></ProGate>;

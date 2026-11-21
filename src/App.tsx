@@ -68,6 +68,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
   appearance: 'auto',
   lotusFolderPath: '',
   keepEnginesRunningOnQuit: false,
+  advancedMode: false,
   selectedModel: '',
   temperature: 0.7,
   topP: 0.9,
@@ -139,6 +140,8 @@ function loadSettings(): LotusSettings {
   try { kv.setItem('lotus.whisperAuto.v1', '1'); } catch { /* memory only */ }
   // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
   // Settings → Engines switches them to the built-in ones.
+  // 0.18.0: people who used Lotus before Advanced mode existed keep seeing everything they saw.
+  if (raw && saved.advancedMode === undefined) saved.advancedMode = true;
   if (raw && saved.imageEngine === undefined) {
     return { ...DEFAULT_SETTINGS, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox', engineModelsInStudio: false, ...saved };
   }
@@ -172,6 +175,12 @@ export default function App() {
   const [settingsPane, setSettingsPane] = useState<SettingsTab | null>(null);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
   const openSettings = useCallback((pane: SettingsTab | null = null) => { setSettingsPane(pane); setIsSettingsOpen(true); }, []);
+  // "Try Pro" cards (and other deep links) open a Settings pane by name.
+  useEffect(() => {
+    const h = (e: Event) => openSettings(((e as CustomEvent).detail as SettingsTab) ?? null);
+    window.addEventListener('lotus:open-settings', h);
+    return () => window.removeEventListener('lotus:open-settings', h);
+  }, [openSettings]);
   const [accountView, setAccountView] = useState<AccountView | null>(null);
   // 0.11.0: skills, memory, soul and plugins are tabs of the Tasks page.
   const [tasksRequest, setTasksRequest] = useState<{ tab: LibraryTab; n: number } | null>(null);

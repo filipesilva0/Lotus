@@ -48,11 +48,13 @@ export interface VoiceOption { id: string; name: string; detail: string; mine: b
 export const speakerLabel = (n: string) => { const m = /^([ab])([fm])_(\w+)$/.exec(n); return m ? `${m[3][0].toUpperCase()}${m[3].slice(1)} · ${m[1] === 'a' ? 'US' : 'UK'} English, ${m[2] === 'f' ? 'female' : 'male'}` : n; };
 
 /** Every voice you can speak with right now: yours first, then each built-in speaker. */
-export function voiceOptions(models: VoiceModel[], mine: MyVoice[]): VoiceOption[] {
+export function voiceOptions(models: VoiceModel[], mine: MyVoice[], o: { proLocked?: boolean } = {}): VoiceOption[] {
   const byId = new Map(models.map((m) => [m.id, m]));
   const own = mine.map((v): VoiceOption => {
     const m = byId.get(v.model);
-    const why = !m ? 'Its voice model isn’t downloaded.' : m.clones && !v.reference ? 'It has no recording yet.' : m.needsReferenceText && !v.referenceText?.trim() ? 'Add the words spoken in its recording.' : undefined;
+    // 0.18.0: cloned voices are Lotus Pro. When Pro is locked they're kept but can't speak, so calls and
+    // read-aloud fall back to a built-in voice (pickVoice). Built-in speakers saved with your settings stay free.
+    const why = !m ? 'Its voice model isn’t downloaded.' : m.clones && o.proLocked ? 'Cloned voices are part of Lotus Pro.' : m.clones && !v.reference ? 'It has no recording yet.' : m.needsReferenceText && !v.referenceText?.trim() ? 'Add the words spoken in its recording.' : undefined;
     return { id: v.id, name: v.name, detail: m ? (m.clones ? `Your voice · ${m.title.replace(/\s*\(.*\)$/, '')}` : `Your voice · ${m.title}`) : 'Your voice', mine: true, ready: !why, why,
       model: v.model, speaker: v.speaker ?? 0, reference: v.reference, referenceText: v.referenceText, steps: v.steps, speed: v.speed, effects: v.effects };
   });

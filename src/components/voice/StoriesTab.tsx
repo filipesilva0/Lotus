@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ProGate } from '../pro/TryPro';
 import { Plus, Play, Square, Download, Trash2, Copy, Scissors, Film, Sparkles } from 'lucide-react';
 import { voicebox, Story, StoryDetail, StoryItem, fmtDuration } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
@@ -10,11 +11,13 @@ import { kv } from '../../lib/store';
 const ROW_H = 52;
 const effMs = (i: StoryItem) => Math.max(200, i.duration * 1000 - i.trim_start_ms - i.trim_end_ms);
 
-export const StoriesTab: React.FC<{
+type StoriesTabProps = {
   data: VoiceData;
   pendingGeneration: string | null;
   onPendingHandled: () => void;
-}> = ({ data, pendingGeneration, onPendingHandled }) => {
+};
+
+const StoriesTabInner: React.FC<StoriesTabProps> = ({ data, pendingGeneration, onPendingHandled }) => {
   const [stories, setStories] = useState<Story[]>([]);
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -308,3 +311,7 @@ export const StoriesTab: React.FC<{
     </div>
   );
 };
+
+
+/** 0.18.0: multi-voice Stories with export are Lotus Pro (unlocked until Pro launches). */
+export const StoriesTab: React.FC<StoriesTabProps> = (p) => <ProGate feature="stories" className="m-6"><StoriesTabInner {...p} /></ProGate>;

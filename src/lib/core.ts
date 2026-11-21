@@ -17,7 +17,11 @@ export type CoreEvent =
   | { type: 'memory' }
   /** Built-in engines (session 17): download jobs and the chat server; image progress. */
   | { type: 'builtin'; jobs: unknown[]; chat: unknown }
-  | { type: 'builtin-image'; genId: string; step: number; total: number };
+  | { type: 'builtin-image'; genId: string; step: number; total: number }
+  /** Lotus Pro status changed (0.18.0: licence key, trial). */
+  | { type: 'pro'; status: unknown }
+  /** MCP tool servers started, stopped or failed (Settings → Advanced). */
+  | { type: 'mcp' };
 
 let info: CoreInfo | null = null;
 let lastError: string | null = null;

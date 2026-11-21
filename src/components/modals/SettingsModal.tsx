@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { chromeOs } from '../common/TitleBar';
-import { X, Cpu, MessageSquare, Volume2, Palette, Shield, Download, SunMoon, Sparkles, Server, Sun, Moon, Wrench, SlidersHorizontal } from 'lucide-react';
+import { X, Cpu, Gem, MessageSquare, Volume2, Palette, Shield, Download, SunMoon, Sparkles, Server, Sun, Moon, Wrench, SlidersHorizontal, Blocks } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
@@ -14,6 +14,9 @@ import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAg
 import type { Updates } from '../../hooks/useUpdates';
 import { ToolsPanel } from './ToolsSettings';
 import { kv } from '../../lib/store';
+import { ProSettings } from '../pro/ProSettings';
+import { AdvancedPanel } from './AdvancedSettings';
+import { usePro } from '../../lib/pro';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -38,7 +41,9 @@ export type SettingsTab =
   | 'island'
   | 'appearance'
   | 'updates'
-  | 'licenses';
+  | 'licenses'
+  | 'pro'
+  | 'advanced';
 
 /** One setting: name and a sentence on the left, its control on the right (same look in every pane). */
 const Row: React.FC<{ title: string; hint?: React.ReactNode; children?: React.ReactNode }> = ({ title, hint, children }) => (
@@ -68,6 +73,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (pane) return pane;
     try { const saved = kv.getItem(PANE_KEY); return !saved || saved === 'inference' ? 'general' : (saved as SettingsTab); } catch { return 'general'; }
   });
+  // Lotus Pro's pane appears once Pro is launched (or in a test build pointed at Polar's practice shop).
+  const pro = usePro();
+  const showPro = pro.locks || pro.sandbox;
+  const advanced = settings.advancedMode === true || settings.llmBackend !== 'builtin' || settings.imageEngine !== 'builtin' || settings.voiceEngine !== 'builtin';
   const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { kv.setItem(PANE_KEY, t); } catch { /* memory only */ } };
   useEffect(() => { if (isOpen && pane) setActiveTabRaw(pane); }, [isOpen, pane]);
   useEffect(() => {
@@ -80,7 +89,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
     { id: 'general', label: 'General', icon: SlidersHorizontal },
-    { id: 'engine', label: 'Engines', icon: Server },
+    // Advanced mode (0.18.0): engines for people who chose one other than Lotus's own, or who turned it on.
+    ...(advanced ? [{ id: 'engine' as SettingsTab, label: 'Engines', icon: Server }] : []),
     { id: 'chat', label: 'Chat', icon: MessageSquare },
     { id: 'memory', label: 'Memory', icon: Sparkles },
     { id: 'tools', label: 'Tools', icon: Wrench },
@@ -89,14 +99,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'updates', label: 'Updates', icon: Download },
     { id: 'licenses', label: 'Privacy', icon: Shield },
+    ...(settings.advancedMode ? [{ id: 'advanced' as SettingsTab, label: 'Advanced', icon: Blocks }] : []),
+    ...(showPro ? [{ id: 'pro' as SettingsTab, label: 'Lotus Pro', icon: Gem }] : []),
   ];
-  const paneName = tabs.find((t) => t.id === activeTab)?.label ?? 'Settings';
+  // A pane hidden since it was last open (Advanced mode turned off) opens General instead.
+  const tab: SettingsTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'general';
+  const paneName = tabs.find((t) => t.id === tab)?.label ?? 'Settings';
   const mac = chromeOs() === 'macos';
   const closeBtn = <IconBtn label="Close Settings" onClick={onClose}><X className="w-4 h-4" /></IconBtn>;
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={`Settings: ${paneName}`} className="material-frosted w-full max-w-3xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label={`Settings: ${paneName}`} className="material-frosted w-full max-w-4xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
         {/* HIG Settings: the title is the pane's name; a fixed pane toolbar shows which pane is open. */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center px-2 h-10 shrink-0">
           <div className="flex">{mac && closeBtn}</div>
@@ -104,14 +118,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="flex justify-end">{!mac && closeBtn}</div>
         </div>
         <nav className="shrink-0 flex justify-center gap-0.5 px-3 pb-2 border-b border-[var(--sep)] overflow-x-auto" aria-label="Settings panes" role="tablist">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const isActive = tab === t.id;
             return (
-              <button key={tab.id} type="button" role="tab" aria-selected={isActive} onClick={() => setActiveTab(tab.id)}
-                className={`min-w-[64px] px-2 pt-1.5 pb-1 flex flex-col items-center gap-0.5 rounded-[8px] text-[12px] transition-colors focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'}`}>
+              <button key={t.id} type="button" role="tab" aria-selected={isActive} onClick={() => setActiveTab(t.id)}
+                className={`min-w-[60px] px-1.5 pt-1.5 pb-1 flex flex-col items-center gap-0.5 rounded-[8px] text-[12px] transition-colors focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'}`}>
                 <Icon className={`w-5 h-5 ${isActive ? 'text-[var(--color-accent-vibrant)]' : ''}`} strokeWidth={1.6} aria-hidden="true" />
-                <span className="whitespace-nowrap">{tab.label}</span>
+                <span className="whitespace-nowrap">{t.label}</span>
               </button>
             );
           })}
@@ -121,7 +135,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           {/* Body Content */}
           <div className="flex-1 overflow-y-auto px-5 pt-2 pb-5">
-            {activeTab === 'general' && (
+            {tab === 'general' && (
               <div className="space-y-5">
                 <Group label="Background work">
                   <div className="py-3 space-y-2">
@@ -138,11 +152,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Toggle checked={settings.autoRename} onChange={(v) => onUpdateSettings({ autoRename: v })} ariaLabel="Auto-rename chats" />
                   </Row>
                 </Group>
+                <Group label="Advanced mode">
+                  <Row title="Advanced mode" hint="Shows the settings for people who know local AI: other engines, cloud models with your own key, MCP tool servers and a local API for other apps. Everything in it is free.">
+                    <Toggle checked={settings.advancedMode === true} onChange={(v) => onUpdateSettings({ advancedMode: v })} ariaLabel="Advanced mode" />
+                  </Row>
+                </Group>
                 <p className="text-[12px] text-[var(--color-text-muted)] leading-snug px-1">Temperature, context window, reply length, system prompt and the other model settings live with the chat they change: open Chat and show the right panel (Model). Image and voice settings are in the right panel of their pages.</p>
               </div>
             )}
 
-            {activeTab === 'chat' && (
+            {tab === 'chat' && (
               <div className="space-y-5">
                 <Group label="Typing and reading">
                   <Row title="Send with Enter" hint="Enter sends the message; Shift+Enter starts a new line. Off: Ctrl+Enter sends.">
@@ -160,12 +179,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'engine' && <EngineScalingPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+            {tab === 'engine' && <EngineScalingPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
-            {activeTab === 'memory' && <MemorySkillsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
-            {activeTab === 'tools' && <ToolsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+            {tab === 'memory' && <MemorySkillsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+            {tab === 'tools' && <ToolsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
-            {activeTab === 'appearance' && (
+            {tab === 'appearance' && (
               <div className="space-y-5">
                 <section aria-labelledby="appearance-h" className="divide-y divide-[var(--sep)] border-b border-[var(--sep)]">
                   <h4 id="appearance-h" className="sr-only">Appearance</h4>
@@ -221,13 +240,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {activeTab === 'island' && <IslandSettingsPanel models={models} voiceEngine={settings.voiceEngine} />}
+            {tab === 'island' && <IslandSettingsPanel models={models} voiceEngine={settings.voiceEngine} />}
 
-            {activeTab === 'voice' && <VoiceSettingsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+            {tab === 'voice' && <VoiceSettingsPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
-            {activeTab === 'updates' && <UpdatesPanel u={updates} />}
+            {tab === 'updates' && <UpdatesPanel u={updates} />}
 
-            {activeTab === 'licenses' && <PrivacyPanel settings={settings} />}
+            {tab === 'pro' && <ProSettings />}
+
+            {tab === 'advanced' && <AdvancedPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
+
+            {tab === 'licenses' && <PrivacyPanel settings={settings} />}
           </div>
 
         </div>

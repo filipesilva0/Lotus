@@ -142,6 +142,8 @@ export class AgentService {
   private waits = new Map<string, { finish: (allow: boolean) => void; step: Step }>();
   private asks = new Map<string, (answer: string) => void>();
   readonly registry = new Registry(ALL_TOOLS);
+  /** MCP tool servers (Advanced mode, 0.18.0), set by the server. Their tools join every run's. */
+  mcp?: import('../mcp').McpHub;
   /** The task board (phase 2), set by the server once the board service exists. */
   board?: import('./types').BoardAccess;
 
@@ -164,7 +166,9 @@ export class AgentService {
 
   toolsFor(a: Pick<StartArgs, 'memoryOn' | 'web' | 'only' | 'workId'> & { prompt?: string }): Tool[] {
     const s = readAgentSettings(this.o.db);
-    return ALL_TOOLS.filter((t) => {
+    const mcp = this.mcp?.tools() ?? [];
+    for (const t of mcp) this.registry.add(t);
+    return [...ALL_TOOLS, ...mcp].filter((t) => {
       if (a.only && !a.only.includes(t.name)) return false;
       if (t.name.startsWith('memory.') && !a.memoryOn) return false;
       // Incognito and memory-off chats leave nothing lasting behind, the soul included (0.10.5).
