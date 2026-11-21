@@ -87,7 +87,8 @@ function net(answer: (e: Engine, q: string) => Answer) {
 const good = (e: Engine, q = 'q'): Answer => ({ body: e === 'ddg' ? DDG_PAGE(5, `${e}${q}`) : e === 'lite' ? DDG_LITE : e === 'bing' ? BING_PAGE : JSON.stringify(WIKI) });
 
 const dirs: string[] = [];
-afterAll(() => dirs.forEach((d) => rmSync(d, { recursive: true, force: true })));
+// Windows keeps an open database file locked, so a leftover temp folder is not an error.
+afterAll(() => dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* Windows */ } }));
 beforeEach(() => { __resetWebThrottle(); SEARCH_GAP_MS.value = 5; RETRY_AFTER_MS.value = 60; });
 afterAll(() => { SEARCH_GAP_MS.value = 1000; RETRY_AFTER_MS.value = 8000; });
 
