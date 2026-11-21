@@ -87,7 +87,7 @@ describe('a run is Done only when it really answered', () => {
     // The note reached the reply as text too.
     expect(h.events.filter((e) => e.kind === 'token').map((e) => (e as { text: string }).text).join('')).toContain("couldn't finish");
     // The last turn asks for an answer without reasoning (a long think used up its tokens before).
-    expect(ol.requests[ol.requests.length - 1].body.think).toBe(false);
+    expect(ol.requests.at(-1)?.body?.think).toBe(false);
   });
 
   test('a run that answers after failed searches is finished', async () => {
