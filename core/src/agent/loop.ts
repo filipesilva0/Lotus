@@ -12,6 +12,7 @@ import { checkArgs, fromWire, Registry, toWire, wireTools } from './registry';
 import { alwaysRuleFor, decide, Rule } from './policy';
 import { claimText, unbackedClaims } from './claims';
 import { parseTags, TagFilter, tagInstructions } from './tags';
+import { callsInText } from './textCalls';
 import { analysePrompt, isNoIssues, reviewPrompt, reviewFix, stepsDigest } from './think';
 import type { AgentEvent, ApprovalMode, Step, Tool, ToolCtx, ToolResult } from './types';
 
@@ -161,6 +162,14 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
         messages.push({ role: 'user', content: asText.name ? `(Lotus check) There is no tool called ${asText.name}. Answer the user in plain words.` : '(Lotus check) Answer the user in plain words.' });
         continue;
       }
+    }
+    // The call inside other text: "Let me check.\n```json\n{"name": …}\n```" (Qwen 2.5 Coder 7B, 0.15.0 review).
+    const inside = !calls.length && !asText ? callsInText(turnText, (n) => req.tools.some((t) => t.name === fromWire(n))) : null;
+    if (inside) {
+      d.emit({ kind: 'reset', keep: keep.length });
+      shown = keep;
+      calls = inside.calls.map((c) => ({ name: c.name, args: c.args }));
+      turnText = '';
     }
 
     if (!calls.length) {
