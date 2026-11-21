@@ -7,6 +7,7 @@ import { ScalingCard } from '../hardware/ScalingCard';
 import { llamacpp } from '../../services/llm';
 import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
 import { memoryStore, useMemoryStore } from '../../memory/store';
+import { providerOf } from '../../chat/webCore';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
@@ -74,8 +75,8 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
 /** Settings → Chat: web search. */
 export const WebSearchPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => (
   <div className="space-y-4">
-    <Row title="Web search provider" hint="Used when Web is on in the message box, and by tasks and routines that search the web. DuckDuckGo needs no account; SearXNG is a search engine you can run yourself.">
-      <Segmented label="Web search provider" value={s.webSearchProvider} onChange={(v) => set({ webSearchProvider: v })} options={[{ id: 'duckduckgo', label: 'DuckDuckGo' }, { id: 'searxng', label: 'SearXNG' }]} />
+    <Row title="Web search provider" hint="Used when Web is on in the message box, and by tasks and routines that search the web. Lotus Search is built in and needs no account: it asks DuckDuckGo, then Bing and Wikipedia when one is busy or asks for a captcha. SearXNG is a search engine you can run yourself.">
+      <Segmented label="Web search provider" value={providerOf(s.webSearchProvider)} onChange={(v) => set({ webSearchProvider: v })} options={[{ id: 'auto', label: 'Lotus Search' }, { id: 'searxng', label: 'SearXNG' }]} />
     </Row>
     {s.webSearchProvider === 'searxng' && (
       <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">

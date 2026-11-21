@@ -228,7 +228,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               {modeBtn(thinkingOn, onToggleThinking, <Brain className="w-4 h-4" />, 'Think',
                 thinkingOn ? 'Thinking on: the model analyses, drafts and checks before answering (slower)' : 'Thinking: analyse, draft and check before answering. Takes longer, answers better.')}
               {modeBtn(webOn, onToggleWeb, <Globe className="w-4 h-4" />, 'Web',
-                webOn ? 'Web search on: your question is searched on the web and the top pages are read' : 'Web search: search the current web and read the top pages before answering')}
+                webOn ? 'Web search on: when a message needs current facts, Lotus searches the web (using the whole conversation) and reads the top pages' : 'Web search: search the current web and read the top pages before answering')}
               {modeBtn(researchMode, () => setResearchMode((v) => !v), <FlaskConical className="w-4 h-4" />, 'Research',
                 researchMode ? 'Research on: sending starts a deep research task. Lotus asks a few questions, drafts a plan for you to approve, then searches scholarly sources and writes a cited report.' : 'Deep research: plan, search scholarly sources with parallel agents, and write a cited report')}
               {folderBusy && <span className="ml-1 text-[12px] text-[var(--color-text-muted)] animate-pulse" role="status">Reading folder…</span>}
