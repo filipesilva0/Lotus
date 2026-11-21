@@ -8,6 +8,7 @@ import { llamacpp } from '../../services/llm';
 import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
 import { memoryStore, useMemoryStore } from '../../memory/store';
 import { providerOf } from '../../chat/webCore';
+import { count } from '../../lib/plural';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
@@ -111,7 +112,7 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
       <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
         <span className="text-xs font-semibold">Stored on this computer</span>
         <p className="text-xs text-[var(--color-text-muted)]">
-          {memories.length} memories · {skills.length} skills{status ? ` · ${status.messages.toLocaleString()} searchable messages` : ''}
+          {count(memories.length, 'memory')} · {count(skills.length, 'skill')}{status ? ` · ${status.messages.toLocaleString()} searchable messages` : ''}
           {status?.native ? ` · ${status.path}` : ''}
         </p>
         <div className="flex gap-2">

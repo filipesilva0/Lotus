@@ -7,6 +7,7 @@ import { tagWavBlob } from '../../lib/wavTag';
 import { Btn, Card, Select, TextArea, TextInput, Label, Slider, Empty, Banner, Spinner, IconBtn, cx } from '../common/ui';
 import { avatarGradient, VoiceData } from './useVoiceData';
 import { kv } from '../../lib/store';
+import { confirmAlert } from '../common/Alerts';
 
 const ROW_H = 52;
 const effMs = (i: StoryItem) => Math.max(200, i.duration * 1000 - i.trim_start_ms - i.trim_end_ms);
@@ -284,7 +285,7 @@ const StoriesTabInner: React.FC<StoriesTabProps> = ({ data, pendingGeneration, o
                 <IconBtn label="Split at playhead" disabled={playheadMs <= sel.start_time_ms + 100 || playheadMs >= sel.start_time_ms + effMs(sel) - 100}
                   onClick={() => act(() => voicebox.splitStoryItem(story.id, sel.id, Math.round(playheadMs)))}><Scissors className="w-4 h-4" /></IconBtn>
                 <IconBtn label="Duplicate" onClick={() => act(() => voicebox.duplicateStoryItem(story.id, sel.id))}><Copy className="w-4 h-4" /></IconBtn>
-                <IconBtn label="Remove from story" onClick={() => act(async () => { await voicebox.deleteStoryItem(story.id, sel.id); setSelected(null); })}><Trash2 className="w-4 h-4" /></IconBtn>
+                <IconBtn label="Remove from story" onClick={() => void confirmAlert({ title: 'Remove this clip from the story?', confirm: 'Remove' }).then((ok) => { if (ok) act(async () => { await voicebox.deleteStoryItem(story.id, sel.id); setSelected(null); }); })}><Trash2 className="w-4 h-4" /></IconBtn>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>

@@ -106,6 +106,31 @@ export function removeTask(all: Task[], id: string): Task[] {
   return all.filter((t) => t.id !== id).map((t) => (t.links.some((l) => l.to === id) ? { ...t, links: t.links.filter((l) => l.to !== id) } : t));
 }
 
+/** What deleting a task takes away: the task itself and the links other tasks had to it (for Undo). */
+export interface RemovedTask { task: Task; inbound: { from: string; link: TaskLink }[] }
+
+export function snapshotTask(all: Task[], id: string): RemovedTask | null {
+  const task = all.find((t) => t.id === id);
+  if (!task) return null;
+  const inbound = all.flatMap((t) => t.links.filter((l) => l.to === id).map((link) => ({ from: t.id, link })));
+  return { task, inbound };
+}
+
+/**
+ * Puts a deleted task back as it was (Undo): same id, column, order, steps and log, and the links
+ * other tasks had to it. A run it had is not restored (deleting it stopped that run).
+ */
+export function restoreTask(all: Task[], r: RemovedTask): Task[] {
+  if (all.some((t) => t.id === r.task.id)) return all;
+  const { run: _run, ...task } = r.task;
+  const back: Task = { ...task, links: task.links.filter((l) => all.some((t) => t.id === l.to)), log: [...task.log, { at: Date.now(), text: 'Restored (Undo)', kind: 'status' as const }].slice(-60) };
+  const withLinks = all.map((t) => {
+    const add = r.inbound.filter((x) => x.from === t.id && !t.links.some((l) => l.to === x.link.to && l.type === x.link.type)).map((x) => x.link);
+    return add.length ? { ...t, links: [...t.links, ...add] } : t;
+  });
+  return [...withLinks, back];
+}
+
 /**
  * Moves a task to a column, placed before `beforeId` (or at the end). Starting work on a blocked
  * task is refused with an explanation.
@@ -151,4 +176,15 @@ export function isOverdue(t: Task, today = new Date()): boolean {
   if (!t.due || t.status === 'done') return false;
   const d = today.toISOString().slice(0, 10);
   return t.due < d;
+}
+
+/**
+ * Which run button a task's panel shows. A task assigned to you has none (0.19 critique #15: "Run
+ * with Lotus" showed while Agent was Me); one that is running or failed keeps Stop / Try Again so
+ * it can still be controlled after you take it back.
+ */
+export function runAction(t: Pick<Task, 'assignee' | 'run'>): 'stop' | 'retry' | 'run' | null {
+  if (t.run?.state === 'running' || t.run?.state === 'queued') return 'stop';
+  if (t.run?.state === 'failed') return 'retry';
+  return t.assignee === 'lotus' ? 'run' : null;
 }

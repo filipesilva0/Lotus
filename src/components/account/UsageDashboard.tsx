@@ -6,6 +6,7 @@ import { useMemoryStore } from '../../memory/store';
 import { usePlugins } from '../../plugins/store';
 import { countSavedImages } from '../../hooks/useGallery';
 import { cx } from '../common/ui';
+import { count } from '../../lib/plural';
 
 /**
  * Usage analytics on the profile page. Colours come from the app icon's petals (validated as a
@@ -200,10 +201,10 @@ export const UsageDashboard: React.FC<{ sessions: ChatSession[] }> = ({ sessions
         <Card title="Features" subtitle="Replies that used each one"><FeaturesChart u={u} /></Card>
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-1 px-1 text-[12px] text-[var(--color-text-muted)]">
-        <span className="inline-flex items-center gap-1.5"><Brain className="w-3.5 h-3.5 text-[var(--petal-violet)]" />{mem.memories.length} memories</span>
-        <span className="inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[var(--petal-orange)]" />{mem.skills.length} skills</span>
+        <span className="inline-flex items-center gap-1.5"><Brain className="w-3.5 h-3.5 text-[var(--petal-violet)]" />{count(mem.memories.length, 'memory')}</span>
+        <span className="inline-flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-[var(--petal-orange)]" />{count(mem.skills.length, 'skill')}</span>
         <span className="inline-flex items-center gap-1.5"><Puzzle className="w-3.5 h-3.5 text-[var(--petal-green)]" />{installed.length} plugin{installed.length === 1 ? '' : 's'} ({installed.filter((p) => p.enabled).length} on)</span>
-        <span className="inline-flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-[var(--petal-blue)]" />{images === null ? '…' : images} images in the gallery</span>
+        <span className="inline-flex items-center gap-1.5"><ImageIcon className="w-3.5 h-3.5 text-[var(--petal-blue)]" />{images === null ? '… images' : count(images, 'image')} in the gallery</span>
       </div>
     </div>
   );

@@ -14,6 +14,8 @@ import { mixStory, playTogether } from '../../../voice/render';
 import { Story, StoryItem, layoutStory, parseScript, scriptSpeakers, storyLength } from '../../../voice/studio';
 import { kv } from '../../../lib/store';
 import { Studio, speakWith } from '../../../voice/useStudio';
+import { offerUndo } from '../../common/Alerts';
+import { putBack, takeOut } from '../../../lib/undoList';
 
 const TRACKS = 4;
 const SAMPLE = 'Narrator: It was a quiet night in the village.\nAna: Did you hear that?\nLeo: Just the wind. Go back to sleep.\nNarrator: But it was not the wind.';
@@ -91,7 +93,12 @@ const StoriesViewInner: React.FC<{ studio: Studio; storyId: string | null; onSto
     catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
   const move = (i: number, d: -1 | 1) => save((s) => { const items = [...s.items]; const j = i + d; if (j < 0 || j >= items.length) return s; [items[i], items[j]] = [items[j], items[i]]; return { ...s, items }; });
-  const removeLine = (it: StoryItem) => { if (it.clip) void deleteMedia(it.clip).catch(() => undefined); save((s) => ({ ...s, items: s.items.filter((x) => x.id !== it.id) })); };
+  // Undo puts the line back; its audio is only deleted once the Undo note has gone.
+  const removeLine = (it: StoryItem) => {
+    const { index } = takeOut(story.items, it.id);
+    save((s) => ({ ...s, items: takeOut(s.items, it.id).rest }));
+    offerUndo('Line deleted', () => save((s) => ({ ...s, items: putBack(s.items, it, index) })), () => { if (it.clip) void deleteMedia(it.clip).catch(() => undefined); });
+  };
   const scale = Math.max(length, 1);
 
   return (

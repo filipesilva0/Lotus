@@ -7,6 +7,9 @@ import { isTauri } from '../lib/http';
 import { uid } from '../lib/persist';
 import { savedExe } from './engineControl';
 import { kv } from '../lib/store';
+import { folderPath, modelsRoot } from '../models/comfyPaths';
+
+export { folderPath, modelsRoot };
 
 export type ModelFolder = 'checkpoints' | 'loras';
 /** Every models/ subfolder Lotus writes to (split image models use the last three; session 10). */
@@ -24,11 +27,11 @@ export interface DownloadProgress {
 export const MODEL_EXTENSIONS = ['safetensors', 'ckpt', 'pt', 'pth', 'bin', 'gguf', 'sft', 'onnx'];
 
 const DIR_KEY = 'lotus.comfy.modelsDir.v1';
-export const savedModelsDir = () => kv.getItem(DIR_KEY) || '';
-export const setSavedModelsDir = (p: string) => kv.setItem(DIR_KEY, p);
 
-const sep = (dir: string) => (dir.includes('\\') ? '\\' : '/');
-export const folderPath = (modelsDir: string, kind: ComfySubfolder) => `${modelsDir.replace(/[\\/]+$/, '')}${sep(modelsDir)}${kind}`;
+export const savedModelsDir = () => modelsRoot(kv.getItem(DIR_KEY) || '');
+export const setSavedModelsDir = (p: string) => kv.setItem(DIR_KEY, modelsRoot(p));
+
+
 
 /** The folder ComfyUI loads models from: the one the user chose, else found from the launcher they located. */
 export async function findModelsDir(): Promise<string> {
@@ -39,7 +42,7 @@ export async function findModelsDir(): Promise<string> {
   const found = (launcher ? await invokeNative<string | null>('comfy_models_dir', { launcher }) : null)
     ?? await invokeNative<string | null>('comfy_models_guess');
   if (found) setSavedModelsDir(found);
-  return found ?? '';
+  return found ? modelsRoot(found) : '';
 }
 
 /** Lets the user point at ComfyUI's `models` folder. */
@@ -47,7 +50,7 @@ export async function browseModelsDir(): Promise<string | null> {
   if (!isTauri) return null;
   const { open } = await import('@tauri-apps/plugin-dialog');
   const picked = await open({ title: "Choose ComfyUI's models folder", directory: true, multiple: false });
-  if (typeof picked === 'string') { setSavedModelsDir(picked); return picked; }
+  if (typeof picked === 'string') { setSavedModelsDir(picked); return modelsRoot(picked); }
   return null;
 }
 
