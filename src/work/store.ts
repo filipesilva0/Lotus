@@ -3,7 +3,8 @@
 // questions keep arriving) while you use other pages.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, HelperInfo, runAgent, workArtifacts } from '../lib/agent';
+import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, HelperInfo, runAgent, stopRun, workArtifacts } from '../lib/agent';
+import { markInterrupted } from './interrupted';
 import { kv } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
@@ -29,6 +30,14 @@ export interface WorkMsg {
   tokensPerSec?: number;
   /** 0.11.0: helper agents deployed during this reply, in the order they started. */
   agents?: HelperInfo[];
+  /** 0.15.1: the core's run for this reply; `pending` until that run has ended, then when it `ended`. */
+  runId?: string;
+  pending?: boolean;
+  ended?: number;
+  /** 0.15.1: you pressed Stop. */
+  stopped?: boolean;
+  /** 0.15.1: Lotus closed (app or core) before this reply finished; set on startup (interrupted.ts). */
+  interrupted?: boolean;
   ts: number;
 }
 
@@ -49,6 +58,12 @@ export interface PendingAsk { workId: string; runId: string; askId: string; ques
 
 const blank = (): WorkItem => ({ id: uid('work'), title: 'New work', ts: Date.now(), messages: [] });
 const load = (): WorkItem[] => { const l = kv.getJson<WorkItem[]>(WORK_KEY, []); return Array.isArray(l) ? l : []; };
+
+/** Saved Work at startup: nothing is running yet, so a reply that was still going was cut off. */
+function loadAtStart(): { items: WorkItem[]; cutOff: string[] } {
+  const r = markInterrupted(load());
+  return { items: r.items, cutOff: r.runIds };
+}
 
 /** The plan the agent wrote (latest plan.set) and which steps it ticked since. */
 export function planOf(item: WorkItem | undefined): { steps: string[]; done: Set<number> } | null {
@@ -93,7 +108,8 @@ export function helpersOf(steps: AgentStep[] = []): { name: string; goal: string
 }
 
 export function useWork(settings: LotusSettings) {
-  const [items, setItems] = useState<WorkItem[]>(() => { const l = load(); return l.length ? l : [blank()]; });
+  const [start] = useState(loadAtStart);
+  const [items, setItems] = useState<WorkItem[]>(() => (start.items.length ? start.items : [blank()]));
   const [activeId, setActiveId] = useState(() => items[0].id);
   const [running, setRunning] = useState<Record<string, { runId: string; ctrl: AbortController }>>({});
   const [asks, setAsks] = useState<PendingAsk[]>([]);
@@ -102,6 +118,20 @@ export function useWork(settings: LotusSettings) {
   const settingsRef = useRef(settings); settingsRef.current = settings;
 
   useEffect(() => { kv.setJson(WORK_KEY, items.filter((i) => i.messages.length)); }, [items]);
+
+  // A window reload leaves the core running: stop the runs of replies closed at startup, so no
+  // job keeps going (and writing files) where nobody can see it. Best effort; the core may be
+  // starting, or already gone and restarted (it closes its own stale runs then).
+  useEffect(() => {
+    if (!start.cutOff.length) return;
+    let tries = 0;
+    const t = window.setInterval(() => {
+      if (!agentAvailable() && ++tries < 30) return;
+      window.clearInterval(t);
+      if (agentAvailable()) start.cutOff.forEach((id) => void stopRun(id).catch(() => undefined));
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [start]);
 
   const refreshArtifacts = useCallback(async (id: string) => {
     if (!agentAvailable()) return;
@@ -147,7 +177,7 @@ export function useWork(settings: LotusSettings) {
     const keptFiles = files.length ? files.map((f) => ({ name: f.name, kind: f.kind })) : old?.files;
     const user: WorkMsg = { id: uid('wm'), role: 'user', content: t, ts: Date.now(),
       ...(keptFiles?.length ? { files: keptFiles } : {}), ...(attached ? { attached } : {}) };
-    const reply: WorkMsg = { id: uid('wm'), role: 'assistant', content: '', steps: [], ts: Date.now() };
+    const reply: WorkMsg = { id: uid('wm'), role: 'assistant', content: '', steps: [], pending: true, ts: Date.now() };
     patch(workId, (w) => ({ ...w, ts: Date.now(), title: w.messages.length && cut !== 0 ? w.title : t.slice(0, 48), messages: [...(cut >= 0 ? w.messages.slice(0, cut) : w.messages), user, reply] }));
     let thinkStart = 0;
     const history = [...item.messages, user].filter((m) => m.content.trim()).slice(-16)
@@ -164,7 +194,11 @@ export function useWork(settings: LotusSettings) {
         messages: [{ role: 'system', content: s.systemPrompt }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;
-        if (rid && !runId) { runId = rid; setRunning((r) => (r[workId] ? { ...r, [workId]: { ...r[workId], runId } } : r)); }
+        if (rid && !runId) {
+          runId = rid;
+          setRunning((r) => (r[workId] ? { ...r, [workId]: { ...r[workId], runId } } : r));
+          patchMsg(workId, reply.id, (m) => ({ ...m, runId: rid }));
+        }
         if (e.kind === 'token') patchMsg(workId, reply.id, (m) => ({ ...m, content: m.content + e.text, ...(thinkStart && m.thinkingMs === undefined ? { thinkingMs: Date.now() - thinkStart } : {}) }));
         else if (e.kind === 'thinking') {
           if (!thinkStart) thinkStart = Date.now();
@@ -206,6 +240,8 @@ export function useWork(settings: LotusSettings) {
       if (!ctrl.signal.aborted) throw e;
       return '';
     } finally {
+      const stopped = ctrl.signal.aborted;
+      patchMsg(workId, reply.id, ({ pending: _p, ...m }) => ({ ...m, ended: Date.now(), ...(stopped ? { stopped } : {}) }));
       setRunning((r) => { const { [workId]: _gone, ...rest } = r; return rest; });
       setAsks((a) => a.filter((x) => x.workId !== workId));
     }

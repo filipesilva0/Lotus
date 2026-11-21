@@ -71,8 +71,13 @@ export function pruneRuns(db: Db, keep = 2000): void {
   db.sql.query('DELETE FROM agent_runs WHERE id NOT IN (SELECT id FROM agent_runs ORDER BY created DESC LIMIT ?)').run(keep);
 }
 
-/** A run that was going when the core stopped did not finish. */
-export function closeStaleRuns(db: Db): void {
-  db.sql.run("UPDATE agent_runs SET status = 'stopped', finished = created WHERE status = 'running'");
-  db.sql.run("UPDATE agent_steps SET status = 'error', detail = 'Lotus stopped before this step finished.' WHERE status IN ('running', 'waiting')");
+/** What a run cut off by a restart says in its history (the Work page says the same, src/work/interrupted.ts). */
+export const CUT_OFF_RUN = 'Lotus closed before this run finished.';
+export const CUT_OFF_STEP = 'Lotus closed before this step finished.';
+
+/** A run that was going when the core stopped did not finish. Returns how many runs it closed. */
+export function closeStaleRuns(db: Db): number {
+  const n = db.sql.query('UPDATE agent_runs SET status = ?, finished = created, reply = COALESCE(reply, ?) WHERE status = ?').run('stopped', CUT_OFF_RUN, 'running').changes;
+  db.sql.query("UPDATE agent_steps SET status = 'error', detail = ?, finished = COALESCE(finished, started) WHERE status IN ('running', 'waiting')").run(CUT_OFF_STEP);
+  return n;
 }

@@ -82,6 +82,9 @@ export async function runAgent(a: AgentStart, on: (e: AgentEvent) => void, signa
   } finally { off(); }
 }
 
+/** Stops a run in the core (false when the core isn't running it). */
+export const stopRun = (runId: string) => rpc<boolean>('agent_stop', { runId });
+
 /** Allow / Deny a waiting step; `always` also saves the step's Always-allow rule (Settings → Tools lists them). */
 export const decideStep = (runId: string, stepId: string, allow: boolean, always = false) => rpc<boolean>('agent_decide', { runId, stepId, allow, always });
 
