@@ -44,11 +44,7 @@ export interface AvatarLook {
 export const LOTUS_LOOK: AvatarLook = { hue: 330, shape: 'round', tone: 0.4 };
 export const LOTUS_SEED = 'petal';
 
-/**
- * Petal wears the colour of the page you are on (session 16): Chat blue, Work red, Images orange,
- * Voice yellow, Tasks green. Pages without a petal (Engines & Models) keep lotus pink.
- */
-export const PAGE_HUES: Record<string, number> = { chat: 222, work: 356, images: 32, voice: 52, tasks: 142 };
+/** Petal's colour. Until 0.21 it wore the colour of the page you were on; now it keeps lotus pink everywhere. */
 export const KEY_PETAL_HUE = 'lotus.petal.hue';
 let petalHue = 330;
 const hueSubs = new Set<(h: number) => void>();
@@ -57,7 +53,6 @@ export const petal = {
   set(h: number) { if (h === petalHue) return; petalHue = h; hueSubs.forEach((f) => f(h)); },
   on(f: (h: number) => void) { hueSubs.add(f); return () => { hueSubs.delete(f); }; },
 };
-export const hueForPage = (view: string) => PAGE_HUES[view] ?? 330;
 
 export function hueOf(color: unknown): number | undefined {
   if (typeof color === 'number' && Number.isFinite(color)) return ((color % 360) + 360) % 360;

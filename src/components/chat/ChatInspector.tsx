@@ -236,7 +236,7 @@ const RethinkSection: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ sett
 };
 
 /**
- * 0.11.0: only the knobs people turn. The folded "Advanced" part is gone (system prompt → Tasks → Soul;
+ * 0.11.0: only the knobs people turn. The folded "Advanced" part is gone (system prompt → Assistant → Soul;
  * the raw request view was removed); stop sequences stay, and everything has room to breathe.
  */
 const ParamsTab: React.FC<Pick<Props, 'settings' | 'onSettings'>> = ({ settings: s, onSettings: set }) => {

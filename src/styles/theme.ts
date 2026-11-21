@@ -1,4 +1,4 @@
-import { ColorPalette, FontFamily, FontSize, ViewMode } from '../types/lotus';
+import { ColorPalette, FontFamily, FontSize } from '../types/lotus';
 
 export interface ThemeColors {
   name: string;
@@ -71,15 +71,12 @@ export const PALETTES: Record<ColorPalette, ThemeColors> = {
 };
 
 /**
- * Each page owns one of the five petals of the logo (left to right: blue, red, orange, yellow, green)
- * and uses that colour as its accent (session 8; this replaced the accent-colour setting).
- * Engines & Models is not one of the five workspaces, so it gets the neutral graphite accent.
+ * The one accent the whole app uses (0.21). Sessions 8 to 0.20 gave each page its own petal colour
+ * (Chat blue, Work red, Images orange, Voice yellow, Tasks green); the user dropped that idea, so every
+ * page, the setup guide and the mascot now share Lotus blue. The other palettes stay because saved
+ * settings and older code paths still name them.
  */
-export const PAGE_PALETTE: Record<ViewMode, ColorPalette> = {
-  chat: 'blue', work: 'red', images: 'amber', voice: 'yellow', tasks: 'green', engines: 'graphite',
-};
-/** Session 16: Work replaced App Builder and sits right after Chat, so the pages take the petals in order. */
-export const PETAL_ORDER: ViewMode[] = ['chat', 'work', 'images', 'voice', 'tasks'];
+export const APP_PALETTE: ColorPalette = 'blue';
 
 /** Dark-mode fills for palettes whose light fill is too dark against the dark window (see applyThemeToDocument). */
 const DARK_FILL: Partial<Record<ColorPalette, [string, string]>> = { yellow: ['#9C6A00', '#8F5F00'] };
@@ -157,8 +154,8 @@ export function applyThemeToDocument(
   }
 
   // Filled controls always use the deeper accent so white labels keep >= 4.5:1 in both appearances.
-  // 0.20: on dark surfaces the deep gold fill (Voice page) blended into the background (2.7:1), so dark mode
-  // uses a slightly brighter gold that still keeps white labels above 4.5:1 and the button edge above 3:1.
+  // 0.20: on dark surfaces the deep gold fill blended into the background (2.7:1), so dark mode uses a
+  // slightly brighter gold that still keeps white labels above 4.5:1 and the button edge above 3:1.
   const darkFill = darkMode ? DARK_FILL[paletteKey] : undefined;
   root.style.setProperty('--color-accent-fill', darkFill?.[0] ?? palette.vibrant);
   root.style.setProperty('--color-accent-fill-hover', darkFill?.[1] ?? palette.vibrantHover);

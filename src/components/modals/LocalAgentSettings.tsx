@@ -102,7 +102,7 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
       <Row title="Recall past conversations" hint="Searches earlier chats (full-text search on this computer) for parts relevant to your message and gives them to the model.">
         <Toggle checked={s.sessionRecall} onChange={(v) => set({ sessionRecall: v })} ariaLabel="Recall past conversations" />
       </Row>
-      <Row title="Write and improve skills" hint="After a complex chat or a finished task, Lotus writes the procedure as a skill; it uses matching skills later and rewrites one when you correct it. Manage them in Tasks → Skills.">
+      <Row title="Write and improve skills" hint="After a complex chat or a finished task, Lotus writes the procedure as a skill; it uses matching skills later and rewrites one when you correct it. Manage them in Assistant → Skills.">
         <Toggle checked={s.autoSkills} onChange={(v) => set({ autoSkills: v })} ariaLabel="Write and improve skills" />
       </Row>
       <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 space-y-2">
