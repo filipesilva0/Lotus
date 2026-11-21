@@ -1,4 +1,5 @@
 import React from 'react';
+import { prettyModelName } from '../../models/names';
 import { Cpu, RefreshCw } from 'lucide-react';
 import { hardware, useHardware } from '../../hardware/monitor';
 import { useAgentPool } from '../../agents/pool';
@@ -47,10 +48,10 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
       {!compact && (
         <>
           <div className="mt-2.5">
-            {h.agentModel && <KV k="Agents use" v={h.agentModel} mono />}
+            {h.agentModel && <KV k="Agents use" v={<span title={h.agentModel}>{prettyModelName(h.agentModel)}</span>} />}
             <KV k="File chunk size" v={`${p.chunkChars.toLocaleString()} characters`} />
             {p.perAgentMb > 0 && <KV k="Cost of one more agent" v={gb(p.perAgentMb)} />}
-            {h.model && <KV k="Selected model" v={`${h.model.name} · ${gb(h.model.weightsMb)}${h.model.loadedVramMb ? ' · loaded' : ''}`} mono />}
+            {h.model && <KV k="Selected model" v={<span title={h.model.name}>{`${prettyModelName(h.model.name)} · ${gb(h.model.weightsMb)}${h.model.loadedVramMb ? ' · loaded' : ''}`}</span>} />}
             {p.llamacppFlags && <KV k="Suggested llama-server flags" v={p.llamacppFlags} mono />}
           </div>
           <ul className="mt-2 space-y-0.5 text-[12px] text-[var(--color-text-muted)] leading-snug list-disc pl-4">

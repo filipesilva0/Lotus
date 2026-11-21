@@ -59,6 +59,8 @@ import { missingFor } from './models/imageProfiles';
 import { linkComfyModels } from './services/engineControl';
 
 import { DEFAULT_DENY } from './agents/toolDefaults';
+import { prettyModelName } from './models/names';
+import { setSoul } from './lib/identity';
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
 /** Help › Lotus Help opens the user guide (the project README) in the browser. */
@@ -330,6 +332,8 @@ export default function App() {
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => { kv.setItem(SETTINGS_KEY, JSON.stringify(settings)); }, [settings]);
+  // One identity everywhere (0.20): the name on replies, calls and Talk comes from the Soul.
+  useEffect(() => { setSoul(settings.systemPrompt); }, [settings.systemPrompt]);
 
   // Petal, the mascot, wears the page's petal colour too (here and on the island).
   useEffect(() => {
@@ -367,14 +371,14 @@ export default function App() {
   useEffect(() => {
     if (!ollamaUp || !serverChat) return;
     void llamacpp.listModels().then((ids) => {
-      setModels(ids.map((id) => ({ id, name: id, tag: 'Your server' })));
+      setModels(ids.map((id) => ({ id, name: prettyModelName(id), tag: 'Your server' })));
       setSettings((s) => (ids.length && !ids.includes(s.selectedModel) ? { ...s, selectedModel: ids[0] } : s));
     });
   }, [ollamaUp, serverChat, settings.llamacppUrl]);
   useEffect(() => {
     if (!ollamaUp || builtinChat || serverChat) return;
     ollamaClient.listModels().then((list) => {
-      setModels(list.map((m) => ({ id: m.name, name: m.name, tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
+      setModels(list.map((m) => ({ id: m.name, name: prettyModelName(m.name), tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
       setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
     }).catch(() => undefined);
   }, [ollamaUp, chatModelsDone, builtinChat, serverChat]);

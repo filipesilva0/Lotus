@@ -155,6 +155,42 @@ html.no-glass body { background: var(--color-bg-base); }
   .material-overlay, .material-frosted { background: var(--color-bg-card); backdrop-filter: none; }
 }
 
+/* Sheets (Settings and other modal dialogs, 0.20). A sheet is read, not glanced at, so it is nearly opaque:
+   the frosted look stays, but the page behind it no longer shows through the text. The backdrop dims the
+   page enough to separate the two in both themes (it was 25% black in light, which read as a blur). */
+.sheet-backdrop { background: rgba(0,0,0,.38); }
+.dark .sheet-backdrop { background: rgba(0,0,0,.55); }
+.material-sheet {
+  background-color: color-mix(in srgb, var(--color-bg-card) 96%, transparent);
+  background-image: var(--frost-sheen), var(--frost-grain);
+  -webkit-backdrop-filter: var(--frost-blur); backdrop-filter: var(--frost-blur);
+  box-shadow: inset 0 0.5px 0 0 var(--frost-edge), 0 0 0 0.5px var(--frost-rim), var(--shadow-float);
+}
+:root { --sheet-nav: color-mix(in srgb, var(--color-text-main) 4%, transparent); }
+
+/* Selected chips and toggles (0.20): colour is never the only signal. A selected chip gets the accent fill,
+   accent text AND an accent outline, so it reads as "on" even for people who can't tell yellow from grey. */
+.is-selected {
+  background: var(--color-accent-pastel); color: var(--color-accent-vibrant);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-accent-vibrant) 75%, transparent);
+}
+
+/* Info notes: text with no control (where something lives, what a page colour means). Styled apart from
+   setting rows so nobody looks for a missing switch. */
+.info-note { border-radius: 8px; background: color-mix(in srgb, var(--color-text-main) 5%, transparent); }
+
+/* Rows whose actions appear on hover also show them while any part of the row has keyboard focus,
+   so every action has a keyboard path (Tab to the row, then Tab through its buttons). */
+.row-actions { opacity: 0; }
+.group:hover .row-actions, .group:focus-within .row-actions, .row-actions:focus-within { opacity: 1; }
+@media (hover: none) { .row-actions { opacity: 1; } }
+
+/* Tips hide once the control is clicked and stay hidden until the pointer leaves it (they used to
+   linger over the sidebar after picking a page). See lib/tipDismiss.ts. */
+.tip.tip-off::after { display: none !important; }
+/* A tip with no text draws nothing (an empty black box showed over the composer progress line). */
+.tip[data-tip=""]::after { display: none !important; }
+
 /* ── Tips: short names for icon-only buttons (data-tip="…"; data-tip-side="right" | "below", default above).
    Shown after a short hover delay, or at once on keyboard focus. The control keeps its aria-label. ── */
 .tip { position: relative; }

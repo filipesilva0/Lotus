@@ -13,6 +13,7 @@ import { EngineId } from '../../services/engineConfig';
 import type { EngineState } from '../../hooks/useEngines';
 import { usePersisted, uid } from '../../lib/persist';
 import { estimateVram, fmtGB, paramsOf } from '../../models/library';
+import { prettyModelName } from '../../models/names';
 import { Banner, Btn, Card, Empty, Gauge, cx } from '../common/ui';
 import { ActiveDownloads } from '../models/ActiveDownloads';
 import { AddModelDialog, ModelKind } from '../models/AddModelDialog';
@@ -82,7 +83,7 @@ const Hub: React.FC<{ q: string; installed: OllamaModel[]; running: RunningModel
             const run = running.find((r) => r.name === m.name);
             return (
               <Card key={m.name} className={cx('p-3.5 cursor-default', selected === m.name && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')} onClick={() => onSelect(m.name)}>
-                <div className="flex items-start gap-2"><div className="flex-1 min-w-0"><p className="text-[14px] font-semibold truncate">{m.name}</p><p className="text-[12px] text-[var(--color-text-muted)]">{[m.details?.parameter_size, m.details?.quantization_level, fmtGB(m.size)].filter(Boolean).join(' · ')}</p></div>
+                <div className="flex items-start gap-2"><div className="flex-1 min-w-0"><p className="text-[14px] font-semibold truncate" title={m.name}>{prettyModelName(m.name)}</p><p className="text-[12px] text-[var(--color-text-muted)]">{[m.details?.parameter_size, m.details?.quantization_level, fmtGB(m.size)].filter(Boolean).join(' · ')}</p></div>
                   {run && <span className="px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--c-green)]/15 text-[var(--c-green)] text-[12px] font-semibold">Loaded</span>}</div>
                 <div className="mt-3 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
                   {run ? <Btn size="sm" loading={busy === m.name} icon={<PowerOff className="w-3 h-3" />} onClick={() => void act(m.name, () => ollamaClient.unload(m.name))}>Unload</Btn>
@@ -167,7 +168,7 @@ const Arena: React.FC<{ names: string[]; engine: 'builtin' | 'ollama' | 'llamacp
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Models to compare (pick 2 or 3)">
           {engine === 'llamacpp' ? <span className="text-[13px] text-[var(--color-text-muted)]">A llama-server you run serves one model, so there is nothing to compare. Use Lotus’s engine or Ollama in Settings → Engines.</span>
             : !names.length && <span className="text-[13px] text-[var(--color-text-muted)]">{ready === false ? (engine === 'ollama' ? 'Start Ollama to list installed models.' : 'Install Lotus’s chat engine in Models to compare models.') : 'Get at least two chat models first.'}</span>}
-          {names.map((n) => <button key={n} type="button" aria-pressed={valid.includes(n)} onClick={() => toggle(n)} className={cx('h-7 px-3 rounded-full text-[12px] font-medium', valid.includes(n) ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{n}</button>)}
+          {names.map((n) => <button key={n} type="button" aria-pressed={valid.includes(n)} onClick={() => toggle(n)} className={cx('h-7 px-3 rounded-full text-[12px] font-medium', valid.includes(n) ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')} title={n}>{prettyModelName(n)}</button>)}
         </div>
         <div className="flex gap-2 items-end">
           <textarea aria-label="Prompt to test" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2} placeholder="Type one prompt to send to every selected model"
@@ -186,7 +187,7 @@ const Arena: React.FC<{ names: string[]; engine: 'builtin' | 'ollama' | 'llamacp
             const hide = blind && !voted;
             return (
               <div key={c.model} className="bg-[var(--color-bg-panel)] min-w-0 flex flex-col min-h-0">
-                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : c.model}</span>{c.state === 'running' && <span className="text-[12px] text-[var(--color-text-muted)] animate-pulse">{c.loading ? 'Loading model…' : 'Generating…'}</span>}{c.state === 'waiting' && <span className="text-[12px] text-[var(--color-text-muted)]">Next</span>}</div>
+                <div className="px-3 h-9 flex items-center justify-between border-b border-[var(--sep)]"><span className="text-[13px] font-semibold truncate">{hide ? label(i) : prettyModelName(c.model)}</span>{c.state === 'running' && <span className="text-[12px] text-[var(--color-text-muted)] animate-pulse">{c.loading ? 'Loading model…' : 'Generating…'}</span>}{c.state === 'waiting' && <span className="text-[12px] text-[var(--color-text-muted)]">Next</span>}</div>
                 <div className="grid grid-cols-3 gap-2 px-3 py-2 text-center border-b border-[var(--sep)]">
                   {[['First token', c.ttft !== null ? `${c.ttft} ms` : '—'], ['Speed', c.tps !== null ? `${c.tps} tok/s` : c.state === 'running' && c.tokens ? '…' : '—'], ['Total', c.total !== null ? `${(c.total / 1000).toFixed(1)} s` : '—']].map(([k, v]) => (
                     <div key={k}><p className="text-[12px] text-[var(--color-text-muted)]">{k}</p><p className="text-[13px] font-semibold tabular-nums">{v}</p></div>

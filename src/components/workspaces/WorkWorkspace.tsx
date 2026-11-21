@@ -19,11 +19,14 @@ import { isTauri } from '../../lib/http';
 import type { ArtifactInfo, AgentStep, HelperInfo } from '../../lib/agent';
 import { agentAvailable, workArtifact, workDir } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
+import { ReplyHeader } from '../common/ReplyHeader';
 import { AgentFace } from '../common/AgentFace';
 import { MarkdownLite } from '../../lib/markdownLite';
 import { InspectorPane, MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
 import { Btn, IconBtn, Segmented, TextArea, cx, useFlash } from '../common/ui';
-import { ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, VramMeter } from '../common/PromptBox';
+import { ModeButton, PickerButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayNote, TrayRow, VramMeter } from '../common/PromptBox';
+import { prettyModelName } from '../../models/names';
+import { useAssistantName } from '../../lib/identity';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { Tip } from '../common/Tip';
 import { useCommand } from '../../lib/commands';
@@ -204,8 +207,7 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
   const made = steps.filter((s) => s.tool === 'artifact.write' && s.status === 'done').map((s) => s.data?.artifact as { file: string; title: string; kind: string }).filter(Boolean);
   return (
     <div className="min-w-0">
-      {/* The face is the status: it only moves (and thinks) while Lotus is working. */}
-      <p className="flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-text-muted)] mb-1"><AgentFace size={18} animate={live} mood={live ? 'thinking' : m.error ? 'sad' : undefined} />Lotus</p>
+      <ReplyHeader live={live} mood={live ? 'thinking' : m.error ? 'sad' : undefined} />
       <div className="min-w-0">
         <ThinkingDrawer m={{ id: m.id, role: 'assistant', content: m.content, timestamp: '', thinking: m.thinking, thinkingMs: m.thinkingMs, isStreaming: live && m.thinkingMs === undefined } as ChatMessage} mode={reasoning} />
         {agents.length > 0 && <AgentsPanel agents={agents} steps={steps} live={live} interrupted={m.interrupted} onDecide={onDecide} />}
@@ -334,6 +336,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   const [q, setQ] = useState('');
   const [openArtifact, setOpenArtifact] = useState<string | null>(null);
   const [talk, setTalk] = useState(false);
+  const name = useAssistantName();
   const [vs, setVs] = useState<VoiceState>(voiceState.get());
   const [notice, setNotice] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -418,7 +421,8 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   };
 
   const row = (w: WorkItem) => (
-    <div key={w.id} role="button" tabIndex={0} onClick={() => work.setActiveId(w.id)} onKeyDown={(e) => { if (e.key === 'Enter') work.setActiveId(w.id); }}
+    <div key={w.id} role="button" tabIndex={0} onClick={() => work.setActiveId(w.id)} aria-keyshortcuts="Delete"
+      onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') work.setActiveId(w.id); else if (e.key === 'Delete') { e.preventDefault(); deleteWork(w.id); } }}
       className={cx('group relative flex items-center gap-2 px-2.5 h-9 rounded-[8px] cursor-default',
         w.id === work.activeId ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
       {work.runningIds.includes(w.id) ? <AgentFace size={16} mood="thinking" /> : null}
@@ -486,21 +490,21 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             {!agentAvailable() && <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">Work mode runs in the desktop app (it needs the Lotus core).</p>}
             {notice && <p role="status" className="mb-2 text-[12px] text-[var(--c-orange)]">{notice}</p>}
             <PromptShell drag={drag}
-              tray={<>
+              tray={<TrayRow
+              actions={<>
               {item.folder ? (
-                <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`Lotus can read and edit files in ${item.folder} (saving asks first)`}>
+                <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`${name} can read and edit files in ${item.folder} (saving asks first)`}>
                   <FolderOpen className="w-4 h-4 shrink-0" /><span className="truncate">{folderName(item.folder)}</span>
                   <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => work.patch(item.id, (x) => ({ ...x, folder: undefined }))}><X className="w-3 h-3" /></IconBtn>
                 </span>
               ) : isTauri && (
-                <button type="button" title="Let Lotus work in a folder: it opens, searches and edits the files it needs (saving asks first)"
-                  onClick={async () => { const p = await pickFolderPath('Give Lotus a folder for this work'); if (p) work.patch(item.id, (x) => ({ ...x, folder: p })); }}
-                  className="h-7 px-2 inline-flex items-center gap-1.5 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]"><FolderOpen className="w-4 h-4" />Choose Folder</button>
+                <TrayButton title={`Let ${name} work in a folder: it opens, searches and edits the files it needs (saving asks first)`}
+                  onClick={async () => { const p = await pickFolderPath(`Give ${name} a folder for this work`); if (p) work.patch(item.id, (x) => ({ ...x, folder: p })); }}
+                  icon={<FolderOpen className="w-4 h-4" />} label="Choose Folder" />
               )}
-              <span className="text-[12px] text-[var(--color-text-muted)] px-1 inline-flex items-center gap-1">Can use: files, web, tasks, images{tools.length ? `, ${tools.join(', ')}` : ''}<Tip text="What the agent can do in Work. Turn on browser and computer control in Settings → Tools. Steps that change your files or control your computer ask first unless you changed that there." /></span>
-              <span className="flex-1" />
-              <button type="button" onClick={onOpenSettings} className="h-7 px-2 inline-flex items-center gap-1.5 rounded-[8px] text-[13px] text-[var(--color-text-muted)] hover:bg-[var(--hover)]"><MonitorSmartphone className="w-3.5 h-3.5" />Tools</button>
-            </>}>
+              <TrayButton onClick={onOpenSettings} icon={<MonitorSmartphone className="w-4 h-4" />} label="Tools" title="Choose what the agent may do: browser and computer control, and which steps ask first" />
+              </>}
+              status={<TrayNote><span className="inline-flex items-center gap-1">Can use: files, web, tasks, images{tools.length ? `, ${tools.join(', ')}` : ''}<Tip text="What the agent can do in Work. Turn on browser and computer control in Settings → Tools. Steps that change your files or control your computer ask first unless you changed that there." /></span></TrayNote>} />}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
               <VramMeter />
               {(files.length > 0 || drag) && (
@@ -518,25 +522,26 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                   })}
                 </div>
               )}
-              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={talk ? (vs === 'listening' ? 'Listening… just talk' : vs === 'speaking' ? 'Lotus is speaking…' : 'Talk mode is on') : 'Describe the job, e.g. “Make a study plan for my exams as a document”'}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void go(); } }} aria-label="Describe the work"
-                className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none max-h-48" />
-              <div className="flex items-center gap-1 px-2.5 pb-2.5">
+              <PromptText value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={talk ? (vs === 'listening' ? 'Listening… just talk' : vs === 'speaking' ? `${name} is speaking…` : 'Talk mode is on') : 'Describe the job, e.g. “Make a study plan for my exams as a document”'}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void go(); } }} aria-label="Describe the work" />
+              <PromptRow
+                attach={<>
                 <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
                 <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code" onClick={() => fileInput.current?.click()}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+                </>}
+                chips={<>
                 <ModeButton on={!!item.think} onClick={() => work.patch(item.id, (x) => ({ ...x, think: !x.think }))} icon={<Brain className="w-4 h-4" />} label="Think" title="Let the model think before it acts; its reasoning shows above the reply (slower, often better plans)" />
-                <ModeButton on={talk} onClick={() => setTalk((t) => !t)} icon={<AudioLines className="w-4 h-4" />} label={talk ? (vs === 'listening' ? 'Listening' : vs === 'speaking' ? 'Speaking' : 'Talk') : 'Talk'} title="Talk with Lotus hands-free: it listens, works, answers aloud and listens again (needs Voicebox for listening)" />
-                <span className="flex-1" />
-                <Popover up align="right" className="w-[280px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title="Model" text={model || 'No model'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
+                <ModeButton on={talk} onClick={() => setTalk((t) => !t)} icon={<AudioLines className="w-4 h-4" />} label={talk ? (vs === 'listening' ? 'Listening' : vs === 'speaking' ? 'Speaking' : 'Talk') : 'Talk'} title={`Talk with ${name} hands-free: it listens, works, answers aloud and listens again`} />
+                </>}
+                picker={<Popover up align="right" className="w-[280px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title={model ? `Model (${model})` : 'Model'} text={model ? prettyModelName(model) : 'No model'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
                   {(close) => (<>
                     {models.map((m) => <MenuItem key={m.id} active={m.id === model} onClick={() => { onSettings({ selectedModel: m.id }); close(); }}><span className="truncate flex-1">{m.name}</span><span className="text-[12px] opacity-70">{m.tag}</span></MenuItem>)}
                     {!models.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No chat models yet.</p>}
                     <div className="my-1 border-t border-[var(--sep)]" />
                     <MenuItem onClick={() => { close(); onOpenModels(); }}>Get more models…</MenuItem>
                   </>)}
-                </Popover>
-                {work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={(!text.trim() && !files.length) || !model} onClick={() => void go()} label="Start" tip="Start (Enter)" />}
-              </div>
+                </Popover>}
+                send={work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={(!text.trim() && !files.length) || !model} onClick={() => void go()} label="Start" tip="Start (Enter)" />} />
             </PromptShell>
           </div>
         </div>

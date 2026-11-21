@@ -47,7 +47,14 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
     const on = s.id === activeId && !research?.openId;
     return (
       <div key={s.id} onClick={() => onSelect(s.id)} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' && renaming !== s.id) onSelect(s.id); }}
+        // Keyboard path for the hover actions (0.20): Tab reaches them once the row has focus; F2 renames, Delete deletes.
+        aria-keyshortcuts="F2 Delete"
+        onKeyDown={(e) => {
+          if (renaming === s.id || e.target !== e.currentTarget) return;
+          if (e.key === 'Enter') onSelect(s.id);
+          else if (e.key === 'F2') { e.preventDefault(); setDraft(s.title); setRenaming(s.id); }
+          else if (e.key === 'Delete') { e.preventDefault(); onDelete(s.id); }
+        }}
         className={cx('group relative flex items-center gap-2 px-2.5 h-9 rounded-[8px] cursor-default',
           on ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
         {s.incognito && <EyeOff className="w-3.5 h-3.5 shrink-0" aria-label="Incognito" />}
@@ -113,7 +120,7 @@ export const ChatSidebar: React.FC<Props> = ({ sessions, activeId, folders, onFo
                   <Folder className="w-3.5 h-3.5 shrink-0" />
                   <span className="flex-1 truncate">{f.name}</span>
                   <span className="text-[12px] tabular-nums">{sessions.filter((s) => s.folderId === f.id).length}</span>
-                  <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex" onClick={(e) => {
+                  <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex group-focus-within:inline-flex" onClick={(e) => {
                     e.stopPropagation(); onFolders(folders.filter((x) => x.id !== f.id));
                     sessions.filter((s) => s.folderId === f.id).forEach((s) => onPatch(s.id, (x) => ({ ...x, folderId: undefined })));
                     if (folder === f.id) setFolder(null);

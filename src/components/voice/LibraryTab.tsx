@@ -89,7 +89,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                     {g.status === 'failed' && <IconBtn label="Retry" onClick={async () => { await voicebox.retry(g.id); void load(true); }}><RotateCw className="w-3.5 h-3.5" /></IconBtn>}
                     <IconBtn label={g.is_favorited ? 'Remove favorite' : 'Favorite'} active={g.is_favorited} onClick={() => fav(g)}><Star className="w-3.5 h-3.5" fill={g.is_favorited ? 'currentColor' : 'none'} /></IconBtn>
                     <IconBtn label="Save as WAV" disabled={g.status !== 'completed'} onClick={async () => downloadBlob(await tagWavBlob(await voicebox.exportAudio(g.id)), `${g.profile_name ?? 'voice'}-${g.id.slice(0, 6)}.wav`)}><Download className="w-3.5 h-3.5" /></IconBtn>
-                    <IconBtn label="Delete" onClick={() => del(g)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn label="Delete" className="hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]" onClick={() => del(g)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                   </div>
                 </div>
                 {open?.id === g.id && (

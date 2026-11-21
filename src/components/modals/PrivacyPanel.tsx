@@ -33,7 +33,7 @@ export const PrivacyPanel: React.FC<{ settings: LotusSettings }> = ({ settings }
           <div className="min-w-0">
             <span className="text-[13px] block">Offer to send crash reports</span>
             <span className="block text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">
-              Off by default. When Lotus breaks, it shows you the report first. Send opens a GitHub issue in your browser that you read and submit yourself. Nothing is sent without you.
+              {crash.on ? 'On.' : 'Off.'} When Lotus breaks, it shows you the report first. Send opens a GitHub issue in your browser that you read and submit yourself. Nothing is sent without you.
             </span>
           </div>
           <Toggle checked={crash.on} onChange={setCrashReports} ariaLabel="Offer to send crash reports" />

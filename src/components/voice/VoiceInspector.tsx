@@ -1,7 +1,7 @@
 import { confirmAlert } from '../common/Alerts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Copy, Loader2, Sparkles, Trash2 } from 'lucide-react';
-import { voicebox, Generation, ModelStatus, ProfileSample, STT_MODELS, TTS_ENGINES, VoiceProfile } from '../../services/voicebox';
+import { fmtDuration, voicebox, Generation, ModelStatus, ProfileSample, STT_MODELS, TTS_ENGINES, VoiceProfile } from '../../services/voicebox';
 import { engineUrl } from '../../services/engineConfig';
 import { VoiceData } from './useVoiceData';
 import { VoiceMode } from './VoiceSidebar';
@@ -106,7 +106,7 @@ const Raw: React.FC<{ online: boolean }> = ({ online }) => {
     <div className="overflow-y-auto flex-1">
       <Section title="Latest generation" action={<Btn size="sm" variant="ghost" onClick={load}>Refresh</Btn>}>
         {g ? (<>
-          <KV k="Engine" v={g.engine ?? '—'} /><KV k="Audio length" v={g.duration ? `${g.duration.toFixed(1)} s` : '—'} /><KV k="Seed" v={g.seed ?? '—'} /><KV k="Status" v={g.status} />
+          <KV k="Engine" v={g.engine ?? '—'} /><KV k="Audio length" v={g.duration ? fmtDuration(g.duration) : '—'} /><KV k="Seed" v={g.seed ?? '—'} /><KV k="Status" v={g.status} />
           <div className="flex items-center justify-between mt-3 mb-1"><span className="text-[12px] font-medium">Record (JSON)</span><IconBtn label="Copy JSON" className="!w-6 !h-6" onClick={() => void navigator.clipboard.writeText(text)}><Copy className="w-3.5 h-3.5" /></IconBtn></div>
           <pre className="max-h-72 overflow-auto p-2 rounded-[8px] bg-[var(--hover)] text-[12px] font-mono whitespace-pre-wrap break-all">{text}</pre>
         </>) : <p className="text-[13px] text-[var(--color-text-muted)]">Nothing generated yet.</p>}

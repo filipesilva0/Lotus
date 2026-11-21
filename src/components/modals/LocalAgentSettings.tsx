@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { Eraser } from 'lucide-react';
 import { Tip } from '../common/Tip';
 import { LotusSettings } from '../../types/lotus';
 import { Toggle } from '../common/Toggle';
-import { Segmented, Stepper, TextInput, Btn } from '../common/ui';
+import { Segmented, Stepper, TextInput, Btn, InfoNote, SettingRow } from '../common/ui';
 import { ScalingCard } from '../hardware/ScalingCard';
 import { llamacpp } from '../../services/llm';
 import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
@@ -11,15 +12,7 @@ import { providerOf } from '../../chat/webCore';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
-const Row: React.FC<{ title: string; hint: React.ReactNode; children: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
-    <div className="min-w-0">
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-text-main)]">{title}<Tip label={title} /></span>
-      <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>
-    </div>
-    <div className="shrink-0">{children}</div>
-  </div>
-);
+const Row: React.FC<{ title: string; hint: React.ReactNode; children?: React.ReactNode }> = (p) => <SettingRow {...p} tip />;
 
 /** Settings → Local engine & VRAM. */
 export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => {
@@ -74,7 +67,7 @@ export const EngineScalingPanel: React.FC<P> = ({ settings: s, onUpdateSettings:
 
 /** Settings → Chat: web search. */
 export const WebSearchPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => (
-  <div className="space-y-4">
+  <div>
     <Row title="Web search provider" hint="Used when Web is on in the message box, and by tasks and routines that search the web. Lotus Search is built in and needs no account: it asks DuckDuckGo, then Bing and Wikipedia when one is busy or asks for a captcha. SearXNG is a search engine you can run yourself.">
       <Segmented label="Web search provider" value={providerOf(s.webSearchProvider)} onChange={(v) => set({ webSearchProvider: v })} options={[{ id: 'auto', label: 'Lotus Search' }, { id: 'searxng', label: 'SearXNG' }]} />
     </Row>
@@ -98,7 +91,7 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
   const [wiped, setWiped] = useState(false);
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[var(--color-text-muted)] leading-snug px-1">Memory is on for every new chat. The Memory button next to Incognito in the chat header pauses it for one chat at once: no recall and no learning until you turn it back on. Incognito chats never use memory.</p>
+      <InfoNote title="Memory in each chat">Memory is on for every new chat. The Memory button in the chat bar, under the message box beside Incognito, pauses it for that chat: no recall and no learning until you turn it back on. Incognito chats never use memory.</InfoNote>
       <Row title="Learn from conversations" hint="Every few messages, a background agent notes lasting facts and preferences you mention, and corrects ones that changed. Learned items are marked in the chat inspector, where you can delete them.">
         <Toggle checked={s.autoMemory} onChange={(v) => set({ autoMemory: v })} ariaLabel="Learn from conversations" />
       </Row>
@@ -115,7 +108,7 @@ export const MemorySkillsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: 
           {status?.native ? ` · ${status.path}` : ''}
         </p>
         <div className="flex gap-2">
-          <Btn variant="danger" disabled={wiped} onClick={() => void memoryStore.wipeHistory().then(() => setWiped(true))}>{wiped ? 'Search index cleared' : 'Clear conversation search index'}</Btn>
+          <Btn variant="danger" icon={<Eraser className="w-3.5 h-3.5" />} disabled={wiped} onClick={() => void memoryStore.wipeHistory().then(() => setWiped(true))}>{wiped ? 'Search Index Cleared' : 'Clear Search Index'}</Btn>
         </div>
         <p className="text-xs text-[var(--color-text-muted)]">Clearing the index does not delete your chats; it stops them from being recalled until they are indexed again (new messages are indexed as you chat).</p>
       </div>

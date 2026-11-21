@@ -2,7 +2,7 @@
 // panel (presets first, every knob under "Fine-Tune"), and clip audio read from Lotus Studio.
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Play, Square, Sparkles, Boxes, Plus } from 'lucide-react';
+import { ChevronDown, Play, Square, Sparkles, Boxes, Plus , Check } from 'lucide-react';
 import { AudioPlayer } from '../AudioPlayer';
 import { MenuItem, Popover, SliderField } from '../../common/Pane';
 import { PickerButton, ModeButton } from '../../common/PromptBox';
@@ -87,7 +87,7 @@ export const EffectsPanel: React.FC<{ value: Partial<Effects>; onChange: (fx: Ef
       <div className="flex flex-wrap gap-1.5 mb-3" role="group" aria-label="Effect presets">
         {EFFECT_PRESETS.map((x) => (
           <button key={x.id} type="button" aria-pressed={p === x.id} onClick={() => onChange(withEffects(x.fx))}
-            className={cx('h-7 px-2.5 rounded-full text-[12px]', p === x.id ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-medium' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{x.label}</button>
+            className={cx('h-7 px-2.5 rounded-full text-[12px] inline-flex items-center gap-1', p === x.id ? 'is-selected font-medium' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{p === x.id && <Check className="w-3 h-3" aria-hidden="true" />}{x.label}</button>
         ))}
       </div>
       <details className="group">
