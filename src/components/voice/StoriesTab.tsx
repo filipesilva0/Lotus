@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Play, Square, Download, Trash2, Copy, Scissors, Film, Sparkles } from 'lucide-react';
 import { voicebox, Story, StoryDetail, StoryItem, fmtDuration } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
+import { tagWavBlob } from '../../lib/wavTag';
 import { Btn, Card, Select, TextArea, TextInput, Label, Slider, Empty, Banner, Spinner, IconBtn, cx } from '../common/ui';
 import { avatarGradient, VoiceData } from './useVoiceData';
 import { kv } from '../../lib/store';
@@ -216,7 +217,7 @@ export const StoriesTab: React.FC<{
             <div className="w-24"><Slider min={30} max={200} step={5} value={pxPerSec} onChange={setPxPerSec} label="Zoom" /></div>
             <Btn variant="ghost" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setLineOpen(!lineOpen)}>Add Line</Btn>
             <Btn variant="secondary" loading={exporting} disabled={!items.length} icon={<Download className="w-3.5 h-3.5" />}
-              onClick={async () => { setExporting(true); try { downloadBlob(await voicebox.exportStoryAudio(story.id), `${story.name}.wav`); } catch (e) { setErr((e as Error).message); } finally { setExporting(false); } }}>
+              onClick={async () => { setExporting(true); try { downloadBlob(await tagWavBlob(await voicebox.exportStoryAudio(story.id)), `${story.name}.wav`); } catch (e) { setErr((e as Error).message); } finally { setExporting(false); } }}>
               Export WAV
             </Btn>
           </div>

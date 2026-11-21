@@ -62,6 +62,28 @@ export interface LibEntry {
   vision?: boolean;
 }
 
+/**
+ * What a model's licence lets people do with it, for the badge on its card (0.17.0). Read from the
+ * licence name so a new model only needs its licence written correctly.
+ *   open            commercial use allowed (Apache, MIT, NVIDIA Open Model, OpenMDW, CC-BY…)
+ *   limits          commercial use allowed with conditions (OpenRAIL use limits, Llama's licence)
+ *   non-commercial  personal or research use only
+ *   varies          depends on the file (e.g. each Piper voice's recordings)
+ */
+export type LicenceUse = 'open' | 'limits' | 'non-commercial' | 'varies';
+export function licenceUse(licence: string): LicenceUse {
+  const l = licence.toLowerCase();
+  if (/non[- ]?commercial|\bcc-by(-sa)?-nc|research[- ]only/.test(l)) return 'non-commercial';
+  if (/varies|unknown|check/.test(l)) return 'varies';
+  if (/rail|llama|gemma terms/.test(l)) return 'limits';
+  return 'open';
+}
+export const LICENCE_BADGE: Record<Exclude<LicenceUse, 'open'>, { label: string; hint: string }> = {
+  'non-commercial': { label: 'Non-commercial', hint: 'Its licence allows personal, non-commercial use only. Don\'t use what it makes for paid or business work.' },
+  limits: { label: 'Use limits', hint: 'Commercial use is allowed, but its licence lists uses that aren\'t. Read the licence before using it for work.' },
+  varies: { label: 'Check licence', hint: 'The licence depends on the recordings or data it was trained on. Check its model card before using it for work.' },
+};
+
 // ── Chat ───────────────────────────────────────────────────────────────────
 
 const chat = (e: Omit<LibEntry, 'kind'>): LibEntry => ({ ...e, kind: 'chat' });
@@ -328,19 +350,19 @@ export const VOICE_MODELS: LibEntry[] = [
     blurb: voicePick('kokoro')?.blurb ?? 'Natural voices, fast even without a GPU.',
     builtin: { files: [{ url: SHERPA('tts-models', 'kokoro-en-v0_19.tar.bz2'), path: 'voice/kokoro', gb: 0.33, archive: true }] },
     voice: { engine: 'kokoro', languages: ['en'], speakers: KOKORO_EN.map((name, id) => ({ id, name })) }, voicebox: voicePick('kokoro')?.match },
-  { id: 'piper-en-us-lessac', kind: 'voice', tier: 'quick', title: 'Piper · Lessac (US English)', maker: 'Rhasspy', licence: 'MIT', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
+  { id: 'piper-en-us-lessac', kind: 'voice', tier: 'quick', title: 'Piper · Lessac (US English)', maker: 'Rhasspy', licence: 'Varies by voice', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
     blurb: 'A clear, tiny voice that speaks instantly on any computer.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-en_US-lessac-medium.tar.bz2'), path: 'voice/piper-en-us-lessac', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['en'] } },
-  { id: 'piper-en-gb-alba', kind: 'voice', title: 'Piper · Alba (British English)', maker: 'Rhasspy', licence: 'MIT', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
+  { id: 'piper-en-gb-alba', kind: 'voice', title: 'Piper · Alba (British English)', maker: 'Rhasspy', licence: 'Varies by voice', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
     blurb: 'A tiny British English voice.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-en_GB-alba-medium.tar.bz2'), path: 'voice/piper-en-gb-alba', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['en'] } },
-  { id: 'piper-pt-pt-tugao', kind: 'voice', title: 'Piper · Tugão (European Portuguese)', maker: 'Rhasspy', licence: 'MIT', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
+  { id: 'piper-pt-pt-tugao', kind: 'voice', title: 'Piper · Tugão (European Portuguese)', maker: 'Rhasspy', licence: 'Varies by voice', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
     blurb: 'A tiny voice for Portuguese from Portugal.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-pt_PT-tugao-medium.tar.bz2'), path: 'voice/piper-pt-pt-tugao', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['pt'] } },
-  { id: 'piper-pt-br-faber', kind: 'voice', title: 'Piper · Faber (Brazilian Portuguese)', maker: 'Rhasspy', licence: 'MIT', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
+  { id: 'piper-pt-br-faber', kind: 'voice', title: 'Piper · Faber (Brazilian Portuguese)', maker: 'Rhasspy', licence: 'Varies by voice', tags: ['Tiny'], vramGb: 0, diskGb: 0.07,
     blurb: 'A tiny voice for Brazilian Portuguese.',
     builtin: { files: [{ url: SHERPA('tts-models', 'vits-piper-pt_BR-faber-medium.tar.bz2'), path: 'voice/piper-pt-br-faber', gb: 0.07, archive: true }] },
     voice: { engine: 'piper', languages: ['pt'] } },

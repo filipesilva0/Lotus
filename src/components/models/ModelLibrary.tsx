@@ -4,7 +4,7 @@ import { Banner, Btn, Card, cx } from '../common/ui';
 import { confirmAlert } from '../common/Alerts';
 import { Tip } from '../common/Tip';
 import { cancelJob, fmtSize, installCustomModel, installEngine, installModel, jobFor, removeEngine, removeModel, useBuiltins, type BuiltinId, type Job } from '../../lib/builtins';
-import { availableOn, picksFor, CLASS_LABEL, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, machineClass, type Fit, type LibEntry, type ModelKind } from '../../models/library';
+import { availableOn, picksFor, CLASS_LABEL, fitOf, FIT_LABEL, KIND_LABEL, LIBRARY, LICENCE_BADGE, licenceUse, machineClass, type Fit, type LibEntry, type ModelKind } from '../../models/library';
 import type { ImageFolder } from '../../models/imageProfiles';
 import { ollamaClient, type OllamaModel } from '../../services/ollamaService';
 import { voicebox } from '../../services/voicebox';
@@ -171,6 +171,7 @@ export const ModelLibrary: React.FC<{
             const have = isInstalled(e);
             const fit = b.machine ? fitOf(e, vram, unified, ram) : null;
             const tier = picks.get(e.id);
+            const use = licenceUse(e.licence);
             const offline = (eng === 'ollama' && ollamaUp === false) || (eng === 'voicebox' && voiceboxUp === false) || ((eng === 'builtin' || eng === 'comfyui') && !b.available);
             return (
               <Card key={e.id} className="p-3.5 flex flex-col min-w-0 overflow-hidden">
@@ -179,6 +180,7 @@ export const ModelLibrary: React.FC<{
                   <span className="shrink-0 px-1.5 h-5 inline-flex items-center rounded-[5px] bg-[var(--hover)] text-[12px] font-medium">{KIND_LABEL[e.kind]}</span>
                 </div>
                 {tier && b.machine && <p className="mt-1 text-[12px] font-medium text-[var(--color-accent-vibrant)]">Suggested for this computer · {TIER_LABEL[tier]}</p>}
+                {use !== 'open' && <p className="mt-1"><span title={LICENCE_BADGE[use].hint} className={cx('px-1.5 h-5 inline-flex items-center rounded-[5px] text-[12px] font-medium', use === 'non-commercial' ? 'bg-[var(--c-orange)]/15 text-[var(--c-orange)]' : 'bg-[var(--hover)] text-[var(--color-text-muted)]')}>{LICENCE_BADGE[use].label}</span><span className="sr-only">: {LICENCE_BADGE[use].hint}</span></p>}
                 <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug flex-1">{e.blurb}</p>
                 <p className="mt-2 text-[12px] tabular-nums">
                   {e.diskGb >= 1 ? `${e.diskGb} GB` : `${Math.round(e.diskGb * 1000)} MB`}

@@ -231,7 +231,7 @@ The setup guide and the Models page download only what you pick, and only from e
 | **Sign-in and sync** | Only if you set up a sync server and sign in (profile picture → Set Up Sync Server). Off by default, and Lotus never asks you to | Your email, password and profile (name and picture) to the sync server *you* chose, such as your own Supabase project. Nothing goes to a Lotus server: there isn't one. |
 | **Update check** | When you press the button, or at launch if you opt in | A request to this repository's Releases |
 
-No telemetry, no analytics, no remote fonts. Your chats, settings, tasks and memory live in a single file in `Lotus Studio/Data` (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+No telemetry, no analytics, no remote fonts. Crash reports are off unless you turn them on, and even then Lotus only opens a GitHub issue for you to read and send yourself. Your chats, settings, tasks and memory live in a single file in `Lotus Studio/Data` (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
 
 <div align="right"><sub><a href="#top">Back to top ↑</a></sub></div>
 
@@ -286,7 +286,9 @@ npm run check:tauri                       # native and web package versions matc
 
 ## <img src="docs/assets/petal-lotus.svg" width="20" height="20"> License
 
-A license for Lotus hasn't been chosen yet. Until one is added in `LICENSE`, all rights are reserved. Engines and bundled fonts keep their own licenses; see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
+Lotus is source-available under the [Functional Source License 1.1, Apache 2.0 future licence](LICENSE) (FSL-1.1-ALv2). You can read, audit, change and use the code for anything except offering a competing product or service. Two years after each release, that release's code also becomes available under the Apache License 2.0. Every file in this repository is under that licence unless the file or [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) says otherwise.
+
+Engines, models and bundled fonts keep their own licences; see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) and the [engine licence check](docs/legal/engine-licences.md). Using Lotus is covered by the [terms of use](docs/legal/TERMS.md) and the [privacy policy](docs/legal/PRIVACY.md).
 
 <br>
 

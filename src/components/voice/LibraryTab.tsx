@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Search, Star, Download, Trash2, RotateCw, Play } from 'lucide-react';
 import { voicebox, Generation, engineLabel, fmtDuration } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
+import { tagWavBlob } from '../../lib/wavTag';
 import { Btn, Card, TextInput, Select, Empty, Banner, Spinner, IconBtn, cx } from '../common/ui';
 import { AudioPlayer } from './AudioPlayer';
 import { VoiceData } from './useVoiceData';
@@ -87,7 +88,7 @@ export const LibraryTab: React.FC<{ data: VoiceData; onSpeakAgain: (text: string
                   <div className="flex items-center shrink-0">
                     {g.status === 'failed' && <IconBtn label="Retry" onClick={async () => { await voicebox.retry(g.id); void load(true); }}><RotateCw className="w-3.5 h-3.5" /></IconBtn>}
                     <IconBtn label={g.is_favorited ? 'Remove favorite' : 'Favorite'} active={g.is_favorited} onClick={() => fav(g)}><Star className="w-3.5 h-3.5" fill={g.is_favorited ? 'currentColor' : 'none'} /></IconBtn>
-                    <IconBtn label="Save as WAV" disabled={g.status !== 'completed'} onClick={async () => downloadBlob(await voicebox.exportAudio(g.id), `${g.profile_name ?? 'voice'}-${g.id.slice(0, 6)}.wav`)}><Download className="w-3.5 h-3.5" /></IconBtn>
+                    <IconBtn label="Save as WAV" disabled={g.status !== 'completed'} onClick={async () => downloadBlob(await tagWavBlob(await voicebox.exportAudio(g.id)), `${g.profile_name ?? 'voice'}-${g.id.slice(0, 6)}.wav`)}><Download className="w-3.5 h-3.5" /></IconBtn>
                     <IconBtn label="Delete" onClick={() => del(g)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
                   </div>
                 </div>

@@ -1,8 +1,13 @@
 # Third-party licenses and attributions
 
-Lotus is a front end for local AI engines and borrows ideas from two open-source projects.
-No code, artwork, sounds or trademarks from either project are bundled in Lotus. The one bundled
-third-party runtime is Bun, inside lotusd (below).
+Lotus itself is source-available under the Functional Source License 1.1, Apache 2.0 future licence
+(FSL-1.1-ALv2); see LICENSE. The projects below keep their own licences, and their notices are kept
+here as those licences require. The engine licence check is in docs/legal/engine-licences.md.
+
+Lotus is a front end for local AI engines and borrows ideas from two open-source projects,
+Voicebox and Coucou (both MIT; notices below). No artwork, sounds or trademarks from either project
+are bundled in Lotus. Third-party code that ships inside Lotus (Bun, blobatar, fflate, pdf.js,
+SQLite, fonts) is listed below; engines and models are downloaded only when you ask.
 
 ## Bun (bundled inside lotusd)
 
@@ -42,7 +47,7 @@ Lotus's Voice workspace talks to the Voicebox server over its local REST API
 Downloaded from each project's GitHub releases into `Lotus Studio/Engines` when the user installs them (Models page or the first-run guide). Lotus finds the release through `api.github.com` and downloads from `github.com`.
 - **llama.cpp** (llama-server, chat): MIT. https://github.com/ggml-org/llama.cpp (NVIDIA builds come with NVIDIA's CUDA runtime libraries, under NVIDIA's own licence terms, as published by the project).
 - **stable-diffusion.cpp** (sd-cli, images): MIT. https://github.com/leejet/stable-diffusion.cpp
-- **sherpa-onnx** (speech and dictation): Apache-2.0. https://github.com/k2-fsa/sherpa-onnx; its voice and Whisper model archives come from the same project's `tts-models` and `asr-models` releases (Kokoro: Apache-2.0; Piper voices: MIT, each voice with its own dataset licence; Whisper: MIT). Voice cloning (0.8.2): PocketTTS by Kyutai (code MIT, weights CC-BY-4.0, `tts-models`), ZipVoice by k2-fsa (Apache-2.0, `tts-models`) with the Vocos 24 kHz vocoder (MIT, `vocoder-models`).
+- **sherpa-onnx** (speech and dictation): Apache-2.0. https://github.com/k2-fsa/sherpa-onnx. Its 1.x speech programs, which Lotus uses, include espeak-ng (GPL-3.0, https://github.com/espeak-ng/espeak-ng) to pronounce Kokoro and Piper voices; Lotus runs them as separate programs and doesn't ship them. Lotus plays Piper *voice files* with sherpa-onnx and doesn't use the Piper program (whose newer releases are GPL-3.0). GPT-SoVITS (MIT, https://github.com/RVC-Boss/GPT-SoVITS) is installed by the user, not by Lotus; its voice and Whisper model archives come from the same project's `tts-models` and `asr-models` releases (Kokoro: Apache-2.0; Piper voices: MIT, each voice with its own dataset licence; Whisper: MIT). Voice cloning (0.8.2): PocketTTS by Kyutai (code MIT, weights CC-BY-4.0, `tts-models`), ZipVoice by k2-fsa (Apache-2.0, `tts-models`) with the Vocos 24 kHz vocoder (MIT, `vocoder-models`).
 - Chat models in GGUF from Hugging Face (unsloth repositories, each model under its maker's licence, shown on the Models page), image models from huggingface.co (Comfy-Org, stabilityai, stable-diffusion-v1-5, madebyollin).
 
 ## Coucou (inspiration for the floating island)
