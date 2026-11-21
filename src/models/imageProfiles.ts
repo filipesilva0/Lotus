@@ -286,12 +286,67 @@ export function sdcppArgs(p: ImageProfile, run: SdRun, path: (folder: ImageFolde
   return args;
 }
 
-/** Reads sd.cpp's progress line ("|====>   | 3/20 - 1.23s/it") → 0..1, or null. */
+/**
+ * sd-cli draws three kinds of progress bars, all in the same shape:
+ *   "|####| 178/178 -   1.03GB/s"       loading weights (counts tensors, MB/s or GB/s)
+ *   "|==>  |  2/50 -   1.19s/it"         a sampling step (s/it or it/s)
+ *   "|==>  |  3/80 -   0.20s/it"         a VAE tile, when the image is decoded in tiles (also s/it)
+ * Only the sampling steps are progress the user cares about.
+ */
+const SD_BAR = /(?:^|[|\s])(\d+)\s*\/\s*(\d+)\s*-\s*[\d.]+\s*(s\/it|it\/s|[KMG]?i?B\/s)/g;
+
+/** The last timed bar ("3/20 - 1.23s/it") in a piece of sd.cpp output, or null. Loading bars (MB/s) don't count. */
 export function sdcppProgress(line: string): { step: number; total: number } | null {
-  const m = /\|\s*(\d+)\s*\/\s*(\d+)\s*-/.exec(line) ?? /(?:^|\s)(\d+)\s*\/\s*(\d+)\s*-\s*[\d.]+\s*(?:s\/it|it\/s)/.exec(line);
-  if (!m) return null;
-  const step = Number(m[1]), total = Number(m[2]);
-  return total > 0 && step <= total ? { step, total } : null;
+  let hit: { step: number; total: number } | null = null;
+  for (const m of line.matchAll(SD_BAR)) {
+    if (/B\/s$/.test(m[3])) continue;
+    const step = Number(m[1]), total = Number(m[2]);
+    if (total > 0 && step <= total) hit = { step, total };
+  }
+  return hit;
+}
+
+/**
+ * How many sampling steps sd-cli will draw a bar for. Text to image runs all of them; from a start
+ * image only the last `strength` share is run (sd.cpp rounds that share either way between versions,
+ * and some builds still count every step, so the full count is kept too).
+ */
+export function sdcppStepCounts(steps: number, strength?: number): number[] {
+  if (strength === undefined || strength >= 1) return [steps];
+  const t = steps * Math.max(0, strength);
+  return [...new Set([steps, Math.floor(t), Math.round(t), Math.ceil(t), Math.floor(t) + 1].filter((n) => n > 0 && n <= steps))];
+}
+
+/**
+ * Turns sd-cli's raw output, chunk by chunk, into sampling steps only (0.15.1). In 0.15.0 the image
+ * progress read every bar, so one run showed "Step 178 of 178" (loading), then "3 of 80" (tiles), then
+ * the real steps. Bars split across two chunks are held back until the rest arrives.
+ */
+export function sdcppStepReader(steps: number, strength: number | undefined, onStep: (step: number, total: number) => void): (chunk: string) => void {
+  const totals = new Set(sdcppStepCounts(steps, strength));
+  let carry = '';
+  let last = '';
+  return (chunk) => {
+    const parts = (carry + chunk).split(/\r|\n|\x1b\[K/);
+    carry = parts.pop() ?? '';
+    // A whole bar without its terminator (the last one before the program pauses) still counts.
+    if (/(s\/it|it\/s)\s*(- ETA [\d:]+)?\s*$/.test(carry)) { parts.push(carry); carry = ''; }
+    if (carry.length > 4096) carry = carry.slice(-4096);
+    for (const part of parts) {
+      const pr = sdcppProgress(part);
+      if (!pr || !totals.has(pr.total)) continue;
+      const key = `${pr.step}/${pr.total}`;
+      if (key === last) continue;
+      last = key;
+      onStep(pr.step, pr.total);
+    }
+  };
+}
+
+/** What the image progress card says before the seconds: "Loading model · ", "Step 3 of 30 · ", "Finishing · ". */
+export function imageStage(step: { step: number; total: number } | null, builtin: boolean): string {
+  if (!step || !step.total) return builtin ? 'Loading model · ' : '';
+  return step.step >= step.total ? 'Finishing · ' : `Step ${step.step} of ${step.total} · `;
 }
 
 /**

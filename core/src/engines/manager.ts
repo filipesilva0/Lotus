@@ -26,7 +26,7 @@ import { readGgufInfo } from './gguf';
 import { gpuMemory } from '../hardware';
 import { SttServers } from './sttServer';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
-import { missingFor, sdcppArgs, sdcppProgress, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
+import { missingFor, sdcppArgs, sdcppStepReader, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
 
 export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx' };
 export const IMAGE_FOLDERS: ImageFolder[] = ['checkpoints', 'diffusion_models', 'text_encoders', 'vae', 'loras'];
@@ -718,11 +718,13 @@ export class Builtins {
       o.signal?.addEventListener('abort', onAbort, { once: true });
       const read = async (s: ReadableStream<Uint8Array>) => {
         const dec = new TextDecoder();
+        // Sampling steps only: sd-cli also draws bars while it loads weights and decodes tiles.
+        const onStep = sdcppStepReader(run.steps, run.init ? run.strength ?? 0.65 : undefined, (step, total) => o.onProgress?.(step, total));
         for await (const chunk of s) {
           const text = dec.decode(chunk, { stream: true });
           log += text;
           if (log.length > 200_000) log = log.slice(-100_000);
-          for (const part of text.split(/[\r\n]+/)) { const pr = sdcppProgress(part); if (pr) o.onProgress?.(pr.step, pr.total); }
+          onStep(text);
         }
       };
       await Promise.all([read(proc.stdout as ReadableStream<Uint8Array>), read(proc.stderr as ReadableStream<Uint8Array>)]);

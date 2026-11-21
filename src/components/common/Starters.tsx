@@ -6,7 +6,7 @@ import { cx } from './ui';
 import { kv } from '../../lib/store';
 import type { StarterGroup } from '../../data/starters';
 
-export const Starters: React.FC<{ groups: StarterGroup[]; onPick: (text: string) => void; id: string; className?: string }> = ({ groups, onPick, id, className }) => {
+export const Starters: React.FC<{ groups: StarterGroup[]; onPick: (text: string, group: StarterGroup) => void; id: string; className?: string }> = ({ groups, onPick, id, className }) => {
   const key = `lotus.starters.${id}`;
   const [tab, setTabRaw] = useState(() => { const t = kv.getItem(key); return groups.some((g) => g.id === t) ? t! : groups[0]?.id; });
   const setTab = (t: string) => { setTabRaw(t); try { kv.setItem(key, t); } catch { /* memory only */ } };
@@ -22,7 +22,7 @@ export const Starters: React.FC<{ groups: StarterGroup[]; onPick: (text: string)
       </div>
       <div role="tabpanel" className="flex flex-wrap justify-center gap-2">
         {group.items.map((s) => (
-          <button key={s.title} type="button" onClick={() => onPick(s.text)} title={s.text}
+          <button key={s.title} type="button" onClick={() => onPick(s.text, group)} title={s.text}
             className="h-8 px-3 rounded-[8px] text-[13px] font-medium bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:shadow-[0_0_0_1px_var(--color-accent-fill)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]">
             {s.title}
           </button>

@@ -1,5 +1,6 @@
 import { Starters } from '../common/Starters';
-import { IMAGE_STARTERS } from '../../data/starters';
+import { IMAGE_STARTERS, type StarterGroup } from '../../data/starters';
+import { modelForStyle } from '../../models/imageStyle';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { offerUndo, flushUndo } from '../common/Alerts';
 import { useCommand } from '../../lib/commands';
@@ -21,7 +22,7 @@ import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
 import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
-import { FAMILIES, RESOLUTIONS, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
+import { FAMILIES, RESOLUTIONS, imageStage, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
@@ -175,6 +176,15 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
 
   const actionBtn = 'h-8 px-2.5 inline-flex items-center gap-1.5 rounded-[7px] text-[12px] font-medium text-white hover:bg-white/20 disabled:opacity-40';
 
+  /** An example prompt: also make sure the selected model can draw that kind of picture (Photo on an anime model, 0.15.0). */
+  const pickStarter = (text: string, group: StarterGroup) => {
+    setPrompt(text);
+    const models = builtin ? profiles.map((p) => ({ id: p.id, name: `${p.name} ${p.files.model ?? ''}`, label: p.name })) : checkpoints.map((c) => ({ id: c, name: c }));
+    const current = models.find((m) => m.id === (builtin ? profile?.id : params.checkpoint));
+    const { switchTo, note } = modelForStyle(group.style, current, models);
+    if (switchTo) set(builtin ? { profile: switchTo.id } : { checkpoint: switchTo.id });
+    setNotice(note ?? null);
+  };
   const newImage = () => { g.newSession(); setPrompt(''); set({ seed: null }); setRefs([]); };
   useCommand('new-image', newImage);
 
@@ -203,7 +213,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
         {/* Canvas */}
         <div className="flex-1 min-h-0 p-5 flex flex-col items-center justify-center">
           {!cur && !busyHere && <Empty icon={<ImageIcon className="w-5 h-5" />} title="Nothing generated yet" body={`Describe an image below and press Generate, or start from an example. ${builtin ? 'Lotus' : 'ComfyUI'} makes it on this computer.`} className="flex-1"
-            action={<Starters id="images" groups={IMAGE_STARTERS} className="max-w-[640px]" onPick={(t) => setPrompt(t)} />} />}
+            action={<Starters id="images" groups={IMAGE_STARTERS} className="max-w-[640px]" onPick={pickStarter} />} />}
           {(cur || busyHere) && (
             <div className="relative group flex-1 min-h-0 w-full flex items-center justify-center">
               {cur && <img src={cur.url} alt={cur.prompt} draggable={false} onClick={() => { if (!busyHere) setViewing(true); }}
@@ -214,7 +224,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
                   <div className="flex items-center justify-between text-[13px] mb-2">
                     <span className="font-medium">{g.label}…</span>
-                    <span className="tabular-nums text-[var(--color-text-muted)]">{g.step ? `Step ${g.step.step} of ${g.step.total} · ` : ''}{Math.floor(g.elapsed)}s</span>
+                    <span className="tabular-nums text-[var(--color-text-muted)]">{imageStage(g.step, builtin)}{Math.floor(g.elapsed)}s</span>
                   </div>
                   <Progress label="Generating" value={g.step && g.step.total ? g.step.step / g.step.total : null} />
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[12px] text-[var(--color-text-muted)]">
