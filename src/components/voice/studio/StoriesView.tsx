@@ -2,6 +2,7 @@
 // arrange lines on four tracks (overlaps allowed), play them together and export one WAV.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { fmtDuration } from '../../../services/voicebox';
 import { ProGate } from '../../pro/TryPro';
 import { ArrowDown, ArrowUp, Download, FileText, ListPlus, Play, RefreshCw, Square, Trash2, Wand2 } from 'lucide-react';
 import { Banner, Btn, Empty, IconBtn, Segmented, Select, TextArea, cx } from '../../common/ui';
@@ -18,6 +19,8 @@ import { offerUndo } from '../../common/Alerts';
 import { putBack, takeOut } from '../../../lib/undoList';
 
 const TRACKS = 4;
+/** Tracks are lettered (A–D) so they never share numbers with the story's lines (0.20). */
+const trackName = (t: number) => String.fromCharCode(65 + t);
 const SAMPLE = 'Narrator: It was a quiet night in the village.\nAna: Did you hear that?\nLeo: Just the wind. Go back to sleep.\nNarrator: But it was not the wind.';
 const SAMPLE_TEXT = 'The lighthouse keeper had not seen a ship in eleven years. Every evening he climbed the hundred and twelve steps anyway, lit the lamp, and wrote one line in the logbook: nothing on the horizon.\n\nThen, on a grey Tuesday in March, a light answered his.\n\nIt blinked three times, paused, and blinked three times again. He knew that signal. He had taught it to someone, a long time ago.';
 const SPEEDS = [0.8, 0.9, 1, 1.1, 1.25];
@@ -105,7 +108,7 @@ const StoriesViewInner: React.FC<{ studio: Studio; storyId: string | null; onSto
     <div className="max-w-[860px] mx-auto px-6 py-6 space-y-5">
       <div className="flex items-center gap-2">
         <input value={story.name} onChange={(e) => save((s) => ({ ...s, name: e.target.value }))} aria-label="Story name" className="flex-1 min-w-0 bg-transparent text-[18px] font-semibold focus:outline-none rounded-[6px] focus-visible:shadow-[0_0_0_2px_var(--color-accent-fill)]" />
-        <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">{story.items.length} lines · {length.toFixed(1)} s</span>
+        <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">{story.items.length} line{story.items.length === 1 ? '' : 's'} · {fmtDuration(length)}</span>
         {missing.length > 0 && <Btn loading={!!busy} icon={<Wand2 className="w-3.5 h-3.5" />} onClick={() => void makeAll()}>Make {missing.length === story.items.length ? 'All' : `${missing.length} Missing`}</Btn>}
         <Btn variant="primary" disabled={!story.items.some((i) => i.clip)} icon={playing ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />} onClick={() => void play()}>{playing ? 'Stop' : 'Play'}</Btn>
         <IconBtn label="Export as WAV (also saved in Lotus Studio/Audio)" disabled={!story.items.some((i) => i.clip) || !!busy} onClick={() => void exportWav()}><Download className="w-4 h-4" /></IconBtn>
@@ -118,7 +121,7 @@ const StoriesViewInner: React.FC<{ studio: Studio; storyId: string | null; onSto
         <div className="rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] p-2" aria-label="Timeline">
           {Array.from({ length: TRACKS }, (_, t) => (
             <div key={t} className="relative h-8 my-1 rounded-[6px] bg-[var(--hover)]">
-              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--color-text-muted)] pointer-events-none">{t + 1}</span>
+              <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[12px] text-[var(--color-text-muted)] pointer-events-none" aria-label={`Track ${trackName(t)}`}>{trackName(t)}</span>
               <div className="absolute inset-y-0 left-6 right-1">
               {layout.filter((l) => l.track === t).map((l) => {
                 const it = story.items.find((x) => x.id === l.id)!;
@@ -141,9 +144,9 @@ const StoriesViewInner: React.FC<{ studio: Studio; storyId: string | null; onSto
         {story.items.map((it, i) => (
           <li key={it.id} id={`line-${it.id}`} className={cx('rounded-[12px] p-3 shadow-[0_0_0_0.5px_var(--sep)]', sel === it.id ? 'bg-[var(--hover)]' : 'bg-[var(--color-bg-card)]')} onClick={() => setSel(it.id)}>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[12px] tabular-nums text-[var(--color-text-muted)] w-5">{i + 1}</span>
+              <span className="text-[12px] tabular-nums text-[var(--color-text-muted)] w-12 shrink-0">Line {i + 1}</span>
               <div className="w-[200px]"><Select aria-label="Voice for this line" value={it.voice} onChange={(e) => patchItem(it.id, { voice: e.target.value, clip: undefined, duration: undefined })}>{studio.options.map((o) => <option key={o.id} value={o.id} disabled={!o.ready}>{o.name}</option>)}</Select></div>
-              <div className="w-[90px]"><Select aria-label="Track" value={it.track} onChange={(e) => patchItem(it.id, { track: Number(e.target.value) })}>{Array.from({ length: TRACKS }, (_, t) => <option key={t} value={t}>Track {t + 1}</option>)}</Select></div>
+              <div className="w-[90px]"><Select aria-label="Track" value={it.track} onChange={(e) => patchItem(it.id, { track: Number(e.target.value) })}>{Array.from({ length: TRACKS }, (_, t) => <option key={t} value={t}>Track {trackName(t)}</option>)}</Select></div>
               <div className="w-[82px]"><Select aria-label="Speed for this line" value={it.speed ?? 1} onChange={(e) => patchItem(it.id, { speed: Number(e.target.value), clip: undefined, duration: undefined })}>{SPEEDS.map((x) => <option key={x} value={x}>{x === 1 ? 'Normal' : `${x}×`}</option>)}</Select></div>
               <label className="text-[12px] text-[var(--color-text-muted)] inline-flex items-center gap-1">Start
                 <input type="number" min={0} step={0.1} value={it.start ?? ''} placeholder="auto" onChange={(e) => patchItem(it.id, { start: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}

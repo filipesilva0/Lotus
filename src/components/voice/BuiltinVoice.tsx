@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { fmtDuration } from '../../services/voicebox';
 import { AudioLines, BookOpen, Phone, Boxes, Copy, FileAudio, FileText, Film, Mic, Mic2, Plus, Search, SlidersHorizontal, Star, Trash2, Upload, Volume2, ListPlus, ChevronDown } from 'lucide-react';
 import { Banner, Btn, Empty, IconBtn, Select, cx } from '../common/ui';
 import { InspectorPane, KV, MenuItem, Popover, Section, SidebarPane, SliderField, groupByDate } from '../common/Pane';
@@ -157,7 +158,8 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
       className={cx('w-full h-9 px-2.5 flex items-center gap-2.5 rounded-[8px] text-[13px] text-left', mode === m ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>{icon}{label}{extra}</button>
   );
   const row = (id: string, title: string, on: boolean, onClick: () => void, sub?: string, del?: () => void) => (
-    <div key={id} role="button" tabIndex={0} onClick={onClick} onKeyDown={(e) => { if (e.key === 'Enter') onClick(); }}
+    <div key={id} role="button" tabIndex={0} onClick={onClick} aria-keyshortcuts={del ? 'Delete' : undefined}
+      onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === 'Enter') onClick(); else if (e.key === 'Delete' && del) { e.preventDefault(); del(); } }}
       className={cx('group flex items-center gap-2 px-2.5 rounded-[8px] cursor-default', sub ? 'py-1.5' : 'h-9', on ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
       <span className="flex-1 min-w-0"><span className="block truncate text-[13px]">{title}</span>{sub && <span className="block truncate text-[12px] font-normal text-[var(--color-text-muted)]">{sub}</span>}</span>
       {del && <span className="hidden group-hover:flex group-focus-within:flex shrink-0" onClick={(e) => e.stopPropagation()}><IconBtn label="Delete" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={del}><Trash2 className="w-3.5 h-3.5" /></IconBtn></span>}
@@ -256,7 +258,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                 <Empty className="flex-1" icon={<AudioLines />} title="Turn text into speech"
                   body="Type below, pick a voice and press Speak. Everything is made on this computer and saved in Lotus Studio."
                   action={<div className="flex flex-col items-center gap-3">
-                    <div className="flex flex-wrap justify-center gap-2">{STARTERS.map((s) => <button key={s} type="button" onClick={() => setText(s)} className="max-w-[220px] px-3 py-2 rounded-[10px] text-[12px] text-left bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:shadow-[0_0_0_1px_var(--color-accent-fill)]">{s}</button>)}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full max-w-[680px]">{STARTERS.map((s) => <button key={s} type="button" onClick={() => setText(s)} className="px-3 py-2 rounded-[10px] text-[12px] text-left bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:shadow-[0_0_0_1px_var(--color-accent-fill)]">{s}</button>)}</div>
                     <Btn variant="ghost" icon={<Mic2 className="w-3.5 h-3.5" />} onClick={() => { go('voices'); setVoiceSel(null); }}>Make Your Own Voice</Btn>
                   </div>} />
               )}
@@ -270,7 +272,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
                     <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{c.text}</p>
                     <div className="mt-2"><ClipAudio path={c.path} autoPlay={fresh === c.id} /></div>
                     <p className="mt-1 flex items-center gap-1 text-[12px] text-[var(--color-text-muted)]">
-                      <span className="truncate">{c.voice}{c.seconds ? ` · ${c.seconds.toFixed(1)} s` : ''} · {new Date(c.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="truncate">{c.voice}{c.seconds ? ` · ${fmtDuration(c.seconds)}` : ''} · {new Date(c.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                       <span className="flex-1" />
                       <IconBtn label={c.fav ? 'Remove from favourites' : 'Add to favourites'} active={c.fav} className="!w-6 !h-6" onClick={() => studio.saveHistory((h) => ({ ...h, clips: h.clips.map((x) => (x.id === c.id ? { ...x, fav: !x.fav } : x)) }))}><Star className="w-3.5 h-3.5" fill={c.fav ? 'currentColor' : 'none'} /></IconBtn>
                       <IconBtn label="Use this text again" className="!w-6 !h-6" onClick={() => setText(c.text)}><Copy className="w-3.5 h-3.5" /></IconBtn>

@@ -19,9 +19,9 @@ export const Modal: React.FC<{
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
-        className={cx('material-frosted w-full max-h-[86vh] flex flex-col rounded-[12px] outline-none', xl ? 'max-w-[980px]' : wide ? 'max-w-2xl' : 'max-w-md')}>
+        className={cx('material-sheet w-full max-h-[86vh] flex flex-col rounded-[12px] outline-none', xl ? 'max-w-[980px]' : wide ? 'max-w-2xl' : 'max-w-md')}>
         <div className="flex items-center justify-between px-4 h-11 shrink-0 border-b border-[var(--sep)]">
           <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">{title}</h2>
           <IconBtn label="Close" onClick={onClose}><X className="w-4 h-4" /></IconBtn>

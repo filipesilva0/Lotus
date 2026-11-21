@@ -3,6 +3,9 @@ import './fonts';
 import './index.css';
 import React from 'react';
 import { initStore } from './lib/store';
+import { installTipDismiss } from './lib/tipDismiss';
+
+if (typeof document !== 'undefined') installTipDismiss();
 
 /** If the window itself breaks, say so plainly and offer the diagnostics, instead of a blank page (0.17.0). */
 class CrashScreen extends React.Component<{ children: React.ReactNode }, { failed: boolean; copied: boolean }> {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tip } from './Tip';
-import { Loader2, AlertTriangle, Info, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { Loader2, AlertTriangle, Info, ChevronUp, ChevronDown, Check, Trash2 } from 'lucide-react';
 
 /*
  * Shared macOS-style controls.
@@ -37,7 +37,9 @@ export const Btn: React.FC<BtnProps> = ({ variant = 'secondary', loading, size =
       variant === 'secondary' &&
         'bg-[var(--color-bg-card)] text-[var(--color-text-main)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]',
       variant === 'ghost' && 'text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]',
-      variant === 'danger' && 'text-[var(--c-red)] hover:bg-[var(--hover)] active:bg-[var(--pressed)]',
+      // 0.20: one destructive look everywhere: a real button (same surface as secondary) with red text and a
+      // trash or eraser icon, never a bare red text link. Row-level deletes use DeleteButton below.
+      variant === 'danger' && 'bg-[var(--color-bg-card)] text-[var(--c-red)] shadow-[0_0_0_0.5px_var(--sep),0_0.5px_1.5px_rgba(0,0,0,.12)] hover:bg-[color-mix(in_srgb,var(--c-red)_10%,var(--color-bg-card))] active:bg-[var(--pressed)]',
       ringFocus,
       className,
     )}
@@ -358,3 +360,36 @@ export function useFlash(ms = 1400): [boolean, () => void] {
     },
   ];
 }
+
+/** A note with no control (where a setting lives, what something means). Looks unlike a setting row on purpose. */
+export const InfoNote: React.FC<{ title?: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
+  <div role="note" className={cx('info-note flex gap-2.5 px-3 py-2.5', className)}>
+    <Info className="w-4 h-4 mt-px shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+    <div className="min-w-0 text-[12px] leading-snug text-[var(--color-text-muted)]">
+      {title && <p className="text-[13px] font-medium text-[var(--color-text-main)] mb-0.5">{title}</p>}
+      {children}
+    </div>
+  </div>
+);
+
+/** The one row-level delete control (sidebars, lists, clips): a trash icon that turns red on hover or focus. */
+export const DeleteButton: React.FC<{ label: string; onClick: (e: React.MouseEvent) => void; small?: boolean; className?: string }> = ({ label, onClick, small = true, className }) => (
+  <IconBtn label={label} onClick={onClick} className={cx(small ? '!w-6 !h-6' : '!w-7 !h-7', 'hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]', className)}>
+    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+  </IconBtn>
+);
+
+/**
+ * One setting (0.20): name and a sentence on the left, its control on the right, with the same size, weight
+ * and spacing in every Settings pane (three panes each had their own version). Rows sit flush, divided by
+ * hairlines; a row without a control should be an InfoNote instead.
+ */
+export const SettingRow: React.FC<{ title: string; hint?: React.ReactNode; children?: React.ReactNode; tip?: boolean }> = ({ title, hint, children, tip }) => (
+  <div className="setting-row py-3 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
+    <div className="min-w-0">
+      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-[var(--color-text-main)]">{title}{tip && <Tip label={title} />}</span>
+      {hint && <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>}
+    </div>
+    {children && <div className="shrink-0">{children}</div>}
+  </div>
+);

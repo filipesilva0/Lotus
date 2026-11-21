@@ -7,6 +7,8 @@ import { BrainCircuit, Ear, Hand, Mic, MicOff, MessageSquare, Phone, PhoneOff } 
 import { Banner, Btn, cx } from '../../common/ui';
 import { usePanels } from '../../../lib/panels';
 import { AgentFace } from '../../common/AgentFace';
+import { currentAssistantName, useAssistantName } from '../../../lib/identity';
+import { prettyModelName } from '../../../models/names';
 import { CallLog } from '../../../voice/studio';
 import { callBlocker, endCall, interrupt, setBargeIn, setCallMemory, setMuted, startCall, useCall } from '../../../voice/call';
 
@@ -24,7 +26,7 @@ const Bubble: React.FC<{ role: 'user' | 'assistant'; text: string; live?: boolea
 /** A finished call, read again. */
 export const PastCall: React.FC<{ call: CallLog; onCallAgain: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ call, onCallAgain, onOpenInChat }) => {
   const mins = call.ended ? Math.max(1, Math.round((call.ended - call.started) / 60000)) : null;
-  const text = call.turns.map((t) => `${t.role === 'user' ? 'Me' : 'Lotus'}: ${t.text}`).join('\n');
+  const text = call.turns.map((t) => `${t.role === 'user' ? 'Me' : currentAssistantName()}: ${t.text}`).join('\n');
   return (
     <div className="max-w-[760px] mx-auto px-6 py-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -50,6 +52,40 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
   const turns = c.call?.turns ?? [];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [turns.length, c.partial]);
   const memoryOn = c.call ? c.call.memory : memoryDefault;
+  const name = useAssistantName();
+
+  // 0.20: before a call the button sits right under the intro, in one centred group (it used to be pinned
+  // to the bottom of the page with a large empty gap above it). During a call it moves to the bottom.
+  const controls = (
+    <>
+      <div className={cx('shrink-0 flex items-center justify-center gap-3', live ? 'pt-3 pb-1' : 'pt-6 pb-1')}>
+        {live && (
+          <button type="button" onClick={() => setMuted(!c.muted)} aria-pressed={c.muted} aria-label={c.muted ? 'Unmute' : 'Mute'} data-tip={c.muted ? 'Unmute' : `Mute (${name} stops listening)`} className="tip w-12 h-12 rounded-full flex items-center justify-center bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)]">
+            {c.muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+          </button>
+        )}
+        {live
+          ? <button type="button" onClick={endCall} aria-label="End call" className="w-16 h-16 rounded-full flex items-center justify-center text-white bg-[var(--c-red)] hover:brightness-110"><PhoneOff className="w-6 h-6" /></button>
+          : <button type="button" onClick={() => startCall({ memory: memoryOn })} disabled={!!blocker} aria-label="Start call" className="w-16 h-16 rounded-full flex items-center justify-center text-white bg-[var(--c-green)] hover:brightness-110 disabled:opacity-40"><Phone className="w-6 h-6" /></button>}
+        {live && (
+          <button type="button" onClick={interrupt} disabled={c.phase !== 'speaking' && c.phase !== 'thinking'} aria-label="Interrupt" data-tip={`Interrupt: stop ${name} and listen`} className="tip w-12 h-12 rounded-full flex items-center justify-center bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)] disabled:opacity-40">
+            <Hand className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+      <div className="shrink-0 flex flex-wrap justify-center gap-x-1 pb-4">
+        <button type="button" onClick={() => (live ? setCallMemory(!memoryOn) : onMemoryDefault(!memoryOn))} aria-pressed={memoryOn}
+          className={cx('h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', memoryOn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
+          <BrainCircuit className="w-3.5 h-3.5" />{memoryOn ? 'Memory on: remembers across calls and chats' : 'Memory off: this call is not remembered'}
+        </button>
+        <button type="button" onClick={() => setBargeIn(!c.bargeIn)} aria-pressed={c.bargeIn}
+          data-tip={c.bargeIn ? `${name} keeps listening while it talks and stops when you speak. Headphones work best; on speakers, speak up a little.` : `Only the Interrupt button stops ${name}.`}
+          className={cx('tip h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', c.bargeIn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
+          <Ear className="w-3.5 h-3.5" />{c.bargeIn ? 'Interrupt by voice: on' : 'Interrupt by voice: off'}
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -61,14 +97,15 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
           <span aria-hidden="true" className="absolute inset-0 rounded-full transition-transform duration-100"
             style={{ boxShadow: '0 0 0 2px var(--color-accent-fill)', opacity: live && c.phase === 'listening' && !c.muted ? 0.35 + c.level : 0, transform: `scale(${1 + (c.phase === 'listening' ? c.level * 0.25 : 0)})` }} />
           <div className="absolute inset-[16px] flex items-center justify-center">
-            <AgentFace size={80} animate={live && c.phase !== 'listening'} mood={c.phase === 'thinking' ? 'thinking' : c.phase === 'speaking' ? 'happy' : undefined} label="Lotus" />
+            <AgentFace size={80} animate={live && c.phase !== 'listening'} mood={c.phase === 'thinking' ? 'thinking' : c.phase === 'speaking' ? 'happy' : undefined} label={name} />
           </div>
         </div>
-        <h2 className="mt-3 text-[18px] font-semibold">{live ? (c.muted ? 'Muted' : PHASE[c.phase]) : 'Talk with Lotus'}</h2>
+        <h2 className="mt-3 text-[18px] font-semibold">{live ? (c.muted ? 'Muted' : PHASE[c.phase]) : `Talk with ${name}`}</h2>
         <p className="mt-1 text-[13px] text-[var(--color-text-muted)] max-w-md leading-relaxed">
-          {live ? (c.phase === 'listening' && !c.muted ? 'Speak whenever you like. Lotus answers when you pause.' : c.phase === 'speaking' || c.phase === 'thinking' ? (c.bargeIn && !c.muted ? 'Just start talking to cut in.' : 'Press Interrupt to cut in.') : ' ')
-            : `A voice call with ${model || 'your chat model'}, all on this computer. Lotus answers in the language you speak, with ${voice ?? 'your voice'}${memoryOn ? ', and remembers what matters for later calls and chats' : ''}.`}
+          {live ? (c.phase === 'listening' && !c.muted ? `Speak whenever you like. ${name} answers when you pause.` : c.phase === 'speaking' || c.phase === 'thinking' ? (c.bargeIn && !c.muted ? 'Just start talking to cut in.' : 'Press Interrupt to cut in.') : ' ')
+            : `A voice call with ${model ? prettyModelName(model) : 'your chat model'}, all on this computer. ${name} answers in the language you speak, with ${voice ?? 'your voice'}${memoryOn ? ', and remembers what matters for later calls and chats' : ''}.`}
         </p>
+        {!live && controls}
       </div>
 
       {live && (
@@ -85,32 +122,7 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
       </div>
       </div>
 
-      <div className="shrink-0 pt-3 pb-1 flex items-center justify-center gap-3">
-        {live && (
-          <button type="button" onClick={() => setMuted(!c.muted)} aria-pressed={c.muted} aria-label={c.muted ? 'Unmute' : 'Mute'} data-tip={c.muted ? 'Unmute' : 'Mute (Lotus stops listening)'} className="tip w-12 h-12 rounded-full flex items-center justify-center bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)]">
-            {c.muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
-        )}
-        {live
-          ? <button type="button" onClick={endCall} aria-label="End call" className="w-16 h-16 rounded-full flex items-center justify-center text-white bg-[var(--c-red)] hover:brightness-110"><PhoneOff className="w-6 h-6" /></button>
-          : <button type="button" onClick={() => startCall({ memory: memoryOn })} disabled={!!blocker} aria-label="Start call" className="w-16 h-16 rounded-full flex items-center justify-center text-white bg-[var(--c-green)] hover:brightness-110 disabled:opacity-40"><Phone className="w-6 h-6" /></button>}
-        {live && (
-          <button type="button" onClick={interrupt} disabled={c.phase !== 'speaking' && c.phase !== 'thinking'} aria-label="Interrupt" data-tip="Interrupt: stop Lotus and listen" className="tip w-12 h-12 rounded-full flex items-center justify-center bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:bg-[var(--hover)] disabled:opacity-40">
-            <Hand className="w-5 h-5" />
-          </button>
-        )}
-      </div>
-      <div className="shrink-0 flex flex-wrap justify-center gap-x-1 pb-4">
-        <button type="button" onClick={() => (live ? setCallMemory(!memoryOn) : onMemoryDefault(!memoryOn))} aria-pressed={memoryOn}
-          className={cx('h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', memoryOn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
-          <BrainCircuit className="w-3.5 h-3.5" />{memoryOn ? 'Memory on: remembers across calls and chats' : 'Memory off: this call is not remembered'}
-        </button>
-        <button type="button" onClick={() => setBargeIn(!c.bargeIn)} aria-pressed={c.bargeIn}
-          data-tip={c.bargeIn ? 'Lotus keeps listening while it talks and stops when you speak. Headphones work best; on speakers, speak up a little.' : 'Only the Interrupt button stops Lotus.'}
-          className={cx('tip h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', c.bargeIn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
-          <Ear className="w-3.5 h-3.5" />{c.bargeIn ? 'Interrupt by voice: on' : 'Interrupt by voice: off'}
-        </button>
-      </div>
+      {live && controls}
     </div>
   );
 };

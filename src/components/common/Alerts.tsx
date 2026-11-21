@@ -109,9 +109,9 @@ export const AlertHost: React.FC = () => {
 
   return createPortal(<>
     {alert && (
-      <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[14vh] px-4 bg-black/20 dark:bg-black/40">
+      <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[14vh] px-4 sheet-backdrop">
         <div ref={boxRef} role="alertdialog" aria-modal="true" aria-labelledby={`alert-t-${alert.id}`} aria-describedby={alert.message ? `alert-m-${alert.id}` : undefined}
-          className="material-frosted w-[260px] rounded-[12px] px-4 pt-5 pb-4 flex flex-col items-center text-center">
+          className="material-sheet w-[260px] rounded-[12px] px-4 pt-5 pb-4 flex flex-col items-center text-center">
           <LotusMark size={44} />
           <h2 id={`alert-t-${alert.id}`} className="mt-3 text-[13px] font-semibold leading-snug text-[var(--color-text-main)]">{alert.title}</h2>
           {alert.message && <p id={`alert-m-${alert.id}`} className="mt-1.5 text-[12px] leading-snug text-[var(--color-text-main)]">{alert.message}</p>}

@@ -81,6 +81,9 @@ export const PAGE_PALETTE: Record<ViewMode, ColorPalette> = {
 /** Session 16: Work replaced App Builder and sits right after Chat, so the pages take the petals in order. */
 export const PETAL_ORDER: ViewMode[] = ['chat', 'work', 'images', 'voice', 'tasks'];
 
+/** Dark-mode fills for palettes whose light fill is too dark against the dark window (see applyThemeToDocument). */
+const DARK_FILL: Partial<Record<ColorPalette, [string, string]>> = { yellow: ['#9C6A00', '#8F5F00'] };
+
 export const FONTS: Record<FontFamily, { name: string; family: string }> = {
   // 'jakarta' is the stored key for the default; it now means the system UI font
   // (San Francisco on macOS, Segoe UI Variable on Windows). Never bundled or redistributed.
@@ -113,7 +116,8 @@ export function applyThemeToDocument(
   const root = document.documentElement;
 
   // Semantic surface/text tokens. Components must use these (var(--color-*)) and never hard-code hex.
-  // Muted text is >= 4.5:1 on its surface in both themes (WCAG AA); do not add a lighter grey.
+  // Muted text is >= 4.5:1 on every surface it sits on, sidebars and hover fills included, in both themes
+  // (WCAG AA; 0.20 raised it: light grey was 3.9:1 on the sidebar). Do not add a lighter grey.
   if (darkMode) {
     root.classList.add('dark');
     root.style.colorScheme = 'dark';
@@ -124,7 +128,7 @@ export function applyThemeToDocument(
     root.style.setProperty('--color-bg-sidebar', '#2A2A2D');
     root.style.setProperty('--color-border-subtle', 'rgba(255,255,255,0.12)');
     root.style.setProperty('--color-text-main', 'rgba(255,255,255,0.92)');
-    root.style.setProperty('--color-text-muted', 'rgba(235,235,245,0.62)');
+    root.style.setProperty('--color-text-muted', 'rgba(235,235,245,0.68)');
 
     root.style.setProperty('--color-accent-pastel', palette.pastelDark);
     root.style.setProperty('--color-accent-pastel-border', palette.pastelBorderDark);
@@ -142,7 +146,7 @@ export function applyThemeToDocument(
     root.style.setProperty('--color-bg-sidebar', '#E8E8EA');
     root.style.setProperty('--color-border-subtle', 'rgba(0,0,0,0.12)');
     root.style.setProperty('--color-text-main', 'rgba(0,0,0,0.88)');
-    root.style.setProperty('--color-text-muted', 'rgba(60,60,67,0.68)');
+    root.style.setProperty('--color-text-muted', 'rgba(60,60,67,0.80)');
 
     root.style.setProperty('--color-accent-pastel', palette.pastel);
     root.style.setProperty('--color-accent-pastel-border', palette.pastelBorder);
@@ -153,8 +157,11 @@ export function applyThemeToDocument(
   }
 
   // Filled controls always use the deeper accent so white labels keep >= 4.5:1 in both appearances.
-  root.style.setProperty('--color-accent-fill', palette.vibrant);
-  root.style.setProperty('--color-accent-fill-hover', palette.vibrantHover);
+  // 0.20: on dark surfaces the deep gold fill (Voice page) blended into the background (2.7:1), so dark mode
+  // uses a slightly brighter gold that still keeps white labels above 4.5:1 and the button edge above 3:1.
+  const darkFill = darkMode ? DARK_FILL[paletteKey] : undefined;
+  root.style.setProperty('--color-accent-fill', darkFill?.[0] ?? palette.vibrant);
+  root.style.setProperty('--color-accent-fill-hover', darkFill?.[1] ?? palette.vibrantHover);
   root.style.setProperty('--color-accent-light', palette.vibrantLight);
   // System status colours (systemGreen / systemRed / systemOrange, adapted per appearance).
   root.style.setProperty('--c-green', darkMode ? '#30D158' : '#248A3D');

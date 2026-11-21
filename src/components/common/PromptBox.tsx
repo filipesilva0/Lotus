@@ -61,7 +61,7 @@ const focusRing = 'focus:outline-none focus-visible:outline-[3px] focus-visible:
 export const ModeButton: React.FC<{ on: boolean; onClick: () => void; icon: React.ReactNode; label: string; title: string; disabled?: boolean }> = ({ on, onClick, icon, label, title, disabled }) => (
   <button type="button" aria-pressed={on} onClick={onClick} data-tip={title} data-tip-wrap="" aria-description={title} disabled={disabled}
     className={cx('tip h-8 inline-flex items-center gap-1.5 px-2.5 rounded-full text-[13px] transition-colors duration-100 disabled:opacity-40', focusRing,
-      on ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
+      on ? 'is-selected font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
     {icon}<span>{label}</span>
   </button>
 );
@@ -87,7 +87,7 @@ export const TrayButton: React.FC<{ onClick: () => void; icon: React.ReactNode; 
 export const TrayToggle: React.FC<{ on: boolean; onClick: () => void; icon: React.ReactNode; tip: string; disabled?: boolean; align?: 'end' }> = ({ on, onClick, icon, tip, disabled, align }) => (
   <button type="button" aria-pressed={on} aria-label={tip} data-tip={tip} data-tip-wrap="" data-tip-align={align} onClick={onClick} disabled={disabled}
     className={cx('tip w-7 h-7 inline-flex items-center justify-center rounded-[8px] transition-colors duration-100 disabled:opacity-40', focusRing,
-      on ? 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
+      on ? 'is-selected' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
     {icon}
   </button>
 );
@@ -120,3 +120,37 @@ export const PickerButton = React.forwardRef<HTMLButtonElement, React.ButtonHTML
     </button>
   ));
 PickerButton.displayName = 'PickerButton';
+
+/*
+ * 0.20: one skeleton for every prompt box. Chat, Work and Images used to lay out their rows by hand, so the
+ * same things sat in different places. Now each page fills the same slots:
+ *   box row:  [+ attach] [page chips…]            ……  [picker] [mic] [send]
+ *   tray:     [page actions…]                     ……  [status / switches]
+ * Page-specific chips (Think, Web, Talk, LoRA…) always go in the chips slot, right after the +.
+ */
+export const PromptRow: React.FC<{ attach?: React.ReactNode; chips?: React.ReactNode; picker?: React.ReactNode; mic?: React.ReactNode; send: React.ReactNode; className?: string }> = ({ attach, chips, picker, mic, send, className }) => (
+  <div className={cx('relative flex items-center gap-1 px-2.5 pb-2.5', className)}>
+    {attach}
+    {chips && <div className="flex items-center gap-1 min-w-0" role="group" aria-label="Options for this message">{chips}</div>}
+    <div className="flex-1" />
+    {picker}
+    {mic}
+    {send}
+  </div>
+);
+
+/** The tray's two slots: page actions on the left, status and per-conversation switches on the right. */
+export const TrayRow: React.FC<{ actions?: React.ReactNode; status?: React.ReactNode }> = ({ actions, status }) => (
+  <>
+    {actions}
+    <div className="flex-1" />
+    {status}
+  </>
+);
+
+/** The text field inside the box (same size, padding and placeholder colour on every page). */
+export const PromptText = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => (
+  <textarea ref={ref} {...p}
+    className={cx('w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none max-h-48', className)} />
+));
+PromptText.displayName = 'PromptText';

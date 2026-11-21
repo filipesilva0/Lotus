@@ -113,14 +113,14 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
   const busy = s.phase !== null;
   const host = engineUrl(id).replace(/^https?:\/\//, '');
   const status = s.phase === 'starting' ? 'Starting…' : s.phase === 'stopping' ? 'Stopping…' : s.up === null ? 'Checking…'
-    : remote ? (s.up ? 'Connected' : "Can't reach it") : s.up ? 'Running' : 'Stopped';
+    : remote ? (s.up ? 'Connected' : "Can't reach it") : s.up ? 'Running' : 'Not running';
 
   return (
     <Card className="p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={cx('w-2 h-2 rounded-full', s.up ? 'bg-[var(--c-green)]' : s.up === null || busy ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[#9CA3AF]')} />
+            <span className={cx('w-2 h-2 rounded-full', s.up ? 'bg-[var(--c-green)]' : s.up === null || busy ? 'bg-[var(--c-orange)] animate-pulse' : 'bg-[var(--color-text-muted)] opacity-60')} aria-hidden="true" />
             <h3 className="text-sm font-semibold text-[var(--color-text-main)]">{m.name}</h3>
             {s.version && <span className="text-xs font-mono text-[var(--color-text-muted)]">{s.version}</span>}
           </div>
@@ -146,7 +146,8 @@ const EngineCard: React.FC<{ id: EngineId; eng: Eng }> = ({ id, eng }) => {
         </Banner>
       )}
       {s.error && <Banner tone="error">{s.error}</Banner>}
-      {!s.up && !busy && !s.error && !s.needsExe && s.detail && <Banner tone="warn">{s.detail}</Banner>}
+      {/* 0.20: an optional engine that isn't running is not an error, so its note is plain text, not a yellow warning. */}
+      {!s.up && !busy && !s.error && !s.needsExe && s.detail && <p className="text-[12px] leading-snug text-[var(--color-text-muted)]">{s.detail}</p>}
 
       <div className="mt-auto pt-3 border-t border-[var(--color-border-subtle)] space-y-3">
         {!remote && (
@@ -232,7 +233,7 @@ const StorageTab: React.FC = () => {
     ['Work artifacts', paths.studioDir ? `${paths.studioDir}${sep}Work` : 'Lotus Studio/Work'],
   ];
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="space-y-5 w-full max-w-4xl mx-auto">
       <Card className="p-5 space-y-3">
         <div className="flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-[var(--color-accent-vibrant)]" />

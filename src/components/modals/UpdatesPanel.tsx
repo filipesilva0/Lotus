@@ -34,7 +34,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-[var(--color-text-main)]">Lotus {u.version ?? ''}</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-            {state.kind === 'current' && `You're on the latest version. Checked ${new Date(state.checkedAt).toLocaleTimeString()}.`}
+            {state.kind === 'current' && `You're on the latest version. Checked ${new Date(state.checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`}
             {state.kind === 'checking' && 'Checking for updates…'}
             {state.kind === 'available' && `Version ${state.info.version} is available.`}
             {state.kind === 'installing' && 'Downloading the update…'}
@@ -48,7 +48,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
           onClick={u.check}
           icon={<RefreshCw className="w-3.5 h-3.5" />}
         >
-          Check for updates
+          Check for Updates
         </Btn>
       </Card>
 
@@ -118,7 +118,7 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
         <div>
           <p className="text-sm font-semibold text-[var(--color-text-main)]">Check when Lotus starts</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5 max-w-sm leading-relaxed">
-            Off by default. Checking contacts GitHub, which sees your IP address and the request, nothing else.
+            {u.autoCheck ? 'On: Lotus checks each time it starts.' : 'Off: Lotus checks only when you press Check for Updates.'} Checking contacts GitHub, which sees your IP address and the request, nothing else.
             Lotus never installs anything without you pressing the button.
           </p>
         </div>

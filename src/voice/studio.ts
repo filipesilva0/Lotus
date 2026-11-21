@@ -47,6 +47,19 @@ export interface VoiceOption { id: string; name: string; detail: string; mine: b
 /** Kokoro voice ids ("af_heart") → "Heart · US English, female". */
 export const speakerLabel = (n: string) => { const m = /^([ab])([fm])_(\w+)$/.exec(n); return m ? `${m[3][0].toUpperCase()}${m[3].slice(1)} · ${m[1] === 'a' ? 'US' : 'UK'} English, ${m[2] === 'f' ? 'female' : 'male'}` : n; };
 
+/**
+ * A built-in voice model's title split into the voice's name and its engine (0.20). Library titles put the
+ * engine first ("Piper · Alba (British English)") while Kokoro voices put it in the subtitle, so the same
+ * list read two ways. Every voice is now "Alba · British English" with the engine underneath.
+ */
+export function voiceLabel(title: string): { name: string; engine: string } {
+  const m = /^(Piper|Kokoro|Kitten|Matcha)\s*·\s*(.+?)\s*(?:\((.+)\))?$/.exec(title.trim());
+  if (m) return { name: m[3] ? `${m[2]} · ${m[3]}` : m[2], engine: m[1] };
+  const c = /^(.+?)\s*\((.+)\)$/.exec(title.trim());
+  return c ? { name: c[1], engine: c[1] } : { name: title, engine: title };
+}
+const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
 /** Every voice you can speak with right now: yours first, then each built-in speaker. */
 export function voiceOptions(models: VoiceModel[], mine: MyVoice[], o: { proLocked?: boolean } = {}): VoiceOption[] {
   const byId = new Map(models.map((m) => [m.id, m]));
@@ -55,13 +68,18 @@ export function voiceOptions(models: VoiceModel[], mine: MyVoice[], o: { proLock
     // 0.18.0: cloned voices are Lotus Pro. When Pro is locked they're kept but can't speak, so calls and
     // read-aloud fall back to a built-in voice (pickVoice). Built-in speakers saved with your settings stay free.
     const why = !m ? 'Its voice model isn’t downloaded.' : m.clones && o.proLocked ? 'Cloned voices are part of Lotus Pro.' : m.clones && !v.reference ? 'It has no recording yet.' : m.needsReferenceText && !v.referenceText?.trim() ? 'Add the words spoken in its recording.' : undefined;
-    return { id: v.id, name: v.name, detail: m ? (m.clones ? `Your voice · ${m.title.replace(/\s*\(.*\)$/, '')}` : `Your voice · ${m.title}`) : 'Your voice', mine: true, ready: !why, why,
+    // Names saved from an old library title keep the engine in front ("Piper · Tugão"); show just the voice.
+    return { id: v.id, name: v.name.replace(/^(Piper|Kokoro)\s*·\s*/, ''), detail: m ? `Your voice · ${voiceLabel(m.title).engine}` : 'Your voice', mine: true, ready: !why, why,
       model: v.model, speaker: v.speaker ?? 0, reference: v.reference, referenceText: v.referenceText, steps: v.steps, speed: v.speed, effects: v.effects };
   });
-  const presets = models.filter((m) => !m.clones).flatMap((m) => (m.speakers.length ? m.speakers : [{ id: 0, name: m.title }]).map((s): VoiceOption => ({
-    id: `preset:${m.id}:${s.id}`, name: m.speakers.length > 1 ? speakerLabel(s.name) : m.title, detail: m.speakers.length > 1 ? m.title : 'Built-in voice', mine: false, ready: true, model: m.id, speaker: s.id,
-  })));
-  return [...own, ...presets];
+  const presets = models.filter((m) => !m.clones).flatMap((m) => (m.speakers.length ? m.speakers : [{ id: 0, name: m.title }]).map((s): VoiceOption => {
+    const l = voiceLabel(m.title);
+    return { id: `preset:${m.id}:${s.id}`, name: m.speakers.length > 1 ? speakerLabel(s.name) : l.name, detail: l.engine, mine: false, ready: true, model: m.id, speaker: s.id };
+  }));
+  // A built-in speaker you saved under its own name shows once, as yours (it listed twice before).
+  const shadowed = (p: VoiceOption) => mine.some((v) => v.model === p.model && (v.speaker ?? 0) === p.speaker
+    && norm(v.name).split(' ').includes(norm(p.name.split(' · ')[0])));
+  return [...own, ...presets.filter((p) => !shadowed(p))];
 }
 
 /** The option to use: the chosen one if it still exists and works, else the first that works. */
