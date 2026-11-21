@@ -464,8 +464,8 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             {empty ? (
               <div className="pt-[8vh] text-center">
                 <div className="flex justify-center mb-2"><AgentFace size={44} /></div>
-                <h2 className="text-[22px] font-semibold tracking-[-0.01em]">What should Lotus work on?</h2>
-                <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Describe the result you want. Lotus plans it, deploys agents for the parts that can run side by side, and hands you the finished files.</p>
+                <h2 className="text-[22px] font-semibold tracking-[-0.01em]">What should {name} work on?</h2>
+                <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">Describe the result you want. {name} plans it, deploys agents for the parts that can run side by side, and hands you the finished files.</p>
                 <Starters id="work" groups={WORK_STARTERS} className="mt-6" onPick={setText} />
               </div>
             ) : (

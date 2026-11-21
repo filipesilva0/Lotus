@@ -11,20 +11,14 @@ import { DEFAULT_DENY } from '../../agents/toolDefaults';
 import { isTauri } from '../../lib/http';
 import { kv } from '../../lib/store';
 import { ALLOW_KEY, describeAllow, parseAllow } from '../../lib/allowRules';
+import { toolLabel } from '../../lib/toolLabel';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
 const Row: React.FC<{ title: string; hint: React.ReactNode; children?: React.ReactNode }> = (p) => <SettingRow {...p} tip />;
 
 const RISK_GROUP: Record<ToolInfo['risk'], string> = { read: 'Only looks (never asks)', write: 'Changes Lotus’s own data (tasks, memory, images)', risky: 'Changes your files or computer (asks first unless you chose Never)' };
-/** Tool labels are written for the progress line ("Reading a file"); here they name an ability ("Read a file"). */
-export const toolLabel = (label: string) => label
-  .replace(/^(\w+?)(?:ing)\b/, (_m, stem: string) => {
-    const w = stem.toLowerCase();
-    const fixed: Record<string, string> = { mak: 'Make', writ: 'Write', sav: 'Save', mov: 'Move', chang: 'Change', creat: 'Create', delet: 'Delete', remov: 'Remove', updat: 'Update', us: 'Use', tak: 'Take', typ: 'Type', clos: 'Close', describ: 'Describe', schedul: 'Schedule', rememb: 'Remember', run: 'Run', stopp: 'Stop', plann: 'Plan', scroll: 'Scroll', search: 'Search', read: 'Read', open: 'Open', add: 'Add', list: 'List', ask: 'Ask', click: 'Click', press: 'Press', look: 'Look', check: 'Check', find: 'Find', fetch: 'Fetch', start: 'Start', edit: 'Edit', draw: 'Draw', speak: 'Speak', send: 'Send', learn: 'Learn', forgett: 'Forget', forget: 'Forget' };
-    return fixed[w] ?? stem[0].toUpperCase() + stem.slice(1);
-  })
-  .replace(/\bits soul\b/g, 'the Soul');
+
 
 export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => {
   const [tools, setTools] = useState<ToolInfo[] | null>(null);
