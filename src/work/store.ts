@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, HelperInfo, runAgent, stopRun, workArtifacts } from '../lib/agent';
 import { historyContent, markInterrupted } from './interrupted';
 import { kv } from '../lib/store';
+import { expandPluginSlash, pluginSystemBlock } from '../plugins/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
 import type { LotusSettings } from '../types/lotus';
@@ -175,7 +176,8 @@ export function useWork(settings: LotusSettings) {
    * it and everything after it are dropped first, and its attached files are kept.
    */
   const send = useCallback(async (text: string, workId = activeId, files: WorkAttachment[] = [], from?: string): Promise<string> => {
-    const t = text.trim() || (files.length ? 'Look at the attached files.' : '');
+    // 0.21: plugin slash commands (/logo …) work here too, and plugin skills that fit the request are added.
+    const t = expandPluginSlash(text.trim()) || (files.length ? 'Look at the attached files.' : '');
     const item0 = ref.current.find((w) => w.id === workId);
     if (!t || !item0 || running[workId]) return '';
     if (!agentAvailable()) throw new Error('Work mode needs the Lotus core, which runs with the desktop app.');
@@ -203,7 +205,7 @@ export function useWork(settings: LotusSettings) {
       const done = await runAgent({
         model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: [...(item.folder ? [item.folder] : []), ...(s.agentFolders ?? [])],
         options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow, ...(item.think ? { think: true } : {}) },
-        messages: [{ role: 'system', content: s.systemPrompt }, ...history],
+        messages: [{ role: 'system', content: (s.systemPrompt ?? '') + pluginSystemBlock(t) }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;
         if (rid && !runId) {

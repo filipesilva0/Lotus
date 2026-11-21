@@ -33,6 +33,7 @@ import { WORK_TOOLS, listArtifacts } from '../tools/work';
 import { COMPUTER_TOOLS } from '../tools/computer';
 import { BROWSER_TOOLS } from '../tools/browser';
 import { avatarCreate } from '../tools/avatar';
+import { artifactPng } from '../tools/svgpng';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -41,11 +42,11 @@ export const STOPPED_BY_YOU = 'You stopped this run.';
 /** A run whose engine request was cut off without Stop (engine restarted, model swapped, Lotus closing). */
 export const ENGINE_CUT_OFF = 'The chat engine stopped before this finished (it was restarted, switched models, or Lotus was closing). Steps already done and saved files are kept. Press Try again, or say "keep going".';
 
-export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
+export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate, artifactPng];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
 const AVATAR_WORDS = /avatar|blob|face|mascot|character|persona|look like|icon/i;
-const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate', 'agents.deploy']);
+const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'artifact.png', 'agent.delegate', 'agents.deploy']);
 
 /** A work id from the UI, as a safe folder name. */
 export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
