@@ -28,7 +28,18 @@ export interface MyVoice {
   effects?: Effects;
   notes?: string;
   created: number;
+  /** When the maker ticked VOICE_CONSENT for its recording (0.17.0). Missing on voices made before. */
+  consentAt?: number;
 }
+
+/**
+ * The promise asked for before Lotus copies a voice from a recording (0.17.0): new voices, a replaced
+ * recording, and Voicebox samples. Lotus ships no voices of real people and doesn't share copied voices.
+ */
+export const VOICE_CONSENT = 'This is my voice, or I have the speaker’s permission to copy it.';
+export const VOICE_CONSENT_NOTE = 'Only copy voices you have the right to use. Don’t copy a famous or public person, and don’t use a copied voice to pretend to be someone.';
+/** A voice from a recording can be made only after the promise is ticked. */
+export const canCloneVoice = (o: { hasSample: boolean; consent: boolean }): boolean => o.hasSample && o.consent;
 
 /** One entry in the voice picker. `id` is `preset:<model>:<speaker>` or a MyVoice id. */
 export interface VoiceOption { id: string; name: string; detail: string; mine: boolean; ready: boolean; model: string; speaker: number; reference?: string; referenceText?: string; steps?: number; speed?: number; effects?: Effects; why?: string }

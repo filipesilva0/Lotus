@@ -8,7 +8,7 @@ import { Segmented, Select, IconBtn } from '../common/ui';
 import { PALETTES, FONTS, PAGE_PALETTE, PETAL_ORDER } from '../../styles/theme';
 import type { FontFamily } from '../../types/lotus';
 import { VIEW_TITLES } from '../rail/LeftRail';
-import { THIRD_PARTY_LICENSES_TEXT } from '../../data/licenses';
+import { PrivacyPanel } from './PrivacyPanel';
 import { UpdatesPanel } from './UpdatesPanel';
 import { EngineScalingPanel, MemorySkillsPanel, WebSearchPanel } from './LocalAgentSettings';
 import type { Updates } from '../../hooks/useUpdates';
@@ -98,7 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: 'island', label: 'Island', icon: Cpu },
     { id: 'appearance', label: 'Appearance', icon: Palette },
     { id: 'updates', label: 'Updates', icon: Download },
-    { id: 'licenses', label: 'Legal', icon: Shield },
+    { id: 'licenses', label: 'Privacy', icon: Shield },
     ...(settings.advancedMode ? [{ id: 'advanced' as SettingsTab, label: 'Advanced', icon: Blocks }] : []),
     ...(showPro ? [{ id: 'pro' as SettingsTab, label: 'Lotus Pro', icon: Gem }] : []),
   ];
@@ -250,14 +250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {tab === 'advanced' && <AdvancedPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
-            {tab === 'licenses' && (
-              <div className="space-y-3 pt-2">
-                <span className="text-[13px] block">Open-source notices</span>
-                <pre className="p-4 bg-[var(--hover)] rounded-[10px] text-[12px] text-[var(--color-text-main)] font-mono whitespace-pre-wrap max-h-[420px] overflow-y-auto leading-relaxed">
-                  {THIRD_PARTY_LICENSES_TEXT}
-                </pre>
-              </div>
-            )}
+            {tab === 'licenses' && <PrivacyPanel settings={settings} />}
           </div>
 
         </div>

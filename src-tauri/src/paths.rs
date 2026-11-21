@@ -13,6 +13,9 @@ use std::path::PathBuf;
 #[serde(rename_all = "camelCase")]
 pub struct AppPaths {
     pub portable: bool,
+    /// Installed from the Microsoft Store (the MSIX package ships a `lotus.store` marker). The Store
+    /// keeps this copy up to date, so the built-in updater stays out of the way.
+    pub store: bool,
     pub data_dir: String,
     pub exe_dir: String,
     /// Documents/Lotus Studio (or the folder chosen in the installer); see setup.rs.
@@ -49,6 +52,12 @@ pub fn is_portable() -> bool {
     exe_dir().join("lotus.portable").exists() || registry_flag()
 }
 
+/// The Microsoft Store package (MSIX) puts an empty `lotus.store` file next to Lotus.exe; see the
+/// "Microsoft Store package" step in .github/workflows/build-windows.yml.
+pub fn is_store() -> bool {
+    exe_dir().join("lotus.store").exists()
+}
+
 /// Data directory for portable mode (`<exe dir>\data`).
 pub fn portable_data_dir() -> PathBuf {
     exe_dir().join("data")
@@ -80,6 +89,7 @@ pub fn describe(installed_data_dir: PathBuf, studio_dir: PathBuf) -> AppPaths {
     let portable = is_portable();
     AppPaths {
         portable,
+        store: is_store(),
         data_dir: data_dir_for(portable, &installed_data_dir, &studio_dir).to_string_lossy().into_owned(),
         exe_dir: exe_dir().to_string_lossy().into_owned(),
         studio_dir: studio_dir.to_string_lossy().into_owned(),

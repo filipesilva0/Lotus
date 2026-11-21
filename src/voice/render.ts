@@ -2,6 +2,10 @@
 // chunks, and stories mixed to one file. Everything runs in the window with OfflineAudioContext.
 
 import { encodeWav } from '../lib/audio';
+import { tagWavBlob } from '../lib/wavTag';
+
+/** Lotus-made audio is tagged "Made with Lotus" inside the file (0.17.0). */
+const lotusWav = (buf: AudioBuffer): Promise<Blob> => tagWavBlob(encodeWav(buf));
 import { Effects, effectTail, pitchRate, withEffects } from './studio';
 
 const RATE = 24000;
@@ -87,7 +91,7 @@ export async function applyEffects(blob: Blob, effects: Partial<Effects>): Promi
   node.start(0);
   const out = await ctx.startRendering();
   if (fx.normalize) normalize(out);
-  return encodeWav(out);
+  return lotusWav(out);
 }
 
 /** Joins clips (long texts spoken in parts) with a short pause between them. */
@@ -99,7 +103,7 @@ export async function joinClips(blobs: Blob[], pause = 0.25): Promise<Blob> {
   const ctx = new OfflineAudioContext(1, Math.ceil(total * rate) + 1, rate);
   let t = 0;
   for (const b of bufs) { const n = ctx.createBufferSource(); n.buffer = b; n.connect(ctx.destination); n.start(t); t += b.duration + pause; }
-  return encodeWav(await ctx.startRendering());
+  return lotusWav(await ctx.startRendering());
 }
 
 /** Length of a clip in seconds. */
@@ -116,7 +120,7 @@ export async function mixStory(parts: { blob: Blob; start: number; gain: number 
   let peak = 0;
   for (const v of out.getChannelData(0)) peak = Math.max(peak, Math.abs(v));
   if (peak > 0.99) normalize(out);
-  return encodeWav(out);
+  return lotusWav(out);
 }
 
 /** Plays several clips together at their places (story preview). Returns a stop function. */

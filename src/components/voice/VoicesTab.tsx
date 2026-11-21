@@ -7,6 +7,8 @@ import { Modal } from '../common/Modal';
 import { Avatar } from './SpeakTab';
 import { VoiceData } from './useVoiceData';
 import { VoiceEditor } from './VoiceEditor';
+import { confirmAlert } from '../common/Alerts';
+import { VOICE_CONSENT, VOICE_CONSENT_NOTE } from '../../voice/studio';
 
 const TYPE_LABEL: Record<string, { label: string; icon: React.ReactNode }> = {
   cloned: { label: 'Cloned', icon: <Mic2 className="w-3 h-3" /> },
@@ -45,6 +47,8 @@ export const VoicesTab: React.FC<{
   };
   const doImport = async (f: File) => {
     setErr(null);
+    // 0.17.0: an imported voice may be a copy of someone; ask for the same promise as a new one.
+    if (!await confirmAlert({ title: 'Import this voice?', message: `${VOICE_CONSENT}\n\n${VOICE_CONSENT_NOTE}`, confirm: 'I Confirm' })) return;
     try { await voicebox.importProfile(f); await data.refreshProfiles(); } catch (e) { setErr((e as Error).message); }
   };
   const doDelete = async () => {
@@ -99,7 +103,8 @@ export const VoicesTab: React.FC<{
                       <div className="absolute right-0 top-9 z-10 w-36 rounded-[10px] border border-[var(--color-border-subtle)] bg-[var(--color-bg-card)] shadow-lg py-1" onMouseLeave={() => setMenu(null)}>
                         {[
                           { l: 'Edit', i: <Pencil className="w-3.5 h-3.5" />, f: () => { setMenu(null); setEditing(p); } },
-                          { l: 'Export', i: <Download className="w-3.5 h-3.5" />, f: () => doExport(p) },
+                          // 0.17.0: copied voices stay on this computer (no sharing of cloned voices).
+                          ...(p.voice_type === 'cloned' ? [] : [{ l: 'Export', i: <Download className="w-3.5 h-3.5" />, f: () => doExport(p) }]),
                           { l: 'Delete', i: <Trash2 className="w-3.5 h-3.5" />, f: () => { setMenu(null); setToDelete(p); }, danger: true },
                         ].map((m) => (
                           <button key={m.l} onClick={m.f} className={cx('w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5', m.danger ? 'text-[var(--c-red)]' : 'text-[var(--color-text-main)] dark:text-slate-200')}>

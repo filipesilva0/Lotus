@@ -33,6 +33,7 @@ fn updater(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
 /// On Linux only the AppImage can replace itself. Copies installed from the .deb or .rpm belong to
 /// the system package manager, so they are told where to get the new package instead.
 fn can_self_install() -> Result<(), String> {
+    store_copy()?;
     #[cfg(target_os = "linux")]
     if std::env::var_os("APPIMAGE").is_none() {
         return Err("This copy of Lotus was installed from a .deb or .rpm package, which Lotus cannot replace by itself. Download the new package from the Lotus website or the GitHub Releases page and install it over this one.".into());
@@ -40,9 +41,21 @@ fn can_self_install() -> Result<(), String> {
     Ok(())
 }
 
+/// The Microsoft Store copy is updated by the Store; downloading the MSI from GitHub would install a
+/// second, separate copy next to it.
+pub const STORE_MESSAGE: &str = "This copy of Lotus came from the Microsoft Store, which keeps it up to date. Open the Store's Library to get the newest version.";
+
+fn store_copy() -> Result<(), String> {
+    if crate::paths::is_store() {
+        return Err(STORE_MESSAGE.into());
+    }
+    Ok(())
+}
+
 /// `Ok(None)` means Lotus is up to date.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    store_copy()?;
     let found = updater(&app)?.check().await.map_err(|e| e.to_string())?;
     Ok(found.map(|u| UpdateInfo {
         version: u.version.clone(),

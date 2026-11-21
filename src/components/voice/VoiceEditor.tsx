@@ -8,6 +8,7 @@ import {
 import { MicRecorder, SystemAudioRecorder, micErrorMessage } from '../../lib/audio';
 import { SampleHealthPanel } from './SampleHealth';
 import { Modal } from '../common/Modal';
+import { VoiceConsent } from './VoiceConsent';
 import { Btn, Segmented, Label, TextInput, TextArea, Select, Banner, Spinner, IconBtn, cx } from '../common/ui';
 
 interface NewSample {
@@ -29,6 +30,7 @@ export const VoiceEditor: React.FC<{
 }> = ({ open, profile, onClose, onSaved }) => {
   const editing = !!profile;
   const [type, setType] = useState<VoiceType>('cloned');
+  const [consent, setConsent] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [language, setLanguage] = useState('en');
@@ -53,7 +55,7 @@ export const VoiceEditor: React.FC<{
 
   useEffect(() => {
     if (!open) return;
-    setErr(null); setSamples([]); setRecording(false); setPresetList(null);
+    setErr(null); setSamples([]); setRecording(false); setPresetList(null); setConsent(false);
     setType(profile?.voice_type ?? 'cloned');
     setName(profile?.name ?? '');
     setDescription(profile?.description ?? '');
@@ -114,7 +116,9 @@ export const VoiceEditor: React.FC<{
     name.trim().length > 0 &&
     (type !== 'designed' || designPrompt.trim().length > 0) &&
     (type !== 'preset' || !!presetVoice) &&
-    (!clone || editing || (samples.length > 0 && samples.every((s) => s.text.trim())));
+    (!clone || editing || (samples.length > 0 && samples.every((s) => s.text.trim()))) &&
+    // 0.17.0: new recordings of a voice need the consent tick.
+    (!clone || samples.length === 0 || consent);
 
   const save = async () => {
     setBusy(true); setErr(null);
@@ -243,6 +247,7 @@ export const VoiceEditor: React.FC<{
                 {presetList.length === 0 && <p className="text-xs text-[var(--color-text-muted)] col-span-2">This engine has no built-in voices.</p>}
               </div>
             )}
+            {samples.length > 0 && <div className="mt-3"><VoiceConsent checked={consent} onChange={setConsent} disabled={busy} /></div>}
           </section>
         )}
 
@@ -252,6 +257,7 @@ export const VoiceEditor: React.FC<{
             <TextArea rows={3} value={designPrompt} maxLength={2000}
               placeholder="A calm, low-pitched woman in her forties, warm and unhurried, like a late-night radio host"
               onChange={(e) => setDesignPrompt(e.target.value)} />
+            <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Describe how it sounds, not who. Don’t ask for the voice of a real or famous person.</p>
           </section>
         )}
 

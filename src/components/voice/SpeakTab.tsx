@@ -4,6 +4,7 @@ import {
   voicebox, Generation, TTS_ENGINES, LANGUAGES, EffectConfig, engineLabel, fmtDuration, GenerateInput, TtsEngine,
 } from '../../services/voicebox';
 import { downloadBlob } from '../../lib/audio';
+import { tagWavBlob } from '../../lib/wavTag';
 import { Btn, Card, Select, TextArea, TextInput, Label, Banner, Spinner, Empty, Stepper, cx } from '../common/ui';
 import { PromptShell, SendButton, TrayNote } from '../common/PromptBox';
 import { AudioPlayer } from './AudioPlayer';
@@ -182,7 +183,7 @@ export const SpeakTab: React.FC<Props> = ({ data, profile, onSelectProfile, text
         {result && (
           <Card className="p-4 space-y-3">
             <AudioPlayer src={result.url} autoPlay
-              onDownload={async () => downloadBlob(await voicebox.exportAudio(result.gen.id), `${profile.name}-${result.gen.id.slice(0, 6)}.wav`)} />
+              onDownload={async () => downloadBlob(await tagWavBlob(await voicebox.exportAudio(result.gen.id)), `${profile.name}-${result.gen.id.slice(0, 6)}.wav`)} />
             <div className="flex items-center justify-between">
               <p className="text-xs text-[var(--color-text-muted)] tabular-nums">
                 {engineLabel(result.gen.engine)} · {fmtDuration(result.gen.duration)}
