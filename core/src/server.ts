@@ -10,6 +10,7 @@
 //   GET    /v1/media/<path>              the file (token may be passed as ?t= for <img>/<audio>)
 //   DELETE /v1/media/<path>
 //   GET    /v1/media-list?kind=image
+//   GET    /v1/work-file?workId=&file=   a video, sound or picture from a Work job's folder (0.21)
 //   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
 //   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin } · { type: 'agent', runId, kind, … } · { type: 'memory' }
 //   GET    /v1/stream                    the same events as one JSON object per line (a streamed HTTP response).
@@ -164,7 +165,8 @@ export function startServer(o: CoreOptions): CoreServer {
   };
   const builtins = new Builtins({ studio: o.studio, broadcast, kvGet: (k) => kvGet(o.db, k), kvSet: kvSetCore, fetch: o.fetch, log, ...o.builtins });
   try { builtins.ensureFolders(); } catch (e) { log(`could not create the Models folders: ${(e as Error).message}`); }
-  const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins });
+  // Copied voices in videos follow the Pro switch (0.21); `licence` is made just below and read later.
+  const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins, proUnlocked: () => { const s = licence.status(); return !s.locks || s.unlocked; } });
   // Phase 2: the task board, routines and their scheduler live here, next to the agent.
   const board = new BoardService({ db: o.db, agent, broadcast, log });
   agent.board = board;
@@ -250,6 +252,12 @@ export function startServer(o: CoreOptions): CoreServer {
         if (url.pathname === '/v1/media-list' && req.method === 'GET') {
           const kind = url.searchParams.get('kind');
           return json(req, { items: listMedia(o.db, kind === 'image' || kind === 'audio' ? (kind as MediaKind) : undefined) });
+        }
+        // 0.21: a video, sound or picture a Work job made, for the Artifacts panel's player.
+        if (url.pathname === '/v1/work-file' && req.method === 'GET') {
+          const full = agent.artifactPath(url.searchParams.get('workId') ?? '', url.searchParams.get('file') ?? '');
+          if (!full) return fail(req, 404, 'That artifact is no longer in the work folder.');
+          return new Response(Bun.file(full), { headers: { 'content-type': /\.webm$/i.test(full) ? 'video/webm' : mimeFor(full), 'cache-control': 'no-store', ...cors(req) } });
         }
         if (url.pathname.startsWith('/v1/media/')) {
           const rel = decodeURIComponent(url.pathname.slice('/v1/media/'.length));

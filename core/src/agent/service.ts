@@ -29,10 +29,11 @@ import { TASK_TOOLS } from '../tools/tasks';
 import { imageGenerate } from '../tools/image';
 import { MEMORY_TOOLS } from '../tools/memory';
 import { WEB_TOOLS } from '../tools/web';
-import { WORK_TOOLS, listArtifacts } from '../tools/work';
+import { WORK_TOOLS, isMediaKind, listArtifacts } from '../tools/work';
 import { COMPUTER_TOOLS } from '../tools/computer';
 import { BROWSER_TOOLS } from '../tools/browser';
 import { avatarCreate } from '../tools/avatar';
+import { VIDEO_TOOLS } from '../tools/video';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -41,11 +42,12 @@ export const STOPPED_BY_YOU = 'You stopped this run.';
 /** A run whose engine request was cut off without Stop (engine restarted, model swapped, Lotus closing). */
 export const ENGINE_CUT_OFF = 'The chat engine stopped before this finished (it was restarted, switched models, or Lotus was closing). Steps already done and saved files are kept. Press Try again, or say "keep going".';
 
-export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
+export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate, ...VIDEO_TOOLS];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
 const AVATAR_WORDS = /avatar|blob|face|mascot|character|persona|look like|icon/i;
-const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate', 'agents.deploy']);
+// 0.21: the video tools need a work folder for what they make, and keep chat's tool list short.
+const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate', 'agents.deploy', 'voice.list', 'video.inspect', 'video.voiceover', 'video.make']);
 
 /** A work id from the UI, as a safe folder name. */
 export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
@@ -163,7 +165,7 @@ export class AgentService {
   /** The task board (phase 2), set by the server once the board service exists. */
   board?: import('./types').BoardAccess;
 
-  constructor(private o: { db: Db; studio: string; broadcast: (e: Record<string, unknown>) => void; fetch?: typeof fetch; log?: (m: string) => void; builtins?: import('../engines/manager').Builtins }) {
+  constructor(private o: { db: Db; studio: string; broadcast: (e: Record<string, unknown>) => void; fetch?: typeof fetch; log?: (m: string) => void; builtins?: import('../engines/manager').Builtins; proUnlocked?: () => boolean }) {
     closeStaleRuns(o.db);
     pruneRuns(o.db);
   }
@@ -211,7 +213,15 @@ export class AgentService {
     const d = this.workDir(id);
     const hit = d && listArtifacts(d).find((x) => x.file === file);
     if (!d || !hit) throw new Error('That artifact is no longer in the work folder.');
+    if (isMediaKind(hit.kind)) throw new Error('That artifact is a video, sound or picture; open it with work_file.');
     return readFileSync(join(d, hit.file), 'utf8');
+  }
+
+  /** 0.21: the full path of an artifact (videos and sounds are streamed to the Artifacts panel). */
+  artifactPath(id: string, file: string): string | null {
+    const d = this.workDir(id);
+    const hit = d && listArtifacts(d).find((x) => x.file === file);
+    return d && hit ? join(d, hit.file) : null;
   }
 
   answer(runId: string, askId: string, answer: string): boolean {
@@ -291,10 +301,12 @@ export class AgentService {
         }
         const out = await runAgent({
           runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), allow: this.allowRules, capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined, think: !!a.think,
+          // 0.21: whether the built-in model can see pictures (it has a vision projector).
+          vision: s.backend === 'builtin' ? !!this.o.builtins?.installed().find((m) => m.id === a.model)?.mmproj : undefined,
         }, {
           llm,
           registry: this.registry,
-          ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, board: this.board, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
+          ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, proUnlocked: this.o.proUnlocked, board: this.board, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
             delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { ...helperBase, goal, context, name }) : undefined,
             deploy: workDir ? (jobs, context) => {
               // Several helpers at once. Lotus's own engine serves one request at a time (and may reload the
@@ -351,13 +363,14 @@ export class AgentService {
     try {
       const out = await runAgent({
         runId: subId, model: h.model, tools: h.tools, approval: h.s.approval, rules: parseRules(h.s.deny), allow: this.allowRules, maxTurns: 10,
+        vision: h.s.backend === 'builtin' ? !!this.o.builtins?.installed().find((m) => m.id === h.model)?.mmproj : undefined,
         messages: [
           { role: 'system', content: `You are ${name}. You are a helper agent working for Lotus on one part of a bigger job. Do exactly the goal below with your tools, then reply with the result itself (facts, text, file names you saved), not a description of your process. Be concise.` },
           { role: 'user', content: `Goal: ${h.goal}${h.context ? `\n\nContext:\n${h.context}` : ''}` },
         ],
       }, {
         llm: h.llm, registry: this.registry,
-        ctx: { db: this.o.db, studio: this.o.studio, board: this.board, folders: h.folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: h.fetchFn, memoryOn: h.memoryOn, workDir: h.workDir || undefined },
+        ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, proUnlocked: this.o.proUnlocked, board: this.board, folders: h.folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: h.fetchFn, memoryOn: h.memoryOn, workDir: h.workDir || undefined },
         signal: h.signal,
         emit: (e) => {
           if (e.kind === 'step') {

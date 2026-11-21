@@ -212,6 +212,8 @@ export const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }>
   if ((kind === 'all' || kind === 'chat') && settings.llmBackend !== 'ollama') want.add('llama');
   if ((kind === 'all' || kind === 'image') && settings.imageEngine !== 'comfyui') want.add('sd');
   if ((kind === 'all' || kind === 'voice' || kind === 'dictation') && settings.voiceEngine !== 'voicebox') want.add('sherpa');
+  // 0.21: FFmpeg for videos in Work mode (only on the All tab; it runs no models).
+  if (kind === 'all') want.add('ffmpeg');
   const list = b.engines.filter((e) => want.has(e.id));
   if (!list.length) return null;
   return (
@@ -224,7 +226,7 @@ export const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }>
             <li key={e.id} className="flex items-center gap-3 py-2">
               <span className="w-[72px] shrink-0 text-[12px] text-[var(--color-text-muted)]">{e.role.split(' ')[0]}</span>
               <span className="flex-1 min-w-0"><span className="text-[13px] font-medium">{e.name}</span>
-                <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{e.installed ? `${e.version} · ${e.flavour}` : job?.state === 'error' ? job.error : e.outdated ? `${e.version} · ${e.note ?? 'Needs an update'}` : 'Not installed'}</span></span>
+                <span className="block text-[12px] text-[var(--color-text-muted)] truncate">{e.installed ? `${e.version} · ${e.flavour}` : job?.state === 'error' ? job.error : e.outdated ? `${e.version} · ${e.note ?? 'Needs an update'}` : e.note ?? 'Not installed'}</span></span>
               {job?.state === 'running' ? <div className="w-[220px] shrink-0 min-w-0"><Progress job={job} onCancel={() => void cancelJob(job.id)} /></div>
                 : e.installed ? <Btn size="sm" variant="ghost" icon={<Trash2 className="w-3 h-3" />} onClick={() => void confirmAlert({ title: `Remove ${e.name}?`, message: 'Your models stay in Lotus Studio/Models. You can install the engine again at any time.', confirm: 'Remove' }).then((ok) => { if (ok) void removeEngine(e.id); })}>Remove</Btn>
                 : <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => void installEngine(e.id)}>{e.outdated ? 'Update' : 'Install'}</Btn>}
