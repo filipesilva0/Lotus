@@ -9,33 +9,21 @@
 // exported/imported as `.lotus-plugin.json` files. The plugin creator (plugins/creator.ts) drafts them.
 
 import { useSyncExternalStore } from 'react';
-import { matchScore, queryWords } from '../memory/store';
 import { uid } from '../lib/persist';
 import { kv } from '../lib/store';
+import { buildPluginBlock } from './block';
+import { builtinPlugins, isBuiltinId } from './builtin';
 
-export interface PluginCommand { name: string; description: string; prompt: string }
-export interface PluginSkill { name: string; description: string; whenToUse: string; body: string }
-
-export interface LotusPlugin {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  author: string;
-  instructions: string;
-  commands: PluginCommand[];
-  skills: PluginSkill[];
-  enabled: boolean;
-  origin: 'created' | 'imported';
-  created: number;
-  updated: number;
-}
+import type { LotusPlugin, PluginCommand, PluginSkill } from './types';
+export type { LotusPlugin, PluginCommand, PluginSkill } from './types';
 
 /** File format for export/import. */
 export interface PluginFile { lotusPlugin: 1; name: string; version: string; description: string; author?: string; instructions?: string; commands?: PluginCommand[]; skills?: PluginSkill[] }
 
 const KEY = 'lotus.plugins.v1';
-export const LIMITS = { name: 48, description: 280, instructions: 4000, commands: 12, skills: 8, prompt: 4000, skillBody: 8000 } as const;
+/** On/off choices for the built-in plugins, by id (only the ones the user changed). */
+const BUILTIN_KEY = 'lotus.plugins.builtin.v1';
+export const LIMITS = { name: 48, description: 280, instructions: 4000, commands: 12, skills: 12, prompt: 4000, skillBody: 8000 } as const;
 
 /** Built-in slash commands a plugin may not take over. Kept in sync with SLASH in Composer.tsx. */
 export const RESERVED_COMMANDS = ['new', 'clear', 'incognito', 'research', 'search', 'think', 'web', 'memory', 'model', 'temp', 'seed', 'system', 'pin', 'plugins', 'library'];
@@ -93,23 +81,30 @@ export function validatePlugin(raw: unknown, others: Pick<LotusPlugin, 'commands
 // ── store ─────────────────────────────────────────────────────────────────
 
 function load(): LotusPlugin[] {
-  try { const v = JSON.parse(kv.getItem(KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
+  try { const v = JSON.parse(kv.getItem(KEY) || '[]'); return Array.isArray(v) ? v.filter((p) => p && !isBuiltinId(String(p.id))) : []; } catch { return []; }
+}
+function loadChoices(): Record<string, boolean> {
+  try { const v = JSON.parse(kv.getItem(BUILTIN_KEY) || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch { return {}; }
 }
 let list: LotusPlugin[] = load();
+let choices = loadChoices();
+/** The user's plugins first, then the built-in ones. One array per change, for useSyncExternalStore. */
+let all: LotusPlugin[] = [...list, ...builtinPlugins(choices)];
 const subs = new Set<() => void>();
+function refresh() { all = [...list, ...builtinPlugins(choices)]; subs.forEach((f) => f()); }
 function commit(next: LotusPlugin[]) {
   list = next;
   try { kv.setItem(KEY, JSON.stringify(list)); } catch { /* quota */ }
-  subs.forEach((f) => f());
+  refresh();
 }
 
 export const plugins = {
-  get: () => list,
+  get: () => all,
   subscribe: (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; },
   /** Re-reads storage (another window or a test changed it). */
-  reload: () => { list = load(); subs.forEach((f) => f()); },
-  install(raw: unknown, origin: LotusPlugin['origin']): Validation & { id?: string } {
-    const v = validatePlugin(raw, list);
+  reload: () => { list = load(); choices = loadChoices(); refresh(); },
+  install(raw: unknown, origin: Exclude<LotusPlugin['origin'], 'builtin'>): Validation & { id?: string } {
+    const v = validatePlugin(raw, all);
     if (!v.plugin) return v;
     const t = Date.now();
     const p: LotusPlugin = { ...v.plugin, id: uid('plg'), enabled: true, origin, created: t, updated: t };
@@ -117,14 +112,24 @@ export const plugins = {
     return { ...v, id: p.id };
   },
   update(id: string, raw: unknown): Validation {
+    if (isBuiltinId(id)) return { plugin: null, errors: ['Built-in plugins can’t be edited. Switch it off, or create your own plugin.'], warnings: [] };
     const cur = list.find((p) => p.id === id);
     if (!cur) return { plugin: null, errors: ['That plugin is no longer installed.'], warnings: [] };
-    const v = validatePlugin(raw, list.filter((p) => p.id !== id));
+    const v = validatePlugin(raw, all.filter((p) => p.id !== id));
     if (v.plugin) commit(list.map((p) => (p.id === id ? { ...p, ...v.plugin, updated: Date.now() } : p)));
     return v;
   },
-  setEnabled(id: string, enabled: boolean) { commit(list.map((p) => (p.id === id ? { ...p, enabled } : p))); },
-  remove(id: string) { commit(list.filter((p) => p.id !== id)); },
+  setEnabled(id: string, enabled: boolean) {
+    if (isBuiltinId(id)) {
+      choices = { ...choices, [id]: enabled };
+      try { kv.setItem(BUILTIN_KEY, JSON.stringify(choices)); } catch { /* quota */ }
+      refresh();
+      return;
+    }
+    commit(list.map((p) => (p.id === id ? { ...p, enabled } : p)));
+  },
+  /** Built-in plugins can't be removed (switch them off instead). */
+  remove(id: string) { if (!isBuiltinId(id)) commit(list.filter((p) => p.id !== id)); },
 };
 
 export function usePlugins(): LotusPlugin[] {
@@ -146,8 +151,11 @@ export function fromFileText(text: string): unknown {
 export interface PluginSlash { name: string; help: string; args: string; plugin: string; prompt: string }
 
 /** Slash commands from enabled plugins, for the composer menu. */
-export function pluginCommands(from: LotusPlugin[] = list): PluginSlash[] {
-  return from.filter((p) => p.enabled).flatMap((p) => p.commands.map((c) => ({ name: c.name, help: `${c.description} · ${p.name}`, args: c.prompt.includes('{{input}}') ? '<text>' : '', plugin: p.name, prompt: c.prompt })));
+export function pluginCommands(from: LotusPlugin[] = all): PluginSlash[] {
+  // A plugin made before 0.21 may use a name a built-in plugin now has: the user's own comes first and wins.
+  const seen = new Set<string>();
+  return from.filter((p) => p.enabled).flatMap((p) => p.commands.map((c) => ({ name: c.name, help: `${c.description} · ${p.name}`, args: c.prompt.includes('{{input}}') ? '<text>' : '', plugin: p.name, prompt: c.prompt })))
+    .filter((c) => (seen.has(c.name) ? false : (seen.add(c.name), true)));
 }
 
 /** Fills a command template. Without {{input}}, the user's text is appended after the template. */
@@ -159,29 +167,8 @@ export function expandCommand(prompt: string, input: string): string {
 
 /**
  * Text added to the system prompt: the instructions of every enabled plugin (capped), plus the
- * plugin skills that match this message (at most two, so small context windows are not flooded).
+ * plugin skills that match this message (at most two). See plugins/block.ts.
  */
-export function pluginSystemBlock(query: string, from: LotusPlugin[] = list, budget = 6000): string {
-  const on = from.filter((p) => p.enabled);
-  if (!on.length) return '';
-  const parts: string[] = [];
-  let left = budget;
-  for (const p of on) {
-    if (!p.instructions || left < 200) continue;
-    const t = p.instructions.slice(0, left);
-    left -= t.length;
-    parts.push(`### ${p.name}\n${t}`);
-  }
-  const words = queryWords(query);
-  const skills = words.length
-    ? on.flatMap((p) => p.skills.map((k) => ({ p, k, s: matchScore(words, `${k.name} ${k.name} ${k.whenToUse} ${k.description}`) })))
-        .filter((x) => x.s >= Math.min(2, words.length)).sort((a, b) => b.s - a.s).slice(0, 2)
-    : [];
-  for (const { p, k } of skills) {
-    if (left < 300) break;
-    const t = k.body.slice(0, left);
-    left -= t.length;
-    parts.push(`### Skill: ${k.name} (from ${p.name})\n${t}`);
-  }
-  return parts.length ? `\n\n# Plugins the user turned on\nFollow these unless the user asks otherwise.\n\n${parts.join('\n\n')}` : '';
+export function pluginSystemBlock(query: string, from: LotusPlugin[] = all, budget = 6000): string {
+  return buildPluginBlock(query, from, budget);
 }

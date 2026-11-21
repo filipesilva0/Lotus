@@ -37,6 +37,26 @@ Lotus's Voice workspace talks to the Voicebox server over its local REST API
 - Project: https://github.com/jamiepine/voicebox
 - License: MIT, Copyright (c) 2026 Voicebox Contributors
 
+## Built-in plugins brought over from Claude's skills (0.21)
+
+Lotus ships built-in plugins (Tasks → Plugins → Built into Lotus) with skills adapted from the skills
+and plugins Claude uses. Three come from MIT projects and are adapted (shortened and reworded for
+small local models and Lotus's tools); their notices are kept here as the MIT licence requires. The
+full MIT licence text is under "MIT License text" below.
+
+- **Superpowers** (`src/plugins/builtin/superpowers.ts`), adapted from superpowers 7.0.2.
+  https://github.com/obra/superpowers · License: MIT, Copyright (c) 2025 Jesse Vincent
+- **Caveman** (`src/plugins/builtin/community.ts`), adapted from caveman 1.1.2.
+  https://github.com/akramsystems/caveman · License: MIT, Copyright (c) 2026 Ali Akram
+- **Site Audit** (`src/plugins/builtin/community.ts`), adapted from claude-site-audit 1.0.0.
+  https://github.com/rjspence3/claude-site-audit · License: MIT (as declared in its plugin
+  manifest), Copyright (c) Rob Spence. Its PDF script and reference files are not included.
+
+The other built-in plugins (Design, Documents, Writing, Code Quality, Toolkit) are written from
+scratch for Lotus. They do the same jobs as Anthropic's design, document, humanizer, research and
+code-review skills, but no text from those (proprietary or unclearly licensed) sources is copied.
+⚠️ Not reviewed by a lawyer; check before selling Lotus.
+
 ## fflate (bundled inside lotusd, session 17; in the app since 0.11.0)
 - **What:** zip unpacking for the built-in engines' downloads, and (0.11.0) reading Word, Excel, PowerPoint, OpenDocument and EPUB attachments. **Licence:** MIT. https://github.com/101arrowz/fflate
 

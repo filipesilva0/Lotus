@@ -12,6 +12,8 @@ import { extractJson, llm } from '../services/llm';
 import { uid } from '../lib/persist';
 import { count } from '../lib/plural';
 import { memoryStore, Skill } from '../memory/store';
+import { matchPluginSkills } from '../plugins/block';
+import { plugins } from '../plugins/store';
 import { readPage, searchWeb } from '../chat/webSearch';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { JobCtx } from '../agents/pool';
@@ -26,12 +28,12 @@ export interface RunHooks {
   dependencyResults: () => { title: string; result: string }[];
 }
 
-const SYSTEM = (t: Task, skills: Skill[], web: string, deps: { title: string; result: string }[], tools = false) => `You are Lotus, an AI agent running on the user's own computer, working through a task from their task board.
+const SYSTEM = (t: Task, skills: { name: string; body: string }[], web: string, deps: { title: string; result: string }[], tools = false) => `You are Lotus, an AI agent running on the user's own computer, working through a task from their task board.
 ${tools ? 'Use your tools for anything they can do (files, the task board, memory, images, the web when it is on). When a step needs an action no tool can take, write exactly what the user should do so they can do it in one go.' : 'You can only think and write: you cannot run programs, open files or browse. When a step needs an action you cannot take, write exactly what the user should do (commands, settings, text to paste) so they can do it in one go.'}
 Today's date: ${new Date().toDateString()}.
 
 TASK: ${t.title}
-${t.description ? `DETAILS:\n${t.description}\n` : ''}${deps.length ? `\nRESULTS OF TASKS THIS ONE DEPENDS ON:\n${deps.map((d) => `• ${d.title}:\n${d.result.slice(0, 1500)}`).join('\n')}\n` : ''}${skills.length ? `\nSKILLS YOU WROTE EARLIER (follow if relevant):\n${skills.map((s) => `### ${s.name}\n${s.body.slice(0, 1800)}`).join('\n\n')}\n` : ''}${web ? `\nWEB RESULTS (cite as [n] when used):\n${web}\n` : ''}
+${t.description ? `DETAILS:\n${t.description}\n` : ''}${deps.length ? `\nRESULTS OF TASKS THIS ONE DEPENDS ON:\n${deps.map((d) => `• ${d.title}:\n${d.result.slice(0, 1500)}`).join('\n')}\n` : ''}${skills.length ? `\nSKILLS (follow if relevant):\n${skills.map((s) => `### ${s.name}\n${s.body.slice(0, 1800)}`).join('\n\n')}\n` : ''}${web ? `\nWEB RESULTS (cite as [n] when used):\n${web}\n` : ''}
 Write in GitHub Flavored Markdown. Be concrete and complete; no filler.`;
 
 export function parsePlan(text: string): string[] {
@@ -50,7 +52,10 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
 
   // Skills that match the task
   const ids = await memoryStore.searchSkills(`${t0.title} ${t0.description}`.slice(0, 400), 2);
-  const skills = ids.map((id) => memoryStore.get().skills.find((k) => k.id === id)).filter((k): k is Skill => !!k && k.enabled);
+  const learned = ids.map((id) => memoryStore.get().skills.find((k) => k.id === id)).filter((k): k is Skill => !!k && k.enabled);
+  // 0.21: skills from plugins that are on (built-in or the user's), with the same "names its subject" rule.
+  const fromPlugins = learned.length >= 2 ? [] : matchPluginSkills(`${t0.title} ${t0.description}`.slice(0, 400), plugins.get(), 2 - learned.length).map((x) => x.skill);
+  const skills: { name: string; body: string }[] = [...learned, ...fromPlugins];
   if (skills.length) h.log(`Using skill${skills.length > 1 ? 's' : ''}: ${skills.map((k) => k.name).join(', ')}`, 'agent');
 
   // Web
