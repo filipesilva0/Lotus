@@ -52,6 +52,30 @@ const WORK_PROMPT = `\n\nYou are working in Lotus's Work mode: the user hands yo
 - If you are blocked or a choice is the user's to make, use ask.user with short options instead of guessing.
 - Finish with a short summary of what you made and where it is.`;
 
+/** The pages a helper really found: what it read first, then search results (0.16.5, at most 8). */
+export function helperSources(steps: Step[]): { title: string; url: string }[] {
+  const out: { title: string; url: string }[] = [];
+  const add = (title: unknown, url: unknown) => {
+    const u = String(url ?? '').trim();
+    if (/^https?:\/\//i.test(u) && !out.some((x) => x.url === u)) out.push({ title: String(title ?? '').trim() || u, url: u });
+  };
+  for (const s of steps) if (s.status === 'done' && s.tool === 'web.read') add(s.data?.title, s.data?.url);
+  for (const s of steps) {
+    if (s.status !== 'done' || s.tool !== 'web.search') continue;
+    for (const r of (Array.isArray(s.data?.results) ? s.data!.results : []) as { title?: string; url?: string }[]) add(r.title, r.url);
+  }
+  return out.slice(0, 8);
+}
+
+/** A helper's answer plus the sources Lotus saw it find, so the lead agent can cite real pages, or a
+ *  plain note when it found none (0.16.0: researchers came back empty and the brief invented references). */
+export function withSources(content: string, sources: { title: string; url: string }[], searched: boolean): string {
+  const body = content.trim();
+  if (sources.length) return `${body}\n\nSources found:\n${sources.map((s) => `- ${s.title}: ${s.url}`).join('\n')}`.trim();
+  if (!searched) return body;
+  return `${body}${body ? '\n\n' : ''}(Lotus) This helper found no web sources. Anything above comes from the model's own knowledge and was not checked; don't cite sources for it.`;
+}
+
 /** Always-allow rules (Phase 2): their own key, so the app's settings saves never race the core's. */
 export const ALLOW_KEY = 'lotus.agentAllow.v1';
 
@@ -292,7 +316,7 @@ export class AgentService {
   private async helper(runId: string, n: number, h: {
     goal: string; context: string; name?: string; batch?: string; model: string; tools: Tool[]; llm: Parameters<typeof runAgent>[1]['llm']; s: AgentSettings; workDir: string; folders: string[];
     memoryOn: boolean; fetchFn: typeof fetch; signal: AbortSignal; emit: (e: AgentEvent) => void; approve: (st: Step) => Promise<boolean | 'timeout'>;
-  }): Promise<{ name: string; content: string; steps: number; ok: boolean }> {
+  }): Promise<{ name: string; content: string; steps: number; ok: boolean; sources: { title: string; url: string }[] }> {
     const name = (h.name ?? '').trim().slice(0, 40) || `Helper ${n}`;
     const subId = `${runId}-h${n}`;
     // The helper's card (Work page, island): queued → running (with what it is doing) → done.
@@ -324,12 +348,14 @@ export class AgentService {
       });
       const ok = out.steps.every((x) => x.status !== 'error') || !!out.content;
       tell({ status: h.signal.aborted ? 'stopped' : ok ? 'done' : 'error', steps: out.steps.length, current: undefined, result: out.content.slice(0, 400), finished: Date.now() });
-      return { name, content: out.content, steps: out.steps.length, ok };
+      const sources = helperSources(out.steps);
+      const searched = h.tools.some((t) => t.name.startsWith('web.'));
+      return { name, content: withSources(out.content, sources, searched), steps: out.steps.length, ok, sources };
     } catch (e) {
       const stopped = h.signal.aborted;
       tell({ status: stopped ? 'stopped' : 'error', current: undefined, result: stopped ? undefined : (e as Error)?.message ?? String(e), finished: Date.now() });
       if (stopped) throw e;
-      return { name, content: `Failed: ${(e as Error)?.message ?? String(e)}`, steps: done, ok: false };
+      return { name, content: `Failed: ${(e as Error)?.message ?? String(e)}`, steps: done, ok: false, sources: [] };
     }
   }
 

@@ -48,9 +48,9 @@ export interface ToolCtx {
   /** Asks the user a question and waits for the answer (typed, a picked option, or spoken). */
   ask?: (question: string, options: string[]) => Promise<string | null>;
   /** Runs a helper agent on one part of the job and returns its final answer and step count. */
-  delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean }>;
+  delegate?: (goal: string, context: string, name?: string) => Promise<{ content: string; steps: number; ok: boolean; sources?: { title: string; url: string }[] }>;
   /** 0.11.0: runs several helper agents at once (agents.deploy), each on its own part; results in order. */
-  deploy?: (jobs: { goal: string; name?: string }[], context: string) => Promise<{ name: string; content: string; steps: number; ok: boolean }[]>;
+  deploy?: (jobs: { goal: string; name?: string }[], context: string) => Promise<{ name: string; content: string; steps: number; ok: boolean; sources?: { title: string; url: string }[] }[]>;
   /** The built-in engines (session 17): image.generate uses them when Settings → Engines picks Built in. */
   builtins?: import('../engines/manager').Builtins;
   /** The task board and routines in lotus.db (phase 2). Without it (older tests) the tools use kv. */

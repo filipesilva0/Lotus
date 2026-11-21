@@ -210,7 +210,40 @@ export class EngineHealth {
   clear() { this.rest.clear(); }
 }
 
-export interface MetaResult { results: WebResult[]; engine: EngineId | null; tried: { engine: EngineId; error?: string; unreachable?: boolean; count: number }[] }
+const STOP = new Set(('a an and are as at be by can do does for from has have how i in is it its me my of on or our than that the their there these this to was what when where which who whom why will with you your ' +
+  'about after before best current currently latest new news now recent today tonight tomorrow yesterday week weekend year please tell find show give ' +
+  'o os a as um uma de do da dos das e em no na nos nas para por com que qual quais quando onde como hoje amanhã ontem').split(' '));
+
+/** The words of a query that a page about it should mention (no filler words, no bare numbers). */
+export function queryTerms(query: string): string[] {
+  const words = query.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').match(/[\p{L}\p{N}]+/gu) ?? [];
+  return [...new Set(words.filter((w) => !STOP.has(w) && !/^\d+$/.test(w) && (w.length > 1 || /\d/.test(w))))];
+}
+
+/** How many of the query's words a result mentions in its title, snippet or address (plurals count). */
+export function matchCount(terms: string[], r: WebResult): number {
+  const hay = `${r.title} ${r.snippet} ${r.url}`.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  return terms.filter((t) => hay.includes(t) || (t.length > 4 && hay.includes(t.replace(/(?:es|s)$/, '')))).length;
+}
+
+/**
+ * Drops results that have nothing to do with the query, and puts the closest first. The 0.16.0 test:
+ * when DuckDuckGo asked for a captcha, Bing often answered with unrelated pages (it ignores queries it
+ * finds odd and shows popular pages instead). A result must mention at least one query word, or a third
+ * of them for longer queries.
+ */
+export function relevantResults(query: string, results: WebResult[]): WebResult[] {
+  const terms = queryTerms(query);
+  if (!terms.length) return results;
+  const need = Math.max(1, Math.ceil(terms.length / 3));
+  return results
+    .map((r, i) => ({ r, i, n: matchCount(terms, r) }))
+    .filter((x) => x.n >= need)
+    .sort((a, b) => b.n - a.n || a.i - b.i)
+    .map((x) => x.r);
+}
+
+export interface MetaResult { results: WebResult[]; engine: EngineId | null; tried: { engine: EngineId; error?: string; unreachable?: boolean; count: number; dropped?: number }[] }
 
 /**
  * Lotus Search: asks engines in turn until one gives enough results (3, or `limit` if smaller). Results
@@ -226,9 +259,11 @@ export async function metaSearch(io: WebIO, query: string, o: { limit?: number; 
   for (const e of o.health.order(o.engines ?? ENGINE_ORDER)) {
     if (o.signal?.aborted) throw new DOMException('Stopped', 'AbortError');
     try {
-      const got = await searchEngine(io, e, q, limit, o.signal);
+      const raw = await searchEngine(io, e, q, limit, o.signal);
       o.health.ok(e);
-      tried.push({ engine: e, count: got.length });
+      // Bing's off-topic pages are dropped (DuckDuckGo and Wikipedia stay as they rank them).
+      const got = e === 'bing' ? relevantResults(q, raw) : raw;
+      tried.push({ engine: e, count: got.length, ...(got.length < raw.length ? { dropped: raw.length - got.length } : {}) });
       for (const r of got) if (out.length < limit && !out.some((x) => x.url === r.url)) out.push(r);
       if (got.length && !engine) engine = e;
       if (out.length >= Math.min(3, limit)) break;

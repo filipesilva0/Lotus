@@ -478,7 +478,9 @@ describe('agent loop', () => {
     const ol = fakeOllama([{ calls: [{ name: 'task_list', args: {} }] }]); stops.push(ol.stop);
     const h = harness(ol.url);
     const out = await runAgent({ ...h.req('loop'), maxTurns: 5 }, h.deps);
-    expect(ol.requests.length).toBe(5);
+    // 5 turns, then one more without tools to ask for an answer (0.16.5); this model still only calls tools.
+    expect(ol.requests.length).toBe(6);
+    expect(ol.requests[5].tools ?? []).toEqual([]);
     expect(out.steps.length).toBe(2);
     expect(out.content).toContain('stopped after several tool steps');
   });
