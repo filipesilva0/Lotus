@@ -116,6 +116,8 @@ export interface LotusSettings {
   appearance: Appearance;
   lotusFolderPath: string;
   keepEnginesRunningOnQuit: boolean;
+  /** 0.18.0: shows the enthusiast settings (Engines, Advanced: cloud keys, MCP, local API). Off for new installs. */
+  advancedMode?: boolean;
   selectedModel: string;
   temperature: number;
   topP: number;

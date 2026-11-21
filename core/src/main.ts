@@ -68,6 +68,8 @@ function stop(why: string) {
   try { server.builtins.shutdown(); } catch { /* nothing running */ }
   try { stopGptSovits(); } catch { /* nothing running */ }
   try { server.board.stop(); } catch { /* nothing running */ }
+  try { server.mcp.stop(); } catch { /* nothing running */ }
+  try { server.localApi.stop(); } catch { /* nothing running */ }
   try { server.stop(true); } catch { /* already stopped */ }
   try { db.sql.close(); } catch { /* already closed */ }
   process.exit(0);

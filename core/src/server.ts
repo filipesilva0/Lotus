@@ -29,6 +29,8 @@ import { builtinRpc } from './engines/rpc';
 import { kvGet } from './kv';
 import { webSearchRpc } from './tools/web';
 import { Licence, type LicenceOptions } from './licence';
+import { McpHub, MCP_KEY } from './mcp';
+import { LocalApi, LOCAL_API_KEY } from './localApi';
 
 export const VERSION = '0.3.1';
 
@@ -56,6 +58,7 @@ type Json = Record<string, unknown>;
 type Rpc = (db: Db, args: Json) => unknown;
 
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
+const optStr = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
 /** RPC methods keep the names the Rust commands had, so the web layer's calls map one to one. */
@@ -119,7 +122,7 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
   }
 }
 
-export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService; licence: Licence };
+export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService; licence: Licence; mcp: McpHub; localApi: LocalApi };
 
 export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
@@ -166,6 +169,13 @@ export function startServer(o: CoreOptions): CoreServer {
   const board = new BoardService({ db: o.db, agent, broadcast, log });
   agent.board = board;
   if (o.scheduler !== false) board.start();
+  // MCP tool servers (Advanced mode): started now and whenever their list changes.
+  const mcp = new McpHub({ kvGet: (k) => kvGet(o.db, k), fetch: o.fetch, log, onChange: () => broadcast({ type: 'mcp' }) });
+  agent.mcp = mcp;
+  if (mcp.configs().length) void mcp.ready();
+  // The local API for other apps (Advanced mode): off unless turned on in Settings.
+  const localApi = new LocalApi({ db: o.db, builtins, fetch: o.fetch, log });
+  if (o.scheduler !== false) localApi.apply();
   const licence = new Licence({ dataDir: o.db.dir, fetch: o.fetch, log, ...o.licence });
   // The 30-day recheck: once shortly after start, then daily. It never blocks anything when offline.
   if (o.scheduler !== false) {
@@ -219,6 +229,8 @@ export function startServer(o: CoreOptions): CoreServer {
             const body = (await req.json()) as Partial<KvChange> & { origin?: string };
             const done = kvApply(o.db, { set: body.set ?? {}, remove: body.remove ?? [] });
             if (Object.keys(done.set).length || done.remove.length) broadcast({ type: 'kv', ...done, origin: str(body.origin) });
+            if (MCP_KEY in done.set || done.remove.includes(MCP_KEY)) void mcp.ready();
+            if (LOCAL_API_KEY in done.set || done.remove.includes(LOCAL_API_KEY)) localApi.apply();
             return json(req, { ok: true });
           }
         }
@@ -259,6 +271,10 @@ export function startServer(o: CoreOptions): CoreServer {
           if (!fn) {
             const b = await builtinRpc(builtins, o.db, o.studio, method, args, broadcast);
             if (b.found) return json(req, { result: b.value ?? null });
+            if (method === 'local_api_status') return json(req, { result: localApi.apply() });
+            if (method === 'mcp_status') return json(req, { result: mcp.status() });
+            if (method === 'mcp_restart') return json(req, { result: await mcp.restart(optStr(args.id)) });
+            if (method === 'mcp_tools') { await mcp.ready(); return json(req, { result: mcp.tools().map((t) => ({ name: t.name, label: t.label, description: t.description })) }); }
             const pr = await proRpc(licence, method, args);
             if (pr.found) {
               if (method !== 'pro_status') broadcast({ type: 'pro', status: pr.value });
@@ -285,5 +301,5 @@ export function startServer(o: CoreOptions): CoreServer {
       message() { /* clients only listen */ },
     },
   });
-  return Object.assign(server, { agent, builtins, board, licence });
+  return Object.assign(server, { agent, builtins, board, licence, mcp, localApi });
 }

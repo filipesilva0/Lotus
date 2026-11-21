@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS: LotusSettings = {
   appearance: 'auto',
   lotusFolderPath: '',
   keepEnginesRunningOnQuit: false,
+  advancedMode: false,
   selectedModel: '',
   temperature: 0.7,
   topP: 0.9,
@@ -136,6 +137,8 @@ function loadSettings(): LotusSettings {
   try { kv.setItem('lotus.whisperAuto.v1', '1'); } catch { /* memory only */ }
   // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
   // Settings → Engines switches them to the built-in ones.
+  // 0.18.0: people who used Lotus before Advanced mode existed keep seeing everything they saw.
+  if (raw && saved.advancedMode === undefined) saved.advancedMode = true;
   if (raw && saved.imageEngine === undefined) {
     return { ...DEFAULT_SETTINGS, llmBackend: 'ollama', imageEngine: 'comfyui', voiceEngine: 'voicebox', engineModelsInStudio: false, ...saved };
   }
