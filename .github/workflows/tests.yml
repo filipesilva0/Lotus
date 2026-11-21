@@ -1,0 +1,88 @@
+name: Tests
+
+# Runs on every pull request and every push to main, so a change that breaks something shows a red
+# cross on GitHub before it is merged. Three jobs run side by side:
+#   core      lotusd (core/): type check + the Bun test suite
+#   frontend  the React app: TypeScript type check + Tauri npm/crate version check
+#   rust      the Tauri shell (src-tauri/): cargo check (compiles without building an installer)
+# The full three-platform build stays in build-windows.yml and still only runs for releases.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same pull request cancels the older, now pointless run.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core tests (lotusd)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4   # same version the release build ships
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'core/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+      # The core shares document parsing with the app (src/lib/docParse.ts), which imports packages
+      # from the top-level package.json, so those are installed too.
+      - name: Install app packages
+        working-directory: .
+        run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+  frontend:
+    name: Frontend type check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      # Rust crates and npm packages must be on the same Tauri minor release (falls back to reading
+      # Cargo.lock here, since this job has no Rust toolchain).
+      - run: npm run check:tauri
+
+  rust:
+    name: Tauri (Rust) check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: check
+      - name: Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      # tauri-build insists the bundled core binary and the built frontend exist. A check does not
+      # package anything, so empty placeholders are enough.
+      - name: Placeholders for the core binary and frontend
+        run: |
+          mkdir -p dist src-tauri/binaries
+          touch "src-tauri/binaries/lotusd-$(rustc -vV | sed -n 's/host: //p')"
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --locked
