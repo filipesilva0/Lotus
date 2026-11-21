@@ -24,12 +24,12 @@ export interface ProStatus {
   buyUrl: string;
   portalUrl: string;
   canActivate: boolean;
-  sandbox: boolean;
+  test: boolean;
 }
 
 export const OPEN_STATUS: ProStatus = {
   locks: false, unlocked: true, plan: 'free', trialStartedAt: null, trialEndsAt: null, trialDaysLeft: 0, displayKey: null,
-  limitActivations: null, lastCheckedAt: null, problem: null, buyUrl: '', portalUrl: '', canActivate: false, sandbox: false,
+  limitActivations: null, lastCheckedAt: null, problem: null, buyUrl: '', portalUrl: '', canActivate: false, test: false,
 };
 
 let status: ProStatus = OPEN_STATUS;

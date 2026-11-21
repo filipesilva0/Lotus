@@ -73,9 +73,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (pane) return pane;
     try { const saved = kv.getItem(PANE_KEY); return !saved || saved === 'inference' ? 'general' : (saved as SettingsTab); } catch { return 'general'; }
   });
-  // Lotus Pro's pane appears once Pro is launched (or in a test build pointed at Polar's practice shop).
+  // Lotus Pro's pane appears once Pro is launched (or in a test build).
   const pro = usePro();
-  const showPro = pro.locks || pro.sandbox;
+  const showPro = pro.locks || pro.test;
   const advanced = settings.advancedMode === true || settings.llmBackend !== 'builtin' || settings.imageEngine !== 'builtin' || settings.voiceEngine !== 'builtin';
   const setActiveTab = (t: SettingsTab) => { setActiveTabRaw(t); try { kv.setItem(PANE_KEY, t); } catch { /* memory only */ } };
   useEffect(() => { if (isOpen && pane) setActiveTabRaw(pane); }, [isOpen, pane]);
