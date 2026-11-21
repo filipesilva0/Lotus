@@ -14,6 +14,20 @@ export const UpdatesPanel: React.FC<{ u: Updates }> = ({ u }) => {
     return <Banner tone="info">Updates are available in the Lotus desktop app. This is the browser preview.</Banner>;
   }
 
+  if (u.store) {
+    return (
+      <div className="space-y-4">
+        <Card className="p-4">
+          <p className="text-sm font-semibold text-[var(--color-text-main)]">Lotus {u.version ?? ''}</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5 leading-relaxed">
+            This copy came from the Microsoft Store, which installs new versions for you. To update now, open the
+            Store, go to Library and press Get updates.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card className="p-4 flex items-center justify-between gap-4">

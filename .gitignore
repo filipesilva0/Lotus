@@ -17,3 +17,4 @@ core/node_modules/
 
 # Claude's guides, notes and test harnesses (kept on Filipe's Mac, not in git)
 Claude/
+dist-msix/

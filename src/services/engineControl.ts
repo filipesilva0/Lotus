@@ -5,7 +5,7 @@ import { isTauri, http, timeoutSignal, networkErrorText } from '../lib/http';
 import { engineUrl, EngineId, isRemote, isLoopbackHost, LISTEN_HINT, engineToken, normalizeEngineUrl, authHeaderFromToken } from './engineConfig';
 import { kv } from '../lib/store';
 
-export interface AppPaths { portable: boolean; dataDir: string; exeDir: string; studioDir?: string; legacyDataDir?: string }
+export interface AppPaths { portable: boolean; store?: boolean; dataDir: string; exeDir: string; studioDir?: string; legacyDataDir?: string }
 
 const exeKey = (id: EngineId) => `lotus.engine.${id}.exe`;
 export const savedExe = (id: EngineId) => kv.getItem(exeKey(id)) || '';

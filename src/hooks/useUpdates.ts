@@ -23,12 +23,14 @@ export function useUpdates() {
   const [state, setState] = useState<UpdateState>({ kind: 'idle' });
   const [version, setVersion] = useState<string | null>(null);
   const [portable, setPortable] = useState(false);
+  // Microsoft Store copy: the Store updates it, so the panel only says so (src-tauri/src/updates.rs).
+  const [store, setStore] = useState(false);
   const [autoCheck, setAutoCheckState] = useState(loadAuto);
   const busy = useRef(false);
 
   useEffect(() => {
     void currentVersion().then(setVersion);
-    void appPaths().then((p) => setPortable(!!p?.portable));
+    void appPaths().then((p) => { setPortable(!!p?.portable); setStore(!!p?.store); });
   }, []);
 
   const check = useCallback(async () => {
@@ -68,13 +70,13 @@ export function useUpdates() {
   // Optional check shortly after launch (off by default: it is the one request Lotus makes to GitHub).
   useEffect(() => {
     if (!updatesSupported || !autoCheck) return;
-    const t = setTimeout(() => void check(), 4000);
+    const t = setTimeout(() => void appPaths().then((p) => { if (!p?.store) void check(); }), 4000);
     return () => clearTimeout(t);
     // run once per launch, not whenever the toggle flips later
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { state, version, portable, autoCheck, setAutoCheck, check, install, supported: updatesSupported };
+  return { state, version, portable, store, autoCheck, setAutoCheck, check, install, supported: updatesSupported };
 }
 
 export type Updates = ReturnType<typeof useUpdates>;
