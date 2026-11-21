@@ -9,8 +9,9 @@ import { hasLiveSettings, liveSettings, onSettings } from '../lib/liveSettings';
 import { ollamaClient } from '../services/ollamaService';
 import { comfy } from '../services/comfyService';
 import { llamacpp } from '../services/llm';
+import { builtinsNow, chatFit } from '../lib/builtins';
 import {
-  estimateKvBytes, HardwareReading, kvFromModelInfo, LlamaCppProps, ModelProfile, parseParams, pickAgentModel, planScale, ScalePlan,
+  BuiltinFit, estimateKvBytes, HardwareReading, kvFromModelInfo, LlamaCppProps, ModelProfile, parseParams, pickAgentModel, planScale, ScalePlan,
 } from './scaler';
 
 interface NativeSnapshot {
@@ -126,6 +127,18 @@ let running = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastModelRead = 0;
 let lastModelName = '';
+let builtinFit: { model: string; at: number; fit: BuiltinFit | null } = { model: '', at: 0, fit: null };
+
+/** Lotus's own engine: the context it runs with now, or the one it would pick for this model. */
+async function readBuiltinFit(model: string): Promise<BuiltinFit | null> {
+  if (!model) return null;
+  const chat = builtinsNow().chat;
+  if (chat.state === 'ready' && chat.model === model && chat.ctx && chat.fit) return { ...chat.fit, ctx: chat.ctx };
+  if (builtinFit.model === model && Date.now() - builtinFit.at < 20_000) return builtinFit.fit;
+  const fit = await chatFit(model).catch(() => null);
+  builtinFit = { model, at: Date.now(), fit };
+  return fit;
+}
 
 async function tick(): Promise<void> {
   if (!hasLiveSettings()) return;
@@ -140,7 +153,8 @@ async function tick(): Promise<void> {
   }
   let lp: LlamaCppProps | null = null;
   if (s.llmBackend === 'llamacpp') lp = await llamacpp.props().catch(() => null);
-  const plan = planScale({ hw, model, reserveMb: s.vramReserveMb, maxSubagents: s.maxSubagents, manualCtx: s.contextWindow, autoScale: s.autoScale, backend: s.llmBackend === 'ollama' ? 'ollama' : 'llamacpp', llamacpp: lp });
+  const builtin = s.llmBackend === 'builtin' && s.autoScale ? await readBuiltinFit(s.selectedModel) : null;
+  const plan = planScale({ hw, model, reserveMb: s.vramReserveMb, maxSubagents: s.maxSubagents, manualCtx: s.contextWindow, autoScale: s.autoScale, backend: s.llmBackend === 'ollama' ? 'ollama' : s.llmBackend === 'builtin' ? 'builtin' : 'llamacpp', llamacpp: lp, builtin });
   const agentModel = s.llmBackend !== 'ollama' ? s.selectedModel : pickAgentModel(plan, s.selectedModel, installed, hw, s.vramReserveMb);
   set({ hw, model, llamacpp: lp, plan, agentModel, installed, caps, updatedAt: Date.now() });
 }

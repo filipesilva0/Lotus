@@ -125,7 +125,9 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
     case 'models_remove': return { found: true, value: b.removeModel(str(a.id)) };
     case 'image_file_remove': return { found: true, value: b.removeImageFile(str(a.folder) as ImageFolder, str(a.file)) };
     case 'job_cancel': return { found: true, value: b.cancel(str(a.jobId)) };
-    case 'chat_ensure': return { found: true, value: { url: await b.ensureChat(str(a.model), { ctx: num(a.ctx, 0) }) } };
+    case 'chat_ensure': return { found: true, value: { url: await b.ensureChat(str(a.model), { ctx: num(a.ctx, 0), auto: a.auto === true }) } };
+    // The context Auto would give this model now (Settings → Chat shows it).
+    case 'chat_fit': return { found: true, value: await b.chatFit(str(a.model)) };
     case 'chat_stop': return { found: true, value: b.stopChat() };
     // Lets ComfyUI read Lotus Studio/Models/image (root = ComfyUI's own folder, if known).
     case 'comfy_link_models': return { found: true, value: { files: linkComfy(join(b.modelsDir, 'image'), { root: str(a.root) || undefined, desktopConfigDir: a.desktop === false ? undefined : comfyDesktopConfigDir() }) } };

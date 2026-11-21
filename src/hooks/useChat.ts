@@ -21,6 +21,7 @@ import { considerSkill, correction, isComplexExchange, positiveFeedback, recordU
 import type { ContextFile } from '../context/discover';
 import { CHOICES_INSTRUCTIONS } from '../chat/choices';
 import { installInstructions, type InstallTarget } from '../chat/install';
+import { wantsImage, wantsInstall } from '../chat/promptParts';
 import { imageInstructions } from '../chat/imageProposal';
 import { imageChoices } from '../chat/imageChoices';
 import { installTarget } from '../setup/jobs';
@@ -213,8 +214,11 @@ export function useChat(settings: LotusSettings) {
       usedSkillIds = recall.usedSkills.map((k) => k.id);
       let system = `${s.systemPrompt}\n\nToday's date is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Format replies with GitHub Flavored Markdown when it helps (tables, task lists, code blocks).`;
       system += CHOICES_INSTRUCTIONS;
-      system += installInstructions();
-      system += imageInstructions(imageChoices());
+      // 0.15.1: the install and image instructions (about 2,500 characters) only go with messages that
+      // need them; on an 8 GB card every token of the system prompt delays the first word.
+      const lastReply = [...history].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+      if (wantsInstall(o.query ?? '')) system += installInstructions();
+      if (wantsImage(o.query ?? '', lastReply)) system += imageInstructions(imageChoices());
       if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added. Your soul (this system prompt\'s persona) can change too: when the user asks you to be different from now on (name, personality, tone, standing rules), use soul.update; for facts about the user use memory.save.';
       system += pluginSystemBlock(o.query ?? '');
       system += recall.system;

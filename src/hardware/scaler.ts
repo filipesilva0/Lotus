@@ -47,6 +47,18 @@ export interface LlamaCppProps {
   slots: number;
 }
 
+/** How Lotus's own engine sized its context (the core measures it: core/src/engines/chatFit.ts). */
+export interface BuiltinFit {
+  ctx: number;
+  fits: boolean;
+  /** Memory the model may use (free video memory minus the reserve), MB; null when not measured. */
+  budgetMb: number | null;
+  /** Weights plus runtime buffers, MB. */
+  baseMb: number;
+  kvMb: number;
+  measured: boolean;
+}
+
 export interface ScaleInput {
   hw: HardwareReading | null;
   model: ModelProfile | null;
@@ -55,8 +67,9 @@ export interface ScaleInput {
   /** The user's manual context setting (used when nothing is measured or scaling is off). */
   manualCtx: number;
   autoScale: boolean;
-  backend: 'ollama' | 'llamacpp';
+  backend: 'ollama' | 'llamacpp' | 'builtin';
   llamacpp?: LlamaCppProps | null;
+  builtin?: BuiltinFit | null;
 }
 
 export type Fit = 'fits' | 'partial' | 'too-large' | 'unknown';
@@ -165,6 +178,27 @@ export function planScale(i: ScaleInput): ScalePlan {
   if (!i.autoScale) {
     notes.push('Auto-scaling is off: using your context setting and one background agent at a time.');
     return base(manual);
+  }
+
+  // Lotus's own engine: the core sizes the context to free video memory when it starts llama-server.
+  if (i.backend === 'builtin') {
+    const f = i.builtin;
+    if (!f) {
+      notes.push('Lotus sizes the context when it loads the model. Until then this shows your context setting.');
+      return base(manual);
+    }
+    const p = base(f.ctx);
+    p.measured = f.measured;
+    p.fit = !f.measured ? 'unknown' : f.fits ? 'fits' : 'partial';
+    if (g) p.recommendedParamsB = recommendParams(g.totalMb - i.reserveMb);
+    if (!f.measured) notes.push(`Video memory could not be measured on this computer, so Lotus uses ${f.ctx.toLocaleString()} tokens.`);
+    else {
+      notes.push(`${((f.budgetMb ?? 0) / 1024).toFixed(1)} GB of video memory free for the model (${(i.reserveMb / 1024).toFixed(1)} GB kept for other apps); the model and its buffers take ${(f.baseMb / 1024).toFixed(1)} GB.`);
+      notes.push(f.fits
+        ? `Context set to ${f.ctx.toLocaleString()} tokens: the most that fits next to the model (${(f.kvMb / 1024).toFixed(1)} GB), so it runs fully on the GPU.`
+        : `The model is bigger than the free video memory, so part of it runs on the CPU and replies are slower. The context stays at ${f.ctx.toLocaleString()} tokens to keep as much as possible on the GPU. ${p.recommendedParamsB ? `A model of about ${p.recommendedParamsB}B parameters or smaller would fit fully.` : 'A smaller model would fit fully.'}`);
+    }
+    return p;
   }
 
   // llama.cpp: context and slots are fixed when the server starts; we can only read and advise.

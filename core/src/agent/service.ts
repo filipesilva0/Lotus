@@ -39,6 +39,7 @@ import { join } from 'node:path';
 export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
+const AVATAR_WORDS = /avatar|blob|face|mascot|character|persona|look like|icon/i;
 const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'agent.delegate', 'agents.deploy']);
 
 /** A work id from the UI, as a safe folder name. */
@@ -58,7 +59,7 @@ export function readAllowRules(db: Db): string[] {
   try { const v = JSON.parse(kvGet(db, ALLOW_KEY) || '[]'); return Array.isArray(v) ? v.map(String).filter(Boolean) : []; } catch { return []; }
 }
 
-export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp' | 'builtin'; llamacppUrl: string; contextWindow: number; enabled: boolean; computerUse: boolean; browserUse: boolean }
+export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp' | 'builtin'; llamacppUrl: string; contextWindow: number; autoScale: boolean; enabled: boolean; computerUse: boolean; browserUse: boolean }
 
 export function readAgentSettings(db: Db): AgentSettings {
   let s: Record<string, unknown> = {};
@@ -69,6 +70,7 @@ export function readAgentSettings(db: Db): AgentSettings {
     folders: Array.isArray(s.agentFolders) ? s.agentFolders.map(String) : [],
     backend: engineChoice(kvGet(db, 'lotus.settings.v1')).llmBackend,
     contextWindow: typeof s.contextWindow === 'number' ? s.contextWindow : 0,
+    autoScale: s.autoScale !== false,
     llamacppUrl: typeof s.llamacppUrl === 'string' && s.llamacppUrl ? s.llamacppUrl : 'http://127.0.0.1:8080',
     enabled: s.agentTools !== false,
     computerUse: s.computerUse === true,
@@ -136,7 +138,7 @@ export class AgentService {
     return [...new Set(all)];
   }
 
-  toolsFor(a: Pick<StartArgs, 'memoryOn' | 'web' | 'only' | 'workId'>): Tool[] {
+  toolsFor(a: Pick<StartArgs, 'memoryOn' | 'web' | 'only' | 'workId'> & { prompt?: string }): Tool[] {
     const s = readAgentSettings(this.o.db);
     return ALL_TOOLS.filter((t) => {
       if (a.only && !a.only.includes(t.name)) return false;
@@ -145,6 +147,9 @@ export class AgentService {
       if (t.name === 'soul.update' && !a.memoryOn) return false;
       if (t.name.startsWith('web.') && !a.web && !a.workId) return false;
       if (WORK_ONLY.has(t.name) && !a.workId) return false;
+      // 0.15.1: the face designer's long list of colours, shapes and expressions only goes to a chat that
+      // talks about faces or avatars (it is mostly for Work's helpers); every token here slows the first reply.
+      if (t.name === 'avatar.create' && !a.workId && !AVATAR_WORDS.test(a.prompt ?? '')) return false;
       if (t.name.startsWith('computer.') && !s.computerUse) return false;
       if (t.name.startsWith('browser.') && !s.browserUse) return false;
       return true;
@@ -236,8 +241,9 @@ export class AgentService {
           // The built-in engine loads the chosen model on first use (and swaps models when asked).
           if (!this.o.builtins) throw new Error('The built-in chat engine is not available in this build.');
           const b = this.o.builtins;
-          llm.url = await b.ensureChat(a.model, { ctx: a.options?.numCtx || s.contextWindow || undefined });
-          llm.growCtx = async (tokens) => { const url = await b.ensureChat(a.model, { ctx: tokens }); llm.url = url; return url; };
+          // Auto (the default) sizes the context to free video memory; otherwise the chat's own setting.
+          llm.url = await b.ensureChat(a.model, s.autoScale ? { auto: true } : { ctx: a.options?.numCtx || s.contextWindow || undefined });
+          llm.growCtx = async (tokens) => { const url = await b.ensureChat(a.model, { ctx: tokens, grow: true }); llm.url = url; return url; };
         }
         const out = await runAgent({
           runId, model: a.model, messages, tools, approval: s.approval, rules: parseRules(s.deny), allow: this.allowRules, capabilities: a.capabilities, maxTurns: workDir ? 24 : undefined, think: !!a.think,
