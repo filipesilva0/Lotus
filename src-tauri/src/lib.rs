@@ -8,6 +8,7 @@ mod lotusd;
 mod mac_chrome;
 mod mic;
 mod paths;
+mod pick;
 mod setup;
 mod updates;
 
@@ -119,6 +120,7 @@ pub fn run() {
             hardware::hw_snapshot,
             context_files::ctx_discover,
             context_files::ctx_read_folder,
+            pick::pick_files,
             lotusd::core_info,
             lotusd::core_restart,
             updates::update_check,

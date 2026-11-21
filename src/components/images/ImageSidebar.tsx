@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Search, SquarePen, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, X, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, SquarePen, Pin, PinOff, Pencil, Trash2, Folder, FolderPlus, FolderInput, X, Check, ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react';
+import { offerUndo } from '../common/Alerts';
 import { GenSession } from '../../hooks/useGallery';
 import { ChatFolder } from '../../types/lotus';
 import { Btn, IconBtn, TextInput, cx } from '../common/ui';
@@ -27,6 +28,21 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
   const pinned = list.filter((s) => s.pinned);
   const groups = groupByDate<GenSession>(list.filter((s) => !s.pinned));
 
+  /** Pin or unpin, with Undo: a stray click can no longer quietly move a generation. */
+  const togglePin = (s: GenSession) => {
+    const was = !!s.pinned;
+    onPatch(s.id, (x) => ({ ...x, pinned: !was }));
+    offerUndo(was ? `Unpinned “${s.title}”` : `Pinned “${s.title}”`, () => onPatch(s.id, (x) => ({ ...x, pinned: was })), () => undefined);
+  };
+  /** Deletes a project (its generations stay, with no project), with Undo. */
+  const removeFolder = (f: ChatFolder) => {
+    const before = folders;
+    const moved = sessions.filter((x) => x.folderId === f.id).map((x) => x.id);
+    onFolders(folders.filter((x) => x.id !== f.id));
+    if (folder === f.id) setFolder(null);
+    offerUndo(`Project “${f.name}” deleted`, () => { onFolders(before); moved.forEach((id) => onPatch(id, (x) => ({ ...x, folderId: f.id }))); }, () => undefined);
+  };
+
   const commit = (id: string) => { if (draft.trim()) onPatch(id, (s) => ({ ...s, title: draft.trim() })); setRenaming(null); };
 
   const row = (s: GenSession) => {
@@ -34,7 +50,7 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
     const thumb = s.versions[s.index]?.url;
     return (
       <div key={s.id} role="button" tabIndex={0} onClick={() => onSelect(s.id)} onKeyDown={(e) => { if (e.key === 'Enter' && renaming !== s.id) onSelect(s.id); }}
-        className={cx('group flex items-center gap-2 p-1.5 rounded-[8px] cursor-default', on ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
+        className={cx('group relative flex items-center gap-2 p-1.5 rounded-[8px] cursor-default', on ? 'bg-[var(--pressed)] [--row-bg:var(--pressed)]' : 'hover:bg-[var(--hover)] [--row-bg:var(--hover)]')}>
         <span className="relative w-9 h-9 rounded-[6px] overflow-hidden bg-[var(--hover)] shrink-0 shadow-[0_0_0_0.5px_var(--sep)]">
           {thumb && <img src={thumb} alt="" className={cx('w-full h-full object-cover', s.id === busyId && 'opacity-50')} />}
           {s.id === busyId && <span className="absolute inset-0 flex items-center justify-center"><span className="w-4 h-4 rounded-full border-2 border-[var(--color-accent-vibrant)] border-t-transparent animate-spin" /></span>}
@@ -50,16 +66,22 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
           </>)}
         </span>
         {renaming !== s.id && (
-          <span className="hidden group-hover:flex group-focus-within:flex items-center" onClick={(e) => e.stopPropagation()}>
-            <IconBtn label={s.pinned ? 'Unpin' : 'Pin'} className="!w-6 !h-6" onClick={() => onPatch(s.id, (x) => ({ ...x, pinned: !x.pinned }))}>{s.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}</IconBtn>
-            <IconBtn label="Rename" className="!w-6 !h-6" onClick={() => { setDraft(s.title); setRenaming(s.id); }}><Pencil className="w-3.5 h-3.5" /></IconBtn>
-            <Popover align="right" trigger={(_o, t) => <IconBtn label="Move to project" className="!w-6 !h-6" onClick={t}><FolderInput className="w-3.5 h-3.5" /></IconBtn>}>
+          // 0.19 critique #13: four buttons used to slide in over the middle of the row, so a click
+          // meant to open it could land on Pin. Now only Pin and a "More" menu sit at the far right,
+          // on top of the row (the title keeps its width), and pinning says so with Undo.
+          <span className="absolute right-1 top-1/2 -translate-y-1/2 hidden group-hover:flex group-focus-within:flex items-center gap-0.5 pl-3 rounded-r-[8px] bg-[linear-gradient(to_right,transparent,var(--row-bg)_0.75rem)]"
+            onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <IconBtn label={s.pinned ? 'Unpin' : 'Pin'} className="!w-6 !h-6" onClick={() => togglePin(s)}>{s.pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}</IconBtn>
+            <Popover align="right" trigger={(o, t) => <IconBtn label="More actions" aria-expanded={o} aria-haspopup="menu" className="!w-6 !h-6" onClick={t}><MoreHorizontal className="w-3.5 h-3.5" /></IconBtn>}>
               {(close) => (<>
-                <MenuItem active={!s.folderId} onClick={() => { onPatch(s.id, (x) => ({ ...x, folderId: undefined })); close(); }}>No project</MenuItem>
-                {folders.map((f) => <MenuItem key={f.id} active={s.folderId === f.id} onClick={() => { onPatch(s.id, (x) => ({ ...x, folderId: f.id })); close(); }}>{f.name}</MenuItem>)}
+                <MenuItem onClick={() => { setDraft(s.title); setRenaming(s.id); close(); }}><Pencil className="w-3.5 h-3.5" />Rename</MenuItem>
+                <p className="px-2.5 pt-1.5 pb-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">Move to project</p>
+                <MenuItem active={!s.folderId} onClick={() => { onPatch(s.id, (x) => ({ ...x, folderId: undefined })); close(); }}><FolderInput className="w-3.5 h-3.5" />No project</MenuItem>
+                {folders.map((f) => <MenuItem key={f.id} active={s.folderId === f.id} onClick={() => { onPatch(s.id, (x) => ({ ...x, folderId: f.id })); close(); }}><Folder className="w-3.5 h-3.5" />{f.name}</MenuItem>)}
+                <div className="my-1 h-px bg-[var(--sep)]" />
+                <MenuItem danger onClick={() => { close(); onDelete(s.id); }}><Trash2 className="w-3.5 h-3.5" />Delete</MenuItem>
               </>)}
             </Popover>
-            <IconBtn label="Delete generation" className="!w-6 !h-6 hover:!text-[var(--c-red)]" onClick={() => onDelete(s.id)}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
           </span>
         )}
       </div>
@@ -95,7 +117,7 @@ export const ImageSidebar: React.FC<Props> = ({ sessions, activeId, folders, onF
                 <div key={f.id} role="button" tabIndex={0} aria-pressed={folder === f.id} onClick={() => setFolder(folder === f.id ? null : f.id)} onKeyDown={(e) => { if (e.key === 'Enter') setFolder(folder === f.id ? null : f.id); }}
                   className={cx('group flex items-center gap-2 px-2.5 h-8 rounded-[8px] text-[13px] cursor-default', folder === f.id ? 'bg-[var(--pressed)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)]')}>
                   <Folder className="w-3.5 h-3.5" /><span className="flex-1 truncate">{f.name}</span>
-                  <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex" onClick={(e) => { e.stopPropagation(); onFolders(folders.filter((x) => x.id !== f.id)); if (folder === f.id) setFolder(null); }}><X className="w-3 h-3" /></IconBtn>
+                  <IconBtn label={`Delete project ${f.name}`} className="!w-5 !h-5 hidden group-hover:inline-flex group-focus-within:inline-flex" onClick={(e) => { e.stopPropagation(); removeFolder(f); }}><X className="w-3 h-3" /></IconBtn>
                 </div>
               ))}
             </div>

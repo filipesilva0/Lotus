@@ -10,6 +10,7 @@
 
 import { extractJson, llm } from '../services/llm';
 import { uid } from '../lib/persist';
+import { count } from '../lib/plural';
 import { memoryStore, Skill } from '../memory/store';
 import { readPage, searchWeb } from '../chat/webSearch';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
@@ -76,7 +77,7 @@ export async function runTaskAgent(h: RunHooks, c: JobCtx): Promise<string> {
     const steps = parsePlan(r.content);
     if (!steps.length) throw new Error('The model did not return a usable plan. Add steps yourself, or try a larger model.');
     h.patch((t) => ({ ...t, steps: steps.map((text): TaskStep => ({ id: uid('step'), text, done: false })) }));
-    h.log(`Planned ${steps.length} steps`, 'agent');
+    h.log(`Planned ${count(steps.length, 'step')}`, 'agent');
   }
 
   // Steps

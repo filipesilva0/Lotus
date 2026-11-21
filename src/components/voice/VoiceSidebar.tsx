@@ -4,6 +4,7 @@ import { voicebox, Capture, Generation, Story, VoiceProfile } from '../../servic
 import { VoiceData } from './useVoiceData';
 import { IconBtn, Btn, cx } from '../common/ui';
 import { SidebarPane, groupByDate } from '../common/Pane';
+import { count } from '../../lib/plural';
 
 export type VoiceMode = 'voices' | 'speak' | 'dictate' | 'stories' | 'library';
 
@@ -76,7 +77,7 @@ export const VoiceSidebar: React.FC<Props> = ({ mode, onMode, data, online, prof
         </>)}
         {online && (mode === 'speak' || mode === 'library') && grouped(gens, (g) => item(g.id, g.text.slice(0, 60), `${data.profiles.find((p) => p.id === g.profile_id)?.name ?? 'Voice'} · ${g.status}`, false, () => onReuse(g)))}
         {online && mode === 'dictate' && grouped(caps.filter((c) => !needle || (c.transcript_refined || c.transcript_raw || '').toLowerCase().includes(needle)), (c) => item(c.id, (c.transcript_refined || c.transcript_raw || 'Empty capture').slice(0, 60), new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), false))}
-        {online && mode === 'stories' && stories.filter((s) => !needle || s.name.toLowerCase().includes(needle)).map((s) => item(s.id, s.name, `${s.item_count ?? 0} clips`, false))}
+        {online && mode === 'stories' && stories.filter((s) => !needle || s.name.toLowerCase().includes(needle)).map((s) => item(s.id, s.name, count(s.item_count ?? 0, 'clip'), false))}
       </div>
     </SidebarPane>
   );

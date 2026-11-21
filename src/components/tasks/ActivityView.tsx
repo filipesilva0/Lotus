@@ -10,13 +10,16 @@ import { MarkdownLite } from '../../lib/markdownLite';
 import { AgentSteps } from '../chat/AgentSteps';
 import { InspectorPane, PaneBar, Section } from '../common/Pane';
 import { Banner, Btn, Empty, IconBtn, Segmented, TextInput, cx } from '../common/ui';
+import { plainLine } from '../../lib/plainText';
+import { runSourceLabel } from '../../tasks/activity';
+import { count } from '../../lib/plural';
 
 type Filter = 'all' | RunSource;
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'chat', label: 'Chat' }, { id: 'work', label: 'Work' }, { id: 'task', label: 'Tasks' },
   { id: 'routine', label: 'Routines' }, { id: 'island', label: 'Island' }, { id: 'call', label: 'Calls' },
 ];
-const SOURCE: Record<RunSource, string> = { chat: 'Chat', work: 'Work', task: 'Task', routine: 'Routine', island: 'Island', call: 'Call' };
+
 const PAGE = 60;
 
 const when = (t: number) => {
@@ -113,9 +116,9 @@ export const ActivityView: React.FC<{ focus?: { ref: string; label: string } | n
                 <button type="button" onClick={() => setSel(sel === r.id ? null : r.id)} aria-current={sel === r.id ? 'true' : undefined}
                   className={cx('w-full flex items-center gap-2.5 px-2.5 h-9 rounded-[8px] text-[13px] text-left', sel === r.id ? 'bg-[var(--pressed)]' : 'hover:bg-[var(--hover)]')}>
                   <StatusIcon s={r.status} />
-                  <span className="w-[58px] shrink-0 text-[12px] text-[var(--color-text-muted)]">{r.source ? SOURCE[r.source] : 'Earlier'}</span>
-                  <span className="flex-1 min-w-0 truncate">{r.prompt || '(no request text)'}</span>
-                  {!!r.steps && <span className="shrink-0 text-[12px] text-[var(--color-text-muted)] tabular-nums">{r.steps} step{r.steps === 1 ? '' : 's'}</span>}
+                  <span className="w-[58px] shrink-0 text-[12px] text-[var(--color-text-muted)]">{runSourceLabel(r)}</span>
+                  <span className="flex-1 min-w-0 truncate" title={r.prompt || undefined}>{plainLine(r.prompt) || '(no request text)'}</span>
+                  {!!r.steps && <span className="shrink-0 text-[12px] text-[var(--color-text-muted)] tabular-nums">{count(r.steps, 'step')}</span>}
                   {r.unverified.length > 0 && <AlertCircle className="w-3.5 h-3.5 shrink-0 text-[var(--c-orange,var(--c-red))]" aria-label="Says it did things no step did" />}
                   <span className="w-[110px] shrink-0 text-right text-[12px] text-[var(--color-text-muted)] tabular-nums">{when(r.created)}</span>
                 </button>
@@ -129,7 +132,7 @@ export const ActivityView: React.FC<{ focus?: { ref: string; label: string } | n
       {sel && (
         <InspectorPane label="Run" pinned>
           <PaneBar>
-            <span className="flex-1 truncate text-[13px] font-semibold">{detail?.source ? SOURCE[detail.source] : 'Run'}{detail ? ` · ${when(detail.created)}` : ''}</span>
+            <span className="flex-1 truncate text-[13px] font-semibold">{detail ? runSourceLabel(detail) : 'Run'}{detail ? ` · ${when(detail.created)}` : ''}</span>
             <IconBtn label="Close" onClick={() => setSel(null)}><X className="w-4 h-4" /></IconBtn>
           </PaneBar>
           {!detail ? <div className="p-4 text-[13px] text-[var(--color-text-muted)]">Loading…</div> : (
@@ -147,7 +150,7 @@ export const ActivityView: React.FC<{ focus?: { ref: string; label: string } | n
               )}
               <Section title={detail.status === 'error' ? 'Error' : 'Reply'}>
                 {detail.status === 'running' ? <p className="text-[13px] text-[var(--color-text-muted)]">Still working…</p>
-                  : <div className={cx('text-[13px] leading-relaxed', detail.status === 'error' && 'text-[var(--c-red)]')}><MarkdownLite text={detail.reply || (detail.status === 'stopped' ? 'Stopped.' : '(empty)')} onDark={false} /></div>}
+                  : <div className={cx('text-[13px] leading-relaxed', detail.status === 'error' && 'text-[var(--c-red)]')}><MarkdownLite text={detail.reply === 'Stopped' ? 'You stopped this run.' : detail.reply || (detail.status === 'stopped' ? 'You stopped this run.' : '(empty)')} onDark={false} /></div>}
               </Section>
             </div>
           )}

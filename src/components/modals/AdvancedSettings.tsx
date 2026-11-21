@@ -9,6 +9,8 @@ import { Banner, Btn, IconBtn, Select, TextInput, useFlash } from '../common/ui'
 import { kv } from '../../lib/store';
 import { onCoreEvent, rpc } from '../../lib/core';
 import { llamacppToken, setLlamacppToken } from '../../services/engineConfig';
+import { offerUndo } from '../common/Alerts';
+import { putBack, takeOut } from '../../lib/undoList';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
@@ -111,7 +113,7 @@ const McpServers: React.FC = () => {
                 </div>
                 <IconBtn label={`Restart ${c.name}`} onClick={() => { void rpc('mcp_restart', { id: c.id }).then(refresh); }}><RotateCw className="w-3.5 h-3.5" /></IconBtn>
                 <Toggle checked={c.enabled !== false} onChange={(v) => save(list.map((x) => (x.id === c.id ? { ...x, enabled: v } : x)))} ariaLabel={`Use ${c.name}`} />
-                <IconBtn label={`Remove ${c.name}`} onClick={() => save(list.filter((x) => x.id !== c.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+                <IconBtn label={`Remove ${c.name}`} onClick={() => { const { rest, index } = takeOut(list, c.id); save(rest); offerUndo(`${c.name} removed`, () => save(putBack(rest, c, index)), () => undefined); }}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
               </li>
             );
           })}

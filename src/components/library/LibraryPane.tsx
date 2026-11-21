@@ -10,6 +10,7 @@ import { useProjectContext, stripFrontMatter } from '../../context/discover';
 import { LotusPlugin, fromFileText, plugins, toFile, usePlugins, validatePlugin } from '../../plugins/store';
 import { draftPlugin, DraftResult } from '../../plugins/creator';
 import type { LotusSettings } from '../../types/lotus';
+import { count } from '../../lib/plural';
 
 export type LibraryTab = 'skills' | 'memory' | 'soul' | 'plugins';
 
@@ -66,7 +67,7 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
     }
     if (tab === 'memory') {
       return [
-        { id: 'memory', group: 'Long-term memory', title: 'memory.md', subtitle: mem.status ? `${mem.status.memories} items · ${mem.status.messages.toLocaleString()} indexed messages` : 'Reading the memory database…', text: memoryFile(mem.memories), readOnly: 'A view of the memory database. Add with “remember …”, edit in the chat inspector → Context.', icon: <Brain className="w-3.5 h-3.5" /> },
+        { id: 'memory', group: 'Long-term memory', title: 'memory.md', subtitle: mem.status ? `${count(mem.status.memories, 'item')} · ${count(mem.status.messages, 'indexed message')}` : 'Reading the memory database…', text: memoryFile(mem.memories), readOnly: 'A view of the memory database. Add with “remember …”, edit in the chat inspector → Context.', icon: <Brain className="w-3.5 h-3.5" /> },
         ...projFiles('memory'),
         ...projFiles('rules'),
       ];

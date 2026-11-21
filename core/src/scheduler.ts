@@ -18,7 +18,7 @@ import type { AgentEvent, BoardAccess, Step } from './agent/types';
 import { kvGet } from './kv';
 import { listSkills, searchSkills, type SkillRow } from './memory';
 import { addRoutineRun, listRoutines, listTasks, saveRoutines, saveTasks, type Routine, type RoutineRun } from './board';
-import { addLink, blockersOf, moveTask, newTask, nextRunnable, parseSteps, removeLink, removeTask, type Status, type Task, type TaskLink, type TaskStep } from '../../src/tasks/kanban';
+import { addLink, blockersOf, moveTask, newTask, nextRunnable, parseSteps, removeLink, removeTask, restoreTask, type RemovedTask, type Status, type Task, type TaskLink, type TaskStep } from '../../src/tasks/kanban';
 import { nextRun, validateCron } from '../../src/tasks/cron';
 
 export const TICK_MS = { value: 20_000 };
@@ -139,6 +139,11 @@ export class BoardService implements BoardAccess {
   linkTask(from: string, type: TaskLink['type'], to: string) { return this.mutate((all) => addLink(all, from, type, to)); }
   unlinkTask(from: string, to: string) { return this.mutate((all) => ({ tasks: removeLink(all, from, to) })); }
   removeTask(id: string) { this.cancel(`task:${id}`); return this.mutate((all) => ({ tasks: removeTask(all, id) })); }
+  /** Undo of a delete: the task comes back as it was, with the links other tasks had to it. */
+  restoreTask(r: RemovedTask) {
+    if (!r?.task || typeof r.task.id !== 'string' || typeof r.task.title !== 'string') return 'Nothing to restore.';
+    return this.mutate((all) => ({ tasks: restoreTask(all, { task: r.task, inbound: Array.isArray(r.inbound) ? r.inbound : [] }) }));
+  }
   stopTask(id: string) { this.cancel(`task:${id}`); }
   retryTask(id: string) { this.patch(id, (t) => ({ ...t, run: undefined })); return this.runTask(id, 0); }
 
@@ -398,6 +403,7 @@ export function boardRpc(b: BoardService, method: string, a: Record<string, unkn
     case 'task_link': return { found: true, value: err(b.linkTask(str(a.from), (a.type === 'relates' ? 'relates' : 'blocks'), str(a.to))) };
     case 'task_unlink': return { found: true, value: err(b.unlinkTask(str(a.from), str(a.to))) };
     case 'task_remove': return { found: true, value: err(b.removeTask(str(a.id))) };
+    case 'task_restore': return { found: true, value: err(b.restoreTask(a as unknown as RemovedTask)) };
     case 'task_run': return { found: true, value: err(b.runTask(str(a.id), 0)) };
     case 'task_stop': b.stopTask(str(a.id)); return { found: true, value: { ok: true } };
     case 'task_retry': return { found: true, value: err(b.retryTask(str(a.id))) };
