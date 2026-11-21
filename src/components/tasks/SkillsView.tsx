@@ -39,11 +39,11 @@ const Editor: React.FC<{ s: Skill }> = ({ s }) => {
         <span className="text-[12px] text-[var(--color-text-muted)]">{s.enabled ? 'In use' : 'Off'}</span>
         <Toggle size="sm" checked={s.enabled} onChange={(v) => void memoryStore.putSkill({ ...s, enabled: v })} ariaLabel={s.enabled ? 'Skill on' : 'Skill off'} />
         <Segmented<'read' | 'edit'> label="Mode" value={view} onChange={setView} options={[{ id: 'read', label: 'Read' }, { id: 'edit', label: 'Edit' }]} />
-        <IconBtn label="Delete skill" onClick={() => { void memoryStore.deleteSkill(s.id); offerUndo(`Skill “${s.name}” deleted`, () => void memoryStore.putSkill(s), () => undefined); }}><Trash2 className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Delete skill" className="hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]" onClick={() => { void memoryStore.deleteSkill(s.id); offerUndo(`Skill “${s.name}” deleted`, () => void memoryStore.putSkill(s), () => undefined); }}><Trash2 className="w-4 h-4" /></IconBtn>
       </PaneBar>
       <div className="flex-1 overflow-y-auto">
         {view === 'read' ? (
-          <div className="px-5 py-4 max-w-[760px]">
+          <div className="px-5 py-4 max-w-[760px] mx-auto">
             <p className="text-[14px]">{s.description}</p>
             <p className="mt-1 text-[13px] text-[var(--color-text-muted)]"><span className="font-medium">Use when:</span> {s.whenToUse}</p>
             <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">Version {s.version} · used {s.uses}× · worked {s.wins}× · {s.origin === 'auto' ? 'written by Lotus' : 'edited by you'}{s.tags.length ? ` · ${s.tags.join(', ')}` : ''}</p>
@@ -51,7 +51,7 @@ const Editor: React.FC<{ s: Skill }> = ({ s }) => {
             {path && <p className="mt-4 text-[12px] text-[var(--color-text-muted)]">Saved to {path}</p>}
           </div>
         ) : (
-          <div className="px-5 py-4 max-w-[760px] space-y-2.5">
+          <div className="px-5 py-4 max-w-[760px] mx-auto space-y-2.5">
             <div><Label>Name</Label><TextInput value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} aria-label="Skill name" /></div>
             <div><Label>What it does</Label><TextInput value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} aria-label="Description" /></div>
             <div><Label>Use when</Label><TextInput value={d.whenToUse} onChange={(e) => setD({ ...d, whenToUse: e.target.value })} aria-label="When to use" placeholder="The kind of request that should bring this skill in" /></div>

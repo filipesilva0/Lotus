@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tip } from '../common/Tip';
 import { Toggle } from '../common/Toggle';
-import { Btn, Banner, Select } from '../common/ui';
+import { Btn, Banner, Select, InfoNote } from '../common/ui';
 import { IslandSettings, loadIsland, saveIsland } from '../../island/state';
 import { voicebox, VoiceProfile } from '../../services/voicebox';
 import { invokeNative } from '../../lib/bus';
@@ -68,7 +68,7 @@ export const IslandSettingsPanel: React.FC<{ models: { id: string; name: string 
               {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
           </Row>
-        ) : <Row title="Read-aloud voice" hint="The island reads with the voice in use on the Voice page." />}
+        ) : <div className="py-2.5"><InfoNote title="Read-aloud voice">The island reads with the voice in use on the Voice page. Change it there.</InfoNote></div>}
         <Row title="Collapse when I click away" hint="The chat folds back into the pill a few seconds after it loses focus.">
           <Toggle checked={s.autoCollapse} onChange={(v) => set({ autoCollapse: v })} ariaLabel="Collapse when I click away" />
         </Row>

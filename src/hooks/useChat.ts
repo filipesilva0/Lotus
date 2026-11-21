@@ -548,6 +548,15 @@ export function useChat(settings: LotusSettings) {
     mutate((p) => [s, ...p]); setActiveId(s.id); return s;
   }, [mutate]);
 
+  // 0.20: one rule for empty threads on every page. Like an empty image generation, an empty chat you
+  // leave without writing anything is dropped (it used to stay as "New conversation" forever). Chats with
+  // a folder, attached files or a title you typed are kept.
+  useEffect(() => {
+    if (!ref.current.some((x) => x.id === activeId)) return;
+    const blank = (x: ChatSession) => x.id !== activeId && !x.messages.length && !x.pinned && !x.folderId && !x.folder && !x.context?.length && (!x.title || x.title === 'New conversation');
+    if (ref.current.some(blank)) mutate((p) => p.filter((x) => !blank(x)));
+  }, [activeId, mutate]);
+
   const deleteChat = useCallback((id: string) => {
     void memoryStore.forgetSession(id);
     const rest = ref.current.filter((s) => s.id !== id);

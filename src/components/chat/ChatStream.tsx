@@ -1,3 +1,4 @@
+import { ReplyHeader } from '../common/ReplyHeader';
 import React, { useEffect, useRef, useState } from 'react';
 import { Bot, Brain, BrainCircuit, Globe, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, FileText, Loader2, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Wrench, User, AlertCircle, PanelRight } from 'lucide-react';
 import { ChatMessage, ChatSession } from '../../types/lotus';
@@ -84,10 +85,14 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
           const isLast = mi === session.messages.length - 1;
           return (
             <div key={m.id} className={cx('group flex gap-3', user && 'flex-row-reverse')}>
-              <div className={cx('w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5', user ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] shadow-[0_0_0_0.5px_var(--sep)]')}>
-                {user ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
-              </div>
-              <div className={cx('min-w-0 max-w-[85%]', user && 'flex flex-col items-end')}>
+              {/* 0.20: replies carry the same header as Work (face + the Soul's name); your own messages keep the round badge. */}
+              {user && (
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-[var(--color-accent-fill)] text-white">
+                  <User className="w-3.5 h-3.5" />
+                </div>
+              )}
+              <div className={cx('min-w-0', user ? 'max-w-[85%] flex flex-col items-end' : 'max-w-full')}>
+                {!user && <ReplyHeader live={!!m.isStreaming} />}
                 {!user && <ThinkingDrawer m={m} mode={reasoningMode} />}
                 {!user && <AgentSteps steps={(m.tools ?? []).filter((t) => t.tool)} onDecide={m.isStreaming && onStep ? (t, allow, always) => onStep(m.id, t, allow, always) : undefined} />}
                 {editing === m.id ? (
@@ -114,7 +119,7 @@ export const ChatStream: React.FC<Props> = ({ session, isStreaming, autoScroll, 
                     {img?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Choosing the image settings…</p>}
                     {inst?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing an install request…</p>}
                     {parsed?.pending && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] animate-pulse">Preparing options…</p>}
-                    {m.interrupted && <p className="mt-1.5 text-[12px] opacity-70">Stopped here.</p>}
+                    {m.interrupted && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)]">Stopped here.</p>}
                     {!!m.unverified?.length && !m.isStreaming && <UnverifiedNote items={m.unverified} />}
                     {!!m.drafts?.length && !m.isStreaming && (
                       <details className="group mt-2 text-[12px]">

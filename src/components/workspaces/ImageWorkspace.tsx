@@ -12,7 +12,8 @@ import { DEFAULT_PARAMS, Gallery, ImageParams } from '../../hooks/useGallery';
 import { comfy, ComfyStats, dimensionsFor } from '../../services/comfyService';
 import { engineUrl } from '../../services/engineConfig';
 import { usePanels } from '../../lib/panels';
-import { VramMeter, ModeButton, PickerButton, PromptShell, RoundIcon, SendButton, TrayButton, TrayNote } from '../common/PromptBox';
+import { VramMeter, ModeButton, PickerButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayNote, TrayRow } from '../common/PromptBox';
+import { prettyModelName } from '../../models/names';
 import { usePersisted, uid } from '../../lib/persist';
 import { useFileIntake } from '../../lib/fileDrop';
 import { Banner, Btn, Empty, Gauge, IconBtn, Progress, Stepper, TextArea, TextInput, cx } from '../common/ui';
@@ -94,6 +95,8 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
   const cur = g.current;
   const dims = useMemo(() => (profile ? sizeFor(params.aspect, profile, params.resolution) : dimensionsFor(params.aspect, params.checkpoint, params.resolution)), [params.aspect, params.checkpoint, profile, params.resolution]);
   /** What the model was trained at (side of a square), for the Resolution hint. */
+  // The model's own sampling defaults (its family's), for the Steps hint and the reset button.
+  const sampleDefaults = profile ? { steps: FAMILIES[profile.family].steps, cfg: FAMILIES[profile.family].cfg } : { steps: DEFAULT_PARAMS.steps, cfg: DEFAULT_PARAMS.cfg };
   const nativeRes = useMemo(() => (profile ? sizeFor('1:1', profile) : dimensionsFor('1:1', params.checkpoint)).width, [params.checkpoint, profile]);
   const customSize = !ASPECTS.includes(params.aspect);
   const resFit = resolutionFit(params.resolution ?? 0, nativeRes);
@@ -315,13 +318,11 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
             {comfyUp === false && (builtin ? <BuiltinNotice kind="image" purpose="to generate images" className="mb-1.5 px-1" /> : <EngineNotice id="comfyui" purpose="to generate images" className="mb-1.5 px-1" />)}
             {notice && <p role="status" className="mb-1.5 px-1 text-[12px] text-[var(--color-text-muted)]">{notice}</p>}
             <PromptShell drag={drag}
-              tray={<>
+              tray={<TrayRow actions={<>
                 <TrayButton onClick={() => { setTab('params'); setShowInspector(true); }} icon={<SlidersHorizontal className="w-4 h-4" />} label="Parameters" title="Canvas, images per run, negative prompt, sampling" />
                 <TrayButton onClick={() => { setTab('styles'); setShowInspector(true); }} icon={<Palette className="w-4 h-4" />} label="Styles" title="Saved styles you can call with @ in the prompt" />
                 <TrayButton onClick={onOpenModels} icon={<Boxes className="w-4 h-4" />} label="Models" title="Get checkpoints and LoRAs" />
-                <div className="flex-1" />
-                <TrayNote>{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</TrayNote>
-              </>}>
+                </>} status={<TrayNote>{dims.width}×{dims.height} · {params.count} image{params.count > 1 ? 's' : ''}{params.seed !== null ? ` · seed ${params.seed}` : ''}</TrayNote>} />}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
               <VramMeter fallback={stats && stats.vramTotalGb ? { device: stats.device ?? undefined, totalGb: stats.vramTotalGb, freeGb: stats.vramFreeGb } : null} />
               {(refs.length > 0 || drag) && (
@@ -343,21 +344,21 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                   {drag && !refs.length && <p className="text-[12px] text-[var(--color-text-muted)] py-2">Drop images to use them as references. You can also paste them.</p>}
                 </div>
               )}
-              <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKey} rows={2} aria-label="Prompt"
-                placeholder="Describe the image… (/ for settings, @ for saved styles)"
-                className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
-              <div className="flex items-center gap-1 px-2.5 pb-2.5">
+              <PromptText value={prompt} onChange={(e) => setPrompt(e.target.value)} onKeyDown={onKey} rows={2} aria-label="Prompt"
+                placeholder="Describe the image… (/ for settings, @ for saved styles)" />
+              <PromptRow
+                attach={<>
                 <label className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] cursor-default" data-tip="Add reference images (or paste or drop them)">
                   <input type="file" accept="image/*" multiple className="sr-only" aria-label="Add reference images" onChange={(e) => { takeRefs(e.target.files); e.target.value = ''; }} /><Plus className="w-[18px] h-[18px]" />
                 </label>
                 {cur?.blob && <RoundIcon label="Use the current image as the reference" onClick={useAsReference}><MoveDiagonal className="w-4 h-4" /></RoundIcon>}
-                <Popover up trigger={(o, t) => (
+                </>}
+                chips={<Popover up trigger={(o, t) => (
                   <ModeButton on={loras.length > 0 || o} onClick={t} icon={<Sparkles className="w-4 h-4" />} label={loras.length ? `LoRA · ${loras.length}` : 'LoRA'} title="LoRAs (optional): small add-on models that steer style or subject" />
                 )} className="w-[300px] !p-3">
                   {() => <LoraPicker available={loraList} value={loras} comfyUp={comfyUp} onChange={(next) => set({ loras: next })} onGetMore={onOpenModels} />}
-                </Popover>
-                <div className="flex-1" />
-                {builtin ? (
+                </Popover>}
+                picker={builtin ? (
                   <Popover up align="right" className="w-[300px]" trigger={(o, t) => (
                     <PickerButton open={o} onClick={t} title="Image model" text={profile?.name || 'No image model'}
                       chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
@@ -371,21 +372,20 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                   </Popover>
                 ) : (
                 <Popover up align="right" className="w-[300px]" trigger={(o, t) => (
-                  <PickerButton open={o} onClick={t} title="Checkpoint (image model)" text={params.checkpoint || (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}
+                  <PickerButton open={o} onClick={t} title={params.checkpoint ? `Checkpoint (image model): ${params.checkpoint}` : 'Checkpoint (image model)'} text={params.checkpoint ? prettyModelName(params.checkpoint) : (comfyUp ? 'No checkpoints' : 'ComfyUI stopped')}
                     chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', o && 'rotate-180')} />} />
                 )}>
                   {(close) => (<>
                     {!checkpoints.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">{comfyUp ? 'No checkpoints found in ComfyUI’s models folder.' : 'Start ComfyUI to list checkpoints.'}</p>}
-                    {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate">{c}</span></MenuItem>)}
+                    {checkpoints.map((c) => <MenuItem key={c} active={c === params.checkpoint} onClick={() => { set({ checkpoint: c }); close(); }}><span className="truncate" title={c}>{prettyModelName(c)}</span></MenuItem>)}
                     <div className="my-1 border-t border-[var(--sep)]" />
                     <MenuItem onClick={() => { close(); onOpenModels(); }}><Boxes className="w-3.5 h-3.5" />Get more models…</MenuItem>
                   </>)}
                 </Popover>
                 )}
-                {g.busy
+                send={g.busy
                   ? <SendButton stop onClick={g.cancel} label="Stop generating" />
-                  : <SendButton disabled={!prompt.trim() || (builtin ? !profile : !params.checkpoint) || !comfyUp} onClick={go} label="Generate" tip="Generate (Enter)" />}
-              </div>
+                  : <SendButton disabled={!prompt.trim() || (builtin ? !profile : !params.checkpoint) || !comfyUp} onClick={go} label="Generate" tip="Generate (Enter)" />} />
             </PromptShell>
           </div>
         </div>
@@ -412,10 +412,11 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
               </Section>
               <Section title="Resolution" hint={customSize ? 'A custom size sets the resolution itself.' : `How many pixels the image has. This model was made for about ${nativeRes}×${nativeRes}.`}>
                 <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Resolution">
-                  {RESOLUTIONS.map((r) => {
-                    const on = (params.resolution ?? 0) === r.id;
+                  {/* 0.20: the model's own size is one button ("Default (1024)"), not that plus a separate "1024". */}
+                  {RESOLUTIONS.filter((r) => r.id === 0 || r.id !== nativeRes).map((r) => {
+                    const on = (params.resolution ?? 0) === r.id || (r.id === 0 && params.resolution === nativeRes);
                     return <button key={r.id} type="button" role="radio" aria-checked={on} disabled={customSize} onClick={() => set({ resolution: r.id })}
-                      className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums disabled:opacity-40', r.id === 0 && 'col-span-2', on && !customSize ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{r.id === 0 ? `${r.label} (${nativeRes})` : r.label}</button>;
+                      className={cx('h-7 rounded-[6px] text-[12px] font-medium tabular-nums disabled:opacity-40', r.id === 0 && 'col-span-2', on && !customSize ? 'bg-[var(--color-accent-fill)] text-white' : 'bg-[var(--hover)] hover:bg-[var(--pressed)]')}>{r.id === 0 ? `Default (${nativeRes})` : r.label}</button>;
                   })}
                 </div>
                 {!customSize && resFit !== 'ok' && <p className="mt-1.5 text-[12px] text-[var(--color-text-muted)] leading-snug">{resFit === 'large'
@@ -435,8 +436,12 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
               <Section title="Sampling">
                 {recipeFor(params.checkpoint) && <p className="mb-2 text-[12px] text-[var(--color-text-muted)] leading-snug">This model uses fixed settings ({recipeFor(params.checkpoint)!.steps} steps, guidance {recipeFor(params.checkpoint)!.cfg}). Steps, guidance, sampler and scheduler below apply to other models.</p>}
                 <SliderField label="Guidance scale (CFG)" value={params.cfg} min={1} max={20} step={0.5} onChange={(v) => set({ cfg: v })} format={(v) => v.toFixed(1)} hint="How closely the image follows the prompt. FLUX models usually want 1–4." />
-                <SliderField label="Steps" value={params.steps} min={4} max={80} step={1} onChange={(v) => set({ steps: v })} />
-                <SliderField label="Reference strength" value={params.denoise} min={0.1} max={1} step={0.05} onChange={(v) => set({ denoise: v })} format={(v) => `${Math.round(v * 100)}%`} hint="With a reference image: higher changes more of it." />
+                <SliderField label="Steps" value={params.steps} min={4} max={80} step={1} onChange={(v) => set({ steps: v })} hint={`More steps add detail but take longer; ${sampleDefaults.steps} suits this model.`} />
+                {/* Reference strength only matters with a reference image, so it appears once there is one. */}
+                {refs.length > 0 && <SliderField label="Reference strength" value={params.denoise} min={0.1} max={1} step={0.05} onChange={(v) => set({ denoise: v })} format={(v) => `${Math.round(v * 100)}%`} hint="Higher changes more of the reference image." />}
+                {(params.steps !== sampleDefaults.steps || params.cfg !== sampleDefaults.cfg) && (
+                  <Btn size="sm" variant="ghost" className="mt-1" onClick={() => set({ steps: sampleDefaults.steps, cfg: sampleDefaults.cfg })}>Reset Steps and Guidance</Btn>
+                )}
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   <label className="text-[12px]">Sampler<select aria-label="Sampler" value={params.sampler} onChange={(e) => set({ sampler: e.target.value })} className="mt-0.5 w-full h-7 px-1.5 rounded-[6px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] text-[12px]">
                     {(lists.samplers.length ? lists.samplers : [params.sampler]).map((s) => <option key={s}>{s}</option>)}</select></label>
@@ -477,7 +482,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 <p className="text-[12px] leading-snug mb-2">{cur.prompt}</p>
                 <KV k="Type" v={cur.kind ?? 'txt2img'} /><KV k="Size" v={cur.dimensions} /><KV k="Seed" v={cur.seed} /><KV k="Steps" v={cur.steps} /><KV k="CFG" v={cur.cfg} />
                 {cur.sampler && <KV k="Sampler" v={cur.sampler} />}{cur.denoise !== undefined && <KV k="Strength" v={`${Math.round(cur.denoise * 100)}%`} />}
-                <KV k="Checkpoint" v={cur.checkpoint} mono />{cur.loras?.length ? <KV k="LoRA" v={cur.loras.map((l) => `${l.name} ×${l.strength}`).join(', ')} mono /> : null}<KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
+                <KV k="Model" v={<span title={cur.checkpoint}>{prettyModelName(cur.checkpoint)}</span>} />{cur.loras?.length ? <KV k="LoRA" v={cur.loras.map((l) => `${l.name} ×${l.strength}`).join(', ')} mono /> : null}<KV k="Time" v={`${cur.generationTimeSec}s`} /><KV k="Made" v={cur.timestamp} />
                 {cur.negativePrompt && <KV k="Negative" v={cur.negativePrompt} />}
                 <Btn size="sm" variant="danger" className="mt-3" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => deleteImage(cur)}>Delete This Image</Btn>
               </Section>

@@ -269,7 +269,7 @@ const VoiceDetail: React.FC<{ studio: Studio; id: string; lastClip: string | nul
       {v && <div><H>Notes</H><TextArea rows={2} value={v.notes ?? ''} onChange={(e) => studio.patchVoice(v.id, { notes: e.target.value })} placeholder="What this voice is for" aria-label="Notes" /></div>}
       {!v && <Btn onClick={() => { const nv = studio.addVoice({ name: opt.name, model: opt.model, speaker: opt.speaker }); onSaved(nv.id); }}>Save as My Voice</Btn>}
       {err && <Banner tone="error">{err}</Banner>}
-      {v && <Btn variant="ghost" className="!text-[var(--c-red)]" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={async () => { if (await confirmAlert({ title: `Delete “${v.name}”?`, message: 'Its recording is removed from Lotus Studio too.', confirm: 'Delete' })) { studio.removeVoice(v.id); onSaved(''); } }}>Delete Voice</Btn>}
+      {v && <Btn variant="danger" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={async () => { if (await confirmAlert({ title: `Delete “${v.name}”?`, message: 'Its recording is removed from Lotus Studio too.', confirm: 'Delete' })) { studio.removeVoice(v.id); onSaved(''); } }}>Delete Voice</Btn>}
     </div>
   );
 };

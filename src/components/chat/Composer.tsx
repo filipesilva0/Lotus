@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUp, Mic, MicOff, Plus, Square, X, FileText, Navigation, AtSign, Brain, Globe, FolderOpen, ChevronDown, Check, Boxes, Puzzle, BookOpen, BrainCircuit, EyeOff, FlaskConical } from 'lucide-react';
 import { IconBtn, cx } from '../common/ui';
-import { EdgeMeter, ModeButton, SendButton, TrayButton, TrayToggle } from '../common/PromptBox';
+import { EdgeMeter, ModeButton, PickerButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayRow, TrayToggle } from '../common/PromptBox';
+import { prettyModelName } from '../../models/names';
+import { useAssistantName } from '../../lib/identity';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { transcribe } from '../../voice/voice';
 import { isTauri } from '../../lib/http';
@@ -59,6 +61,7 @@ interface Props {
 
 export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, models, onModel, onOpenModels, onAttachFolder, folder, onClearFolder, extraCommands = [], thinkingOn, onToggleThinking, webOn, onToggleWeb, memoryOn, incognito, onToggleMemory, onToggleIncognito, contextUsed, contextTitle, onOpenLibrary, onResearch, mentions, prefill, onSend, onCommand, onStop }) => {
   const [text, setText] = useState('');
+  const name = useAssistantName();
   const [modelOpen, setModelOpen] = useState(false);
   const [researchMode, setResearchMode] = useState(false);
   const [folderBusy, setFolderBusy] = useState(false);
@@ -194,8 +197,23 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
         {notice && <p role="alert" className="mb-2 px-1 text-[12px] text-[var(--c-red)]">{notice}</p>}
 
         {/* The box sits on a tray: the tray holds per-chat context actions and the memory / incognito toggles. */}
-        <div className="rounded-[24px] bg-[var(--composer-tray)]">
-          <div className={cx('relative rounded-[24px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep),0_2px_8px_rgba(0,0,0,.06)] transition-shadow', drag && 'shadow-[0_0_0_2px_var(--color-accent-fill)]')}>
+        <PromptShell drag={drag} tray={<TrayRow
+          actions={<>
+            {folder ? (
+              <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`${name} can read and edit files in ${folder} (saving asks first)`}>
+                <FolderOpen className="w-4 h-4 shrink-0" /><span className="truncate">{folderName(folder)}</span>
+                <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => onClearFolder?.()}><X className="w-3 h-3" /></IconBtn>
+              </span>
+            ) : trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', isTauri ? `Let ${name} work in a folder: it opens, searches and edits the files it needs (saving asks first)` : "Attach a folder: its text and code files join this chat's context")}
+            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Skills', `The skills, memory and soul ${name} uses (Tasks page)`)}
+            {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
+          </>}
+          status={<>
+            {trayToggle(memoryOn, onToggleMemory, <BrainCircuit className="w-4 h-4" />,
+              incognito ? 'Memory is off in incognito chats' : memoryOn ? 'Memory on · click to pause for this chat' : 'Memory paused · click to resume', incognito)}
+            {trayToggle(incognito, onToggleIncognito, <EyeOff className="w-4 h-4" />,
+              incognito ? 'Incognito on · not saved, no memories' : 'Incognito · don’t save this chat')}
+          </>} />}>
             {/* Context used, as a thin bar along the top edge (no text; the numbers are in the tip). */}
             <EdgeMeter value={contextUsed} label="Context used" title={contextTitle} />
 
@@ -214,19 +232,19 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
                 })}
               </div>
             )}
-            <textarea ref={ta} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
-              aria-label="Message" placeholder={researchMode ? 'What do you want to research? Describe the question in your own words' : streaming ? 'Type to steer the reply…' : `Message ${model || 'Lotus'}`}
-              className="w-full resize-none bg-transparent px-4 pt-4 pb-1 text-[14px] leading-relaxed placeholder:text-[var(--color-text-muted)] focus:outline-none" />
-            <div ref={bar} className="relative flex items-center gap-1 px-2.5 pb-2.5">
+            <PromptText ref={ta} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
+              aria-label="Message" placeholder={researchMode ? 'What do you want to research? Describe the question in your own words' : streaming ? 'Type to steer the reply…' : `Message ${name}`} />
+            <div ref={bar}>
+            <PromptRow
+              attach={<>
               <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
               {/* Browser preview only: the desktop app uses the system folder dialog. */}
               <input ref={dirInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true"
                 {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
                 onChange={(e) => { const l = e.target.files; if (l?.length) void attachFolder(l); e.target.value = ''; }} />
-              <button type="button" aria-label="Attach files" data-tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}
-                className="tip w-8 h-8 inline-flex items-center justify-center rounded-full text-[var(--color-text-main)] hover:bg-[var(--hover)] active:bg-[var(--pressed)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]">
-                <Plus className="w-[18px] h-[18px]" />
-              </button>
+              <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+              </>}
+              chips={<>
               {modeBtn(thinkingOn, onToggleThinking, <Brain className="w-4 h-4" />, 'Think',
                 thinkingOn ? 'Thinking on: the model analyses, drafts and checks before answering (slower)' : 'Thinking: analyse, draft and check before answering. Takes longer, answers better.')}
               {modeBtn(webOn, onToggleWeb, <Globe className="w-4 h-4" />, 'Web',
@@ -234,16 +252,12 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
               {modeBtn(researchMode, () => setResearchMode((v) => !v), <FlaskConical className="w-4 h-4" />, 'Research',
                 researchMode ? 'Research on: sending starts a deep research task. Lotus asks a few questions, drafts a plan for you to approve, then searches scholarly sources and writes a cited report.' : 'Deep research: plan, search scholarly sources with parallel agents, and write a cited report')}
               {folderBusy && <span className="ml-1 text-[12px] text-[var(--color-text-muted)] animate-pulse" role="status">Reading folder…</span>}
-              <div className="flex-1" />
-
-              {/* Model for this chat, right where you type. */}
-              <button type="button" aria-haspopup="listbox" aria-expanded={modelOpen} onClick={() => setModelOpen((o) => !o)}
-                title="Model for this chat"
-                className={cx('h-8 max-w-[220px] inline-flex items-center gap-1 pl-2.5 pr-2 rounded-full text-[13px] transition-colors duration-100 focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]',
-                  modelOpen ? 'bg-[var(--pressed)] text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]')}>
-                <span className="truncate">{model || 'Choose a model'}</span>
-                <ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', modelOpen && 'rotate-180')} />
-              </button>
+              </>}
+              picker={<>
+              {/* Model for this chat, right where you type. Its name is the friendly one; the ID is in the tip. */}
+              <PickerButton open={modelOpen} onClick={() => setModelOpen((o) => !o)} title={model ? `Model for this chat (${model})` : 'Model for this chat'}
+                text={model ? prettyModelName(model) : 'Choose a model'}
+                chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', modelOpen && 'rotate-180')} />} />
               {modelOpen && (
                 <div role="listbox" aria-label="Models" className="material-frosted absolute bottom-full right-2 mb-2 w-[300px] max-h-[320px] overflow-y-auto p-1 rounded-[10px] z-30">
                   <p className="px-2.5 pt-1.5 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Chat model</p>
@@ -263,34 +277,18 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
                   </button>
                 </div>
               )}
-              <button type="button" onClick={toggleMic} aria-pressed={rec} aria-label={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate'} data-tip={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate (local Whisper)'}
+              </>}
+              mic={<button type="button" onClick={toggleMic} aria-pressed={rec} aria-label={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate'} data-tip={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate (local Whisper)'}
                 className={cx('tip w-8 h-8 inline-flex items-center justify-center rounded-full hover:bg-[var(--hover)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]', rec ? 'text-[var(--c-red)] animate-pulse' : 'text-[var(--color-text-main)]')}>
                 {rec ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
-              </button>
-              {streaming && !steer
+              </button>}
+              send={streaming && !steer
                 ? <SendButton stop onClick={onStop} label="Stop the reply" />
                 : <SendButton disabled={!hasText || disabled} onClick={() => void submit()} label={steer ? 'Steer the reply' : 'Send'}
                     tip={steer ? 'Steer: stop the reply here and continue from your message' : sendOnEnter ? 'Send (Enter)' : 'Send (Ctrl+Enter)'}
-                    icon={steer ? <Navigation className="w-4 h-4" /> : undefined} />}
+                    icon={steer ? <Navigation className="w-4 h-4" /> : undefined} />} />
             </div>
-          </div>
-
-          <div className="h-10 flex items-center gap-0.5 px-3">
-            {folder ? (
-              <span className="h-7 inline-flex items-center gap-1.5 pl-2 pr-0.5 rounded-[8px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] text-[13px] max-w-[220px]" title={`Lotus can read and edit files in ${folder} (saving asks first)`}>
-                <FolderOpen className="w-4 h-4 shrink-0" /><span className="truncate">{folderName(folder)}</span>
-                <IconBtn label="Stop using this folder" className="!w-6 !h-6" onClick={() => onClearFolder?.()}><X className="w-3 h-3" /></IconBtn>
-              </span>
-            ) : trayBtn(() => { if (isTauri) void attachFolder(); else dirInput.current?.click(); }, <FolderOpen className="w-4 h-4" />, 'Choose Folder', isTauri ? 'Let Lotus work in a folder: it opens, searches and edits the files it needs (saving asks first)' : "Attach a folder: its text and code files join this chat's context")}
-            {trayBtn(() => onOpenLibrary('skills'), <BookOpen className="w-4 h-4" />, 'Skills', 'The skills, memory and soul Lotus uses (Tasks page)')}
-            {trayBtn(() => onOpenLibrary('plugins'), <Puzzle className="w-4 h-4" />, 'Plugins', 'Your plugins and their / commands')}
-            <div className="flex-1" />
-            {trayToggle(memoryOn, onToggleMemory, <BrainCircuit className="w-4 h-4" />,
-              incognito ? 'Memory is off in incognito chats' : memoryOn ? 'Memory on · click to pause for this chat' : 'Memory paused · click to resume', incognito)}
-            {trayToggle(incognito, onToggleIncognito, <EyeOff className="w-4 h-4" />,
-              incognito ? 'Incognito on · not saved, no memories' : 'Incognito · don’t save this chat')}
-          </div>
-        </div>
+        </PromptShell>
       </div>
     </div>
   );

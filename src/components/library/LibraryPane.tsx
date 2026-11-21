@@ -124,8 +124,8 @@ const DocsPane: React.FC<{ tab: Exclude<LibraryTab, 'plugins'>; settings: LotusS
               <div className="flex justify-end gap-2"><Btn variant="ghost" onClick={() => setEditing(false)}>Cancel</Btn><Btn variant="primary" onClick={() => { onSettings({ systemPrompt: draft }); setEditing(false); }}>Save</Btn></div>
             </div>
           ) : view === 'source'
-            ? <pre className="selectable whitespace-pre-wrap break-words text-[12px] leading-relaxed font-mono">{doc.text}</pre>
-            : <div className="text-[14px] leading-relaxed max-w-[680px]"><FrontMatter text={doc.text} /><MarkdownLite text={stripFrontMatter(doc.text)} onDark={false} /></div>}
+            ? <pre className="selectable whitespace-pre-wrap break-words text-[12px] leading-relaxed font-mono max-w-[760px] mx-auto">{doc.text}</pre>
+            : <div className="text-[14px] leading-relaxed max-w-[720px] mx-auto"><FrontMatter text={doc.text} /><MarkdownLite text={stripFrontMatter(doc.text)} onDark={false} /></div>}
         </div>
       </>) : <p className="m-auto text-[13px] text-[var(--color-text-muted)]">Nothing here yet.</p>}
     </section>
@@ -306,7 +306,7 @@ const PluginCreator: React.FC<{ onInstalled: (id: string) => void }> = ({ onInst
   };
 
   return (
-    <div className="p-5 flex flex-col gap-4 max-w-[680px]">
+    <div className="p-5 flex flex-col gap-4 w-full max-w-[760px] mx-auto">
       <div className="flex items-start gap-3">
         <span className="w-9 h-9 shrink-0 rounded-[10px] inline-flex items-center justify-center bg-[var(--color-accent-pastel)] text-[var(--petal-violet)]"><Wand2 className="w-4.5 h-4.5" /></span>
         <div>

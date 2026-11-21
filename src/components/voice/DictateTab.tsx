@@ -95,7 +95,7 @@ const CaptureCard: React.FC<{ c: Capture; onChange: (c: Capture) => void; onDele
         <IconBtn label={copied ? 'Copied' : 'Copy'} onClick={() => { void navigator.clipboard.writeText(text); flash(); }}>{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}</IconBtn>
         <IconBtn label="Speak this" onClick={() => onSpeak(text)}><Volume2 className="w-3.5 h-3.5" /></IconBtn>
         <IconBtn label="Send to chat" onClick={() => void emitEvent('chat:prefill', text)}><MessageSquare className="w-3.5 h-3.5" /></IconBtn>
-        <IconBtn label="Delete" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+        <IconBtn label="Delete" className="hover:!text-[var(--c-red)] focus-visible:!text-[var(--c-red)]" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
       </div>
     </Card>
   );

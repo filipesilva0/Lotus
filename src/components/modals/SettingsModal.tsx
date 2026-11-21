@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { chromeOs } from '../common/TitleBar';
 import { X, Cpu, Gem, MessageSquare, Volume2, Palette, Shield, Download, SunMoon, Sparkles, Server, Sun, Moon, Wrench, SlidersHorizontal, Blocks } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { IslandSettingsPanel, VoiceSettingsPanel } from './IslandSettingsPanel';
 import { Toggle } from '../common/Toggle';
-import { Segmented, Select, IconBtn } from '../common/ui';
+import { Segmented, Select, IconBtn, InfoNote, SettingRow } from '../common/ui';
 import { PALETTES, FONTS, PAGE_PALETTE, PETAL_ORDER } from '../../styles/theme';
 import type { FontFamily } from '../../types/lotus';
 import { VIEW_TITLES } from '../rail/LeftRail';
@@ -17,6 +16,7 @@ import { kv } from '../../lib/store';
 import { ProSettings } from '../pro/ProSettings';
 import { AdvancedPanel } from './AdvancedSettings';
 import { usePro } from '../../lib/pro';
+import { prettyModelName } from '../../models/names';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -46,15 +46,7 @@ export type SettingsTab =
   | 'advanced';
 
 /** One setting: name and a sentence on the left, its control on the right (same look in every pane). */
-const Row: React.FC<{ title: string; hint?: React.ReactNode; children?: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="flex items-center justify-between gap-4 py-3">
-    <div className="min-w-0">
-      <span className="text-[13px] block">{title}</span>
-      {hint && <span className="block text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">{hint}</span>}
-    </div>
-    {children && <div className="shrink-0">{children}</div>}
-  </div>
-);
+const Row = SettingRow;
 const Group: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <section aria-label={label} className="divide-y divide-[var(--sep)] border-b border-[var(--sep)] last:border-b-0">{children}</section>
 );
@@ -105,43 +97,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // A pane hidden since it was last open (Advanced mode turned off) opens General instead.
   const tab: SettingsTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'general';
   const paneName = tabs.find((t) => t.id === tab)?.label ?? 'Settings';
-  const mac = chromeOs() === 'macos';
   const closeBtn = <IconBtn label="Close Settings" onClick={onClose}><X className="w-4 h-4" /></IconBtn>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] px-4 bg-black/25 dark:bg-black/45 select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={`Settings: ${paneName}`} className="material-frosted w-full max-w-4xl rounded-[12px] flex flex-col h-[84vh] max-h-[640px] overflow-hidden">
-        {/* HIG Settings: the title is the pane's name; a fixed pane toolbar shows which pane is open. */}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center px-2 h-10 shrink-0">
-          <div className="flex">{mac && closeBtn}</div>
-          <h2 className="text-[13px] font-semibold text-[var(--color-text-main)]">{paneName}</h2>
-          <div className="flex justify-end">{!mac && closeBtn}</div>
-        </div>
-        <nav className="shrink-0 flex justify-center gap-0.5 px-3 pb-2 border-b border-[var(--sep)] overflow-x-auto" aria-label="Settings panes" role="tablist">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sheet-backdrop select-none" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      {/* 0.20: a large sheet with the panes in a left list (it was a fixed strip of 11 icon tabs). It grows with
+          the window up to 1040 × 760, so long panes need less scrolling. */}
+      <div role="dialog" aria-modal="true" aria-label={`Settings: ${paneName}`} className="material-sheet w-[min(1040px,100%)] h-[min(760px,100%)] rounded-[12px] flex overflow-hidden">
+        <nav className="shrink-0 w-[196px] flex flex-col gap-0.5 p-2 pt-3 border-r border-[var(--sep)] bg-[var(--sheet-nav)] overflow-y-auto" aria-label="Settings panes" role="tablist" aria-orientation="vertical">
+          <p className="px-2.5 pb-2 text-[12px] font-semibold text-[var(--color-text-muted)]">Settings</p>
           {tabs.map((t) => {
             const Icon = t.icon;
             const isActive = tab === t.id;
             return (
               <button key={t.id} type="button" role="tab" aria-selected={isActive} onClick={() => setActiveTab(t.id)}
-                className={`min-w-[60px] px-1.5 pt-1.5 pb-1 flex flex-col items-center gap-0.5 rounded-[8px] text-[12px] transition-colors focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--pressed)] text-[var(--color-text-main)] font-medium' : 'text-[var(--color-text-muted)] hover:bg-[var(--hover)] hover:text-[var(--color-text-main)]'}`}>
-                <Icon className={`w-5 h-5 ${isActive ? 'text-[var(--color-accent-vibrant)]' : ''}`} strokeWidth={1.6} aria-hidden="true" />
-                <span className="whitespace-nowrap">{t.label}</span>
+                onKeyDown={(e) => {
+                  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                  e.preventDefault();
+                  const i = tabs.findIndex((x) => x.id === t.id);
+                  const n = tabs[(i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
+                  setActiveTab(n.id);
+                  (e.currentTarget.parentElement?.querySelector(`[data-pane="${n.id}"]`) as HTMLElement | null)?.focus();
+                }}
+                data-pane={t.id} tabIndex={isActive ? 0 : -1}
+                className={`h-8 px-2.5 flex items-center gap-2.5 rounded-[6px] text-[13px] text-left transition-colors focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)] ${isActive ? 'bg-[var(--color-accent-fill)] text-white font-medium' : 'text-[var(--color-text-main)] hover:bg-[var(--hover)]'}`}>
+                <Icon className="w-4 h-4 shrink-0" strokeWidth={1.8} aria-hidden="true" />
+                <span className="truncate">{t.label}</span>
               </button>
             );
           })}
         </nav>
-        <div className="flex-1 min-h-0 flex">
-        {/* Section content */}
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          {/* Body Content */}
-          <div className="flex-1 overflow-y-auto px-5 pt-2 pb-5">
+          <div className="flex items-center justify-between gap-2 pl-6 pr-2 h-12 shrink-0 border-b border-[var(--sep)]">
+            <h2 className="text-[15px] font-semibold text-[var(--color-text-main)]">{paneName}</h2>
+            {closeBtn}
+          </div>
+          {/* One scroll area per pane: panes never add a second scrolling box inside it. */}
+          <div className="flex-1 overflow-y-auto px-6 pt-2 pb-6">
+            <div className="max-w-[720px]">
             {tab === 'general' && (
               <div className="space-y-5">
                 <Group label="Background work">
                   <div className="py-3 space-y-2">
                     <Row title="Background tasks model" hint="Runs Lotus's own housekeeping: learning memories, writing skills and naming chats. A small, fast model keeps this light; the chat model is chosen next to the message box. The built-in engine holds one model at a time, so while a chat model is loaded it does this work too instead of being swapped out." />
                     <Select aria-label="Background tasks model" value={settings.backgroundModel} onChange={(e) => onUpdateSettings({ backgroundModel: e.target.value })}>
-                      <option value="">Same as the chat model{settings.selectedModel ? ` (${settings.selectedModel})` : ''}</option>
+                      <option value="">Same as the chat model{settings.selectedModel ? ` (${prettyModelName(settings.selectedModel)})` : ''}</option>
                       {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.tag ? ` · ${m.tag}` : ''}</option>)}
                       {settings.backgroundModel && !models.some((m) => m.id === settings.backgroundModel) && <option value={settings.backgroundModel}>{settings.backgroundModel} (not installed)</option>}
                     </Select>
@@ -157,7 +157,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <Toggle checked={settings.advancedMode === true} onChange={(v) => onUpdateSettings({ advancedMode: v })} ariaLabel="Advanced mode" />
                   </Row>
                 </Group>
-                <p className="text-[12px] text-[var(--color-text-muted)] leading-snug px-1">Temperature, context window, reply length, system prompt and the other model settings live with the chat they change: open Chat and show the right panel (Model). Image and voice settings are in the right panel of their pages.</p>
+                <InfoNote title="Looking for model settings?">Temperature, context window, reply length, system prompt and the other model settings live with the chat they change: open Chat and show the right panel (Model). Image and voice settings are in the right panel of their pages.</InfoNote>
               </div>
             )}
 
@@ -205,11 +205,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 py-3">
-                    <div>
-                      <span className="text-[13px] block">Accent colours</span>
-                      <span className="text-[12px] text-[var(--color-text-muted)]">Each page uses its own petal of the Lotus mark: {PETAL_ORDER.map((id) => `${VIEW_TITLES[id]} ${PALETTES[PAGE_PALETTE[id]].name.toLowerCase()}`).join(', ')}.</span>
-                    </div>
+                  <div className="py-3">
+                    <InfoNote title="Accent colours">
+                      Each page uses its own petal of the Lotus mark, so there is nothing to choose here.
+                      <span className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                        {PETAL_ORDER.map((id) => (
+                          <span key={id} className="inline-flex items-center gap-1.5 text-[var(--color-text-main)]">
+                            <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full" style={{ background: `var(--petal-${PALETTES[PAGE_PALETTE[id]].name.toLowerCase()})` }} />
+                            {VIEW_TITLES[id]}<span className="sr-only"> {PALETTES[PAGE_PALETTE[id]].name.toLowerCase()}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </InfoNote>
                   </div>
 
                   <div className="flex items-center justify-between gap-4 py-3">
@@ -251,9 +258,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {tab === 'advanced' && <AdvancedPanel settings={settings} onUpdateSettings={onUpdateSettings} />}
 
             {tab === 'licenses' && <PrivacyPanel settings={settings} />}
+            </div>
           </div>
-
-        </div>
         </div>
       </div>
     </div>

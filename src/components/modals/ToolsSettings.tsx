@@ -2,30 +2,23 @@
 // folders the file tools may use, deny rules, and the list of tools the core offers.
 
 import React, { useEffect, useState } from 'react';
-import { Tip } from '../common/Tip';
 import { FolderPlus, X } from 'lucide-react';
 import { LotusSettings } from '../../types/lotus';
 import { Toggle } from '../common/Toggle';
-import { Btn, IconBtn, Segmented, TextArea } from '../common/ui';
+import { Btn, IconBtn, Segmented, TextArea, SettingRow } from '../common/ui';
 import { agentAvailable, listTools, type ToolInfo } from '../../lib/agent';
 import { DEFAULT_DENY } from '../../agents/toolDefaults';
 import { isTauri } from '../../lib/http';
 import { kv } from '../../lib/store';
 import { ALLOW_KEY, describeAllow, parseAllow } from '../../lib/allowRules';
+import { toolLabel } from '../../lib/toolLabel';
 
 interface P { settings: LotusSettings; onUpdateSettings: (p: Partial<LotusSettings>) => void }
 
-const Row: React.FC<{ title: string; hint: React.ReactNode; children?: React.ReactNode }> = ({ title, hint, children }) => (
-  <div className="py-3.5 border-b border-[var(--sep)] last:border-b-0 flex items-center justify-between gap-4">
-    <div className="min-w-0">
-      <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-[var(--color-text-main)]">{title}<Tip label={title} /></span>
-      <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5 leading-snug">{hint}</p>
-    </div>
-    {children}
-  </div>
-);
+const Row: React.FC<{ title: string; hint: React.ReactNode; children?: React.ReactNode }> = (p) => <SettingRow {...p} tip />;
 
-const RISK: Record<ToolInfo['risk'], string> = { read: 'Looks only', write: 'Changes Lotus data', risky: 'Changes your files' };
+const RISK_GROUP: Record<ToolInfo['risk'], string> = { read: 'Only looks (never asks)', write: 'Changes Lotus’s own data (tasks, memory, images)', risky: 'Changes your files or computer (asks first unless you chose Never)' };
+
 
 export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) => {
   const [tools, setTools] = useState<ToolInfo[] | null>(null);
@@ -125,19 +118,20 @@ export const ToolsPanel: React.FC<P> = ({ settings: s, onUpdateSettings: set }) 
         <span className="text-[13px] font-semibold">Tools</span>
         {!live && <p className="text-[12px] text-[var(--color-text-muted)]">Tools run in Lotus’s background service, which isn’t running here. They work in the desktop app.</p>}
         {error && <p className="text-[12px] text-[var(--c-red)]">Couldn’t read the tool list: {error}</p>}
-        {tools && (
-          <ul className="divide-y divide-[var(--sep)]">
-            {tools.map((t) => (
-              <li key={t.name} className="py-2 flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <span className="text-[13px]">{t.label}</span> <code className="text-[12px] text-[var(--color-text-muted)]">{t.name}</code>
-                  <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{t.description}</p>
-                </div>
-                <span className="text-[12px] text-[var(--color-text-muted)] shrink-0">{RISK[t.risk]}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* 0.20: what each tool does, in plain words, grouped by what it can touch. The descriptions written for
+            the model ("Read the file first and copy the passage exactly…") are no longer shown here. */}
+        {tools && (['read', 'write', 'risky'] as const).map((risk) => {
+          const list = tools.filter((t) => t.risk === risk);
+          if (!list.length) return null;
+          return (
+            <div key={risk} className="pt-1">
+              <p className="text-[12px] font-semibold text-[var(--color-text-muted)] mb-1">{RISK_GROUP[risk]}</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {list.map((t) => <li key={t.name} title={t.name} className="h-7 px-2.5 inline-flex items-center rounded-[6px] bg-[var(--hover)] text-[12px]">{toolLabel(t.label)}</li>)}
+              </ul>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
