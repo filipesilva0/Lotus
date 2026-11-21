@@ -21,7 +21,7 @@ import { MaskEditor } from '../images/MaskEditor';
 import { LoraPicker } from '../images/LoraPicker';
 import { ImageViewer } from '../images/ImageViewer';
 import { recipeFor } from '../../setup/catalog';
-import { FAMILIES, RESOLUTIONS, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
+import { FAMILIES, RESOLUTIONS, imageStage, resolutionFit, sizeFor, type ImageProfile } from '../../models/imageProfiles';
 
 const ASPECTS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '21:9'];
 interface Style { id: string; name: string; prompt: string; negative?: string }
@@ -214,7 +214,7 @@ export const ImageWorkspace: React.FC<Props> = ({ g, comfyUp, checkpoints, onOpe
                 <div role="status" className="absolute inset-x-6 bottom-6 mx-auto max-w-[420px] p-3.5 rounded-[12px] material-overlay">
                   <div className="flex items-center justify-between text-[13px] mb-2">
                     <span className="font-medium">{g.label}…</span>
-                    <span className="tabular-nums text-[var(--color-text-muted)]">{g.step ? `Step ${g.step.step} of ${g.step.total} · ` : ''}{Math.floor(g.elapsed)}s</span>
+                    <span className="tabular-nums text-[var(--color-text-muted)]">{imageStage(g.step, builtin)}{Math.floor(g.elapsed)}s</span>
                   </div>
                   <Progress label="Generating" value={g.step && g.step.total ? g.step.step / g.step.total : null} />
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 text-[12px] text-[var(--color-text-muted)]">
