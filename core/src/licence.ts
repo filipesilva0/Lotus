@@ -35,6 +35,8 @@ export interface ProConfig {
   portalUrl: string;
   /** Freemius product id. Public, not a secret. Empty: keys can't be activated yet. */
   productId: string;
+  /** Freemius public key (pk_…), for the checkout link. Public, not a secret. */
+  publicKey: string;
   /** Test build: shows the Lotus Pro pane before launch (for a Freemius sandbox product). */
   test: boolean;
 }
@@ -44,7 +46,9 @@ export const PRO_CONFIG: ProConfig = {
   locks: false,
   buyUrl: '',
   portalUrl: '',
-  productId: '',
+  // Lotus Pro on Freemius (set up 2026-11-21). Both are public; the secret key never goes in the app.
+  productId: '45920',
+  publicKey: 'pk_4142d1716197ac0d93e6ba4aaf586',
   test: false,
 };
 
