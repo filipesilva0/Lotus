@@ -6,8 +6,7 @@
 
   The three identity values below must match the app's "Product identity" page in Partner Center
   (Package/Identity/Name, Package/Identity/Publisher, Package/Properties/PublisherDisplayName).
-  Until the Store account exists they are placeholders: the package still builds, but the Store
-  will not accept it. The workflow prints a warning while they are placeholders.
+  DisplayName must be the app name reserved in Partner Center.
 
   Logos in Assets/ are made from src-tauri/icons/icon.png.
 -->
@@ -17,13 +16,13 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap rescap">
   <Identity
-    Name="LotusPlaceholder.Lotus"
-    Publisher="CN=LOTUS-PLACEHOLDER"
+    Name="LotusLocalAIStudio.Lotus-LocalAIStudio"
+    Publisher="CN=552A392A-6D68-465C-86F1-8DDF5201B0A9"
     Version="0.0.1.0"
     ProcessorArchitecture="x64" />
   <Properties>
-    <DisplayName>Lotus AI Studio</DisplayName>
-    <PublisherDisplayName>Lotus</PublisherDisplayName>
+    <DisplayName>Lotus - Local AI Studio</DisplayName>
+    <PublisherDisplayName>Lotus Local AI Studio</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Dependencies>
@@ -36,7 +35,7 @@
   <Applications>
     <Application Id="Lotus" Executable="Lotus.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="Lotus AI Studio"
+        DisplayName="Lotus - Local AI Studio"
         Description="Your own AI. Chat, talk, make images and get things done on your own PC."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\MedTile.png"

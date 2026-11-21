@@ -7,7 +7,7 @@ can paste as is. The package to upload is `Lotus-windows-x64.msix` from the newe
 
 Try these in order and keep the first one Partner Center accepts:
 
-1. **Lotus AI Studio** (recommended, and already set in `src-tauri/msix/Package.appxmanifest`)
+1. **Lotus - Local AI Studio** (reserved, and set in `src-tauri/msix/Package.appxmanifest`)
 2. Lotus: Your Own AI
 3. Lotus Local AI
 4. Lotus Studio for AI
@@ -58,7 +58,7 @@ keep 100%.
 
 ## 6. Store listing (English)
 
-**Product name:** Lotus AI Studio
+**Product name:** Lotus - Local AI Studio
 
 **Short description (up to 100 characters for some views):**
 
