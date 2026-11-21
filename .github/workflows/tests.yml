@@ -37,8 +37,13 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('core/bun.lock') }}
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'core/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
+      # The core shares document parsing with the app (src/lib/docParse.ts), which imports packages
+      # from the top-level package.json, so those are installed too.
+      - name: Install app packages
+        working-directory: .
+        run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun test
