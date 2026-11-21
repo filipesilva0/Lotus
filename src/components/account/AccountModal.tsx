@@ -37,7 +37,7 @@ export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: 
             : (
               <div className="flex items-center gap-3 p-3 rounded-[10px] bg-[var(--hover)]">
                 <Avatar user={null} size={36} />
-                <p className="flex-1 text-[13px] text-[var(--color-text-main)]">Not signed in. Your usage below is counted on this computer; sign in to keep your studio in sync between PCs.</p>
+                <p className="flex-1 text-[13px] text-[var(--color-text-main)]">Not signed in, and you don't need to be. Your usage below is counted on this computer. Signing in is optional and only keeps your profile in sync between PCs.</p>
                 <Btn variant="primary" onClick={() => onView('signin')}>Sign In</Btn>
               </div>
             )}
@@ -53,7 +53,7 @@ export const AccountModal: React.FC<{ open: boolean; view: AccountView; onView: 
 const NoServer: React.FC<{ onSetUp: () => void }> = ({ onSetUp }) => (
   <div className="flex flex-col gap-3 text-[13px]">
     <p className="text-[var(--color-text-main)] leading-relaxed">
-      A Lotus account keeps your studio in sync between PCs. Accounts live on a sync server, and none is set up yet.
+      A Lotus account is optional. It keeps your profile in sync between PCs. Accounts live on a sync server you choose, and none is set up yet.
     </p>
     <p className="text-[var(--color-text-muted)] leading-relaxed">
       You can use a free Supabase project or host one yourself. Everything else in Lotus keeps working without an account.

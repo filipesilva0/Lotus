@@ -39,7 +39,7 @@ running entirely on models that live on your own computer.
 
 Lotus is a small desktop app that brings everything you do with local AI into one place. It comes with its own engines, so there is nothing else to install: pick a chat, an image and a voice model in the setup guide and start. If you already use **Ollama**, **ComfyUI** or **Voicebox**, Lotus can drive those instead.
 
-No accounts. No cloud. No telemetry. Turn off your Wi-Fi and it keeps working.
+Local-first. No account needed and no telemetry. Turn off your Wi-Fi and it keeps working. Sign-in and sync between PCs are optional: they stay off until you set up your own sync server and sign in.
 
 > [!NOTE]
 > **Lotus is an early preview.** Every feature below exists in the code, and builds are published for Windows, macOS and Linux. Expect rough edges.
@@ -228,6 +228,7 @@ The setup guide and the Models page download only what you pick, and only from e
 | **Chrome control** in Work | Only when you turn it on in Settings → Tools, and each action asks first | Whatever the pages Lotus opens for you would receive from any browser |
 | **Deep Research** | Only during a research run | Short keyword queries to the academic databases you tick |
 | **Engine and model downloads** | Only when you pick them in the setup guide or press *Get* / *Download* | A request to that project's own site (see above) or the link you pasted |
+| **Sign-in and sync** | Only if you set up a sync server and sign in (profile picture → Set Up Sync Server). Off by default, and Lotus never asks you to | Your email, password and profile (name and picture) to the sync server *you* chose, such as your own Supabase project. Nothing goes to a Lotus server: there isn't one. |
 | **Update check** | When you press the button, or at launch if you opt in | A request to this repository's Releases |
 
 No telemetry, no analytics, no remote fonts. Your chats, settings, tasks and memory live in a single file in `Lotus Studio/Data` (`lotus.db`), images in `Lotus Studio/Images`, and skills are plain files you can open and edit. Lotus's background core (lotusd) listens only on `127.0.0.1`, on a port picked at each start, and answers only Lotus's own windows (each run gets a new random key). The full list of hosts is in [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md).
