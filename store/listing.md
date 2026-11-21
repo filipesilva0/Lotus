@@ -30,14 +30,15 @@ On **Product management → Product identity**, copy these three lines and send 
 - Visibility: public, discoverable in the Store
 
 When Lotus Pro launches (not now): tick the option that the product uses a third-party payment
-system for in-app purchases. Non-game apps may sell through their own payment provider (Polar) and
+system for in-app purchases. Non-game apps may sell through their own payment provider (Freemius) and
 keep 100%.
 
 ## 4. Properties
 
 - Category: **Productivity** (subcategory: none)
-- Privacy policy URL: https://github.com/filipesilva0/Lotus/blob/main/PRIVACY.md
+- Privacy policy URL: https://github.com/filipesilva0/Lotus/blob/main/docs/legal/PRIVACY.md
 - Website: https://github.com/filipesilva0/Lotus
+- Terms of use (if asked): https://github.com/filipesilva0/Lotus/blob/main/docs/legal/TERMS.md
 - Support contact: https://github.com/filipesilva0/Lotus/issues
 - Product declarations: tick "This app has been tested to meet accessibility guidelines" only if
   you have checked it; leave the others as they are.
