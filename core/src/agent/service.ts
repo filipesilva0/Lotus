@@ -17,7 +17,7 @@ import { resolve } from 'node:path';
 import type { Db } from '../db';
 import { kvApply, kvGet } from '../kv';
 import { engineChoice } from '../../../src/lib/engineDefaults';
-import { APPROVAL_WAIT_MS, runAgent } from './loop';
+import { APPROVAL_WAIT_MS, runAgent, type AgentOutcome } from './loop';
 import { allowedBy, DEFAULT_DENY, isApprovalMode, parseRules } from './policy';
 import { Registry } from './registry';
 import { closeStaleRuns, finishRun, getRun, listRuns, pruneRuns, RUN_SOURCES, saveStep, startRun, type RunSource } from './runs';
@@ -88,7 +88,17 @@ export function readAllowRules(db: Db): string[] {
   try { const v = JSON.parse(kvGet(db, ALLOW_KEY) || '[]'); return Array.isArray(v) ? v.map(String).filter(Boolean) : []; } catch { return []; }
 }
 
-export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp' | 'builtin'; llamacppUrl: string; contextWindow: number; autoScale: boolean; enabled: boolean; computerUse: boolean; browserUse: boolean }
+export interface AgentSettings { approval: ApprovalMode; deny: string[]; folders: string[]; backend: 'ollama' | 'llamacpp' | 'builtin'; llamacppUrl: string; contextWindow: number; autoScale: boolean; enabled: boolean; computerUse: boolean; browserUse: boolean;
+  /** Settings → Engines "Most background agents at once" (0.20.0: Work's agents follow it too). */
+  maxSubagents: number }
+
+/**
+ * How many of Work's agents run at once. Lotus's own engine serves one request at a time, so there they
+ * take turns; Ollama and other servers run up to 3, never more than the user's "Most background agents".
+ */
+export function deployLimit(s: Pick<AgentSettings, 'backend' | 'maxSubagents'>): number {
+  return s.backend === 'builtin' ? 1 : Math.max(1, Math.min(3, s.maxSubagents));
+}
 
 export function readAgentSettings(db: Db): AgentSettings {
   let s: Record<string, unknown> = {};
@@ -104,6 +114,7 @@ export function readAgentSettings(db: Db): AgentSettings {
     enabled: s.agentTools !== false,
     computerUse: s.computerUse === true,
     browserUse: s.browserUse === true,
+    maxSubagents: typeof s.maxSubagents === 'number' && s.maxSubagents >= 1 ? Math.floor(s.maxSubagents) : 4,
   };
 }
 
@@ -291,7 +302,7 @@ export class AgentService {
               const batch = `b${++batchSeq}`;
               const seqs = jobs.map(() => ++helperSeq);
               jobs.forEach((j, i) => emit({ kind: 'helper', helper: { id: `${runId}-h${seqs[i]}`, name: j.name || `Helper ${seqs[i]}`, goal: j.goal.slice(0, 200), status: 'queued', steps: 0, batch, started: Date.now() } }));
-              return pool(jobs.map((j, i) => () => this.helper(runId, seqs[i], { ...helperBase, goal: j.goal, context, name: j.name, batch })), s.backend === 'builtin' ? 1 : 3);
+              return pool(jobs.map((j, i) => () => this.helper(runId, seqs[i], { ...helperBase, goal: j.goal, context, name: j.name, batch })), deployLimit(s));
             } : undefined },
           signal: ctrl.signal,
           emit,
@@ -301,9 +312,10 @@ export class AgentService {
           },
           approve: (st) => this.waitFor(runId, st, ctrl.signal, !!a.unattended),
         });
-        const status = ctrl.signal.aborted ? 'stopped' : 'done';
+        // 0.20.0: a run that never answered is not "done" (the 0.19 review saw a green check on one).
+        const status = ctrl.signal.aborted ? 'stopped' : out.finished ? 'done' : 'error';
         finishRun(this.o.db, runId, { status, reply: out.content, mode: out.mode, unverified: out.unverified });
-        emit({ kind: 'done', content: out.content, unverified: out.unverified, steps: out.steps.length, mode: out.mode });
+        emit({ kind: 'done', content: out.content, unverified: out.unverified, steps: out.steps.length, mode: out.mode, ...(out.finished ? {} : { unfinished: true }) });
       } catch (e) {
         // Only Stop ends a run quietly. An engine request cut off for another reason (the engine was
         // restarted or swapped models, or Lotus is closing) is an error that says why, so the reply
@@ -358,7 +370,7 @@ export class AgentService {
         record: (st, seq) => saveStep(this.o.db, { ...st, runId }, 1000 * n + seq),
         approve: h.approve,
       });
-      const ok = out.steps.every((x) => x.status !== 'error') || !!out.content;
+      const ok = helperSucceeded(out);
       tell({ status: h.signal.aborted ? 'stopped' : ok ? 'done' : 'error', steps: out.steps.length, current: undefined, result: out.content.slice(0, 400), finished: Date.now() });
       const sources = helperSources(out.steps);
       const searched = h.tools.some((t) => t.name.startsWith('web.'));
@@ -459,6 +471,16 @@ export class AgentService {
   running() { return [...this.runs.keys()]; }
 }
 
+
+/**
+ * 0.20.0: a helper is Done only when it really answered and its steps didn't all fail. Before, any
+ * text counted, so "I stopped after several tool steps without a final answer" after 8 failed
+ * searches showed a green check.
+ */
+export function helperSucceeded(out: Pick<AgentOutcome, 'finished' | 'steps' | 'content'>): boolean {
+  if (!out.finished || !out.content.trim()) return false;
+  return !out.steps.length || out.steps.some((x) => x.status === 'done');
+}
 
 /** Runs async jobs with at most `limit` at once; results keep the jobs' order. */
 export async function pool<T>(jobs: (() => Promise<T>)[], limit: number): Promise<T[]> {

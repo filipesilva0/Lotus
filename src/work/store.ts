@@ -242,9 +242,10 @@ export function useWork(settings: LotusSettings) {
       }, ctrl.signal);
       patchMsg(workId, reply.id, (m) => ({ ...m, content: done.content || m.content, unverified: done.unverified.length ? done.unverified : undefined,
         ...(thinkStart && m.thinkingMs === undefined ? { thinkingMs: Date.now() - thinkStart } : {}) }));
-      reportActivity({ id: activity, kind: 'build', label: 'Work done', done: true });
+      // 0.20.0: a run that never answered says so instead of "Work done".
+      reportActivity({ id: activity, kind: 'build', label: done.unfinished ? "Didn't finish" : 'Work done', done: true });
       void refreshArtifacts(workId);
-      if (voicePrefs().notify && done.content) void speak(`Done. ${done.content.split(/(?<=[.!?])\s/)[0]}`);
+      if (voicePrefs().notify && done.content) void speak(done.unfinished ? "Lotus couldn't finish the work." : `Done. ${done.content.split(/(?<=[.!?])\s/)[0]}`);
       return done.content;
     } catch (e) {
       const msg = (e as Error).message;

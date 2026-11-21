@@ -55,12 +55,15 @@ import { chromeOs } from './components/common/TitleBar';
 import type { ColorPalette } from './types/lotus';
 import { kv } from './lib/store';
 import { engineReady, hasImageFile, useBuiltins, useProfiles } from './lib/builtins';
+import { entryById, LIBRARY, preferredChatModel } from './models/library';
 import { missingFor } from './models/imageProfiles';
 import { linkComfyModels } from './services/engineControl';
 
 import { DEFAULT_DENY } from './agents/toolDefaults';
 import { prettyModelName } from './models/names';
 import { setSoul } from './lib/identity';
+import { fixSavedTemperature } from './chat/sampling';
+
 const SETTINGS_KEY = 'lotus.settings.v1';
 const SESSIONS_KEY = 'lotus.sessions.v1';
 /** Help › Lotus Help opens the user guide (the project README) in the browser. */
@@ -140,6 +143,9 @@ function loadSettings(): LotusSettings {
   // English. Move it to Auto once; a language picked after this stays.
   if (saved.whisperLanguage === 'English' && !kv.getItem('lotus.whisperAuto.v1')) saved.whisperLanguage = 'Auto';
   try { kv.setItem('lotus.whisperAuto.v1', '1'); } catch { /* memory only */ }
+  // 0.20.0: a temperature left at the slider's maximum (2.00) goes back to 0.7, once.
+  if (saved.temperature !== undefined) saved.temperature = fixSavedTemperature(saved.temperature, !!kv.getItem('lotus.tempFix.v1'));
+  try { kv.setItem('lotus.tempFix.v1', '1'); } catch { /* memory only */ }
   // Installs from before session 17 keep the engines they were set up with (Ollama, ComfyUI, Voicebox);
   // Settings → Engines switches them to the built-in ones.
   // 0.18.0: people who used Lotus before Advanced mode existed keep seeing everything they saw.
@@ -366,7 +372,8 @@ export default function App() {
     if (!builtinChat) return;
     const list = builtinChatModels;
     setModels(list.map((m) => ({ id: m.id, name: m.title, tag: m.custom ? 'Added by you' : 'Built in' })));
-    setSettings((s) => (list.length && !list.some((m) => m.id === s.selectedModel) ? { ...s, selectedModel: list[0].id } : s));
+    const best = preferredChatModel(list, (m) => (m.entryId ? entryById(m.entryId) : undefined), builtins.machine?.vramGb, builtins.machine?.unified);
+    setSettings((s) => (best && !list.some((m) => m.id === s.selectedModel) ? { ...s, selectedModel: best.id } : s));
   }, [builtinChat, builtinChatModels.map((m) => m.id).join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!ollamaUp || !serverChat) return;
@@ -379,7 +386,8 @@ export default function App() {
     if (!ollamaUp || builtinChat || serverChat) return;
     ollamaClient.listModels().then((list) => {
       setModels(list.map((m) => ({ id: m.name, name: prettyModelName(m.name), tag: [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean).join(' · ') || 'Local' })));
-      setSettings((s) => (list.length && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: list[0].name } : s));
+      const best = preferredChatModel(list, (m) => LIBRARY.find((e) => e.kind === 'chat' && e.ollama && (e.ollama === m.name || `${e.ollama}:latest` === m.name)), builtins.machine?.vramGb, builtins.machine?.unified);
+      setSettings((s) => (best && !list.some((m) => m.name === s.selectedModel) ? { ...s, selectedModel: best.name } : s));
     }).catch(() => undefined);
   }, [ollamaUp, chatModelsDone, builtinChat, serverChat]);
   useEffect(() => { if (comfyUp) comfy.imageModels().then(setCheckpoints).catch(() => setCheckpoints([])); }, [comfyUp, imageFilesDone]);

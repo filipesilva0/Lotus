@@ -159,6 +159,10 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
           {live && p.running > 0 && <span className="font-normal">{p.running} working</span>}
           {interrupted && <span className="font-normal">Cut off</span>}
         </p>
+        {live && agents.some((h) => h.status === 'queued') && (
+          // 0.20.0: say why some agents wait, instead of leaving three numbers that disagree.
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5" role="status">Agents take turns when the chat engine can't run them all at once. Lotus's own engine runs one at a time.</p>
+        )}
         <div className="mt-1.5 h-1 rounded-full bg-[var(--hover)] overflow-hidden" role="progressbar" aria-label="Agents done" aria-valuemin={0} aria-valuemax={p.total} aria-valuenow={finished}>
           <div className="h-full rounded-full bg-[var(--color-accent-vibrant)] transition-[width] duration-300" style={{ width: `${p.total ? (finished / p.total) * 100 : 0}%` }} />
         </div>

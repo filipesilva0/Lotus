@@ -3,6 +3,7 @@ import { prettyModelName } from '../../models/names';
 import { Cpu, RefreshCw } from 'lucide-react';
 import { hardware, useHardware } from '../../hardware/monitor';
 import { useAgentPool } from '../../agents/pool';
+import { statusOf } from '../../hardware/scaler';
 import { Card, Gauge, IconBtn, cx } from '../common/ui';
 import { KV } from '../common/Pane';
 
@@ -24,14 +25,13 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
   const p = h.plan;
   const running = pool.jobs.filter((j) => j.status === 'running').length;
   const queued = pool.jobs.length - running;
+  const status = statusOf(p);
   return (
     <Card className={cx('p-3.5', className)}>
       <div className="flex items-center gap-2 mb-2">
         <Cpu className="w-4 h-4 text-[var(--color-accent-vibrant)]" aria-hidden="true" />
         <span className="text-[13px] font-semibold flex-1">Auto-scaling to video memory</span>
-        <span className={cx('text-[12px] font-medium', p.pressure === 'critical' ? 'text-[var(--c-red)]' : p.pressure === 'tight' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>
-          {p.pressure === 'critical' ? 'Almost full' : p.pressure === 'tight' ? 'Tight' : p.pressure === 'ok' ? 'Plenty free' : ''}
-        </span>
+        {status && <span className={cx('text-[12px] font-medium', status.tone === 'red' ? 'text-[var(--c-red)]' : status.tone === 'orange' ? 'text-[var(--c-orange)]' : 'text-[var(--color-text-muted)]')}>{status.label}</span>}
         <IconBtn label="Measure again" className="!w-6 !h-6" onClick={() => void hardware.refresh()}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>
       </div>
       {g ? (
@@ -42,7 +42,7 @@ export const ScalingCard: React.FC<{ className?: string; compact?: boolean }> = 
       ) : <p className="text-[12px] text-[var(--color-text-muted)]">Video memory could not be read (no NVIDIA/AMD driver reader answered and ComfyUI isn't running).</p>}
       <div className="mt-2.5 grid grid-cols-3 gap-2">
         <Stat label="Context window" value={`${p.numCtx.toLocaleString()}`} unit="tokens" />
-        <Stat label="Background agents" value={`${running}/${p.maxSubagents}`} unit={queued ? `${queued} waiting` : 'running / allowed'} />
+        <Stat label="Background agents" value={`${running} of ${p.maxSubagents}`} unit={queued ? `${queued} waiting` : p.maxSubagents === 1 ? 'one at a time' : 'running at once'} />
         <Stat label="Model size that fits" value={p.recommendedParamsB ? `≤ ${p.recommendedParamsB}B` : '—'} unit="4-bit, 8K context" />
       </div>
       {!compact && (

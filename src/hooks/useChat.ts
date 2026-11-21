@@ -26,7 +26,7 @@ import { wantsImage, wantsInstall } from '../chat/promptParts';
 import { imageInstructions } from '../chat/imageProposal';
 import { imageChoices } from '../chat/imageChoices';
 import { installTarget } from '../setup/jobs';
-import { shouldRename, suggestTitle } from '../chat/rename';
+import { shouldRename, suggestTitle, withFinishedReply } from '../chat/rename';
 import { pluginSystemBlock } from '../plugins/store';
 import { noteChatSuccess } from '../lib/pro';
 import { kv, storeMode } from '../lib/store';
@@ -124,8 +124,11 @@ export function useChat(settings: LotusSettings) {
   }, []);
 
   /** After the first reply: let the background tasks model name the chat (only if Lotus chose the title). */
-  const autoRename = useCallback((sid: string) => {
-    const s = ref.current.find((x) => x.id === sid);
+  const autoRename = useCallback((sid: string, aiId?: string, reply?: string) => {
+    const now = ref.current.find((x) => x.id === sid);
+    // 0.20.0: React may not have applied the end of the stream yet, so the reply that just finished
+    // still looked "streaming" and the chat kept its first message as its name. Use what we know.
+    const s = now && aiId ? withFinishedReply(now, aiId, reply ?? '') : now;
     if (!s || !setRef.current.autoRename || !shouldRename(s)) return;
     const was = s.title;
     void suggestTitle(s).then((title) => {
@@ -154,7 +157,7 @@ export function useChat(settings: LotusSettings) {
     const budget = Math.max(4000, plan.contextBudgetTokens * 4);
     const tools: ChatToolCall[] = [];
     const tool = (label: string, detail?: string) => { const t: ChatToolCall = { id: uid('t'), label, status: 'running', detail }; tools.push(t); patchMsg(sid, aiId, { tools: [...tools] }); return t.id; };
-    const toolDone = (id: string, status: 'done' | 'error', detail?: string) => { const k = tools.findIndex((t) => t.id === id); if (k >= 0) { tools[k] = { ...tools[k], status, detail: detail ?? tools[k].detail }; patchMsg(sid, aiId, { tools: [...tools] }); } };
+    const toolDone = (id: string, status: 'done' | 'error', detail?: string, empty?: boolean) => { const k = tools.findIndex((t) => t.id === id); if (k >= 0) { tools[k] = { ...tools[k], status, detail: detail ?? tools[k].detail, ...(empty ? { empty: true } : {}) }; patchMsg(sid, aiId, { tools: [...tools] }); } };
 
     try {
       if (!o.model) throw new Error('No model selected. Open Models to download one.');
@@ -201,7 +204,7 @@ export function useChat(settings: LotusSettings) {
           try {
             const found = await searchWebFull(plan.query, { provider: s.webSearchProvider, searxngUrl: s.searxngUrl, limit: 6, signal: ctrl.signal });
             results = found.results.slice(0, 6);
-            toolDone(sid1, 'done', `${results.length} results · ${found.provider}`);
+            toolDone(sid1, 'done', results.length ? `${results.length} result${results.length === 1 ? '' : 's'} · ${found.provider}` : `No results for “${plan.query}” · ${found.provider}`, !results.length);
           } catch (e) {
             if (ctrl.signal.aborted) throw e;
             toolDone(sid1, 'error', (e as Error).message);
@@ -282,7 +285,7 @@ export function useChat(settings: LotusSettings) {
       // shows each step with its real result. Thinking mode runs there too (analysis → tools → review,
       // core/src/agent/think.ts); the multi-pass pipeline below is only for the browser preview or tools off.
       if (s.agentTools !== false && agentAvailable()) {
-        const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, always: st.status === 'waiting' ? st.always : undefined, media: st.media });
+        const toCall = (st: AgentStep): ChatToolCall => ({ id: st.id, label: st.label, status: st.status, detail: st.status === 'waiting' ? undefined : st.detail, tool: st.tool, runId: st.runId, ask: st.status === 'waiting' ? st.ask : undefined, always: st.status === 'waiting' ? st.always : undefined, media: st.media, ...(st.data?.empty === true ? { empty: true } : {}) });
         setRaw({ request: { agent: true, model: o.model, messages: turns.length, web: !!o.web, memory: memOn }, response: null, at: Date.now() });
         const done = await runAgent({
           model: o.model, prompt: o.query ?? '', chatId: sid,
@@ -358,7 +361,7 @@ export function useChat(settings: LotusSettings) {
     }
 
     if (!ctrl.signal.aborted && acc) afterReply(sid, aiId, o, usedSkillIds);
-    if (!ctrl.signal.aborted && acc) autoRename(sid);
+    if (!ctrl.signal.aborted && acc) autoRename(sid, aiId, acc);
     // 0.18.0: the first chat that works starts the Pro trial (nothing happens while Pro isn't launched).
     if (!ctrl.signal.aborted && acc) noteChatSuccess();
 

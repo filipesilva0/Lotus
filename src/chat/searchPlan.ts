@@ -5,7 +5,7 @@
 // the latest message needs the web and, if so, a query that stands on its own. If the model can't answer
 // in that shape (or takes too long), a simple rule does the same job less cleverly.
 
-import { queryFromMessage } from './webQuery';
+import { queryFromMessage, stripMarkdown } from './webQuery';
 
 export interface PlanMsg { role: 'user' | 'assistant' | 'system'; content: string }
 export interface SearchPlan { search: boolean; query: string; by: 'model' | 'rule' }
@@ -41,7 +41,7 @@ export function parsePlan(raw: string): { search: boolean; query: string } | nul
     if (/^no[\s_-]*search\b/i.test(line)) return { search: false, query: '' };
     const m = /^search\s*(?:query)?\s*[:：-]\s*(.+)$/i.exec(line);
     if (m) {
-      const query = m[1].replace(/^["'“”‘’<\[]+|["'“”‘’>\].]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const query = stripMarkdown(m[1]).replace(/^["'“”‘’<\[]+|["'“”‘’>\].]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 200);
       return query.length >= 2 && !/^<?query>?$/i.test(query) ? { search: true, query } : null;
     }
   }
@@ -64,6 +64,8 @@ export function rulePlan(history: PlanMsg[], message: string): SearchPlan {
   const m = message.replace(/\s+/g, ' ').trim();
   if (m.length < 3 || SMALL_TALK.test(m) || NO_SEARCH.test(m)) return { search: false, query: '', by: 'rule' };
   let query = queryFromMessage(m) || m.slice(0, 200);
+  // 0.20.0: a long message is not a query. Its main words are (search engines find little for a paragraph).
+  if (query.split(' ').length > 20) query = keywords(query, 10).join(' ') || query.split(' ').slice(0, 12).join(' ');
   const prevUser = [...history].reverse().find((x) => x.role === 'user' && x.content.trim() && x.content.trim() !== m);
   const words = m.split(' ').length;
   if (prevUser && (FOLLOW_UP.test(m) || words <= 6)) {
