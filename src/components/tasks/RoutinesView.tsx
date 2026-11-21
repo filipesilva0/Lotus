@@ -51,7 +51,7 @@ const Editor: React.FC<{ r: Routine; onShowRuns?: (r: Routine) => void }> = ({ r
         <span className="text-[13px] font-semibold flex-1 truncate">{r.name}</span>
         <Toggle size="sm" checked={r.enabled} onChange={(v) => store.update(r.id, { enabled: v })} ariaLabel={r.enabled ? 'Routine on' : 'Routine off'} />
         <Btn size="sm" icon={r.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />} disabled={r.running} onClick={() => store.run(r.id)}>Run Now</Btn>
-        <IconBtn label="Delete routine" onClick={() => store.remove(r.id)}><Trash2 className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Delete routine" onClick={() => store.removeWithUndo(r.id)}><Trash2 className="w-4 h-4" /></IconBtn>
       </PaneBar>
       <div className="flex-1 overflow-y-auto">
         <Section title="What to do">

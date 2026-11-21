@@ -413,7 +413,7 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
   try {
     r = await tool.run(args, { ...d.ctx, signal: d.signal, progress: (detail) => update({ detail }) });
   } catch (e) {
-    const msg = (e as Error)?.name === 'AbortError' ? 'Stopped' : (e as Error)?.message || String(e);
+    const msg = (e as Error)?.name === 'AbortError' ? (d.signal.aborted ? 'Stopped by you' : 'Cut off: the request was cancelled before it finished (a timeout, or the engine restarted)') : (e as Error)?.message || String(e);
     update({ status: 'error', detail: msg, finished: Date.now() });
     return `Error: ${msg}`;
   }

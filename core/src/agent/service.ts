@@ -36,6 +36,11 @@ import { avatarCreate } from '../tools/avatar';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** What a run's history says when you pressed Stop. */
+export const STOPPED_BY_YOU = 'You stopped this run.';
+/** A run whose engine request was cut off without Stop (engine restarted, model swapped, Lotus closing). */
+export const ENGINE_CUT_OFF = 'The chat engine stopped before this finished (it was restarted, switched models, or Lotus was closing). Steps already done and saved files are kept. Press Try again, or say "keep going".';
+
 export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS, ...SOUL_TOOLS, imageGenerate, ...MEMORY_TOOLS, ...WEB_TOOLS, ...WORK_TOOLS, ...COMPUTER_TOOLS, ...BROWSER_TOOLS, avatarCreate];
 
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
@@ -312,8 +317,11 @@ export class AgentService {
         finishRun(this.o.db, runId, { status, reply: out.content, mode: out.mode, unverified: out.unverified });
         emit({ kind: 'done', content: out.content, unverified: out.unverified, steps: out.steps.length, mode: out.mode, ...(out.finished ? {} : { unfinished: true }) });
       } catch (e) {
-        const stopped = ctrl.signal.aborted || (e as Error)?.name === 'AbortError';
-        const message = stopped ? 'Stopped' : (e as Error)?.message || String(e);
+        // Only Stop ends a run quietly. An engine request cut off for another reason (the engine was
+        // restarted or swapped models, or Lotus is closing) is an error that says why, so the reply
+        // never shows a bare "Stopped." the user didn't ask for.
+        const stopped = ctrl.signal.aborted;
+        const message = stopped ? STOPPED_BY_YOU : (e as Error)?.name === 'AbortError' ? ENGINE_CUT_OFF : (e as Error)?.message || String(e);
         finishRun(this.o.db, runId, { status: stopped ? 'stopped' : 'error', reply: message });
         if (stopped) emit({ kind: 'done', content: '', unverified: [], steps: 0, mode: 'tags' });
         else { this.o.log?.(`agent ${runId}: ${message}`); emit({ kind: 'error', message }); }

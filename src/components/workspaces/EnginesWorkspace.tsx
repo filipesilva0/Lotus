@@ -224,8 +224,9 @@ const StorageTab: React.FC = () => {
   const sep = paths.dataDir.includes('\\') ? '\\' : '/';
   const rows: [string, string][] = [
     ['Chats, settings, tasks and memory', `${paths.dataDir}${sep}lotus.db`],
+    ['Models Lotus downloads (chat, images, voice)', paths.studioDir ? `${paths.studioDir}${sep}Models` : 'Lotus Studio/Models'],
     ['Generated images', paths.studioDir ? `${paths.studioDir}${sep}Images` : 'Lotus Studio/Images'],
-    ['Voices, history and stories (Voicebox)', `${paths.dataDir}\\voicebox`],
+    ['Voices, history and stories (Voicebox)', `${paths.dataDir}${sep}voicebox`],
     ['Chat models (Ollama)', "Ollama's own model folder"],
     ['Image checkpoints and LoRAs (ComfyUI)', modelsDir ? `${folderPath(modelsDir, 'checkpoints')}  ·  ${folderPath(modelsDir, 'loras')}` : "ComfyUI's models folder (not set yet)"],
     ['Work artifacts', paths.studioDir ? `${paths.studioDir}${sep}Work` : 'Lotus Studio/Work'],

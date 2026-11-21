@@ -7,6 +7,8 @@ import { LotusSettings } from '../../types/lotus';
 import { InspectorPane, PaneBar, Section, SidebarPane } from '../common/Pane';
 import { Toggle } from '../common/Toggle';
 import { Banner, Btn, Empty, IconBtn, Label, Segmented, TextArea, TextInput, cx } from '../common/ui';
+import { count } from '../../lib/plural';
+import { offerUndo } from '../common/Alerts';
 
 const TEMPLATE = `## Steps
 1.
@@ -37,7 +39,7 @@ const Editor: React.FC<{ s: Skill }> = ({ s }) => {
         <span className="text-[12px] text-[var(--color-text-muted)]">{s.enabled ? 'In use' : 'Off'}</span>
         <Toggle size="sm" checked={s.enabled} onChange={(v) => void memoryStore.putSkill({ ...s, enabled: v })} ariaLabel={s.enabled ? 'Skill on' : 'Skill off'} />
         <Segmented<'read' | 'edit'> label="Mode" value={view} onChange={setView} options={[{ id: 'read', label: 'Read' }, { id: 'edit', label: 'Edit' }]} />
-        <IconBtn label="Delete skill" onClick={() => void memoryStore.deleteSkill(s.id)}><Trash2 className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Delete skill" onClick={() => { void memoryStore.deleteSkill(s.id); offerUndo(`Skill “${s.name}” deleted`, () => void memoryStore.putSkill(s), () => undefined); }}><Trash2 className="w-4 h-4" /></IconBtn>
       </PaneBar>
       <div className="flex-1 overflow-y-auto">
         {view === 'read' ? (
@@ -104,7 +106,7 @@ export const SkillsView: React.FC<{ settings: LotusSettings; onSettings: (p: Par
             </button>
           ))}
         </div>
-        {status && <p className="px-3 py-2 border-t border-[var(--sep)] text-[12px] text-[var(--color-text-muted)]">{status.native ? `${status.skills} skills · ${status.fts5 ? 'full-text search' : 'simple search'}` : 'Browser preview: stored in this browser'}</p>}
+        {status && <p className="px-3 py-2 border-t border-[var(--sep)] text-[12px] text-[var(--color-text-muted)]">{status.native ? `${count(status.skills, 'skill')} · ${status.fts5 ? 'full-text search' : 'simple search'}` : 'Browser preview: stored in this browser'}</p>}
       </SidebarPane>
       <div className="flex-1 min-w-0 flex flex-col">
         {error && <div className="p-3"><Banner tone="error" action={<Btn size="sm" onClick={memoryStore.clearError}>Dismiss</Btn>}>{error}</Banner></div>}

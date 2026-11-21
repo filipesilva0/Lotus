@@ -11,6 +11,8 @@ import { InspectorPane, KV, Section, SliderField } from '../common/Pane';
 import { Banner, Btn, Checkbox, IconBtn, Segmented, Stepper, TextInput, cx } from '../common/ui';
 import { openExternal } from '../../lib/open';
 import { RawExchange } from '../../hooks/useChat';
+import { count } from '../../lib/plural';
+import { offerUndo } from '../common/Alerts';
 
 export type InspectorTab = 'artifacts' | 'context' | 'research' | 'params';
 
@@ -172,14 +174,14 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
             <li key={m.id} className="flex items-start gap-2 text-[13px]">
               <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[12px] font-semibold mt-0.5 shrink-0">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
               <span className="flex-1">{m.text}{m.source === 'auto' && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[12px] text-[var(--color-text-muted)]" title="Learned from a conversation"><Sparkles className="w-3 h-3" />learned</span>}</span>
-              <IconBtn label="Forget" className="!w-6 !h-6" onClick={() => onMemory(memory.filter((x) => x.id !== m.id))}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
+              <IconBtn label="Forget" className="!w-6 !h-6" onClick={() => { const before = memory; onMemory(memory.filter((x) => x.id !== m.id)); offerUndo('Memory forgotten', () => onMemory(before), () => undefined); }}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
             </li>
           ))}
         </ul>
         {status && (
           <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-snug">
             {status.native
-              ? `${status.messages.toLocaleString()} messages searchable · ${status.skills} skills · ${status.fts5 ? 'SQLite full-text search (FTS5)' : 'SQLite (FTS5 unavailable: simple search)'} · stored only on this computer`
+              ? `${count(status.messages, 'message')} searchable · ${count(status.skills, 'skill')} · ${status.fts5 ? 'SQLite full-text search (FTS5)' : 'SQLite (FTS5 unavailable: simple search)'} · stored only on this computer`
               : 'Browser preview: memory is kept in this browser only.'}
           </p>
         )}

@@ -10,6 +10,7 @@ import { SampleHealthPanel } from './SampleHealth';
 import { Modal } from '../common/Modal';
 import { VoiceConsent } from './VoiceConsent';
 import { Btn, Segmented, Label, TextInput, TextArea, Select, Banner, Spinner, IconBtn, cx } from '../common/ui';
+import { confirmAlert } from '../common/Alerts';
 
 interface NewSample {
   key: string;
@@ -177,7 +178,7 @@ export const VoiceEditor: React.FC<{
             {existing.map((s) => (
               <div key={s.id} className="flex items-center gap-2 rounded-[6px] bg-black/[.03] dark:bg-white/[.04] px-3 py-2 mb-2">
                 <span className="text-xs flex-1 truncate text-[var(--color-text-main)] dark:text-slate-200">“{s.reference_text}”</span>
-                <IconBtn label="Delete sample" onClick={async () => { await voicebox.deleteSample(s.id); setExisting((c) => c.filter((x) => x.id !== s.id)); }}>
+                <IconBtn label="Delete sample" onClick={async () => { if (!await confirmAlert({ title: 'Delete this sample?', message: 'The recording is removed from this voice.', confirm: 'Delete' })) return; await voicebox.deleteSample(s.id); setExisting((c) => c.filter((x) => x.id !== s.id)); }}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </IconBtn>
               </div>

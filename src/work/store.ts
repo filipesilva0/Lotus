@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { agentAvailable, AgentStep, answerAsk, ArtifactInfo, decideStep, HelperInfo, runAgent, stopRun, workArtifacts } from '../lib/agent';
-import { markInterrupted } from './interrupted';
+import { historyContent, markInterrupted } from './interrupted';
 import { kv } from '../lib/store';
 import { reportActivity } from '../lib/bus';
 import { uid } from '../lib/persist';
@@ -137,7 +137,18 @@ export function useWork(settings: LotusSettings) {
     if (!agentAvailable()) return;
     try { const list = await workArtifacts(id); setArtifacts((a) => ({ ...a, [id]: list })); } catch { /* core busy */ }
   }, []);
-  useEffect(() => { void refreshArtifacts(activeId); }, [activeId, refreshArtifacts]);
+  // At startup the core may still be starting: keep trying for a while, so the Artifacts panel of the
+  // open work doesn't stay empty until the next file is saved.
+  useEffect(() => {
+    if (agentAvailable()) { void refreshArtifacts(activeId); return; }
+    let tries = 0;
+    const t = window.setInterval(() => {
+      if (!agentAvailable() && ++tries < 30) return;
+      window.clearInterval(t);
+      void refreshArtifacts(activeId);
+    }, 1000);
+    return () => window.clearInterval(t);
+  }, [activeId, refreshArtifacts]);
 
   const patch = useCallback((id: string, fn: (w: WorkItem) => WorkItem) => setItems((l) => l.map((w) => (w.id === id ? fn(w) : w))), []);
   const patchMsg = useCallback((id: string, mid: string, fn: (m: WorkMsg) => WorkMsg) => patch(id, (w) => ({ ...w, messages: w.messages.map((m) => (m.id === mid ? fn(m) : m)) })), [patch]);
@@ -180,8 +191,9 @@ export function useWork(settings: LotusSettings) {
     const reply: WorkMsg = { id: uid('wm'), role: 'assistant', content: '', steps: [], pending: true, ts: Date.now() };
     patch(workId, (w) => ({ ...w, ts: Date.now(), title: w.messages.length && cut !== 0 ? w.title : t.slice(0, 48), messages: [...(cut >= 0 ? w.messages.slice(0, cut) : w.messages), user, reply] }));
     let thinkStart = 0;
-    const history = [...item.messages, user].filter((m) => m.content.trim()).slice(-16)
-      .map((m) => ({ role: m.role, content: m.attached ? `${m.content}\n\n${m.attached}` : m.content, ...(m === user && images.length ? { images } : {}) }));
+    // A stopped or cut-off reply says what it had done, so "keep going" has something to continue.
+    const history = [...item.messages, user].map((m) => ({ m, text: historyContent(m) })).filter((x) => x.text.trim()).slice(-16)
+      .map(({ m, text }) => ({ role: m.role, content: m.attached ? `${text}\n\n${m.attached}` : text, ...(m === user && images.length ? { images } : {}) }));
     const ctrl = new AbortController();
     const activity = `work-${workId}`;
     reportActivity({ id: activity, kind: 'build', label: 'Working' });
@@ -209,6 +221,7 @@ export function useWork(settings: LotusSettings) {
           patchMsg(workId, reply.id, (m) => ({ ...m, agents: upsertHelper(m.agents, e.helper) }));
           // Each agent is its own line on the island too (it also reads the core's events directly).
           const h = e.helper, end = h.status !== 'queued' && h.status !== 'running';
+          if (end) void refreshArtifacts(workId); // a helper saves its files in the same work folder
           reportActivity({ id: `agent-${h.id}`, kind: 'build', agent: h.name, label: `${h.name} · ${end ? (h.status === 'done' ? 'Done' : h.status === 'error' ? 'Failed' : 'Stopped') : h.status === 'queued' ? 'Waiting its turn' : `${h.current ?? 'Working'}${h.steps ? ` · ${h.steps} step${h.steps === 1 ? '' : 's'}` : ''}`}`, done: end });
         }
         else if (e.kind === 'reset') patchMsg(workId, reply.id, (m) => ({ ...m, content: m.content.slice(0, e.keep) }));

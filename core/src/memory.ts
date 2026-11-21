@@ -6,6 +6,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Db } from './db';
+import { skillFits } from '../../src/memory/skillMatch';
 
 export interface IndexedMsg { id: string; sessionId: string; title: string; role: string; content: string; ts: number }
 export interface Hit { id: string; sessionId: string; title: string; role: string; snippet: string; ts: number; score: number }
@@ -220,15 +221,18 @@ export function deleteSkill(db: Db, id: string): void {
   })();
 }
 
+/** Skills that fit the message, best first. A single shared word is not enough (see skillMatch.ts). */
 export function searchSkills(db: Db, query: string, limit = 3): string[] {
+  const fits = (id: string) => { const s = getSkill(db, id); return !!s && skillFits(query, s); };
   if (db.fts) {
     const q = ftsQuery(query);
     if (!q) return [];
     // Name and "when to use" weigh more than the body.
-    return db.sql.query<{ id: string }, [string, number]>('SELECT id FROM skills_fts WHERE skills_fts MATCH ? ORDER BY bm25(skills_fts, 0.0, 6.0, 3.0, 4.0, 1.0) LIMIT ?').all(q, limit).map((r) => r.id);
+    return db.sql.query<{ id: string }, [string, number]>('SELECT id FROM skills_fts WHERE skills_fts MATCH ? ORDER BY bm25(skills_fts, 0.0, 6.0, 3.0, 4.0, 1.0) LIMIT ?').all(q, Math.max(limit * 4, 12))
+      .map((r) => r.id).filter(fits).slice(0, limit);
   }
   const ws = words(query);
   return db.sql.query<{ id: string; t: string }, []>("SELECT id, name || ' ' || description || ' ' || when_to_use AS t FROM skills_fts").all()
     .map((r) => [ws.filter((w) => r.t.toLowerCase().includes(w)).length, r.id] as const)
-    .filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, id]) => id);
+    .filter(([n, id]) => n > 0 && fits(id)).sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, id]) => id);
 }
