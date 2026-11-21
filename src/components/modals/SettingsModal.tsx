@@ -125,7 +125,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-5">
                 <Group label="Background work">
                   <div className="py-3 space-y-2">
-                    <Row title="Background tasks model" hint="Runs Lotus's own housekeeping: learning memories, writing skills and naming chats. A small, fast model keeps this light; the chat model is chosen next to the message box." />
+                    <Row title="Background tasks model" hint="Runs Lotus's own housekeeping: learning memories, writing skills and naming chats. A small, fast model keeps this light; the chat model is chosen next to the message box. The built-in engine holds one model at a time, so while a chat model is loaded it does this work too instead of being swapped out." />
                     <Select aria-label="Background tasks model" value={settings.backgroundModel} onChange={(e) => onUpdateSettings({ backgroundModel: e.target.value })}>
                       <option value="">Same as the chat model{settings.selectedModel ? ` (${settings.selectedModel})` : ''}</option>
                       {models.map((m) => <option key={m.id} value={m.id}>{m.name}{m.tag ? ` · ${m.tag}` : ''}</option>)}

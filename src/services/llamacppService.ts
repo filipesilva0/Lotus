@@ -5,6 +5,7 @@
 import { http, EngineError, errorText, timeoutSignal } from '../lib/http';
 import type { ChatOptions, ChatStats, ChatTurn } from './ollamaService';
 import type { LlamaCppProps } from '../hardware/scaler';
+import { thinkingKwargs } from './thinkSwitch';
 
 const ENGINE = 'llama.cpp';
 
@@ -90,6 +91,8 @@ export class LlamaCppService {
       frequency_penalty: o.frequencyPenalty, presence_penalty: o.presencePenalty,
       stop: o.stop?.length ? o.stop : undefined, max_tokens: o.numPredict,
       ...(o.format === 'json' ? { response_format: { type: 'json_object' } } : {}),
+      // The chat template's thinking switch (Qwen 3, Gemma 4, Nemotron…): llama-server reasons by default.
+      ...thinkingKwargs(o.think),
       ...(stream ? { stream_options: { include_usage: true } } : {}),
     };
   }

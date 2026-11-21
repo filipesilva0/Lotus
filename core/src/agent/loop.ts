@@ -64,6 +64,9 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
   let caps: string[] = [];
   // The built-in llama-server runs with --jinja, so it takes an OpenAI tool list (falls back to tags below).
   if (d.llm.backend === 'llamacpp' && d.llm.nativeTools && req.tools.length) mode = 'native';
+  // llama.cpp can't tell Lotus whether a model reasons, and its templates reason by default: Think off
+  // means no reasoning (seen: Gemma 4 12B reasoned 108-155 s on a one-line question and never answered).
+  if (d.llm.backend === 'llamacpp' && d.llm.think === undefined) think = false;
   if (d.llm.backend === 'ollama' && req.tools.length) {
     caps = req.capabilities ?? (await ollamaCapabilities({ ...d.llm, model: req.model, signal: d.signal }));
     mode = caps.length === 0 || caps.includes('tools') ? 'native' : 'tags';
@@ -74,7 +77,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
 
   const messages: WireMsg[] = req.messages.map((m) => ({ ...m }));
   // Think mode reasons in its analysis and review turns (native reasoning when the model has it); tool turns stay as above.
-  const reasoning = req.think && caps.includes('thinking') ? true : think;
+  const reasoning = req.think && (caps.includes('thinking') || d.llm.backend === 'llamacpp') ? true : think;
   const aside = async (extra: WireMsg[], numPredict: number, temperature: number, title: string): Promise<string> => {
     d.emit({ kind: 'thinking', text: `\n\n### ${title}\n` });
     const r = await chatTurn({ ...d.llm, think: reasoning, numPredict, temperature, model: req.model, signal: d.signal }, [...messages, ...extra], null, {
