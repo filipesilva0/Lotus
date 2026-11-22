@@ -1,7 +1,7 @@
 import { confirmAlert } from '../common/Alerts';
 import { EngineNotice } from '../common/EngineNotice';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Boxes, Layers, Cpu, HardDrive, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare } from 'lucide-react';
+import { Boxes, Layers, Cpu, HardDrive, Image as ImageIcon, Mic, Plus, Power, PowerOff, Search, Sparkles, Square, Swords, Trash2, ThumbsUp, Eye, EyeOff, Play, MessageSquare, Clapperboard } from 'lucide-react';
 import { ChatStats, ollamaClient, OllamaModel, RunningModel } from '../../services/ollamaService';
 import { llm } from '../../services/llm';
 import { ensureChat, useBuiltins } from '../../lib/builtins';
@@ -284,6 +284,7 @@ const KINDS: { id: KindFilter; label: string; icon: React.ReactNode }[] = [
   { id: 'all', label: 'All models', icon: <Boxes className="w-4 h-4" /> },
   { id: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" /> },
   { id: 'image', label: 'Images', icon: <ImageIcon className="w-4 h-4" /> },
+  { id: 'video', label: 'Video', icon: <Clapperboard className="w-4 h-4" /> },
   { id: 'voice', label: 'Voice', icon: <Mic className="w-4 h-4" /> },
   { id: 'dictation', label: 'Dictation', icon: <Mic className="w-4 h-4" /> },
 ];

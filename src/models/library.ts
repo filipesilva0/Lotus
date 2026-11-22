@@ -13,8 +13,9 @@
 
 import { IMAGE_PICKS, VOICE_PICKS, DICTATION_PICK, type Tier, type ImagePick } from '../setup/catalog';
 import type { ImageFamily, ImageFolder, ImageProfile, Slot } from './imageProfiles';
+import type { VideoFamily, VideoFiles } from './videoModels';
 
-export type ModelKind = 'chat' | 'image' | 'voice' | 'dictation';
+export type ModelKind = 'chat' | 'image' | 'voice' | 'dictation' | 'video';
 export type { Tier };
 
 /** A file to fetch. `path` is relative to Lotus Studio/Models and uses forward slashes. */
@@ -54,6 +55,8 @@ export interface LibEntry {
   ollama?: string;
   /** Image models: the setup Lotus creates when it is installed. */
   image?: { family: ImageFamily; files: Partial<Record<Slot, string>> };
+  /** AI video models (0.21): which size, and its files under Lotus Studio/Models/image. */
+  video?: { family: VideoFamily; files: VideoFiles };
   voice?: VoiceSpec;
   /** Voicebox: pattern for its own model names. */
   voicebox?: RegExp;
@@ -355,6 +358,39 @@ export const IMAGE_MODELS: LibEntry[] = [
     image: { family: 'sd15', files: { model: 'v1-5-pruned-emaonly.safetensors', vae: 'vae-ft-mse-840000-ema-pruned.safetensors' } } },
 ];
 
+// ── Video ──────────────────────────────────────────────────────────────────
+
+// 0.21: the open Wan models (Apache-2.0) for stable-diffusion.cpp's video mode, one per size of
+// graphics card (src/models/videoModels.ts picks between them). Files from the repos sd.cpp's Wan
+// docs point to; sizes read from Hugging Face on 22 Nov 2026. The umt5 text encoder is shared.
+const WAN21 = 'Comfy-Org/Wan_2.1_ComfyUI_repackaged';
+const UMT5: LibFile = { url: HF('city96/umt5-xxl-encoder-gguf', 'umt5-xxl-encoder-Q5_K_M.gguf'), path: imgPath('text_encoders', 'umt5-xxl-encoder-Q5_K_M.gguf'), gb: 4.15 };
+const WAN21_VAE: LibFile = { url: HF(WAN21, 'split_files/vae/wan_2.1_vae.safetensors'), path: imgPath('vae', 'wan_2.1_vae.safetensors'), gb: 0.25 };
+const fileOf = (f: LibFile) => f.path.split('/').pop()!;
+const videoEntry = (e: Omit<LibEntry, 'kind' | 'builtin' | 'video' | 'tags'> & { tags?: string[]; family: VideoFamily; model: LibFile; high?: LibFile; vae: LibFile }): LibEntry => {
+  const { family, model, high, vae, ...rest } = e;
+  return {
+    tags: [], ...rest, kind: 'video',
+    builtin: { files: [model, ...(high ? [high] : []), UMT5, vae] },
+    video: { family, files: { model: fileOf(model), ...(high ? { high: fileOf(high) } : {}), vae: fileOf(vae), t5xxl: fileOf(UMT5) } },
+  };
+};
+
+export const VIDEO_MODELS: LibEntry[] = [
+  videoEntry({ id: 'wan21-t2v-1.3b', title: 'Wan 2.1 1.3B (video)', maker: 'Alibaba Wan', licence: 'Apache-2.0', tags: ['Video', 'Small'], vramGb: 6, diskGb: 7.2,
+    blurb: 'Makes short moving clips from words on 6–11 GB cards (832×464). Slow but steady: several minutes for each 2-second clip on an 8 GB card.',
+    family: 'wan21-1.3b', model: { url: HF(WAN21, 'split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors'), path: imgPath('diffusion_models', 'wan2.1_t2v_1.3B_fp16.safetensors'), gb: 2.84 }, vae: WAN21_VAE }),
+  videoEntry({ id: 'wan22-ti2v-5b', title: 'Wan 2.2 5B (video)', maker: 'Alibaba Wan', licence: 'Apache-2.0', tags: ['Video', 'From a picture'], vramGb: 12, diskGb: 9.4,
+    blurb: 'Sharper clips up to 1280×704 that can also bring one of your pictures to life. For 12–23 GB cards.',
+    family: 'wan22-5b', model: { url: HF('QuantStack/Wan2.2-TI2V-5B-GGUF', 'Wan2.2-TI2V-5B-Q5_K_M.gguf'), path: imgPath('diffusion_models', 'Wan2.2-TI2V-5B-Q5_K_M.gguf'), gb: 3.81 },
+    vae: { url: HF('QuantStack/Wan2.2-TI2V-5B-GGUF', 'VAE/Wan2.2_VAE.safetensors'), path: imgPath('vae', 'Wan2.2_VAE.safetensors'), gb: 1.41 } }),
+  videoEntry({ id: 'wan22-t2v-a14b-q4', title: 'Wan 2.2 A14B (video)', maker: 'Alibaba Wan', licence: 'Apache-2.0', tags: ['Video', 'Best'], vramGb: 23, diskGb: 23.7,
+    blurb: 'The best motion and detail Lotus can make, from words. Two 14B experts take turns; for 24 GB cards and 48 GB of RAM.',
+    family: 'wan22-a14b',
+    model: { url: HF('QuantStack/Wan2.2-T2V-A14B-GGUF', 'LowNoise/Wan2.2-T2V-A14B-LowNoise-Q4_K_M.gguf'), path: imgPath('diffusion_models', 'Wan2.2-T2V-A14B-LowNoise-Q4_K_M.gguf'), gb: 9.65 },
+    high: { url: HF('QuantStack/Wan2.2-T2V-A14B-GGUF', 'HighNoise/Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf'), path: imgPath('diffusion_models', 'Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf'), gb: 9.65 }, vae: WAN21_VAE }),
+];
+
 // ── Voice ──────────────────────────────────────────────────────────────────
 
 const SHERPA = (tag: 'tts-models' | 'asr-models' | 'vocoder-models', file: string) => `https://github.com/k2-fsa/sherpa-onnx/releases/download/${tag}/${file}`;
@@ -453,10 +489,10 @@ export const DICTATION_MODELS: LibEntry[] = [
     voice: { engine: 'whisper', languages: ['en'] } },
 ];
 
-export const LIBRARY: LibEntry[] = [...CHAT_MODELS, ...IMAGE_MODELS, ...VOICE_MODELS, ...DICTATION_MODELS];
+export const LIBRARY: LibEntry[] = [...CHAT_MODELS, ...IMAGE_MODELS, ...VIDEO_MODELS, ...VOICE_MODELS, ...DICTATION_MODELS];
 export const entryById = (id: string) => LIBRARY.find((e) => e.id === id);
 
-export const KIND_LABEL: Record<ModelKind, string> = { chat: 'Chat', image: 'Images', voice: 'Voice', dictation: 'Dictation' };
+export const KIND_LABEL: Record<ModelKind, string> = { chat: 'Chat', image: 'Images', voice: 'Voice', dictation: 'Dictation', video: 'Video' };
 
 // ── Fit ───────────────────────────────────────────────────────────────────
 

@@ -3,9 +3,10 @@
 // the video tools: watch the video, write the script, pick the voice, record it and put it together.
 // The job's progress and the finished video are in Work; the videos made so far are listed here.
 //
-// What fits on an 8 GB graphics card: everything here. Lotus doesn't generate new film footage
-// (text-to-video models need far more memory and minutes per second of video); pictures move with
-// slow pan, zoom and crossfades instead, and real videos are narrated as they are.
+// Footage: pictures move with slow pans, zooms and crossfades (quick), or, when the graphics card can,
+// new footage is filmed by AI with the open Wan models (slow: minutes per second of video on an 8 GB
+// card). The size of Wan is picked from the card's memory (src/models/videoModels.ts); without a
+// card that can, the choice isn't offered and Lotus uses pictures.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Clapperboard, Download, Film, Image as ImageIcon, Lightbulb, Plus, Sparkles, X } from 'lucide-react';
@@ -14,7 +15,9 @@ import type { LotusSettings } from '../../types/lotus';
 import { useFileIntake } from '../../lib/fileDrop';
 import { attachWithDialog } from '../../lib/pickFiles';
 import { agentAvailable, uploadToWork, workArtifacts, type ArtifactInfo } from '../../lib/agent';
-import { installEngine, jobFor, useBuiltins } from '../../lib/builtins';
+import { installEngine, installModel, jobFor, useBuiltins } from '../../lib/builtins';
+import { LIBRARY, entryById } from '../../models/library';
+import { aboutTime, pickVideoModel, planVideo, VIDEO_FAMILIES, videoFamilyFor, videoFit } from '../../models/videoModels';
 import { useStudio } from '../../voice/useStudio';
 import { videoRequest, type VideoMode, type VideoShape } from '../../work/videoBrief';
 import { Banner, Btn, Label, Segmented, Select, TextArea, cx } from '../common/ui';
@@ -48,6 +51,7 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
   const [shape, setShape] = useState<VideoShape>('16:9');
   const [seconds, setSeconds] = useState(30);
   const [original, setOriginal] = useState<'lower' | 'mute' | 'keep'>('lower');
+  const [footagePick, setFootage] = useState<'stills' | 'ai'>('stills');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -60,7 +64,23 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
   const hears = sherpaOk && b.models.some((m) => m.kind === 'dictation');
   const chat = b.models.find((m) => m.id === settings.selectedModel);
   const sees = settings.llmBackend === 'builtin' ? !!chat?.mmproj : null;
-  const imageOk = b.engines.some((e) => e.id === 'sd' && e.installed) || settings.imageEngine === 'comfyui';
+  const sdOk = b.engines.some((e) => e.id === 'sd' && e.installed);
+  const imageOk = sdOk || settings.imageEngine === 'comfyui';
+  // AI footage: the Wan size for this card, the one installed that fits, and whether it can start from a picture.
+  const best = b.machine ? videoFamilyFor(b.machine) : null;
+  const videoModels = b.models.flatMap((m) => { const v = m.entryId ? entryById(m.entryId)?.video : undefined; return v ? [{ id: m.id, title: m.title, family: v.family }] : []; });
+  const usable = b.machine ? pickVideoModel(videoModels, b.machine) : null;
+  const suggested = best ? LIBRARY.find((e) => e.video?.family === best) : undefined;
+  const videoJob = suggested ? jobFor(b, `model:${suggested.id}`) : undefined;
+  const aiFromPictures = !!(usable ? VIDEO_FAMILIES[usable.family].fromPicture : best && VIDEO_FAMILIES[best].fromPicture);
+  const aiPossible = !!best && (mode === 'idea' || (mode === 'pictures' && aiFromPictures));
+  const footage = aiPossible ? footagePick : 'stills';
+  const aiReady = footage === 'ai' && !!usable && sdOk;
+  const plan = usable && b.machine ? planVideo(usable.family, b.machine, { seconds, aspect: shape }) : best && b.machine ? planVideo(best, b.machine, { seconds, aspect: shape }) : null;
+  const getVideoModel = async () => {
+    if (!suggested) return;
+    try { if (!sdOk && !jobFor(b, 'engine:sd')) await installEngine('sd'); await installModel(suggested.id); } catch (e) { setError((e as Error).message); }
+  };
 
   const accept = (list: File[]) => {
     const want = mode === 'narrate' ? VIDEO_RE : mode === 'pictures' ? PICTURE_RE : null;
@@ -74,7 +94,7 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
   useEffect(() => { setFiles([]); setError(null); }, [mode]);
 
   const needFiles = mode !== 'idea' && !files.length;
-  const blocked = !agentAvailable() || !ffmpegOk || !voices.length || (mode === 'idea' && !imageOk);
+  const blocked = !agentAvailable() || !ffmpegOk || !voices.length || (mode === 'idea' && footage === 'stills' && !imageOk) || (footage === 'ai' && !aiReady);
   const make = async () => {
     if (busy || blocked || needFiles) return;
     setBusy(true); setError(null);
@@ -83,7 +103,7 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
       const names: string[] = [];
       for (const f of files) names.push(await uploadToWork(id, f));
       const v = voice === 'auto' ? null : voices.find((o) => o.id === voice) ?? null;
-      const text = videoRequest({ mode, files: names, brief, voice: v ? { id: v.id, name: v.name } : null, shape, seconds, original });
+      const text = videoRequest({ mode, files: names, brief, voice: v ? { id: v.id, name: v.name } : null, shape, seconds, original, footage });
       void work.send(text, id).catch((e) => setError((e as Error).message));
       onOpenWork();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
@@ -108,7 +128,9 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
             <Need ok={hears} optional title="Hearing" detail={hears ? 'Whisper writes down what is said in your videos' : 'A dictation model (Whisper) lets Lotus understand what is said in your videos.'} action={<Btn size="sm" onClick={onOpenModels}>Get Whisper</Btn>} />
             <Need ok={sees !== false} optional title="Seeing" detail={sees ? 'Your chat model can look at the video' : sees === null ? 'Lotus looks at your video when the chat model reads images (for example Gemma 3 or Qwen 2.5 VL).' : 'Your chat model can’t see pictures, so Lotus works from what is said. Gemma 3 4B or Qwen 2.5 VL 7B read images and fit 8 GB.'}
               action={<Btn size="sm" onClick={onOpenModels}>Models</Btn>} />
-            {mode === 'idea' && <Need ok={imageOk} title="Pictures" detail={imageOk ? 'Lotus makes a picture for each line of the script' : 'Making a video from an idea needs an image model.'} action={<Btn size="sm" onClick={onOpenModels}>Get one</Btn>} />}
+            {footage === 'ai' && <Need ok={aiReady} title="AI footage" detail={aiReady && usable ? `${usable.title} films new footage on this card` : videoJob?.state === 'running' ? `${videoJob.step}…` : videoJob?.state === 'error' ? videoJob.error ?? 'The download failed.' : suggested ? `${suggested.title}, picked for this graphics card. A one-time download of about ${suggested.diskGb} GB.` : 'This computer can’t film AI footage.'}
+              action={videoJob?.state === 'running' || !suggested ? null : <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => void getVideoModel()}>Download</Btn>} />}
+            {mode === 'idea' && footage === 'stills' && <Need ok={imageOk} title="Pictures" detail={imageOk ? 'Lotus makes a picture for each line of the script' : 'Making a video from an idea needs an image model.'} action={<Btn size="sm" onClick={onOpenModels}>Get one</Btn>} />}
           </ul>
         </section>
 
@@ -121,7 +143,7 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
               </button>
             ))}
           </div>
-          <p className="text-[12px] text-[var(--color-text-muted)] -mt-2">{cur.hint}</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] -mt-2">{footage === 'ai' ? (mode === 'idea' ? 'Lotus writes the script, films a short AI clip for each line, records the voice and puts it together.' : 'Lotus brings each picture to life with AI, records the voiceover and puts it together.') : cur.hint}</p>
 
           {mode !== 'idea' && (
             <div className={cx('rounded-[12px] border border-dashed p-4 text-center', dragging ? 'border-[var(--color-accent-vibrant)] bg-[var(--color-accent-pastel)]' : 'border-[var(--sep)]')}>
@@ -173,6 +195,21 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
             )}
           </div>
           {mode !== 'narrate' && (
+            <div className="space-y-1.5">
+              {aiPossible && (
+                <div className="flex items-center gap-3">
+                  <span className="text-[13px] font-medium">Footage</span>
+                  <Segmented<'stills' | 'ai'> label="Footage" value={footage} onChange={setFootage} options={[{ id: 'stills', label: mode === 'pictures' ? 'My pictures, moving gently' : 'Pictures, moving gently' }, { id: 'ai', label: mode === 'pictures' ? 'Bring them to life with AI' : 'Filmed by AI' }]} />
+                </div>
+              )}
+              <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">{footage === 'ai' && plan
+                ? `New moving footage, made on this computer. It is slow but safe: about ${aboutTime(plan.minutes).replace('about ', '')} for ${seconds} seconds on this card, and you can stop it any time in Work. If the card runs short of memory, Lotus makes smaller clips instead of crashing.`
+                : !best && b.machine ? `${(videoFit('wan21-1.3b', b.machine) as { why?: string }).why ?? ''} Pictures move with slow pans, zooms and crossfades instead.`
+                : mode === 'pictures' && !aiFromPictures ? 'Bringing pictures to life needs a 12 GB graphics card. This one can film from words: pick “From an idea”.'
+                : aiPossible ? `Quick: pictures move with slow pans, zooms and crossfades. “${mode === 'pictures' ? 'Bring them to life with AI' : 'Filmed by AI'}” makes real moving footage, but takes minutes per second of video.` : 'Pictures move with slow pans, zooms and crossfades.'}</p>
+            </div>
+          )}
+          {mode !== 'narrate' && (
             <div className="flex items-center gap-3">
               <span className="text-[13px] font-medium">Shape</span>
               <Segmented<VideoShape> label="Shape" value={shape} onChange={setShape} options={[{ id: '16:9', label: 'Wide 16:9' }, { id: '9:16', label: 'Phone 9:16' }, { id: '1:1', label: 'Square 1:1' }]} />
@@ -184,7 +221,6 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
             <Btn variant="primary" icon={<Sparkles className="w-3.5 h-3.5" />} loading={busy} disabled={blocked || needFiles} onClick={() => void make()}>Make video</Btn>
             <span className="text-[12px] text-[var(--color-text-muted)] leading-snug">{blocked ? 'Get what Lotus needs above first.' : needFiles ? (mode === 'narrate' ? 'Choose a video first.' : 'Add your pictures first.') : 'Opens in Work, where you can watch each step and ask for changes.'}</span>
           </div>
-          <p className="text-[12px] text-[var(--color-text-muted)] leading-snug">Lotus moves pictures with slow pans, zooms and crossfades. It doesn’t film new footage: AI that makes real moving video needs far more graphics memory than most computers have.</p>
         </section>
 
         <MadeVideos work={work} onOpenWork={onOpenWork} />
