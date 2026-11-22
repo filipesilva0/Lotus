@@ -31,6 +31,13 @@ async function makeLoop(c: AudioContext) {
   const answer = hq(await b.createAnswer());
   await b.setLocalDescription(answer); await a.setRemoteDescription(answer);
   const stream = await Promise.race([remote, new Promise<never>((_, j) => setTimeout(() => j(new Error('loop timeout')), 3000))]);
+  // 0.21.6: a bigger buffer on the receiving side. WebRTC keeps only a few milliseconds of sound; while the
+  // chat model and the voice engine keep the PC busy, it ran dry and filled the gaps by repeating bits
+  // of sound, which made Lotus stutter. 300 ms of buffer only delays the voice, it doesn't break it.
+  for (const r of b.getReceivers()) {
+    try { (r as RTCRtpReceiver & { jitterBufferTarget?: number }).jitterBufferTarget = 300; } catch { /* older engine */ }
+    try { (r as RTCRtpReceiver & { playoutDelayHint?: number }).playoutDelayHint = 0.3; } catch { /* older engine */ }
+  }
   const el = new Audio();
   el.autoplay = true;
   el.srcObject = stream;
@@ -53,11 +60,14 @@ let stopCurrent: (() => void) | null = null;
 /** Stops what is playing. */
 export function stopPlayback() { stopCurrent?.(); stopCurrent = null; playLevel = 0; }
 
-/** Plays a WAV/MP3 blob; resolves when it ends or is stopped. */
-export async function playThroughLoop(blob: Blob): Promise<void> {
+/**
+ * Plays a WAV/MP3 blob; resolves when it ends or is stopped. `direct`: skip the WebRTC loop (nothing is
+ * listening for you to interrupt, so echo cancellation isn't needed and the plain path is the cleanest).
+ */
+export async function playThroughLoop(blob: Blob, o: { direct?: boolean } = {}): Promise<void> {
   const c = audioCtx();
   const audio = await c.decodeAudioData(await blob.arrayBuffer());
-  if (loopOk !== false && !loop) {
+  if (!o.direct && loopOk !== false && !loop) {
     try { loop = await makeLoop(c); }
     catch (e) { console.warn('[lotus] voice loop unavailable, playing directly', e); loopOk = false; }
   }
@@ -66,7 +76,7 @@ export async function playThroughLoop(blob: Blob): Promise<void> {
   src.buffer = audio;
   const meter = c.createAnalyser(); meter.fftSize = 512;
   src.connect(meter);
-  const viaLoop = !!loop && loopOk !== false;
+  const viaLoop = !o.direct && !!loop && loopOk !== false;
   if (viaLoop) meter.connect(loop!.dest); else meter.connect(c.destination);
   const buf = new Uint8Array(new ArrayBuffer(512));
   const outBuf = new Uint8Array(new ArrayBuffer(512));

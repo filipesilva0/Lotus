@@ -15,13 +15,14 @@ import { voicebox } from '../../services/voicebox';
 import { kv } from '../../lib/store';
 import { BuiltinVoice } from '../voice/BuiltinVoice';
 import type { LotusSettings } from '../../types/lotus';
+import type { ModelOption } from './ChatWorkspace';
 
 type Tab = VoiceMode;
 
-export const VoiceWorkspace: React.FC<{ onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ onOpenEngines, settings, onSettings, onOpenModels, onOpenInChat }) => {
+export const VoiceWorkspace: React.FC<{ models?: ModelOption[]; onOpenEngines: () => void; settings?: LotusSettings; onSettings?: (p: Partial<LotusSettings>) => void; onOpenModels?: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ models, onOpenEngines, settings, onSettings, onOpenModels, onOpenInChat }) => {
   if (settings?.voiceEngine === 'builtin' && onSettings) {
     return (
-      <BuiltinVoice settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} onOpenInChat={onOpenInChat} />
+      <BuiltinVoice models={models ?? []} settings={settings} onSettings={onSettings} onOpenModels={onOpenModels ?? onOpenEngines} onOpenInChat={onOpenInChat} />
     );
   }
   return <VoiceboxWorkspace onOpenEngines={onOpenEngines} />;

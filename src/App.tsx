@@ -538,7 +538,7 @@ export default function App() {
 
         {currentView === 'images' && <ImageWorkspace g={gallery} checkpoints={checkpoints} comfyUp={comfyUp} builtin={builtinImages} profiles={readyProfiles} builtinLoras={builtins.imageFiles.loras.map((f) => f.file)} onOpenEngines={() => openEngines('engines')} onOpenModels={() => openEngines('models')} />}
 
-        {currentView === 'voice' && <VoiceWorkspace onOpenInChat={openInChat} onOpenEngines={() => openEngines('models')} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} onOpenModels={() => openEngines('models')} />}
+        {currentView === 'voice' && <VoiceWorkspace models={models} onOpenInChat={openInChat} onOpenEngines={() => openEngines('models')} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} onOpenModels={() => openEngines('models')} />}
 
 
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}

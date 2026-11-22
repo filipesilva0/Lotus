@@ -106,9 +106,9 @@ export async function synthesize(text: string): Promise<Blob | null> {
 }
 
 /** Plays audio made by synthesize(); resolves when it ends or hush() stops it. */
-export async function playSpeech(audio: Blob): Promise<void> {
+export async function playSpeech(audio: Blob, o: { direct?: boolean } = {}): Promise<void> {
   setState('speaking');
-  try { await playThroughLoop(audio); } finally { if (state === 'speaking') setState('idle'); }
+  try { await playThroughLoop(audio, o); } finally { if (state === 'speaking') setState('idle'); }
 }
 
 /**

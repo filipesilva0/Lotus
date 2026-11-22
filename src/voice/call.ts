@@ -178,7 +178,8 @@ function patchCall(fn: (c: CallLog) => CallLog) {
 async function reply(a: AbortController, recent: CallTurn[]) {
   const s = settings();
   const call = st.call!;
-  const model = s?.selectedModel ?? '';
+  // 0.21.6: calls can use their own model (Voice → Call); otherwise the chat model.
+  const model = s?.callModel || s?.selectedModel || '';
   if (!model) throw new Error('No chat model is picked. Pick one in Chat.');
   set({ phase: 'thinking', partial: '', error: null });
   const last = call.turns[call.turns.length - 1];
@@ -217,7 +218,8 @@ async function reply(a: AbortController, recent: CallTurn[]) {
       const clip = await audio;
       if (stale(mine)) return;
       set({ phase: 'speaking' });
-      if (clip) await playSpeech(clip); else await speak(sentence);
+      // Without interrupt by voice nothing listens while Lotus talks: play straight out (0.21.6).
+      if (clip) await playSpeech(clip, { direct: !watch }); else await speak(sentence);
       if (!stale(mine)) heard.add(key(sentence));
     });
   };
