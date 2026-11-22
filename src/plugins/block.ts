@@ -6,11 +6,20 @@
 // was enough, which was fine for one or two custom plugins but not for the ~35 built-in skills. The
 // learned-skill rule that one word in a skill's name is enough for a short message is not used here:
 // built-in names hold broad words ("code", "plan", "review") that would pull a skill into "fix my code".
+// A built-in skill may also list `anchors`: a word or phrase that names its subject on its own
+// ("logo", "app icon"). An anchor counts as a match and ranks the skill one place higher.
 
-import { skillOverlap } from '../memory/skillMatch';
+import { skillOverlap, subjectWords } from '../memory/skillMatch';
 import type { LotusPlugin, PluginSkill } from './types';
 
 export interface SkillHit { plugin: LotusPlugin; skill: PluginSkill; shared: number }
+
+/** True when every word of one of the skill's anchors is in the message. */
+export function anchorHit(query: string, skill: Pick<PluginSkill, 'anchors'>): boolean {
+  if (!skill.anchors?.length) return false;
+  const q = new Set(subjectWords(query));
+  return skill.anchors.some((a) => { const w = subjectWords(a); return w.length > 0 && w.every((x) => q.has(x)); });
+}
 
 /** Skills of enabled plugins that fit the message, best first (at most `limit`). */
 export function matchPluginSkills(query: string, from: LotusPlugin[], limit = 2): SkillHit[] {
@@ -20,7 +29,8 @@ export function matchPluginSkills(query: string, from: LotusPlugin[], limit = 2)
     if (!p.enabled) continue;
     for (const k of p.skills) {
       const o = skillOverlap(query, k);
-      if (o.shared >= 2) hits.push({ plugin: p, skill: k, shared: o.shared, inName: o.inName });
+      const anchored = anchorHit(query, k);
+      if (o.shared >= 2 || anchored) hits.push({ plugin: p, skill: k, shared: Math.max(o.shared, 1) + (anchored ? 1 : 0), inName: o.inName });
     }
   }
   return hits.sort((a, b) => b.shared - a.shared || Number(b.inName) - Number(a.inName)).slice(0, limit)

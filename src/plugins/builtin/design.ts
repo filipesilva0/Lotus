@@ -1,5 +1,6 @@
 // Design: Lotus's own versions of design skills (critique, accessibility, UX copy, handoff, design
-// systems, user research, research synthesis, UI/UX process, Apple-platform conventions, charts).
+// systems, user research, research synthesis, UI/UX process, Apple-platform conventions, charts, and
+// (0.21) logo design).
 // Written from scratch for Lotus; they do the same jobs as the design skills Claude uses, without
 // copying their text. Figma, Slack, Notion and other connectors are not available, so the skills work
 // from screenshots, descriptions, pasted text and files the user allows.
@@ -10,7 +11,7 @@ export const DESIGN: BuiltinPluginDef = {
   id: 'builtin-design',
   name: 'Design',
   version: '1.0.0',
-  description: 'Design critique, accessibility checks, UX copy, handoff specs, design systems, user research and charts.',
+  description: 'Design critique, accessibility checks, UX copy, handoff specs, design systems, user research, charts and logos.',
   author: 'Lotus',
   defaultOn: true,
   credit: { by: 'Lotus', license: 'Original', note: 'Written for Lotus. Does the same jobs as the design skills Claude uses, in Lotus’s own words.' },
@@ -18,6 +19,7 @@ export const DESIGN: BuiltinPluginDef = {
   commands: [
     { name: 'critique', description: 'Structured feedback on a design or screenshot', prompt: 'Critique this design: first impression, usability, visual hierarchy, consistency and accessibility, then the top 3 fixes:\n\n{{input}}' },
     { name: 'a11y', description: 'Accessibility check (WCAG 2.1 AA)', prompt: 'Run an accessibility check (WCAG 2.1 AA) on this: contrast, keyboard, screen reader, touch targets, text. List issues by severity with a fix for each:\n\n{{input}}' },
+    { name: 'logo', description: 'Design a logo: brief, 3 directions, SVG drafts, checks and export files', prompt: 'Design a logo, following the logo-design steps: a short brief, three directions (symbol, wordmark, combination), SVG drafts, the checks, one refinement, then the export files. It is for:\n\n{{input}}' },
     { name: 'ux-copy', description: 'Write or improve interface text', prompt: 'Write the interface text (UX copy) for this. Give a recommended version, two alternatives and a one-line reason:\n\n{{input}}' },
   ],
   skills: [
@@ -202,6 +204,32 @@ General conventions, in Lotus's words. Check Apple's Human Interface Guidelines 
 
 ## Visual
 System font (San Francisco) and system colours adapt to Dark Mode and accessibility settings. Use SF Symbols-style icons for consistency.`,
+    },
+    {
+      name: 'logo-design',
+      description: 'Logos and brand icons drawn as vector SVG, with PNG exports.',
+      whenToUse: 'Design or redesign a logo, logotype, wordmark, monogram, emblem, brand symbol, icon or favicon (brand identity).',
+      anchors: ['logo', 'logotype', 'wordmark', 'monogram', 'favicon', 'app icon', 'brand identity', 'brand mark', 'visual identity', 'store tile'],
+      body: `# Logo design
+
+A logo is vector: draw it as SVG by hand. image.generate is only for mood pictures, never the logo.
+No artifact.write here (not Work mode)? Show SVG in \`\`\`svg blocks and suggest Work for the files.
+
+1. **Brief** (ask.user, at most 3 questions, if missing): name, what it does, for whom, 3 personality words, colours wanted or banned, where it will be used.
+2. **Mood** (optional): 1–2 image.generate pictures of the feeling, not of a logo.
+3. **Three directions**, one line each: A symbol (one simple shape for the idea), B wordmark (the name in type), C combination (symbol + name).
+4. **Drafts**: one SVG per direction with artifact.write (logo-a.svg, logo-b.svg, logo-c.svg). viewBox "0 0 64 64" (wide ones "0 0 192 64"); points on a 4-unit grid; whole numbers; circles, rects and simple paths. 2–3 hex colours, plus a one-colour copy (logo-a-mono.svg). Text: a common font stack (say so) or letters as paths. No gradients, filters, photos or hair-thin lines.
+5. **Check each draft**, pass or fail:
+   - 16 px: lines and gaps at least 4 units wide; make a 16 px PNG with artifact.png.
+   - Mono and reverse: works all black, and all white on a dark background.
+   - Original: not close to a known brand's logo; if it is, change it.
+   - Crop: main shapes inside the centre 80%, so a circle or rounded square doesn't cut them.
+6. The user picks one. Do **one refinement** round from their notes, then stop unless asked.
+7. **Export** the chosen one:
+   - logo.svg (master) and logo-mono.svg.
+   - artifact.png on logo.svg: sizes [16, 32, 64, 128, 256, 512, 1024], favicon true.
+   - icon.svg (square symbol only), then artifact.png: sizes [44, 50, 150, 300], padding 10 (Microsoft Store tiles).
+   - brand-notes.md: colours, clear space, smallest size, do and don't.`,
     },
     {
       name: 'charts-and-graphs',

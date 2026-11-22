@@ -165,6 +165,13 @@ export function expandCommand(prompt: string, input: string): string {
   return i ? `${prompt.trim()}\n\n${i}` : prompt.trim();
 }
 
+/** "/logo a bakery" → that plugin command filled in; any other text comes back unchanged (Work mode, 0.21). */
+export function expandPluginSlash(text: string, from: LotusPlugin[] = all): string {
+  const m = text.trim().match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/i);
+  const pc = m ? pluginCommands(from).find((c) => c.name === m[1].toLowerCase()) : undefined;
+  return pc && m ? expandCommand(pc.prompt, m[2] ?? '') : text;
+}
+
 /**
  * Text added to the system prompt: the instructions of every enabled plugin (capped), plus the
  * plugin skills that match this message (at most two). See plugins/block.ts.

@@ -3,7 +3,15 @@
 import type { PluginCredit } from './builtin/types';
 
 export interface PluginCommand { name: string; description: string; prompt: string }
-export interface PluginSkill { name: string; description: string; whenToUse: string; body: string }
+export interface PluginSkill {
+  name: string; description: string; whenToUse: string; body: string;
+  /**
+   * Built-in skills only (0.21): words or short phrases that are enough on their own to pick the
+   * skill ("logo", "app icon"), for subjects a message often names in one word. Every word of a
+   * phrase must be in the message. User plugins can't set these.
+   */
+  anchors?: string[];
+}
 
 export interface LotusPlugin {
   id: string;
