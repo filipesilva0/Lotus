@@ -23,6 +23,22 @@ async function droppedLinks(dt: DataTransfer): Promise<File[]> {
   return nameFiles(out);
 }
 
+const intakes: ((f: File[]) => void)[] = [];
+let pendingHandoff: File[] | null = null;
+/**
+ * Hands files to the page that is open (the newest `useFileIntake`), as if they had been dropped on it.
+ * Called right after switching page, so a page that mounts within a moment gets them instead.
+ */
+export function handFiles(files: File[]): void {
+  if (!files.length) return;
+  pendingHandoff = files;
+  setTimeout(() => {
+    if (!pendingHandoff) return;
+    const take = intakes[intakes.length - 1];
+    if (take) { pendingHandoff = null; take(files); }
+  }, 400);
+}
+
 /** Every file in a drop (all of them, not just the first). */
 export async function droppedFiles(dt: DataTransfer | null): Promise<File[]> {
   if (!dt) return [];
@@ -41,6 +57,15 @@ export function useFileIntake(onFiles: (files: File[]) => void, o: { enabled?: b
   cb.current = onFiles;
   const enabled = o.enabled ?? true;
   const paste = o.paste ?? true;
+
+  // 0.23: the open page also takes files sent from the island's shelf ("Use in Video").
+  useEffect(() => {
+    if (!enabled) return;
+    const take = (f: File[]) => cb.current(f);
+    intakes.push(take);
+    if (pendingHandoff) { const f = pendingHandoff; pendingHandoff = null; setTimeout(() => take(f), 0); }
+    return () => { const i = intakes.lastIndexOf(take); if (i >= 0) intakes.splice(i, 1); };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) { setDragging(false); return; }

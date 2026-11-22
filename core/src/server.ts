@@ -13,6 +13,7 @@
 //   GET    /v1/video-preview?projectId=&file=   the Video editor's preview copy of a file (0.22)
 //   GET    /v1/work-file?workId=&file=   a video, sound or picture from a Work job's folder (0.21)
 //   POST   /v1/work-file?workId=&name=   raw bytes → saved in that folder (videos, pictures, sound only)
+//   POST   /v1/shelf?name=  · GET /v1/shelf · GET|DELETE /v1/shelf/<name>   the island's shelf (0.23, shelf.ts)
 //   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
 //   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin } · { type: 'agent', runId, kind, … } · { type: 'memory' }
 //   GET    /v1/stream                    the same events as one JSON object per line (a streamed HTTP response).
@@ -38,6 +39,7 @@ import { mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { AUDIO_EXT, PICTURE_EXT, VIDEO_EXT } from './tools/video';
 import { VideoEditService } from './video/editService';
+import { MAX_SHELF_FILE, Shelf, fetchCalendar, type ShelfTarget } from './shelf';
 
 const MAX_WORK_UPLOAD = 4 * 1024 ** 3;
 /** A safe file name for a video, picture or sound added to a Work folder; null for anything else. */
@@ -198,6 +200,7 @@ export function startServer(o: CoreOptions): CoreServer {
   // Copied voices in videos follow the Pro switch (0.21); `licence` is made just below and read later.
   const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins, proUnlocked: () => { const s = licence.status(); return !s.locks || s.unlocked; } });
   // 0.22: the Video editor runs its own jobs (no chat model needed), with the same tool context as Work.
+  const shelf = new Shelf(o.studio);
   const video = new VideoEditService({
     workDir: (id) => agent.workDir(id), broadcast,
     toolCtx: (dir, signal, progress) => ({ db: o.db, studio: o.studio, builtins, proUnlocked: () => { const s = licence.status(); return !s.locks || s.unlocked; }, folders: [], kvSet: kvSetCore, kvGet: (k) => kvGet(o.db, k), fetch: o.fetch ?? fetch, memoryOn: false, workDir: dir, signal, progress }),
@@ -324,6 +327,21 @@ export function startServer(o: CoreOptions): CoreServer {
           }
           if (req.method === 'DELETE') { deleteMedia(o.db, o.studio, rel); return json(req, { ok: true }); }
         }
+        // 0.23: the island's shelf: files dropped on the island, kept in Lotus Studio/Shelf.
+        if (url.pathname === '/v1/shelf') {
+          if (req.method === 'GET') return json(req, { items: shelf.list() });
+          if (req.method === 'POST') {
+            if (Number(req.headers.get('content-length') ?? 0) > MAX_SHELF_FILE) return fail(req, 413, 'That file is over 2 GB.');
+            return json(req, await shelf.save(req.body ?? new ArrayBuffer(0), url.searchParams.get('name') ?? 'file'));
+          }
+        }
+        if (url.pathname.startsWith('/v1/shelf/')) {
+          const name = decodeURIComponent(url.pathname.slice('/v1/shelf/'.length));
+          const full = shelf.path(name);
+          if (!full) return fail(req, 404, 'That file is no longer on the shelf.');
+          if (req.method === 'GET') return new Response(Bun.file(full), { headers: { 'content-type': mimeFor(full), 'cache-control': 'no-store', ...cors(req) } });
+          if (req.method === 'DELETE') { shelf.remove(name); return json(req, { ok: true }); }
+        }
         if (url.pathname.startsWith('/v1/rpc/') && req.method === 'POST') {
           const method = url.pathname.slice('/v1/rpc/'.length);
           const fn = Object.prototype.hasOwnProperty.call(RPC, method) ? RPC[method] : undefined;
@@ -333,6 +351,13 @@ export function startServer(o: CoreOptions): CoreServer {
           if (!fn) {
             const b = await builtinRpc(builtins, o.db, o.studio, method, args, broadcast);
             if (b.found) return json(req, { result: b.value ?? null });
+            if (method === 'shelf_path') return json(req, { result: shelf.path(String(args.name ?? '')) });
+            if (method === 'shelf_convert') {
+              const ffmpeg = builtins.videoTool('ffmpeg');
+              if (!ffmpeg) return fail(req, 409, 'Install FFmpeg first: Settings → Models → Lotus Engines → FFmpeg (about 165 MB).');
+              return json(req, { result: await shelf.convert({ ffmpeg, ffprobe: builtins.videoTool('ffprobe') }, String(args.name ?? ''), String(args.to ?? '') as ShelfTarget) });
+            }
+            if (method === 'calendar_fetch') return json(req, { result: { events: await fetchCalendar(String(args.url ?? ''), o.fetch ?? fetch) } });
             if (method === 'local_api_status') return json(req, { result: localApi.apply() });
             if (method === 'mcp_status') return json(req, { result: mcp.status() });
             if (method === 'mcp_restart') return json(req, { result: await mcp.restart(optStr(args.id)) });

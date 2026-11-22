@@ -6,6 +6,7 @@ mod hooks;
 mod island;
 mod lotusd;
 mod mac_chrome;
+mod media;
 mod mic;
 mod paths;
 mod pick;
@@ -98,6 +99,11 @@ pub fn run() {
             island::island_hide,
             island::island_focus,
             island::island_visible,
+            island::island_watch,
+            media::media_now,
+            media::media_control,
+            media::media_pause_if_playing,
+            media::clip_text,
             hooks::hook_answer,
             hooks::hooks_installed,
             hooks::hooks_install,

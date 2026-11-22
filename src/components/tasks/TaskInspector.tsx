@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Bot, Check, ChevronDown, Globe, History, Loader2, Play, RotateCcw, Square, Trash2, X } from 'lucide-react';
+import { Bot, Check, ChevronDown, Globe, History, Loader2, Play, RotateCcw, Square, Timer, Trash2, X } from 'lucide-react';
+import { emitEvent } from '../../lib/bus';
+import { loadIsland } from '../../island/state';
 import { blockedBy, blockersOf, COLUMNS, Priority, runAction, Status, Task, TaskLink } from '../../tasks/kanban';
 import { tasks as store } from '../../tasks/store';
 import { uid } from '../../lib/persist';
@@ -41,6 +43,7 @@ export const TaskInspector: React.FC<{ task: Task; all: Task[]; onClose: () => v
       <PaneBar>
         <span className="text-[13px] font-semibold flex-1 truncate">Task</span>
         {onShowRuns && agentAvailable() && (t.run || t.result) && <IconBtn label="See this task’s runs in Activity" onClick={onShowRuns}><History className="w-4 h-4" /></IconBtn>}
+        {t.status !== 'done' && loadIsland().enabled && <IconBtn label="Focus on this task (a timer on the island)" onClick={() => void emitEvent('island:focus', { id: t.id, title: t.title })}><Timer className="w-4 h-4" /></IconBtn>}
         <IconBtn label="Delete task" onClick={() => { store.removeWithUndo(t.id); onClose(); }}><Trash2 className="w-4 h-4" /></IconBtn>
         <IconBtn label="Close details" onClick={onClose}><X className="w-4 h-4" /></IconBtn>
       </PaneBar>
