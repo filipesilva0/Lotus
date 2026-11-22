@@ -3,7 +3,7 @@
 //
 //   plan.set        the steps the agent will take (shown as a checklist)
 //   plan.check      tick one off
-//   artifact.write  create or replace a deliverable (Markdown doc, HTML page, CSV table, SVG, code)
+//   artifact.write  create or replace a deliverable (Word, Excel, PowerPoint, HTML page, Markdown, CSV, SVG, code)
 //                   in Lotus Studio/Work/<work id>/
 //   artifact.read   read one back to revise it
 //   agent.delegate  hand a self-contained part of the job to a helper agent, get its result back
@@ -13,12 +13,15 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import type { Tool } from '../agent/types';
+import { officeFile } from './office';
+import { OFFICE_LABEL } from '../../../src/lib/officeText';
 
 const KINDS: Record<string, string> = {
   '.md': 'document', '.markdown': 'document', '.txt': 'document',
   '.html': 'page', '.htm': 'page',
   '.csv': 'table', '.tsv': 'table',
   '.svg': 'image', '.json': 'data',
+  '.docx': 'word', '.xlsx': 'spreadsheet', '.pptx': 'slides',
   '.py': 'code', '.js': 'code', '.ts': 'code', '.tsx': 'code', '.jsx': 'code', '.css': 'code', '.sh': 'code', '.ps1': 'code', '.sql': 'code', '.java': 'code', '.c': 'code', '.cpp': 'code', '.rs': 'code', '.go': 'code', '.rb': 'code', '.php': 'code', '.yaml': 'code', '.yml': 'code', '.toml': 'code',
 };
 /** 0.21: what the video tools save. Listed and played in the Artifacts panel, never written by artifact.write. */
@@ -30,6 +33,9 @@ const MEDIA: Record<string, string> = {
 export const artifactKind = (file: string) => KINDS[extname(file).toLowerCase()] ?? MEDIA[extname(file).toLowerCase()] ?? 'file';
 /** Files the panel shows as media (not read as text). */
 export const isMediaKind = (kind: string) => kind === 'video' || kind === 'audio' || kind === 'picture';
+
+/** 0.21: Word, Excel and PowerPoint files (built from text by tools/office.ts). */
+export const isOfficeKind = (kind: string) => kind === 'word' || kind === 'spreadsheet' || kind === 'slides';
 
 /** A safe file name inside the work folder: no folders, no tricks, a known extension. */
 export function safeName(raw: string, fallbackTitle = 'artifact'): string | null {
@@ -75,13 +81,49 @@ export const planCheck: Tool = {
   },
 };
 
+/** 0.21: an Office file's text (Markdown or CSV) is kept beside it, for previews and revisions. */
+const SOURCE_DIR = '.source';
+const sourcePath = (dir: string, file: string) => join(dir, SOURCE_DIR, `${file}.txt`);
+/** The text an Office artifact was made from, or null (not an Office file, or made outside Lotus). */
+export function officeSource(dir: string, file: string): string | null {
+  if (!isOfficeKind(artifactKind(file))) return null;
+  try { return readFileSync(sourcePath(dir, file), 'utf8'); } catch { return null; }
+}
+
+function saveTitle(dir: string, file: string, title: string): string {
+  const titlesPath = join(dir, '.titles.json');
+  let titles: Record<string, string> = {};
+  try { titles = JSON.parse(readFileSync(titlesPath, 'utf8')); } catch { /* new */ }
+  titles[file] = title.slice(0, 120) || file;
+  writeFileSync(titlesPath, JSON.stringify(titles, null, 1));
+  return titles[file];
+}
+
+/** Writes one artifact (Office files are built from their text). Shared by artifact.write and the answer clean-up. */
+export async function saveArtifact(dir: string, file: string, content: string, title: string): Promise<{ file: string; title: string; kind: string; path: string; existed: boolean; bytes: number }> {
+  mkdirSync(dir, { recursive: true });
+  const full = join(dir, file);
+  const existed = existsSync(full);
+  const kind = artifactKind(file);
+  let bytes = content.length;
+  if (isOfficeKind(kind)) {
+    const bin = await officeFile(file, content, title);
+    if (!bin) throw new Error(`Lotus can't build ${file}.`);
+    writeFileSync(full, bin);
+    mkdirSync(join(dir, SOURCE_DIR), { recursive: true });
+    writeFileSync(sourcePath(dir, file), content, 'utf8');
+    bytes = bin.length;
+  } else writeFileSync(full, content, 'utf8');
+  return { file, title: saveTitle(dir, file, title || file), kind, path: full, existed, bytes };
+}
+
 export const artifactWrite: Tool = {
   name: 'artifact.write', label: 'Writing an artifact', risk: 'write',
-  description: 'Save a deliverable for the user as a file they can open, preview and keep: a document (.md), a web page (.html, self-contained), a table (.csv), an image (.svg) or code. Use the same filename again to replace it with a new version. Put the whole content in; never a summary of it.',
+  description: 'Save a deliverable for the user as a real file they can open, preview and keep. Pick the type the user asked for: a Word document (.docx; write the content as Markdown: # title, ## sections, lists, | tables |), an Excel spreadsheet (.xlsx; write CSV, first row = column names, "## Sheet name" starts another sheet, cells starting with = are formulas such as =SUM(B2:B9)), a PowerPoint deck (.pptx; Markdown, a line with --- between slides, # slide title, short bullets, "Notes:" then the speaker notes), a web page or app (.html, one self-contained file), a Markdown document (.md), a table (.csv), an image (.svg) or code (.py, .js…). Use the same filename again to replace it with a new version. Put the whole content in; never a summary of it.',
   parameters: { type: 'object', properties: {
     title: { type: 'string', description: 'A short human title, e.g. "Trip budget".' },
-    filename: { type: 'string', description: 'File name with extension, e.g. budget.csv, report.md, landing.html.' },
-    content: { type: 'string', description: 'The full file content.' },
+    filename: { type: 'string', description: 'File name with extension, e.g. report.docx, budget.xlsx, pitch.pptx, landing.html, notes.md.' },
+    content: { type: 'string', description: 'The full file content (Markdown for .docx and .pptx, CSV for .xlsx).' },
   }, required: ['title', 'filename', 'content'] },
   describe: (a) => `Save “${String(a.title ?? a.filename).slice(0, 80)}” as ${String(a.filename)}`,
   async run(a, ctx) {
@@ -91,23 +133,17 @@ export const artifactWrite: Tool = {
     const content = String(a.content ?? '');
     if (!content.trim()) return { ok: false, text: 'The content is empty. Write the whole file.', summary: 'Empty artifact' };
     if (content.length > 2_000_000) return { ok: false, text: 'That is over 2 MB; split it into smaller artifacts.', summary: 'Too large' };
-    mkdirSync(ctx.workDir, { recursive: true });
-    const full = join(ctx.workDir, file);
-    const existed = existsSync(full);
-    writeFileSync(full, content, 'utf8');
-    const titlesPath = join(ctx.workDir, '.titles.json');
-    let titles: Record<string, string> = {};
-    try { titles = JSON.parse(readFileSync(titlesPath, 'utf8')); } catch { /* new */ }
-    titles[file] = String(a.title ?? file).slice(0, 120);
-    writeFileSync(titlesPath, JSON.stringify(titles, null, 1));
-    const kind = artifactKind(file);
-    return { ok: true, text: `${existed ? 'Updated' : 'Saved'} ${file} (${content.length.toLocaleString()} characters). The user can open it in the Artifacts panel.`, summary: `${existed ? 'Updated' : 'Saved'} ${titles[file]} · ${file}`, data: { artifact: { file, title: titles[file], kind, path: full } } };
+    let r;
+    try { r = await saveArtifact(ctx.workDir, file, content, String(a.title ?? file)); }
+    catch (e) { return { ok: false, text: `Couldn't build ${file}: ${(e as Error).message}. Check the content's format and try again.`, summary: `Couldn't build ${file}` }; }
+    const what = OFFICE_LABEL[r.kind] ?? 'file';
+    return { ok: true, text: `${r.existed ? 'Updated' : 'Saved'} ${file} (${isOfficeKind(r.kind) ? `${what}, ${Math.max(1, Math.round(r.bytes / 1024))} KB` : `${content.length.toLocaleString()} characters`}). The user sees it as a card under your answer and can open it from there, so don't paste its content into your answer.`, summary: `${r.existed ? 'Updated' : 'Saved'} ${r.title} · ${file}`, data: { artifact: { file, title: r.title, kind: r.kind, path: r.path } } };
   },
 };
 
 export const artifactRead: Tool = {
   name: 'artifact.read', label: 'Reading an artifact', risk: 'read',
-  description: 'Read an artifact you saved earlier in this piece of work (to revise or continue it). Without a filename, lists them.',
+  description: 'Read an artifact you saved earlier in this piece of work (to revise or continue it). Word, Excel and PowerPoint files come back as the Markdown or CSV they were made from. Without a filename, lists them.',
   parameters: { type: 'object', properties: { filename: { type: 'string', description: 'The artifact file name.' } } },
   async run(a, ctx) {
     if (!ctx.workDir) return { ok: false, text: 'Artifacts exist only in Work mode.', summary: 'Not in Work mode' };
@@ -118,7 +154,9 @@ export const artifactRead: Tool = {
     const file = safeName(String(a.filename));
     const hit = file && list.find((x) => x.file.toLowerCase() === file.toLowerCase());
     if (!hit) return { ok: false, text: `No artifact called ${a.filename}. There are: ${list.map((x) => x.file).join(', ') || 'none'}.`, summary: 'Not found' };
-    const text = readFileSync(join(ctx.workDir, hit.file), 'utf8');
+    const office = isOfficeKind(hit.kind);
+    const text = office ? officeSource(ctx.workDir, hit.file) : readFileSync(join(ctx.workDir, hit.file), 'utf8');
+    if (text === null) return { ok: false, text: `${hit.file} wasn't made by Lotus in this work, so there is no text to read back. Write a new version with artifact.write.`, summary: 'No text for this file' };
     return { ok: true, text: text.length > 60_000 ? `${text.slice(0, 60_000)}\n…(cut at 60,000 characters)` : text, summary: `Read ${hit.title}` };
   },
 };
@@ -203,3 +241,56 @@ export const askUser: Tool = {
 };
 
 export const WORK_TOOLS: Tool[] = [planSet, planCheck, artifactWrite, artifactRead, agentDelegate, agentsDeploy, askUser];
+
+// ── 0.21: code never sits in the middle of a Work answer ────────────────────
+const LANG_EXT: Record<string, string> = {
+  html: '.html', htm: '.html', svg: '.svg', css: '.css', js: '.js', javascript: '.js', jsx: '.jsx', ts: '.ts', typescript: '.ts', tsx: '.tsx',
+  py: '.py', python: '.py', sh: '.sh', bash: '.sh', shell: '.sh', powershell: '.ps1', ps1: '.ps1', sql: '.sql', java: '.java', c: '.c', cpp: '.cpp', 'c++': '.cpp',
+  rust: '.rs', rs: '.rs', go: '.go', ruby: '.rb', rb: '.rb', php: '.php', yaml: '.yaml', yml: '.yaml', toml: '.toml', json: '.json', csv: '.csv', markdown: '.md', md: '.md',
+};
+const LANG_NAME: Record<string, string> = { '.html': 'Web page', '.svg': 'Image', '.csv': 'Table', '.md': 'Document', '.json': 'Data' };
+
+/** Which code blocks leave the answer: any web page or SVG, and anything else of 6 lines or more. */
+export function codeBlocksToMove(content: string): { start: number; end: number; lang: string; code: string; ext: string }[] {
+  const out: { start: number; end: number; lang: string; code: string; ext: string }[] = [];
+  const re = /(^|\n)[ \t]*(```|~~~)[ \t]*([\w+#.-]*)[^\n]*\n([\s\S]*?)\n[ \t]*\2[ \t]*(?=\n|$)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content))) {
+    const lang = m[3].toLowerCase();
+    const code = m[4];
+    const looksHtml = /^\s*(<!doctype html|<html[\s>])/i.test(code);
+    const ext = looksHtml ? '.html' : LANG_EXT[lang] ?? '.txt';
+    const lines = code.split('\n').length;
+    if (!(ext === '.html' || ext === '.svg' || lines >= 6)) continue;
+    out.push({ start: m.index + m[1].length, end: m.index + m[0].length, lang, code, ext: ext === '.txt' ? '.md' : ext });
+  }
+  return out;
+}
+
+/**
+ * The answer of a Work run, with its long code blocks saved as files in the work folder instead.
+ * Each block becomes a line naming the file; the file shows as a card under the answer.
+ */
+export async function moveCodeToFiles(content: string, dir: string): Promise<{ content: string; saved: { file: string; title: string; kind: string; path: string }[] }> {
+  const blocks = codeBlocksToMove(content);
+  if (!blocks.length || !dir) return { content, saved: [] };
+  const taken = new Set(listArtifacts(dir).map((a) => a.file.toLowerCase()));
+  const saved: { file: string; title: string; kind: string; path: string }[] = [];
+  let out = '', at = 0;
+  for (const b of blocks) {
+    // The title is the heading or the line just before the block ("Here is the landing page:").
+    const before = content.slice(0, b.start).trimEnd().split('\n').pop() ?? '';
+    const named = /<title>([^<]{2,80})<\/title>/i.exec(b.code)?.[1]?.trim() || before.replace(/^#+\s*/, '').replace(/[:：]\s*$/, '').replace(/[*_`]/g, '').trim().slice(0, 60);
+    const title = named && named.length > 2 && named.length <= 60 ? named : (LANG_NAME[b.ext] ?? `Code (${b.lang || b.ext.slice(1)})`);
+    const stem = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || (b.ext === '.html' ? 'page' : 'code');
+    let file = `${stem}${b.ext}`;
+    for (let n = 2; taken.has(file.toLowerCase()); n++) file = `${stem}-${n}${b.ext}`;
+    taken.add(file.toLowerCase());
+    const r = await saveArtifact(dir, file, b.code, title);
+    saved.push({ file, title: r.title, kind: r.kind, path: r.path });
+    out += `${content.slice(at, b.start)}*Saved as ${file}.*`;
+    at = b.end;
+  }
+  out += content.slice(at);
+  return { content: out.replace(/\n{3,}/g, '\n\n').trim(), saved };
+}

@@ -128,6 +128,7 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
     case 'agent_answer': return { found: true, value: agent.answer(str(a.runId), str(a.askId), str(a.answer)) };
     case 'work_artifacts': return { found: true, value: agent.artifacts(str(a.workId)) };
     case 'work_artifact': return { found: true, value: agent.artifactText(str(a.workId), str(a.file)) };
+    case 'work_open': return { found: true, value: agent.artifactOpen(str(a.workId), str(a.file)) };
     case 'work_dir': return { found: true, value: agent.workDir(str(a.workId)) };
     // 0.9.5: a new folder under Images/ for one generation, named from its prompt or title.
     case 'media_folder': return { found: true, value: { dir: newImageFolder(o.studio, str(a.name)) } };
