@@ -122,7 +122,7 @@ export const webSearch: Tool = {
 
 export const webRead: Tool = {
   name: 'web.read', label: 'Reading a web page', risk: 'read',
-  description: 'Open a web page and read its text.',
+  description: 'Open a web page and read its text. Also opens JSON and CSV data feeds (APIs).',
   parameters: { type: 'object', properties: { url: { type: 'string', description: 'The page address (http or https).' } }, required: ['url'] },
   describe: (a) => `Open ${String(a.url)}`,
   async run(a, ctx) {

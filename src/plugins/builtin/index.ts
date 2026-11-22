@@ -4,6 +4,7 @@ import { CODE } from './code';
 import { CAVEMAN, SITE_AUDIT } from './community';
 import { DESIGN } from './design';
 import { DOCUMENTS } from './documents';
+import { GLOBE } from './globe';
 import { SUPERPOWERS } from './superpowers';
 import { TOOLKIT } from './toolkit';
 import { WRITING } from './writing';
@@ -12,7 +13,7 @@ import type { LotusPlugin } from '../types';
 
 export type { BuiltinPluginDef, PluginCredit } from './types';
 
-export const BUILTIN_PLUGINS: BuiltinPluginDef[] = [SUPERPOWERS, DESIGN, DOCUMENTS, WRITING, CODE, TOOLKIT, SITE_AUDIT, CAVEMAN];
+export const BUILTIN_PLUGINS: BuiltinPluginDef[] = [SUPERPOWERS, DESIGN, DOCUMENTS, WRITING, CODE, TOOLKIT, SITE_AUDIT, GLOBE, CAVEMAN];
 
 export const isBuiltinId = (id: string) => id.startsWith('builtin-');
 
@@ -38,6 +39,7 @@ export const NOT_BROUGHT_OVER: { name: string; why: string }[] = [
   { name: 'chrome-browser, built-in-browser, computer-use', why: 'About Claude’s own apps; Lotus has its own browser and computer tools with their own instructions.' },
   { name: 'artifact-capabilities, artifact-diagramming, artifact-design', why: 'claude.ai page features. The design and diagram parts became web-page-design and diagrams.' },
   { name: 'claude-api, update-config, keybindings-help, fewer-permission-prompts, init, run, session-start-hook, plugin-authoring', why: 'Settings and tools of Claude Code itself; Lotus has its own plugin creator.' },
+  { name: 'God’s Eye View (the app itself)', why: 'A whole 3D globe app with its own server; Lotus connects to it as a tool server instead (Globe plugin). Its bundled datasets are not MIT and some are non-commercial.' },
   { name: 'loop', why: 'Lotus Routines already repeat work on a schedule.' },
   { name: 'skill-creator', why: 'Merged into writing-skills (Superpowers).' },
   { name: 'dispatching-parallel-agents, subagent-driven-development', why: 'Merged into delegating-to-helpers (Superpowers).' },
