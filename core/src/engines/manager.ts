@@ -21,7 +21,7 @@ import type { Subprocess } from 'bun';
 import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
-import { fitChatCtx, MB, memoryMb, type ChatFit } from './chatFit';
+import { fitChatCtx, MB, memoryMb, planMoe, type ChatFit } from './chatFit';
 import { readGgufInfo } from './gguf';
 import { gpuMemory } from '../hardware';
 import { SttServers } from './sttServer';
@@ -31,6 +31,17 @@ import { missingFor, sdcppArgs, sdcppStepReader, sizeFor, type ImageFolder, type
 export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx', ffmpeg: 'ffmpeg' };
 export const IMAGE_FOLDERS: ImageFolder[] = ['checkpoints', 'diffusion_models', 'text_encoders', 'vae', 'loras'];
 export const PROFILES_KEY = 'lotus.imageProfiles.v1';
+
+/**
+ * 0.21.0: the message when llama.cpp stopped because it doesn't know the model's design yet ("unknown
+ * model architecture: 'inkling2_loop'"), which happens with brand-new models such as Inkling 2 Mini.
+ */
+export function engineTooOld(log: string, title: string, tag?: string): string | null {
+  const m = /unknown (?:model )?architecture:? '?([\w.-]+)'?/i.exec(log);
+  if (!m) return null;
+  return `${title} needs a newer llama.cpp than the one installed${tag ? ` (${tag})` : ''}: this version doesn't know its design (${m[1]}). `
+    + 'Click Update in Settings → Models (Lotus Engines). If no newer version is offered, llama.cpp doesn\'t run this model yet; new models usually arrive within days.';
+}
 
 export interface EngineRecord { tag: string; flavour: string; dir: string; exes: Record<string, string>; installedAt: number }
 export interface InstalledModel {
@@ -606,7 +617,11 @@ export class Builtins {
   /** The context the built-in chat engine can give this model on this computer right now. */
   async chatFit(modelId: string): Promise<ChatFit> {
     const f = this.modelFiles(modelId);
-    return fitChatCtx({ info: f.info, weightsMb: f.weightsMb, hasVision: f.hasVision, budgetMb: await this.chatBudgetMb(), min: MIN_CHAT_CTX, max: MAX_CHAT_CTX });
+    const input = { info: f.info, weightsMb: f.weightsMb, hasVision: f.hasVision, budgetMb: await this.chatBudgetMb(), min: MIN_CHAT_CTX, max: MAX_CHAT_CTX };
+    const fit = fitChatCtx(input);
+    // 0.21.0: a mixture-of-experts model too big for the card keeps its experts in system memory.
+    const moe = planMoe(input);
+    return moe ? { ...fit, ctx: moe.ctx, fits: moe.fits, moe } : fit;
   }
 
   private async startChat(modelId: string, o: { ctx?: number; auto?: boolean; grow?: boolean }): Promise<string> {
@@ -618,20 +633,25 @@ export class Builtins {
     let fit: ChatFit | undefined;
     try { fit = await this.chatFit(modelId); } catch { fit = undefined; }
     const ctx = o.auto && fit ? fit.ctx : Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
-    const memMb = memoryMb(info, weightsMb, hasVision, ctx);
     const exe = this.exe('llama', 'llama-server');
+    const help = await this.sdcppHelp(exe);
+    // Experts in system memory only when the context is the one the split was planned for.
+    const moe = fit?.moe && fit.moe.cpuLayers > 0 && ctx <= fit.moe.ctx && help.includes('--n-cpu-moe') ? fit.moe : undefined;
+    // Video memory this server holds (what the next model may take over when this one stops).
+    const memMb = moe ? moe.gpuMb : memoryMb(info, weightsMb, hasVision, ctx);
     const port = await freePort();
     const args = ['-m', join(this.modelsDir, gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
     if (m.mmproj) args.push('--mmproj', join(this.modelsDir, m.mmproj));
     // 0.14.2: llama-server separates thinking from the answer (<think>…</think> → reasoning_content) even
     // for templates it doesn't recognise; before, a model's thinking streamed into Chat's answer.
-    if ((await this.sdcppHelp(exe)).includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
+    if (help.includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
+    if (moe) args.push('--n-cpu-moe', String(moe.cpuLayers));
     const logPath = join(this.enginesDir, ENGINE_DIR.llama, 'server.log');
     mkdirSync(dirname(logPath), { recursive: true });
     const how = { auto: !!o.auto, grown: !!o.grow, fit, memMb };
     this.chat = { state: 'starting', model: modelId, port, ctx, ...how };
     this.emit();
-    this.d.log?.(`llama-server: ${gguf} on ${port}, context ${ctx}${fit?.budgetMb != null ? ` (about ${memMb} MB of ${fit.budgetMb} MB free${fit.fits ? '' : '; the model is bigger than that, so part of it runs on the CPU'})` : ''}`);
+    this.d.log?.(`llama-server: ${gguf} on ${port}, context ${ctx}${fit?.budgetMb != null ? ` (about ${memMb} MB of ${fit.budgetMb} MB free${moe ? `; experts of the first ${moe.cpuLayers} layers (${moe.cpuMb} MB) in system memory` : fit.fits ? '' : '; the model is bigger than that, so part of it runs on the CPU'})` : ''}`);
     const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: Bun.file(logPath), stderr: Bun.file(logPath), stdin: 'ignore', windowsHide: true });
     this.chatProc = proc;
     const url = `http://127.0.0.1:${port}`;
@@ -639,8 +659,10 @@ export class Builtins {
     const t0 = now();
     while (now() - t0 < 300_000) {
       if (proc.exitCode !== null || this.chatProc !== proc) {
-        const tail = (() => { try { return readFileSync(logPath, 'utf8').split('\n').filter((l) => /error|failed|unable|out of memory/i.test(l)).slice(-3).join(' '); } catch { return ''; } })();
-        const msg = `The built-in chat engine stopped while loading ${m.title}${tail ? `: ${tail.slice(0, 300)}` : ''}. The model may be too big for this computer; try a smaller one.`;
+        const log = (() => { try { return readFileSync(logPath, 'utf8'); } catch { return ''; } })();
+        const tail = log.split('\n').filter((l) => /error|failed|unable|out of memory/i.test(l)).slice(-3).join(' ');
+        const msg = engineTooOld(log, m.title, this.engines().llama?.tag)
+          ?? `The built-in chat engine stopped while loading ${m.title}${tail ? `: ${tail.slice(0, 300)}` : ''}. The model may be too big for this computer; try a smaller one.`;
         if (this.chatProc === proc) { this.chat = { state: 'error', model: modelId, error: msg }; this.chatProc = null; this.emit(); }
         throw new Error(msg);
       }

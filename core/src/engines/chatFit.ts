@@ -42,6 +42,8 @@ export interface ChatFit {
   /** KV bytes per extra token of context (full-attention layers). */
   kvPerToken: number;
   measured: boolean;
+  /** Mixture-of-experts model split between the card and system memory (planMoe); `ctx` and `fits` follow it. */
+  moe?: MoePlan;
 }
 
 /** Fallback when the file's metadata can't be read: modern models use roughly 16 KB per token per billion parameters. */
@@ -80,4 +82,51 @@ export function fitChatCtx(i: FitInput): ChatFit {
   // The model's own maximum may not be a whole step.
   if (max % CTX_STEP && need(max) <= i.budgetMb) ctx = max;
   return { ctx, fits: need(ctx) <= i.budgetMb, budgetMb: Math.round(i.budgetMb), baseMb, kvMb: Math.round(kvBytes(kv, ctx) / MB), kvPerToken: kv.kvFullBytes, measured: true };
+}
+
+// ── Mixture-of-experts models bigger than the graphics card (0.21.0) ─────────
+//
+// A mixture-of-experts model (gpt-oss, Qwen 3 30B A3B, Gemma 4 26B A4B, Inkling 2 Mini…) only uses a
+// few of its experts for each word. When the whole file doesn't fit in video memory, the fastest way
+// to run it is to keep the attention, the shared weights and the context on the graphics card and the
+// expert weights of the first N layers in system memory (llama.cpp's --n-cpu-moe N): the processor
+// then reads only the few experts each word picks. Moving whole layers to the processor instead (what
+// llama.cpp does with an explicit context and no --n-cpu-moe) runs every part of those layers there
+// and is several times slower.
+
+/** Context a model split this way gets: plenty for chat and Work, small enough to leave room for experts. */
+export const MOE_SPLIT_CTX = 32768;
+
+export interface MoePlan {
+  /** Layers whose experts stay in system memory (--n-cpu-moe). */
+  cpuLayers: number;
+  ctx: number;
+  /** Expert weights in system memory, in MB. */
+  cpuMb: number;
+  /** What stays on the graphics card (weights + context), in MB. */
+  gpuMb: number;
+  /** False when even with every expert in system memory the rest is bigger than the card. */
+  fits: boolean;
+}
+
+/**
+ * How to split a mixture-of-experts model that doesn't fit the card. Null when the model fits as it
+ * is, isn't a mixture of experts, or the card's free memory is unknown.
+ */
+export function planMoe(i: FitInput): MoePlan | null {
+  const experts = i.info?.expertBytes ?? [];
+  if (!i.info || !experts.length || i.budgetMb === null) return null;
+  // A model that fits the card whole stays whole: every expert on the card is fastest.
+  if (fitChatCtx(i).fits) return null;
+  const expertMb = experts.map((b) => b / MB);
+  const allMb = expertMb.reduce((s, b) => s + b, 0);
+  // The context first: what fits with every expert moved out, capped at MOE_SPLIT_CTX.
+  const rest = fitChatCtx({ ...i, weightsMb: Math.max(0, i.weightsMb - allMb), max: Math.min(i.max, MOE_SPLIT_CTX) });
+  const ctx = rest.ctx;
+  const need = i.weightsMb + overheadMb(i.info, i.hasVision) + (kvBytes(i.info, ctx) * 1.05) / MB;
+  // Then as few layers' experts in system memory as possible: the fewer there, the faster each word.
+  let cpuLayers = 0, moved = 0;
+  while (cpuLayers < expertMb.length && need - moved > i.budgetMb) moved += expertMb[cpuLayers++];
+  // (llama.cpp counts layers from the first; a dense layer adds nothing here but still counts.)
+  return { cpuLayers, ctx, cpuMb: Math.round(moved), gpuMb: Math.round(need - moved), fits: need - moved <= i.budgetMb };
 }
