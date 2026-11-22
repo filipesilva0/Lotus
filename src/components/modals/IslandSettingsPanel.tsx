@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Tip } from '../common/Tip';
 import { Toggle } from '../common/Toggle';
-import { Btn, Banner, Select, InfoNote } from '../common/ui';
+import { Btn, Banner, Select, InfoNote, TextInput } from '../common/ui';
 import { IslandSettings, loadIsland, saveIsland } from '../../island/state';
 import { voicebox, VoiceProfile } from '../../services/voicebox';
 import { invokeNative } from '../../lib/bus';
@@ -71,6 +71,40 @@ export const IslandSettingsPanel: React.FC<{ models: { id: string; name: string 
         ) : <div className="py-2.5"><InfoNote title="Read-aloud voice">The island reads with the voice in use on the Voice page. Change it there.</InfoNote></div>}
         <Row title="Collapse when I click away" hint="The chat folds back into the pill a few seconds after it loses focus.">
           <Toggle checked={s.autoCollapse} onChange={(v) => set({ autoCollapse: v })} ariaLabel="Collapse when I click away" />
+        </Row>
+        <Row title="Open with the mouse" hint="Push the mouse against the top centre of any screen and the island opens there, with your quick buttons, a note box and what's next.">
+          <Toggle checked={s.wake} onChange={(v) => set({ wake: v })} ariaLabel="Open with the mouse" />
+        </Row>
+        <Row title="Colour" hint="Match Lotus: white in light mode, black in dark mode. On a Mac it is always black, to blend with the notch.">
+          <Select value={s.surface} onChange={(e) => set({ surface: e.target.value as IslandSettings['surface'] })} className="!w-52" aria-label="Island colour">
+            <option value="auto">Match Lotus</option>
+            <option value="black">Always black</option>
+          </Select>
+        </Row>
+      </Group>
+
+      <Group title="On the island">
+        <Row title="Now playing" hint="Shows the song or video playing on this PC, with play, pause and skip.">
+          <Toggle checked={s.media} onChange={(v) => set({ media: v })} ariaLabel="Now playing" />
+        </Row>
+        <Row title="Pause music while Lotus talks" hint="Your music pauses during calls, dictation and read-aloud, and plays again when they end.">
+          <Toggle checked={s.autoPause} onChange={(v) => set({ autoPause: v })} ariaLabel="Pause music while Lotus talks" />
+        </Row>
+        <Row title="Offer actions for copied text" hint="After you copy some text, the island offers Explain, Summarise, Translate, Fix wording and Read aloud. Everything stays on this PC. Copies from password managers are ignored.">
+          <Toggle checked={s.clipboard} onChange={(v) => set({ clipboard: v })} ariaLabel="Offer actions for copied text" />
+        </Row>
+        {s.clipboard && (
+          <Row title="Translate into" hint="The language for Translate.">
+            <TextInput value={s.translateTo} onChange={(e) => set({ translateTo: e.target.value })} className="!w-52" aria-label="Translate into" />
+          </Row>
+        )}
+        <Row title="Focus timer" hint="Minutes for a focus timer. Start one from the island, or with Focus on a task.">
+          <Select value={String(s.focusMinutes)} onChange={(e) => set({ focusMinutes: Number(e.target.value) })} className="!w-52" aria-label="Focus timer minutes">
+            {[15, 25, 45, 60].map((m) => <option key={m} value={m}>{m} minutes</option>)}
+          </Select>
+        </Row>
+        <Row title="Calendar for Next up" hint="Paste your calendar's private address (in Google Calendar: Settings → your calendar → Secret address in iCal format; in Outlook: Settings → Shared calendars → Publish). Lotus reads it every 10 minutes to show your next meeting with a Join button. Leave empty to show only tasks and routines.">
+          <TextInput value={s.calendarUrl} onChange={(e) => set({ calendarUrl: e.target.value.trim() })} placeholder="https://…/basic.ics" className="!w-52" aria-label="Calendar address" />
         </Row>
       </Group>
 

@@ -39,6 +39,9 @@ winreg = "0.55"
 # versions, pinned so the bindings match the ones wry hands us.
 webview2-com = "=0.38.2"
 windows-core = "=0.61.2"
+# 0.23 island: what's playing (Windows media controls) and copied text. Same versions wry already uses.
+windows = { version = "=0.61.3", features = ["Foundation", "Media_Control", "Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_UI_WindowsAndMessaging"] }
+windows-future = "=0.2.1"
 
 # macOS: place the traffic lights in Lotus's title bar (src/mac_chrome.rs). Already in the build
 # through tao; same versions, only the AppKit classes we call are switched on.

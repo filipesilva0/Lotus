@@ -15,7 +15,7 @@
 import { useSyncExternalStore } from 'react';
 import { kv } from '../lib/store';
 import { uid } from '../lib/persist';
-import { reportActivity } from '../lib/bus';
+import { emitEvent, reportActivity } from '../lib/bus';
 import { hasLiveSettings, liveSettings } from '../lib/liveSettings';
 import { llm } from '../services/llm';
 import { agentAvailable, runAgent } from '../lib/agent';
@@ -50,7 +50,13 @@ export interface CallState {
 const bargeDefault = () => { try { return kv.getItem(BARGE_KEY) !== 'off'; } catch { return true; } };
 let st: CallState = { phase: 'idle', call: null, partial: '', muted: false, level: 0, error: null, bargeIn: bargeDefault() };
 const subs = new Set<() => void>();
-const set = (p: Partial<CallState>) => { st = { ...st, ...p }; subs.forEach((f) => f()); };
+const set = (p: Partial<CallState>) => {
+  const was = st.phase;
+  st = { ...st, ...p };
+  subs.forEach((f) => f());
+  // 0.23: the island pauses your music while a call is on, and plays it again after.
+  if ((was === 'idle') !== (st.phase === 'idle')) void emitEvent('call:active', st.phase !== 'idle').catch(() => undefined);
+};
 export const callState = () => st;
 export function useCall(): CallState {
   return useSyncExternalStore((f) => { subs.add(f); return () => { subs.delete(f); }; }, () => st, () => st);

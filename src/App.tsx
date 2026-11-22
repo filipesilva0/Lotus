@@ -41,6 +41,9 @@ import { pickProfile, proposalParams, type ImageProposal } from './chat/imagePro
 import { useUpdates } from './hooks/useUpdates';
 import { applyThemeToDocument, APP_PALETTE } from './styles/theme';
 import { emitEvent, invokeNative, onEvent } from './lib/bus';
+import { coreFetch } from './lib/core';
+import { handFiles } from './lib/fileDrop';
+import { callState, startCall } from './voice/call';
 import { KEY_PETAL_HUE, LOTUS_LOOK, petal } from './agents/avatars';
 import { WelcomeSetup } from './components/setup/WelcomeSetup';
 import { loadSetup } from './setup/state';
@@ -403,6 +406,16 @@ export default function App() {
     void onEvent<string | null>('main:navigate', (v) => { const page = pageFromName(v); if (page) setCurrentView(page); }).then((u) => offs.push(u));
     void onEvent<string>('chat:prefill', (text) => { setCurrentView('chat'); setPrefill({ text, nonce: Date.now() }); }).then((u) => offs.push(u));
     void onEvent<{ role: 'user' | 'assistant'; content: string }[]>('chat:import', (msgs) => { chat.importMessages(msgs); setCurrentView('chat'); }).then((u) => offs.push(u));
+    // 0.23: the island's Call button, and files sent from its shelf to a page.
+    void onEvent('main:call', () => { setCurrentView('voice'); if (callState().phase === 'idle') startCall({ memory: true }); }).then((u) => offs.push(u));
+    void onEvent<{ page: string; names: string[] }>('main:files', (h) => {
+      const page = pageFromName(h?.page);
+      if (page) setCurrentView(page);
+      void Promise.all((h?.names ?? []).map(async (n) => {
+        const b = await (await coreFetch(`/v1/shelf/${encodeURIComponent(n)}`)).blob();
+        return new File([b], n, { type: b.type });
+      })).then(handFiles).catch(() => undefined);
+    }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
   }, [chat.importMessages]); // eslint-disable-line react-hooks/exhaustive-deps
 
