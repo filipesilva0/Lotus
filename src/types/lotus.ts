@@ -121,6 +121,8 @@ export interface LotusSettings {
   /** 0.18.0: shows the enthusiast settings (Engines, Advanced: cloud keys, MCP, local API). Off for new installs. */
   advancedMode?: boolean;
   selectedModel: string;
+  /** The model voice calls use (0.21.6); empty or missing = the chat model. */
+  callModel?: string;
   temperature: number;
   topP: number;
   contextWindow: number;

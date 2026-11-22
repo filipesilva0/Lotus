@@ -11,6 +11,7 @@ import { VoicesView } from './studio/VoicesView';
 import { StoriesView, newStory } from './studio/StoriesView';
 import { SttEmpty, SttProgress, TranscriptCard } from './studio/SttView';
 import { CallView, PastCall } from './studio/CallView';
+import type { MenuModel } from '../common/PromptParts';
 import { MicPicker } from '../common/MicPicker';
 import { saveCalls, startCall, useCall, useSavedCalls } from '../../voice/call';
 import { transcribeLong, useSttJob } from '../../voice/stt';
@@ -38,7 +39,7 @@ type Mode = 'call' | 'speak' | 'voices' | 'stories' | 'dictate';
 const LANGS = ['Auto', 'English', 'Portuguese', 'Spanish', 'French', 'German', 'Italian', 'Dutch', 'Japanese', 'Chinese', 'Korean', 'Russian'];
 const STARTERS = ['Good morning! Here is your plan for today.', 'Once upon a time, in a quiet village by the sea, there lived a curious little fox.', 'Welcome to our podcast. Today we talk about local AI.'];
 
-export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; onOpenModels: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ settings, onSettings, onOpenModels, onOpenInChat }) => {
+export const BuiltinVoice: React.FC<{ models: MenuModel[]; settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; onOpenModels: () => void; onOpenInChat?: (a: { name: string; text: string; prompt: string }) => void }> = ({ models, settings, onSettings, onOpenModels, onOpenInChat }) => {
   const studio = useStudio();
   const b = studio.builtins;
   const { setRight } = usePanels();
@@ -246,7 +247,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
       <div className="flex-1 min-w-0 flex flex-col min-h-0">
         {mode === 'call' && (pastCall
           ? <div className="flex-1 min-h-0 overflow-y-auto"><PastCall call={pastCall} onOpenInChat={onOpenInChat} onCallAgain={() => { setCallSel(null); startCall({ memory: callMemory }); }} /></div>
-          : <div className="flex-1 min-h-0"><CallView model={settings.selectedModel} dictation={!!dictation.length && engineOk} voice={voice?.ready ? voice.name : null}
+          : <div className="flex-1 min-h-0"><CallView model={settings.callModel || settings.selectedModel} models={models} callModel={settings.callModel ?? ''} onCallModel={(id) => onSettings({ callModel: id })} dictation={!!dictation.length && engineOk} voice={voice?.ready ? voice.name : null}
               memoryDefault={callMemory} onMemoryDefault={(on) => { setCallMemoryDefault(on); kv.setItem('lotus.voice.callMemory', on ? '1' : '0'); }} onOpenModels={onOpenModels} /></div>)}
         <div ref={scroller} className={cx('flex-1 min-h-0 overflow-y-auto', mode === 'call' && 'hidden')}>
           {notice && <div className="max-w-[760px] mx-auto px-6 pt-4"><BuiltinNotice kind="voice" purpose={mode === 'dictate' ? 'to turn speech into text' : 'to speak'} /></div>}

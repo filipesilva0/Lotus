@@ -10,6 +10,7 @@ import { AgentFace } from '../../common/AgentFace';
 import { currentAssistantName, useAssistantName } from '../../../lib/identity';
 import { prettyModelName } from '../../../models/names';
 import { CallLog } from '../../../voice/studio';
+import { ModelMenu, type MenuModel } from '../../common/PromptParts';
 import { callBlocker, endCall, interrupt, setBargeIn, setCallMemory, setMuted, startCall, useCall } from '../../../voice/call';
 
 const PHASE: Record<string, string> = {
@@ -43,7 +44,7 @@ export const PastCall: React.FC<{ call: CallLog; onCallAgain: () => void; onOpen
 };
 
 /** The call screen: face, status, what was said, and the controls. */
-export const CallView: React.FC<{ model: string; dictation: boolean; voice: string | null; memoryDefault: boolean; onMemoryDefault: (on: boolean) => void; onOpenModels: () => void }> = ({ model, dictation, voice, memoryDefault, onMemoryDefault, onOpenModels }) => {
+export const CallView: React.FC<{ model: string; models: MenuModel[]; callModel: string; onCallModel: (id: string) => void; dictation: boolean; voice: string | null; memoryDefault: boolean; onMemoryDefault: (on: boolean) => void; onOpenModels: () => void }> = ({ model, models, callModel, onCallModel, dictation, voice, memoryDefault, onMemoryDefault, onOpenModels }) => {
   const c = useCall();
   const { setRight } = usePanels();
   const live = !!c.call;
@@ -73,7 +74,11 @@ export const CallView: React.FC<{ model: string; dictation: boolean; voice: stri
           </button>
         )}
       </div>
-      <div className="shrink-0 flex flex-wrap justify-center gap-x-1 pb-4">
+      <div className="shrink-0 flex flex-wrap items-center justify-center gap-x-1 pb-4">
+        {/* 0.21.6: the model for calls, apart from Chat's (a small fast model often suits a call best). */}
+        <ModelMenu model={model} models={models} onModel={onCallModel} onOpenModels={onOpenModels} heading="Model for calls"
+          title={callModel ? `Model for calls (${callModel})` : `Model for calls: the same as Chat (${model || 'none'})`} />
+        {callModel && <button type="button" onClick={() => onCallModel('')} className="h-7 px-2.5 rounded-[8px] text-[12px] text-[var(--color-text-muted)] hover:bg-[var(--hover)]">Use Chat's model</button>}
         <button type="button" onClick={() => (live ? setCallMemory(!memoryOn) : onMemoryDefault(!memoryOn))} aria-pressed={memoryOn}
           className={cx('h-7 px-2.5 rounded-[8px] inline-flex items-center gap-1.5 text-[12px]', memoryOn ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-muted)]', 'hover:bg-[var(--hover)]')}>
           <BrainCircuit className="w-3.5 h-3.5" />{memoryOn ? 'Memory on: remembers across calls and chats' : 'Memory off: this call is not remembered'}
