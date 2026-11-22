@@ -40,7 +40,7 @@ Lotus's Voice workspace talks to the Voicebox server over its local REST API
 ## Built-in plugins brought over from Claude's skills (0.21)
 
 Lotus ships built-in plugins (Tasks → Plugins → Built into Lotus) with skills adapted from the skills
-and plugins Claude uses. Three come from MIT projects and are adapted (shortened and reworded for
+and plugins Claude uses. Four come from MIT projects and are adapted (shortened and reworded for
 small local models and Lotus's tools); their notices are kept here as the MIT licence requires. The
 full MIT licence text is under "MIT License text" below.
 
@@ -51,6 +51,13 @@ full MIT licence text is under "MIT License text" below.
 - **Site Audit** (`src/plugins/builtin/community.ts`), adapted from claude-site-audit 1.0.0.
   https://github.com/rjspence3/claude-site-audit · License: MIT (as declared in its plugin
   manifest), Copyright (c) Rob Spence. Its PDF script and reference files are not included.
+- **Globe** (`src/plugins/builtin/globe.ts`), adapted from the tool playbook and MCP server
+  instructions of God's Eye View. https://github.com/bilawalsidhu/gods-eye-view · License: MIT,
+  Copyright (c) 2026 Bilawal Sidhu. Only ideas and short instructions are adapted: none of its code,
+  bundled datasets (which have their own, partly non-commercial licences), 3D models or media are
+  included. Lotus can connect to a copy the user runs as an MCP tool server. "God's Eye View" is a
+  trademark of Metaversity LLC; the plugin uses its own name and mentions the app only to say it
+  works with it.
 
 The other built-in plugins (Design, Documents, Writing, Code Quality, Toolkit) are written from
 scratch for Lotus. They do the same jobs as Anthropic's design, document, humanizer, research and

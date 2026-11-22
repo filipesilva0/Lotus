@@ -326,13 +326,26 @@ export async function searchWebWith(io: WebIO, query: string, o: SearchOpts): Pr
   return (await metaSearch(io, q, { limit: o.limit, signal: o.signal, health: o.health ?? autoHealth })).results;
 }
 
+/** JSON (also GeoJSON and other +json types) and CSV: the data feeds web.read can open. */
+export const isDataType = (type: string): boolean => /application\/([a-z.+-]+\+)?json|text\/(csv|json)/i.test(type);
+
+/** A data answer as compact text a small model can read: JSON without spaces, both cut at 12,000 characters. */
+export function dataText(raw: string, type: string): string {
+  let t = raw;
+  if (/json/i.test(type)) { try { t = JSON.stringify(JSON.parse(raw)); } catch { /* not valid JSON: keep it as it came */ } }
+  return t.length > 12_000 ? `${t.slice(0, 12_000)}\n…(cut at 12,000 characters; ask the feed for fewer results)` : t;
+}
+
 export async function readPageWith(io: WebIO, url: string, signal?: AbortSignal): Promise<WebPage> {
   try {
-    const res = await io.fetch(url, { signal: io.timeout(10_000, signal), headers: { 'User-Agent': UA, Accept: 'text/html,text/plain;q=0.9' } });
+    const res = await io.fetch(url, { signal: io.timeout(10_000, signal), headers: { 'User-Agent': UA, Accept: 'text/html,text/plain;q=0.9,application/json;q=0.8,text/csv;q=0.8' } });
     if (!res.ok) return { url, title: '', text: '', error: `HTTP ${res.status}` };
     const type = res.headers.get('content-type') ?? '';
-    if (!/text\/(html|plain)|xhtml/i.test(type)) return { url, title: '', text: '', error: `Not a web page (${type.split(';')[0] || 'unknown type'})` };
+    const data = isDataType(type);
+    if (!data && !/text\/(html|plain)|xhtml/i.test(type)) return { url, title: '', text: '', error: `Not a web page (${type.split(';')[0] || 'unknown type'})` };
     const raw = (await res.text()).slice(0, 800_000);
+    // 0.21: open data feeds (earthquakes, flights, satellites, weather…) answer JSON or CSV.
+    if (data) return { url, title: url, text: dataText(raw, type) };
     if (/text\/plain/i.test(type)) return { url, title: url, text: raw.slice(0, 6000) };
     return { url, ...readableText(raw) };
   } catch (e) {
