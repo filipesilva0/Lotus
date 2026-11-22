@@ -21,16 +21,29 @@ import type { Subprocess } from 'bun';
 import { BUILTIN_ORDER, BuiltinId, exeName, parseReleases, pickRelease, releaseAccepted, RUNTIMES } from './assets';
 import { download, DownloadError, findFile, folderBytes, listFiles, makeExecutable, removeTree, unpack, type FetchFn } from './files';
 import { readMachine, type Machine } from './machine';
-import { fitChatCtx, MB, memoryMb, type ChatFit } from './chatFit';
+import { fitChatCtx, MB, memoryMb, planMoe, type ChatFit } from './chatFit';
 import { readGgufInfo } from './gguf';
 import { gpuMemory } from '../hardware';
 import { SttServers } from './sttServer';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
+import { sdcppHasVideo, sdcppVideoArgs, videoStepTotals, type VideoAttempt, type VideoFamily, type VideoFiles, type VideoRun } from '../../../src/models/videoModels';
+import { freemem } from 'node:os';
 import { missingFor, sdcppArgs, sdcppStepReader, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
 
 export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx', ffmpeg: 'ffmpeg' };
 export const IMAGE_FOLDERS: ImageFolder[] = ['checkpoints', 'diffusion_models', 'text_encoders', 'vae', 'loras'];
 export const PROFILES_KEY = 'lotus.imageProfiles.v1';
+
+/**
+ * 0.21.0: the message when llama.cpp stopped because it doesn't know the model's design yet ("unknown
+ * model architecture: 'inkling2_loop'"), which happens with brand-new models such as Inkling 2 Mini.
+ */
+export function engineTooOld(log: string, title: string, tag?: string): string | null {
+  const m = /unknown (?:model )?architecture:? '?([\w.-]+)'?/i.exec(log);
+  if (!m) return null;
+  return `${title} needs a newer llama.cpp than the one installed${tag ? ` (${tag})` : ''}: this version doesn't know its design (${m[1]}). `
+    + 'Click Update in Settings → Models (Lotus Engines). If no newer version is offered, llama.cpp doesn\'t run this model yet; new models usually arrive within days.';
+}
 
 export interface EngineRecord { tag: string; flavour: string; dir: string; exes: Record<string, string>; installedAt: number }
 export interface InstalledModel {
@@ -79,6 +92,8 @@ interface Deps {
   hfBase?: string;
   /** Tests: where an ffmpeg already on the computer is (null = none). */
   systemTool?: (name: 'ffmpeg' | 'ffprobe') => string | null;
+  /** Tests: free computer memory in GB. */
+  freeRamGb?: () => number;
 }
 
 const now = () => Date.now();
@@ -606,7 +621,11 @@ export class Builtins {
   /** The context the built-in chat engine can give this model on this computer right now. */
   async chatFit(modelId: string): Promise<ChatFit> {
     const f = this.modelFiles(modelId);
-    return fitChatCtx({ info: f.info, weightsMb: f.weightsMb, hasVision: f.hasVision, budgetMb: await this.chatBudgetMb(), min: MIN_CHAT_CTX, max: MAX_CHAT_CTX });
+    const input = { info: f.info, weightsMb: f.weightsMb, hasVision: f.hasVision, budgetMb: await this.chatBudgetMb(), min: MIN_CHAT_CTX, max: MAX_CHAT_CTX };
+    const fit = fitChatCtx(input);
+    // 0.21.0: a mixture-of-experts model too big for the card keeps its experts in system memory.
+    const moe = planMoe(input);
+    return moe ? { ...fit, ctx: moe.ctx, fits: moe.fits, moe } : fit;
   }
 
   private async startChat(modelId: string, o: { ctx?: number; auto?: boolean; grow?: boolean }): Promise<string> {
@@ -618,20 +637,25 @@ export class Builtins {
     let fit: ChatFit | undefined;
     try { fit = await this.chatFit(modelId); } catch { fit = undefined; }
     const ctx = o.auto && fit ? fit.ctx : Math.min(MAX_CHAT_CTX, Math.max(MIN_CHAT_CTX, o.ctx ?? 0));
-    const memMb = memoryMb(info, weightsMb, hasVision, ctx);
     const exe = this.exe('llama', 'llama-server');
+    const help = await this.sdcppHelp(exe);
+    // Experts in system memory only when the context is the one the split was planned for.
+    const moe = fit?.moe && fit.moe.cpuLayers > 0 && ctx <= fit.moe.ctx && help.includes('--n-cpu-moe') ? fit.moe : undefined;
+    // Video memory this server holds (what the next model may take over when this one stops).
+    const memMb = moe ? moe.gpuMb : memoryMb(info, weightsMb, hasVision, ctx);
     const port = await freePort();
     const args = ['-m', join(this.modelsDir, gguf), '--host', '127.0.0.1', '--port', String(port), '-c', String(ctx), '-np', '1', '--alias', modelId, '--no-webui', '--jinja'];
     if (m.mmproj) args.push('--mmproj', join(this.modelsDir, m.mmproj));
     // 0.14.2: llama-server separates thinking from the answer (<think>…</think> → reasoning_content) even
     // for templates it doesn't recognise; before, a model's thinking streamed into Chat's answer.
-    if ((await this.sdcppHelp(exe)).includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
+    if (help.includes('--reasoning-format')) args.push('--reasoning-format', 'deepseek');
+    if (moe) args.push('--n-cpu-moe', String(moe.cpuLayers));
     const logPath = join(this.enginesDir, ENGINE_DIR.llama, 'server.log');
     mkdirSync(dirname(logPath), { recursive: true });
     const how = { auto: !!o.auto, grown: !!o.grow, fit, memMb };
     this.chat = { state: 'starting', model: modelId, port, ctx, ...how };
     this.emit();
-    this.d.log?.(`llama-server: ${gguf} on ${port}, context ${ctx}${fit?.budgetMb != null ? ` (about ${memMb} MB of ${fit.budgetMb} MB free${fit.fits ? '' : '; the model is bigger than that, so part of it runs on the CPU'})` : ''}`);
+    this.d.log?.(`llama-server: ${gguf} on ${port}, context ${ctx}${fit?.budgetMb != null ? ` (about ${memMb} MB of ${fit.budgetMb} MB free${moe ? `; experts of the first ${moe.cpuLayers} layers (${moe.cpuMb} MB) in system memory` : fit.fits ? '' : '; the model is bigger than that, so part of it runs on the CPU'})` : ''}`);
     const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: Bun.file(logPath), stderr: Bun.file(logPath), stdin: 'ignore', windowsHide: true });
     this.chatProc = proc;
     const url = `http://127.0.0.1:${port}`;
@@ -639,8 +663,10 @@ export class Builtins {
     const t0 = now();
     while (now() - t0 < 300_000) {
       if (proc.exitCode !== null || this.chatProc !== proc) {
-        const tail = (() => { try { return readFileSync(logPath, 'utf8').split('\n').filter((l) => /error|failed|unable|out of memory/i.test(l)).slice(-3).join(' '); } catch { return ''; } })();
-        const msg = `The built-in chat engine stopped while loading ${m.title}${tail ? `: ${tail.slice(0, 300)}` : ''}. The model may be too big for this computer; try a smaller one.`;
+        const log = (() => { try { return readFileSync(logPath, 'utf8'); } catch { return ''; } })();
+        const tail = log.split('\n').filter((l) => /error|failed|unable|out of memory/i.test(l)).slice(-3).join(' ');
+        const msg = engineTooOld(log, m.title, this.engines().llama?.tag)
+          ?? `The built-in chat engine stopped while loading ${m.title}${tail ? `: ${tail.slice(0, 300)}` : ''}. The model may be too big for this computer; try a smaller one.`;
         if (this.chatProc === proc) { this.chat = { state: 'error', model: modelId, error: msg }; this.chatProc = null; this.emit(); }
         throw new Error(msg);
       }
@@ -758,6 +784,102 @@ export class Builtins {
       }
       return made;
      }
+    } finally { this.imageBusy = false; }
+  }
+
+  // ── AI video (sd-cli -M vid_gen, 0.21) ───────────────────────────────
+  /** Installed AI video models with their size and files. */
+  videoModels(): { id: string; title: string; family: VideoFamily; files: VideoFiles }[] {
+    const out: { id: string; title: string; family: VideoFamily; files: VideoFiles }[] = [];
+    for (const m of this.installed()) {
+      if (m.kind !== 'video') continue;
+      const v = m.entryId ? entryById(m.entryId)?.video : undefined;
+      if (v) out.push({ id: m.id, title: m.title, family: v.family, files: v.files });
+    }
+    return out;
+  }
+
+  /** Is the image engine free (no picture or video being made)? */
+  imageEngineBusy() { return this.imageBusy; }
+
+  /**
+   * Makes one AI video clip. Never takes Lotus down with it: sd-cli is its own program, a run that
+   * runs out of memory steps down `attempts` (more memory spare, fewer frames, smaller picture), a run
+   * that prints nothing for 30 minutes is stopped, and every failure ends in a plain sentence.
+   * Returns the clip sd-cli wrote (an .avi, or numbered PNG frames from older builds) and the attempt that worked.
+   */
+  async generateVideoClip(model: { title: string; family: VideoFamily; files: VideoFiles }, attempts: VideoAttempt[], run: Omit<VideoRun, 'output' | 'help'>,
+    o: { signal?: AbortSignal; onProgress?: (step: number, total: number) => void; onRetry?: (why: string, next: VideoAttempt) => void; watchdogMs?: number } = {}): Promise<{ files: string[]; attempt: VideoAttempt; dir: string }> {
+    const exe = this.exe('sd', 'sd-cli');
+    const f = model.files;
+    const need: [('diffusion_models' | 'vae' | 'text_encoders'), string][] = [['diffusion_models', f.model], ...(f.high ? [['diffusion_models', f.high] as ['diffusion_models', string]] : []), ['vae', f.vae], ['text_encoders', f.t5xxl]];
+    const missing = need.filter(([folder, file]) => !existsSync(this.imagePath(folder, file))).map(([, file]) => file);
+    if (missing.length) throw new Error(`${model.title} is missing ${missing.join(', ')}. Remove it in Settings → Models and download it again.`);
+    const help = await this.sdcppHelp(exe);
+    if (!sdcppHasVideo(help)) throw new Error('The installed image engine is too old to make video. Update it in Settings → Engines (stable-diffusion.cpp) and try again.');
+    // The weights wait in RAM while the card works: with too little free, Windows would swap for hours.
+    if (run.lowVram) {
+      const gb = need.filter(([folder]) => folder !== 'vae').reduce((s, [folder, file]) => { try { return s + statSync(this.imagePath(folder, file)).size / 1e9; } catch { return s; } }, 0);
+      const free = (this.d.freeRamGb ?? (() => freemem() / 1e9))();
+      if (free > 0 && free < gb * 0.8) throw new Error(`Making this video needs about ${Math.ceil(gb * 0.8)} GB of free computer memory (RAM) and only ${free.toFixed(1)} GB is free. Close big programs (browsers with many tabs, games) and try again.`);
+    }
+    if (this.imageBusy) throw new Error('The built-in image engine is busy making a picture or another clip. Wait for it to finish.');
+    this.imageBusy = true;
+    const m = await this.machine();
+    if (this.chat.state !== 'stopped' && m.vramGb > 0 && (m.unified ? m.vramGb <= 48 : m.vramGb < 24)) await this.stopChatAndWait();
+    const logPath = join(this.enginesDir, ENGINE_DIR.sd, 'last-video.log');
+    const totals = new Set(videoStepTotals(model.family));
+    let log = '';
+    try {
+      for (let i = 0; i < attempts.length; i++) {
+        const at = attempts[i];
+        const outDir = join(this.enginesDir, ENGINE_DIR.sd, 'out', `v${now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+        mkdirSync(outDir, { recursive: true });
+        const args = sdcppVideoArgs(model.family, f, at, { ...run, help, output: join(outDir, 'clip.avi') }, (folder, file) => this.imagePath(folder, file));
+        log = '';
+        const proc = Bun.spawn([exe, ...args], { cwd: dirname(exe), stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', windowsHide: true });
+        let stalled = false;
+        const kill = () => { try { proc.kill(); } catch { /* gone */ } };
+        o.signal?.addEventListener('abort', kill, { once: true });
+        const quiet = o.watchdogMs ?? 30 * 60_000;
+        let dog = setTimeout(() => { stalled = true; kill(); }, quiet);
+        const read = async (s: ReadableStream<Uint8Array>) => {
+          const dec = new TextDecoder();
+          const readers = [...totals].map((t) => sdcppStepReader(t, undefined, (step, total) => o.onProgress?.(step, total)));
+          for await (const chunk of s) {
+            clearTimeout(dog); dog = setTimeout(() => { stalled = true; kill(); }, quiet);
+            const text = dec.decode(chunk, { stream: true });
+            log += text;
+            if (log.length > 200_000) log = log.slice(-100_000);
+            for (const r of readers) r(text);
+          }
+        };
+        await Promise.all([read(proc.stdout as ReadableStream<Uint8Array>), read(proc.stderr as ReadableStream<Uint8Array>)]);
+        const code = await proc.exited;
+        clearTimeout(dog);
+        o.signal?.removeEventListener('abort', kill);
+        try { writeFileSync(logPath, log); } catch { /* best effort */ }
+        if (o.signal?.aborted) { removeTree(outDir); throw new DOMException('Stopped', 'AbortError'); }
+        const made = readdirSync(outDir).filter((x) => /\.(avi|webm|mkv|mp4|png)$/i.test(x)).sort().map((x) => join(outDir, x));
+        const videoFile = made.find((x) => !/\.png$/i.test(x));
+        if (code === 0 && (videoFile || made.length > 1)) return { files: videoFile ? [videoFile] : made, attempt: at, dir: outDir };
+        removeTree(outDir);
+        if (stalled) throw new Error(`The image engine stopped answering for ${Math.round(quiet / 60_000)} minutes, so Lotus stopped it. The full log is in ${logPath}.`);
+        const oom = sdcppMemoryError(log, m.vramGb);
+        // A crash with no message (a driver reset, code 0xC0000005 and the like) gets the same smaller retry.
+        const crashed = !oom && code !== 0 && !/unknown argument|invalid argument|not found|failed to load|cannot open/i.test(log);
+        if ((oom || crashed) && i < attempts.length - 1) {
+          const next = attempts[i + 1];
+          const why = oom ? 'ran out of graphics memory' : 'stopped unexpectedly';
+          this.d.log?.(`sd-cli video ${why}; retrying at ${next.width}×${next.height}, ${next.frames} frames`);
+          o.onRetry?.(why, next);
+          continue;
+        }
+        if (oom) throw new Error(`${oom.replace(/this image|no image was made/g, (x) => (x === 'this image' ? 'this clip' : 'no clip was made')).replace(/one image at a time/, 'a shorter clip')} Lotus already tried smaller settings. The full log is in ${logPath}.`);
+        const why = log.split(/[\r\n]+/).filter((l) => /error|fail|not found|unknown/i.test(l)).slice(-3).join(' ').slice(0, 400);
+        throw new Error(`The image engine didn't make the clip${why ? `: ${why}` : ''}. The full log is in ${logPath}.`);
+      }
+      throw new Error('The image engine didn\'t make the clip.');
     } finally { this.imageBusy = false; }
   }
 

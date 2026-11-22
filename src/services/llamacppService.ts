@@ -91,8 +91,8 @@ export class LlamaCppService {
       frequency_penalty: o.frequencyPenalty, presence_penalty: o.presencePenalty,
       stop: o.stop?.length ? o.stop : undefined, max_tokens: o.numPredict,
       ...(o.format === 'json' ? { response_format: { type: 'json_object' } } : {}),
-      // The chat template's thinking switch (Qwen 3, Gemma 4, Nemotron…): llama-server reasons by default.
-      ...thinkingKwargs(o.think),
+      // The chat template's thinking switch (Qwen 3, Gemma 4, Nemotron…, Inkling's reasoning_effort): llama-server reasons by default.
+      ...thinkingKwargs(o.think, o.model),
       ...(stream ? { stream_options: { include_usage: true } } : {}),
     };
   }

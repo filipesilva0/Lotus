@@ -48,7 +48,7 @@ export const ALL_TOOLS: Tool[] = [...FILE_TOOLS, ...TASK_TOOLS, ...ROUTINE_TOOLS
 /** Tools only Work mode gets (they need a work folder or are about long jobs). */
 const AVATAR_WORDS = /avatar|blob|face|mascot|character|persona|look like|icon/i;
 // 0.21: the video tools need a work folder for what they make, and keep chat's tool list short.
-const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'artifact.png', 'agent.delegate', 'agents.deploy', 'voice.list', 'video.inspect', 'video.voiceover', 'video.make']);
+const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'artifact.png', 'agent.delegate', 'agents.deploy', 'voice.list', 'video.inspect', 'video.voiceover', 'video.generate', 'video.make']);
 
 /** The command that opens a file with its default app. explorer.exe takes the path as one argument, so nothing is parsed by a shell. */
 export function openCommand(path: string, platform: string = process.platform): string[] {

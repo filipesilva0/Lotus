@@ -17,6 +17,12 @@ export interface VideoBrief {
   seconds?: number;
   /** Narrating: the video's own sound. */
   original?: 'lower' | 'mute' | 'keep';
+  /**
+   * Pictures and ideas: 'stills' moves pictures with slow pans and zooms (quick); 'ai' films new
+   * footage with video.generate (slow: minutes per second of video). From pictures, 'ai' brings
+   * each picture to life (only offered on cards whose model can).
+   */
+  footage?: 'stills' | 'ai';
 }
 
 const voiceStep = (v: VideoBrief['voice']) => (v ? `Use the voice ${v.id} (${v.name}); I chose it.` : 'Call voice.list and pick the best voice for this (language first, then tone); tell me which one and why.');
@@ -36,12 +42,19 @@ export function videoRequest(b: VideoBrief): string {
   }
   const secs = b.seconds ?? 30;
   const lines = Math.max(3, Math.round(secs / 5));
+  const ai = b.footage === 'ai';
+  const film = (from: string) => `For each line, call video.generate once with one shot that shows it (${from}subject, action, place, camera move, light), seconds about that line's length from the voiceover, the same style words every time, aspect "${b.shape}" and filename shot1.mp4, shot2.mp4 and so on. This is slow (minutes per clip): tell me before you start how long it will take. If video.generate says this computer can't, use pictures with slow moves instead and tell me why.`;
   const pics = b.mode === 'pictures'
-    ? `Use my pictures ${list} as the scenes, in this order (look at each with video.inspect first so the script matches it).`
-    : `Make one picture per line with image.generate, aspect ${b.shape}, with the same style words in every prompt so the scenes look like one film.`;
+    ? ai
+      ? `Look at each of my pictures ${list} with video.inspect, then bring them to life in order. ${film('picture set to that picture; ')}`
+      : `Use my pictures ${list} as the scenes, in this order (look at each with video.inspect first so the script matches it).`
+    : ai
+      ? film('')
+      : `Make one picture per line with image.generate, aspect ${b.shape}, with the same style words in every prompt so the scenes look like one film.`;
+  const scenes = ai ? 'the shot files in order as the scenes' : 'the scenes';
   return [
-    `Make a ${secs}-second narrated video, shape ${b.shape}.${about ? ` It is about: ${about}` : ''}`,
-    `Steps: 1) Write a script of about ${lines} short lines (one per scene, about 2.5 words per second) and save it as script.md. 2) ${voiceStep(b.voice)} 3) video.voiceover with the lines. 4) ${pics} 5) video.make with the scenes, voiceover "voiceover.wav" and aspect "${b.shape}".`,
+    `Make a ${secs}-second narrated video, shape ${b.shape}${ai ? ', with new footage filmed by AI' : ''}.${about ? ` It is about: ${about}` : ''}`,
+    `Steps: 1) Write a script of about ${lines} short lines (one per scene, about 2.5 words per second) and save it as script.md. 2) ${voiceStep(b.voice)} 3) video.voiceover with the lines. 4) ${pics} 5) video.make with ${scenes}, voiceover "voiceover.wav" and aspect "${b.shape}".`,
     'Tell me the file name, the voice and what each scene shows.',
   ].join('\n');
 }
