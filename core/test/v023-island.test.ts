@@ -16,7 +16,8 @@ import { islandLook } from '../../src/island/look';
 const dirs: string[] = [];
 const tmp = () => { const d = mkdtempSync(join(tmpdir(), 'lotus-v023-')); dirs.push(d); return d; };
 const stops: (() => void)[] = [];
-afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => rmSync(d, { recursive: true, force: true })); });
+// Windows keeps the open database locked (EBUSY), so cleanup is best effort.
+afterAll(() => { stops.forEach((s) => s()); dirs.forEach((d) => { try { rmSync(d, { recursive: true, force: true }); } catch { /* locked */ } }); });
 const SRC = join(import.meta.dir, '../../src');
 const read = (rel: string) => readFileSync(join(SRC, rel), 'utf8');
 
