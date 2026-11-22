@@ -193,7 +193,10 @@ html.no-glass body { background: var(--color-bg-base); }
 
 /* ── Tips: short names for icon-only buttons (data-tip="…"; data-tip-side="right" | "below", default above).
    Shown after a short hover delay, or at once on keyboard focus. The control keeps its aria-label. ── */
-.tip { position: relative; }
+/* In the components layer so a utility on the element (`absolute`, `fixed`) still wins. Unlayered,
+   this beat Tailwind's `absolute` and pushed the prompt box's top-edge meter 24px past its right
+   edge, outside the box (VRAM bar overflow, 0.21.1). */
+@layer components { .tip { position: relative; } }
 .tip[data-tip]::after {
   content: attr(data-tip); position: absolute; z-index: 60; pointer-events: none;
   left: 50%; bottom: calc(100% + 6px); transform: translate(-50%, 2px);
