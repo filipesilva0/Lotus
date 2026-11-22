@@ -7,13 +7,14 @@ import { DOCUMENTS } from './documents';
 import { GLOBE } from './globe';
 import { SUPERPOWERS } from './superpowers';
 import { TOOLKIT } from './toolkit';
+import { VIDEO } from './video';
 import { WRITING } from './writing';
 import type { BuiltinPluginDef } from './types';
 import type { LotusPlugin } from '../types';
 
 export type { BuiltinPluginDef, PluginCredit } from './types';
 
-export const BUILTIN_PLUGINS: BuiltinPluginDef[] = [SUPERPOWERS, DESIGN, DOCUMENTS, WRITING, CODE, TOOLKIT, SITE_AUDIT, GLOBE, CAVEMAN];
+export const BUILTIN_PLUGINS: BuiltinPluginDef[] = [SUPERPOWERS, DESIGN, DOCUMENTS, WRITING, VIDEO, CODE, TOOLKIT, SITE_AUDIT, GLOBE, CAVEMAN];
 
 export const isBuiltinId = (id: string) => id.startsWith('builtin-');
 
@@ -42,5 +43,6 @@ export const NOT_BROUGHT_OVER: { name: string; why: string }[] = [
   { name: 'God’s Eye View (the app itself)', why: 'A whole 3D globe app with its own server; Lotus connects to it as a tool server instead (Globe plugin). Its bundled datasets are not MIT and some are non-commercial.' },
   { name: 'loop', why: 'Lotus Routines already repeat work on a schedule.' },
   { name: 'skill-creator', why: 'Merged into writing-skills (Superpowers).' },
+  { name: 'onetake (feitangyuan/onetake)', why: 'PolyForm Noncommercial licence: no commercial use, and Lotus is sold. The Video plugin is Lotus’s own version.' },
   { name: 'dispatching-parallel-agents, subagent-driven-development', why: 'Merged into delegating-to-helpers (Superpowers).' },
 ];

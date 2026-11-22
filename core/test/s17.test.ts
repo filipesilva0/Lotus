@@ -301,7 +301,7 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
       expect(j?.error ?? j?.state).toBe('done');
     }
     const st = await rpc('builtin_status');
-    expect(st.engines.map((e: { installed: boolean; version: string }) => [e.installed, e.version])).toEqual([[true, 'b200'], [true, 'master-1-abc'], [true, 'v1.13.7']]);
+    expect(st.engines.map((e: { installed: boolean; version: string }) => [e.installed, e.version])).toEqual([[true, 'b200'], [true, 'master-1-abc'], [true, 'v1.13.7'], [false, null]]); // 0.21: FFmpeg is installed on request (Video)
     expect(existsSync(join(studio, 'Engines', 'llama.cpp', 'b200', 'build', 'bin', 'llama-server'))).toBe(true);
     expect(hits.filter((h) => h === '/dl/none').length).toBe(0); // the release without binaries was skipped
 

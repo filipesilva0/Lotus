@@ -53,6 +53,8 @@ export interface ToolCtx {
   deploy?: (jobs: { goal: string; name?: string }[], context: string) => Promise<{ name: string; content: string; steps: number; ok: boolean; sources?: { title: string; url: string }[] }[]>;
   /** The built-in engines (session 17): image.generate uses them when Settings → Engines picks Built in. */
   builtins?: import('../engines/manager').Builtins;
+  /** 0.21: can Lotus Pro features be used now (copied voices)? Absent = yes (Pro switched off). */
+  proUnlocked?: () => boolean;
   /** The task board and routines in lotus.db (phase 2). Without it (older tests) the tools use kv. */
   board?: BoardAccess;
 }
