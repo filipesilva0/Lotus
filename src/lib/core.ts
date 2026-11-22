@@ -74,7 +74,7 @@ export function coreReady(): Promise<CoreInfo | null> {
   pending ??= askNative().then((i) => {
     info = i;
     pending = null;
-    if (i) openSocket();
+    if (i && !socket) openSocket(); // core:ready may have opened it already
     notify();
     return i;
   });
@@ -177,6 +177,11 @@ export function onCoreEvent(fn: (e: CoreEvent) => void): () => void { listeners.
 function openSocket() {
   if (!info) return;
   if (socketRetry) { clearTimeout(socketRetry); socketRetry = null; }
+  // 0.21.6: one event stream only. At startup the app's core:ready event and coreReady() could both open
+  // one, and every event then arrived twice: each streamed word of a reply was added twice, so calls
+  // spoke every word twice and Chat's thinking showed doubled words (the final answer was replaced
+  // whole, so it looked right).
+  const old = socket; socket = null; try { old?.close(); } catch { /* already closed */ }
   const port = info.port;
   const retry = () => { socketRetry = setTimeout(() => { if (info?.port === port) openSocket(); }, 1500); };
   const deliver = (raw: string) => {
@@ -197,10 +202,10 @@ function openSocket() {
         let buf = '';
         for (;;) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done || socket !== me) break;
           buf += dec.decode(value, { stream: true });
           let nl: number;
-          while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1); if (line) deliver(line); }
+          while ((nl = buf.indexOf('\n')) >= 0) { const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1); if (line && socket === me) deliver(line); }
         }
       } catch { /* closed or failed: retry below */ }
       if (socket !== me || ctrl.signal.aborted) return;
@@ -213,7 +218,7 @@ function openSocket() {
   if (typeof WebSocket === 'undefined') return;
   const ws = new WebSocket(`ws://127.0.0.1:${port}/v1/events?t=${encodeURIComponent(info.token)}`);
   socket = ws;
-  ws.onmessage = (m) => deliver(String(m.data));
+  ws.onmessage = (m) => { if (socket === ws) deliver(String(m.data)); };
   ws.onclose = () => {
     if (socket !== ws) return;
     socket = null;
