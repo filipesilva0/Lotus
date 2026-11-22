@@ -12,7 +12,7 @@
 // Pro (0.18): copied voices follow the Pro switch, like everywhere else in Lotus.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import type { Tool, ToolCtx } from '../agent/types';
 import { resolveMedia } from '../media';
 import { resolveInFolders } from './files';
@@ -177,6 +177,12 @@ const tmpDir = (ctx: ToolCtx) => {
   return d;
 };
 
+/** Removes a tool's scratch folder, and the .video folder once nothing else is using it. */
+function cleanTmp(d: string) {
+  rmSync(d, { recursive: true, force: true });
+  try { const parent = dirname(d); if (!readdirSync(parent).length) rmSync(parent, { recursive: true, force: true }); } catch { /* in use */ }
+}
+
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 // ── Understanding a video ──────────────────────────────────────────────────
@@ -249,7 +255,7 @@ export const videoInspect: Tool = {
         parts.push(`The transcript is saved as ${name}.`);
       }
       return { ok: true, text: parts.join('\n'), summary: isPicture ? `Picture · ${info.width}×${info.height}` : `${clock(info.duration)} video${transcript ? ' · transcript' : ''}`, data: { duration: info.duration, width: info.width, height: info.height, hasAudio: info.hasAudio, ...(imageB64 ? { imageB64, imageNote } : {}) } };
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
+    } finally { cleanTmp(tmp); }
   },
 };
 
@@ -308,7 +314,7 @@ export const videoVoiceover: Tool = {
         text: `Saved ${name} (${total.toFixed(1)} s, voice ${v.name}) and subtitles ${subs}. Lines: ${lines.map((l, i) => `${i + 1}) ${l.start.toFixed(1)}–${l.end.toFixed(1)} s`).join(', ')}.${moved ? ` ${moved} line${moved === 1 ? ' was' : 's were'} moved later so lines don't overlap; shorten them if they must hit their moments.` : ''} Next: video.make with voiceover "${name}".`,
         summary: `${total.toFixed(1)} s voiceover · ${v.name}`, data: { file: name, seconds: total, voice: v.id },
       };
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
+    } finally { cleanTmp(tmp); }
   },
 };
 
@@ -391,7 +397,7 @@ export const videoMake: Tool = {
         text: `Saved ${file}: ${total.toFixed(1)} s, ${width}×${height}, ${scenes.length} scene${scenes.length === 1 ? '' : 's'}${voice ? ', with voiceover' : ''}${music ? ', with music' : ''}${subtitles && r.file.endsWith('.mp4') ? ', with subtitles' : ''} (${mb.toFixed(1)} MB, ${r.encoder}). The user can play it in the Artifacts panel. Scene times: ${scenes.map((s, i) => `${i + 1}) ${basename(s.file)} ${s.duration.toFixed(1)} s`).join(', ')}.`,
         summary: `${file} · ${clock(total)} · ${width}×${height}`, data: { file, seconds: total, encoder: r.encoder },
       };
-    } finally { rmSync(tmp, { recursive: true, force: true }); }
+    } finally { cleanTmp(tmp); }
   },
 };
 
