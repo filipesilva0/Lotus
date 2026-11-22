@@ -55,6 +55,10 @@ full MIT licence text is under "MIT License text" below.
 The other built-in plugins (Design, Documents, Writing, Code Quality, Toolkit) are written from
 scratch for Lotus. They do the same jobs as Anthropic's design, document, humanizer, research and
 code-review skills, but no text from those (proprietary or unclearly licensed) sources is copied.
+The **Video** plugin (0.21) is also written from scratch. The user pointed at onetake
+(https://github.com/feitangyuan/onetake, Copyright (c) 2026 Patrick) as an example; onetake is under
+the PolyForm Noncommercial License 1.0.0, which does not allow commercial use, so none of its text,
+scripts, templates or move library are in Lotus.
 ⚠️ Not reviewed by a lawyer; check before selling Lotus.
 
 ## fflate (bundled inside lotusd, session 17; in the app since 0.11.0)
@@ -68,6 +72,7 @@ Downloaded from each project's GitHub releases into `Lotus Studio/Engines` when 
 - **llama.cpp** (llama-server, chat): MIT. https://github.com/ggml-org/llama.cpp (NVIDIA builds come with NVIDIA's CUDA runtime libraries, under NVIDIA's own licence terms, as published by the project).
 - **stable-diffusion.cpp** (sd-cli, images): MIT. https://github.com/leejet/stable-diffusion.cpp
 - **sherpa-onnx** (speech and dictation): Apache-2.0. https://github.com/k2-fsa/sherpa-onnx. Its 1.x speech programs, which Lotus uses, include espeak-ng (GPL-3.0, https://github.com/espeak-ng/espeak-ng) to pronounce Kokoro and Piper voices; Lotus runs them as separate programs and doesn't ship them. Lotus plays Piper *voice files* with sherpa-onnx and doesn't use the Piper program (whose newer releases are GPL-3.0). GPT-SoVITS (MIT, https://github.com/RVC-Boss/GPT-SoVITS) is installed by the user, not by Lotus; its voice and Whisper model archives come from the same project's `tts-models` and `asr-models` releases (Kokoro: Apache-2.0; Piper voices: MIT, each voice with its own dataset licence; Whisper: MIT). Voice cloning (0.8.2): PocketTTS by Kyutai (code MIT, weights CC-BY-4.0, `tts-models`), ZipVoice by k2-fsa (Apache-2.0, `tts-models`) with the Vocos 24 kHz vocoder (MIT, `vocoder-models`).
+- **FFmpeg** (0.21, videos): LGPL-2.1-or-later. https://ffmpeg.org · builds from https://github.com/BtbN/FFmpeg-Builds (the `lgpl` builds, without GPL-only libraries such as x264 and x265). Lotus runs it as a separate program. A Mac, or a computer that already has FFmpeg, uses its own FFmpeg (which may be a GPL build; that is the user's own copy, not shipped by Lotus).
 - Chat models in GGUF from Hugging Face (unsloth repositories, each model under its maker's licence, shown on the Models page), image models from huggingface.co (Comfy-Org, stabilityai, stable-diffusion-v1-5, madebyollin).
 
 ## Coucou (inspiration for the floating island)

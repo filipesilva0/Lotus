@@ -1,4 +1,4 @@
-import { MessageSquare, Image as ImageIcon, AudioLines, Server, Briefcase, SquareKanban, Sparkles } from 'lucide-react';
+import { MessageSquare, Image as ImageIcon, AudioLines, Server, Briefcase, SquareKanban, Sparkles, Clapperboard } from 'lucide-react';
 import type { ViewMode } from '../../types/lotus';
 
 export interface PageDef {
@@ -16,6 +16,7 @@ export interface PageDef {
  * it at the foot, and it takes the number after the workspaces.
  *
  * 0.21: the pages no longer have their own colours; the whole app shares one accent (styles/theme.ts).
+ * Video (0.21) sits after Voice: it uses Voice's voices and Work's video tools.
  * Tasks was split in two: Tasks keeps the board, routines and activity, and Assistant holds what shapes
  * the assistant itself (memory, soul, skills, plugins).
  */
@@ -24,6 +25,8 @@ export const PAGES: PageDef[] = [
   { id: 'work', label: 'Work', glyph: Briefcase },
   { id: 'images', label: 'Images', glyph: ImageIcon },
   { id: 'voice', label: 'Voice', glyph: AudioLines },
+  // 0.21: narrated videos from your video, your pictures or an idea (runs as a Work job).
+  { id: 'video', label: 'Video', glyph: Clapperboard },
   { id: 'tasks', label: 'Tasks', glyph: SquareKanban },
   { id: 'assistant', label: 'Assistant', glyph: Sparkles },
   { id: 'engines', label: 'Engines & Models', glyph: Server },

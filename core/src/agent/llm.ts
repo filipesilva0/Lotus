@@ -135,7 +135,7 @@ export function toOpenAi(messages: WireMsg[]): unknown[] {
       const id = pending.shift() ?? `call_${++n}`;
       out.push({ role: 'tool', tool_call_id: id, content: m.content });
     } else if ((m.role === 'user' || m.role === 'system') && m.images?.length) {
-      out.push({ role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((b) => ({ type: 'image_url', image_url: { url: `data:image/png;base64,${b}` } }))] });
+      out.push({ role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((b) => ({ type: 'image_url', image_url: { url: `data:${b.startsWith('/9j/') ? 'image/jpeg' : 'image/png'};base64,${b}` } }))] });
     } else out.push({ role: m.role, content: m.content });
   }
   return out;

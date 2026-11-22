@@ -158,6 +158,8 @@ export function useWork(settings: LotusSettings) {
     const empty = ref.current.find((w) => !w.messages.length);
     if (empty) { setActiveId(empty.id); return empty.id; }
     const w = blank();
+    // Known at once, so a page that starts a job right after (Video, 0.21) can send to it before the next render.
+    ref.current = [w, ...ref.current];
     setItems((l) => [w, ...l]);
     setActiveId(w.id);
     return w.id;

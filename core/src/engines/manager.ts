@@ -28,7 +28,7 @@ import { SttServers } from './sttServer';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
 import { missingFor, sdcppArgs, sdcppStepReader, sizeFor, type ImageFolder, type Slot, type ImageProfile, type LoraUse, type SdRun } from '../../../src/models/imageProfiles';
 
-export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx' };
+export const ENGINE_DIR: Record<BuiltinId, string> = { llama: 'llama.cpp', sd: 'stable-diffusion.cpp', sherpa: 'sherpa-onnx', ffmpeg: 'ffmpeg' };
 export const IMAGE_FOLDERS: ImageFolder[] = ['checkpoints', 'diffusion_models', 'text_encoders', 'vae', 'loras'];
 export const PROFILES_KEY = 'lotus.imageProfiles.v1';
 
@@ -77,6 +77,8 @@ interface Deps {
   gpuMemory?: () => Promise<{ usedMb: number; totalMb: number } | null>;
   githubApi?: string;
   hfBase?: string;
+  /** Tests: where an ffmpeg already on the computer is (null = none). */
+  systemTool?: (name: 'ffmpeg' | 'ffprobe') => string | null;
 }
 
 const now = () => Date.now();
@@ -223,7 +225,9 @@ export class Builtins {
     // An installed release Lotus can't use (sherpa-onnx 2.x) counts as not installed, with a note, so
     // the Models page offers Update and the first-run guide fetches the right one.
     const outdated = present && !releaseAccepted(id, r!.tag);
-    return { id, name: RUNTIMES[id].name, role: RUNTIMES[id].role, licence: RUNTIMES[id].licence, installed: present && !outdated, outdated, note: outdated ? RUNTIMES[id].pinNote ?? null : null, version: r?.tag ?? null, flavour: r?.flavour ?? null, folder: join(this.enginesDir, ENGINE_DIR[id]) };
+    // FFmpeg (0.21) that came with the computer works too: say so instead of "Not installed".
+    const system = id === 'ffmpeg' && !present && !!this.videoTool('ffmpeg');
+    return { id, name: RUNTIMES[id].name, role: RUNTIMES[id].role, licence: RUNTIMES[id].licence, installed: present && !outdated, outdated, note: outdated ? RUNTIMES[id].pinNote ?? null : system ? 'Using the FFmpeg already on this computer' : null, version: r?.tag ?? null, flavour: r?.flavour ?? null, folder: join(this.enginesDir, ENGINE_DIR[id]) };
   }
 
   status() {
@@ -304,6 +308,7 @@ export class Builtins {
       const m = await this.machine();
       job.step = 'Finding the latest release…'; this.emit();
       const found = pickRelease(id, await this.releases(id, signal), m);
+      if (!found && id === 'ffmpeg') throw new Error(m.os === 'macos' ? 'FFmpeg has no ready-made build for Macs here. Install it with Homebrew (brew install ffmpeg) and Lotus will use it.' : `FFmpeg has no ready-made build for ${m.os} on ${m.arch}. Install FFmpeg yourself and Lotus will use it.`);
       if (!found) throw new Error(`${spec.name} has no ready-made build for ${m.os === 'macos' ? 'this Mac' : `${m.os} on ${m.arch}`}. Use ${id === 'llama' ? 'Ollama' : id === 'sd' ? 'ComfyUI' : 'Voicebox'} instead (Settings → Engines).`);
       const { release, pick } = found;
       const root = join(this.enginesDir, ENGINE_DIR[id]);
@@ -351,6 +356,16 @@ export class Builtins {
     writeJson(this.stateFile(), state);
     this.emit();
     return true;
+  }
+
+  /**
+   * 0.21: ffmpeg or ffprobe for video work: Lotus's own download first, else one already on this
+   * computer (Homebrew on a Mac, a package on Linux, or one the user installed on Windows).
+   */
+  videoTool(name: 'ffmpeg' | 'ffprobe'): string | null {
+    const p = this.engines().ffmpeg?.exes[name];
+    if (p && existsSync(p)) return p;
+    return this.d.systemTool ? this.d.systemTool(name) : (Bun.which(name) ?? (process.platform === 'darwin' ? ['/opt/homebrew/bin', '/usr/local/bin'].map((d) => join(d, name)).find((f) => existsSync(f)) ?? null : null));
   }
 
   private exe(id: BuiltinId, name: string): string {

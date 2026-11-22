@@ -1,7 +1,7 @@
 // The web side of the core's agent (core/src/agent/service.ts): start a run, follow its events,
 // answer approvals, stop it. Steps arrive as they happen, each with its real result.
 
-import { coreState, onCoreEvent, rpc } from './core';
+import { coreFetch, coreState, onCoreEvent, rpc } from './core';
 import { storeMode } from './store';
 
 export type StepStatus = 'waiting' | 'running' | 'done' | 'error' | 'denied';
@@ -108,3 +108,18 @@ export interface ArtifactInfo { file: string; title: string; kind: string; bytes
 export const workArtifacts = (workId: string) => rpc<ArtifactInfo[]>('work_artifacts', { workId });
 export const workArtifact = (workId: string, file: string) => rpc<string>('work_artifact', { workId, file });
 export const workDir = (workId: string) => rpc<string | null>('work_dir', { workId });
+/** 0.21: a video, sound or picture a job made, as a blob the Artifacts panel can play. */
+export const workFile = async (workId: string, file: string): Promise<Blob> => {
+  const r = await coreFetch(`/v1/work-file?${new URLSearchParams({ workId, file })}`);
+  if (!r.ok) throw new Error('That artifact is no longer in the work folder.');
+  return r.blob();
+};
+/** 0.21: puts a video, picture or sound into a job's folder (the Video page); returns its file name there. */
+export const uploadToWork = async (workId: string, file: File): Promise<string> => {
+  const r = await coreFetch(`/v1/work-file?${new URLSearchParams({ workId, name: file.name })}`, { method: 'POST', headers: { 'content-type': file.type || 'application/octet-stream' }, body: file });
+  const j = (await r.json().catch(() => ({}))) as { file?: string; error?: string };
+  if (!r.ok || !j.file) throw new Error(j.error || `Couldn't add ${file.name}.`);
+  return j.file;
+};
+/** Artifacts shown as media rather than read as text. */
+export const isMediaArtifact = (a: Pick<ArtifactInfo, 'kind'>) => a.kind === 'video' || a.kind === 'audio' || a.kind === 'picture';

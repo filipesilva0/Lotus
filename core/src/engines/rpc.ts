@@ -38,7 +38,7 @@ import { join } from 'node:path';
 type Json = Record<string, unknown>;
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
-const ENGINES: BuiltinId[] = ['llama', 'sd', 'sherpa'];
+const ENGINES: BuiltinId[] = ['llama', 'sd', 'sherpa', 'ffmpeg'];
 const KINDS: ModelKind[] = ['chat', 'image', 'voice', 'dictation'];
 const FOLDERS: ImageFolder[] = ['checkpoints', 'diffusion_models', 'text_encoders', 'vae', 'loras'];
 
@@ -104,7 +104,7 @@ export async function builtinImage(b: Builtins, db: Db, studio: string, a: Image
 
 /** GPT-SoVITS, when a voice uses it (0.15.0). One per core. */
 let gsv: GptSovits | null = null;
-const gptSovits = (studio: string) => (gsv ??= new GptSovits({ tempDir: join(studio, 'Engines', 'GPT-SoVITS-temp') }));
+export const gptSovits = (studio: string) => (gsv ??= new GptSovits({ tempDir: join(studio, 'Engines', 'GPT-SoVITS-temp') }));
 /** Stops the GPT-SoVITS server Lotus started (the core is shutting down). */
 export const stopGptSovits = () => gsv?.stop();
 

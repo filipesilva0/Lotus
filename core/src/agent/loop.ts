@@ -33,6 +33,8 @@ export interface AgentRequest {
   capabilities?: string[];
   /** Think mode (Chat's brain button): an analysis turn before acting and a review of the answer after (think.ts). */
   think?: boolean;
+  /** 0.21: false when the model can't see pictures (a built-in model without a vision projector). */
+  vision?: boolean;
 }
 
 export interface AgentDeps {
@@ -262,7 +264,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     else messages.push({ role: 'assistant', content: result.content });
 
     const results: string[] = [];
-    const images: string[] = [];
+    const images: Shot[] = [];
     for (const call of calls.slice(0, MAX_CALLS_PER_TURN)) {
       if (d.signal.aborted) break;
       const sig = `${call.name}:${JSON.stringify(call.args)}`;
@@ -313,7 +315,13 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     if (mode === 'tags') messages.push({ role: 'user', content: results.join('\n\n') });
     // Screenshots (computer.screenshot, browser.screenshot) go to the model as images so a vision
     // model can see the screen. Only the newest is kept to save context.
-    if (images.length) messages.push({ role: 'user', content: '(Lotus) The screenshot you asked for is attached. Coordinates you give to computer.click are pixels in this image.', images: [images[images.length - 1]] });
+    if (images.length) {
+      const shot = images[images.length - 1];
+      // 0.21: video.inspect brings its own note; a model that can't see gets told instead of a picture it would choke on.
+      const blind = shot.note && (req.vision === false || (d.llm.backend === 'ollama' && caps.length > 0 && !caps.includes('vision')));
+      if (blind) messages.push({ role: 'user', content: '(Lotus) The picture could not be shown: this model can\'t see images. Work from the text the tool returned, and tell the user that a chat model that reads images (for example Gemma 3 or Qwen 2.5 VL) would let you see the video.' });
+      else messages.push({ role: 'user', content: shot.note ?? '(Lotus) The screenshot you asked for is attached. Coordinates you give to computer.click are pixels in this image.', images: [shot.b64] });
+    }
   }
 
   // Out of turns without a final answer (0.16.0: "I stopped… without a final answer" after 8 searches):
@@ -371,7 +379,10 @@ export function sourcesOf(step: Step, text: string): string[] {
 }
 
 /** One tool call: checks, approval, run, record. Returns the text the model reads. */
-async function runStep(name: string, rawArgs: Record<string, unknown>, req: AgentRequest, d: AgentDeps, steps: Step[], images: string[] = []): Promise<string> {
+/** A picture a tool returned for the model to look at (screenshots, video frames). */
+interface Shot { b64: string; note?: string }
+
+async function runStep(name: string, rawArgs: Record<string, unknown>, req: AgentRequest, d: AgentDeps, steps: Step[], images: Shot[] = []): Promise<string> {
   const tool = d.registry.get(name);
   const offered = tool && req.tools.some((t) => t.name === tool.name);
   if (!tool || !offered) {
@@ -417,8 +428,8 @@ async function runStep(name: string, rawArgs: Record<string, unknown>, req: Agen
     update({ status: 'error', detail: msg, finished: Date.now() });
     return `Error: ${msg}`;
   }
-  const { imageB64, ...data } = (r.data ?? {}) as Record<string, unknown> & { imageB64?: string };
-  if (typeof imageB64 === 'string' && imageB64) images.push(imageB64);
+  const { imageB64, imageNote, ...data } = (r.data ?? {}) as Record<string, unknown> & { imageB64?: string; imageNote?: string };
+  if (typeof imageB64 === 'string' && imageB64) images.push({ b64: imageB64, note: typeof imageNote === 'string' ? imageNote : undefined });
   update({ status: r.ok ? 'done' : 'error', detail: r.summary, media: r.media, data: r.data ? data : undefined, finished: Date.now() });
   return r.ok ? r.text : `Error: ${r.text}`;
 }
