@@ -316,9 +316,46 @@ export const translationParts = (text: string, max = 2400): string[] => chunkTex
 export const translatePrompt = (target: string, part: string): string =>
   `Translate the text between the markers into ${target}. Keep the meaning, tone and names; keep paragraph breaks. Reply with the translation only: no notes, no quotes, no markers.\n\n<<<\n${part}\n>>>`;
 
+/**
+ * Ways models mark their thinking (0.21.5). Lotus only knew <think>; Gemma 4 writes
+ * `<|channel>thought … <channel|>` and other models use their own markers, so on a call the thinking
+ * was read out and then the answer, which repeats much of it.
+ */
+const THINK_MARKS: { open: RegExp; close: RegExp }[] = [
+  { open: /<(think|thinking|thought|reasoning)>/i, close: /<\/(think|thinking|thought|reasoning)>/i },
+  { open: /<\|channel\|?>\s*(thought|analysis)\b(<\|message\|>)?/i, close: /<\|?channel\|>|<\|end\|>/i },
+  { open: /\[THINK\]/i, close: /\[\/THINK\]/i },
+];
+/** Leftover markers around the answer (gpt-oss's final channel, a stray Gemma channel tag). */
+const STRAY_MARKS = /<\|start\|>assistant|<\|channel\|>\s*final\s*<\|message\|>|<\|?channel\|?>|<\|message\|>|<\|end\|>|<\|return\|>|<\/?(think|thinking|thought|reasoning)>|\[\/?THINK\]/gi;
+
+/**
+ * What a model reply says out loud: thinking blocks removed, an unfinished one held back, everything
+ * before a closing marker with no opening one dropped (the template opened the thinking), and a marker
+ * still being written at the end held back. `final` drops an unfinished thinking block instead of waiting.
+ */
+export function spokenPart(raw: string, final = false): string {
+  // gpt-oss's answer header first, so its channel tag isn't taken for the end of a thought.
+  let t = raw.replace(/<\|start\|>assistant|<\|channel\|>\s*final\s*<\|message\|>/gi, '');
+  for (const m of THINK_MARKS) {
+    for (;;) {
+      const o = m.open.exec(t), c = m.close.exec(t);
+      if (c && (!o || c.index < o.index)) { t = t.slice(c.index + c[0].length); continue; }
+      if (!o) break;
+      const rest = t.slice(o.index + o[0].length);
+      const end = m.close.exec(rest);
+      if (!end) { t = t.slice(0, o.index); break; }
+      t = t.slice(0, o.index) + rest.slice(end.index + end[0].length);
+    }
+  }
+  t = t.replace(STRAY_MARKS, '');
+  if (!final) { const tail = /(<[|/\w]{0,14}|\[\/?[A-Z]{0,5})$/i.exec(t); if (tail) t = t.slice(0, tail.index); }
+  return t.replace(/^\s+/, '');
+}
+
 /** A model reply without its thinking and stray markers. */
 export function cleanModelText(s: string): string {
-  return s.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').replace(/^\s*<<<\s*|\s*>>>\s*$/g, '').trim();
+  return spokenPart(s, true).replace(/^\s*<<<\s*|\s*>>>\s*$/g, '').trim();
 }
 
 // ── Voice calls (0.9.6) ────────────────────────────────────────────────────

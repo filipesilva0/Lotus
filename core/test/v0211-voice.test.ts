@@ -59,3 +59,32 @@ describe('effects', () => {
     expect(callEffects({ echo: 0.5, room: 0.4, fadeIn: 1, fadeOut: 1, pitch: 2 })).toEqual({ ...NO_EFFECTS, room: 0.4, pitch: 2 });
   });
 });
+
+import { cleanModelText, spokenPart } from '../../src/voice/studio';
+describe('thinking is never read out (0.21.5)', () => {
+  test('Gemma 4 channel markers', () => {
+    expect(spokenPart('<|channel>thought\nThe user said hi. I should greet them.<channel|>Hello! How are you?')).toBe('Hello! How are you?');
+  });
+  test('an unfinished Gemma thought is held back', () => {
+    expect(spokenPart('<|channel>thought\nThe user said hi, I should')).toBe('');
+  });
+  test('<think>, <thinking>, [THINK] and gpt-oss channels', () => {
+    expect(spokenPart('<think>hmm</think>Hi there.')).toBe('Hi there.');
+    expect(spokenPart('<thinking>hmm</thinking>Hi there.')).toBe('Hi there.');
+    expect(spokenPart('[THINK]hmm[/THINK]Hi there.')).toBe('Hi there.');
+    expect(spokenPart('<|channel|>analysis<|message|>hmm<|end|><|start|>assistant<|channel|>final<|message|>Hi there.')).toBe('Hi there.');
+  });
+  test('a closing marker with no opening one drops what came before', () => {
+    expect(spokenPart('The user wants a joke. </think>Why did the chicken cross the road?')).toBe('Why did the chicken cross the road?');
+    expect(spokenPart('thinking about it<channel|>Sure.')).toBe('Sure.');
+  });
+  test('a marker still being written is held back, plain text is untouched', () => {
+    expect(spokenPart('Hello there. <|chan')).toBe('Hello there. ');
+    expect(spokenPart('It costs 5 < 10 dollars, really.')).toBe('It costs 5 < 10 dollars, really.');
+    expect(cleanModelText('<|channel>thought\nx<channel|>Done.')).toBe('Done.');
+  });
+  test('streaming token by token never shows thinking', () => {
+    const raw = '<|channel>thought\nThey asked the time.<channel|>It is noon.';
+    for (let i = 1; i <= raw.length; i++) expect(spokenPart(raw.slice(0, i))).not.toContain('asked');
+  });
+});
