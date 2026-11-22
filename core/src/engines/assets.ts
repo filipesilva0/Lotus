@@ -3,12 +3,14 @@
 //   llama.cpp             ggml-org/llama.cpp           chat (llama-server)
 //   stable-diffusion.cpp  leejet/stable-diffusion.cpp  images (sd-cli)
 //   sherpa-onnx           k2-fsa/sherpa-onnx           speech: Kokoro and Piper voices, Whisper dictation
+//   ffmpeg                BtbN/FFmpeg-Builds           video (0.21): understand, voice over and put videos together.
+//                         LGPL builds only (no x264/x265, which are GPL); no macOS builds, so Macs use Homebrew's.
 //
 // Names seen on the releases pages on 16 Nov 2026 (llama.cpp b11669, sd.cpp master-995-fd21ecf,
 // sherpa-onnx v1.13.7). whisper.cpp stopped publishing binaries (v1.9.5 has only source), which is why
 // speech uses sherpa-onnx, which runs the same Whisper models plus Kokoro and Piper voices.
 
-export type BuiltinId = 'llama' | 'sd' | 'sherpa';
+export type BuiltinId = 'llama' | 'sd' | 'sherpa' | 'ffmpeg';
 export type Os = 'windows' | 'macos' | 'linux';
 export type Arch = 'x64' | 'arm64';
 export type Gpu = 'nvidia' | 'amd' | 'intel' | 'apple' | 'none';
@@ -41,8 +43,10 @@ export const RUNTIMES: Record<BuiltinId, RuntimeSpec> = {
   // token IDs"). Lotus stays on 1.x, which has espeak-ng, PocketTTS and ZipVoice.
   sherpa: { id: 'sherpa', name: 'sherpa-onnx', repo: 'k2-fsa/sherpa-onnx', role: 'Voice and dictation', licence: 'Apache-2.0', exes: [['sherpa-onnx-offline-tts'], ['sherpa-onnx-offline']],
     accepts: (tag) => /^v1\./.test(tag), fallbackTag: 'v1.13.8', pinNote: 'This version can\'t pronounce Kokoro or Piper voices. Update to the version Lotus uses.' },
+  // 0.21: the LGPL build, so nothing GPL comes with it. Its "latest" release is rebuilt every day.
+  ffmpeg: { id: 'ffmpeg', name: 'FFmpeg', repo: 'BtbN/FFmpeg-Builds', role: 'Video', licence: 'LGPL-2.1', exes: [['ffmpeg'], ['ffprobe']] },
 };
-export const BUILTIN_ORDER: BuiltinId[] = ['llama', 'sd', 'sherpa'];
+export const BUILTIN_ORDER: BuiltinId[] = ['llama', 'sd', 'sherpa', 'ffmpeg'];
 
 /** What to download: the engine itself, plus CUDA runtime libraries for NVIDIA builds on Windows. */
 export interface Pick { main: Asset; extra: Asset[]; flavour: string }
@@ -88,6 +92,13 @@ function wishes(id: BuiltinId, p: Platform): [string, RegExp, RegExp?][] {
     if (gpu !== 'none') out.push(['Vulkan', /^sd-.*-bin-Linux-Ubuntu-[\d.]+-x86_64-vulkan\.zip$/]);
     out.push(['Processor', /^sd-.*-bin-Linux-Ubuntu-[\d.]+-x86_64\.zip$/]);
     return out;
+  }
+  if (id === 'ffmpeg') {
+    // A release branch build (n8.1, n9.0…) first: master builds change every day.
+    const t = os === 'windows' ? (arch === 'arm64' ? 'winarm64' : 'win64') : os === 'linux' ? (arch === 'arm64' ? 'linuxarm64' : 'linux64') : null;
+    if (!t) return [];
+    const ext = os === 'windows' ? 'zip' : 'tar\\.xz';
+    return [['LGPL', new RegExp(`^ffmpeg-n[\\d.]+-latest-${t}-lgpl-[\\d.]+\\.${ext}$`)], ['LGPL', new RegExp(`^ffmpeg-master-latest-${t}-lgpl\\.${ext}$`)]];
   }
   // sherpa-onnx: static Release builds carry no extra libraries; speech runs fine on the processor.
   if (os === 'windows') return arch === 'x64' ? [['Processor', /^sherpa-onnx-v[\d.]+-win-x64-static-MT-Release\.tar\.bz2$/]] : [['Processor', /^sherpa-onnx-v[\d.]+-win-arm64-static-MT-Release\.tar\.bz2$/]];

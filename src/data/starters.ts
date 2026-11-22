@@ -46,6 +46,7 @@ export const WORK_STARTERS: StarterGroup[] = [
   { id: 'create', label: 'Create', items: [
     { title: 'Landing Page', text: 'Act as a web designer and copywriter. Build a one-page website for [business or project]: a strong headline, what it offers, three benefits, testimonials placeholder, prices or opening hours, and a contact section. Clean, modern, works on phones. Save it as a page.' },
     { title: 'Presentation Outline', text: 'Act as a presentation coach. Create a [number]-slide presentation outline on [topic] for [audience]: each slide with a title, three short bullet points and speaker notes. Save it as a document.' },
+    { title: 'Narrated Video', text: 'Act as a video producer. Make a 30-second narrated video about [topic] for [audience]. Write the script, pick the best voice, record the voiceover, make one picture per line in the same style, and put it together as a 16:9 video.' },
     { title: 'Budget Spreadsheet', text: 'Act as a personal finance planner. Make a monthly budget table for [situation] with income, fixed costs, variable costs and savings, using realistic example numbers I can change, plus totals. Save it as a table.' },
   ] },
   { id: 'files', label: 'My Files', items: [

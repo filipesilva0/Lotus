@@ -7,7 +7,7 @@ import { Starters } from '../common/Starters';
 import { documentText, READABLE } from '../../lib/docText';
 import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AudioLines, Brain, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
+import { AlertCircle, AudioLines, Brain, Clapperboard, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, agentProgress, helpersOf, planOf } from '../../work/store';
 import { interruptedNote, stoppedNote } from '../../work/interrupted';
 import { ThinkingDrawer } from '../chat/ChatStream';
@@ -17,7 +17,7 @@ import { fileToBase64 } from '../../services/ollamaService';
 import { folderName, pickFolderPath } from '../../chat/folder';
 import { isTauri } from '../../lib/http';
 import type { ArtifactInfo, AgentStep, HelperInfo } from '../../lib/agent';
-import { agentAvailable, workArtifact, workDir } from '../../lib/agent';
+import { agentAvailable, isMediaArtifact, workArtifact, workDir, workFile } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
 import { ReplyHeader } from '../common/ReplyHeader';
 import { AgentFace } from '../common/AgentFace';
@@ -40,7 +40,7 @@ import { attachWithDialog } from '../../lib/pickFiles';
 
 const KIND_ICON: Record<string, React.ReactNode> = {
   document: <FileText className="w-4 h-4" />, page: <Globe className="w-4 h-4" />, table: <Table2 className="w-4 h-4" />,
-  image: <ImageIcon className="w-4 h-4" />, code: <Code2 className="w-4 h-4" />, data: <Code2 className="w-4 h-4" />, file: <FileText className="w-4 h-4" />,
+  image: <ImageIcon className="w-4 h-4" />, picture: <ImageIcon className="w-4 h-4" />, video: <Clapperboard className="w-4 h-4" />, audio: <AudioLines className="w-4 h-4" />, code: <Code2 className="w-4 h-4" />, data: <Code2 className="w-4 h-4" />, file: <FileText className="w-4 h-4" />,
 };
 
 /** CSV → rows (quotes and commas inside quotes handled). */
@@ -60,7 +60,39 @@ export function parseCsv(text: string, sep = text.split('\n')[0].includes('\t') 
 }
 
 // ── Artifacts panel ─────────────────────────────────────────────────────────
-const ArtifactView: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = ({ workId, a, nonce }) => {
+/** 0.21: videos, voiceovers and pictures from the video tools, played in place. */
+export const MediaArtifact: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = ({ workId, a, nonce }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let u: string | null = null, live = true;
+    setUrl(null); setErr(null);
+    workFile(workId, a.file).then((b) => { u = URL.createObjectURL(b); if (live) setUrl(u); }).catch((e) => setErr((e as Error).message));
+    return () => { live = false; if (u) URL.revokeObjectURL(u); };
+  }, [workId, a.file, a.updated, nonce]);
+  const reveal = async () => { const d = await workDir(workId).catch(() => null); if (d) void revealPath(`${d}/${a.file}`); };
+  if (err) return <p className="p-4 text-[13px] text-[var(--c-red)]">{err}</p>;
+  if (!url) return <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Opening…</p>;
+  const download = () => { const el = document.createElement('a'); el.href = url; el.download = a.file; el.click(); };
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-[var(--sep)]">
+        <span className="text-[12px] text-[var(--color-text-muted)] truncate flex-1">{a.file} · {(a.bytes / 1e6).toFixed(1)} MB</span>
+        <IconBtn label="Show in folder" onClick={() => void reveal()}><FolderOpen className="w-3.5 h-3.5" /></IconBtn>
+        <IconBtn label="Download" onClick={download}><Download className="w-3.5 h-3.5" /></IconBtn>
+      </div>
+      <div className="flex-1 min-h-0 overflow-auto p-3 flex items-start justify-center bg-[var(--color-bg-main)]">
+        {a.kind === 'video' ? <video key={url} src={url} controls playsInline className="w-full max-h-full rounded-[8px] bg-black" aria-label={a.title} />
+          : a.kind === 'audio' ? <audio key={url} src={url} controls className="w-full mt-6" aria-label={a.title} />
+          : <img src={url} alt={a.title} className="max-w-full rounded-[8px]" />}
+      </div>
+    </div>
+  );
+};
+
+const ArtifactView: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = (props) => (isMediaArtifact(props.a) ? <MediaArtifact {...props} /> : <TextArtifact {...props} />);
+
+const TextArtifact: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = ({ workId, a, nonce }) => {
   const [text, setText] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
@@ -105,7 +137,7 @@ const ArtifactsPanel: React.FC<{ work: Work; open: string | null; onOpen: (f: st
       </div>
       {cur ? <ArtifactView workId={work.activeId} a={cur} nonce={nonce} /> : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2">
-          {!list.length && <p className="p-3 text-[13px] text-[var(--color-text-muted)] leading-snug">What Lotus makes for this work shows up here: documents, web pages, tables, images and code, saved in your Lotus Studio folder.</p>}
+          {!list.length && <p className="p-3 text-[13px] text-[var(--color-text-muted)] leading-snug">What Lotus makes for this work shows up here: documents, web pages, tables, images, videos and code, saved in your Lotus Studio folder.</p>}
           {list.map((a) => (
             <button key={a.file} type="button" onClick={() => onOpen(a.file)} className="w-full flex items-center gap-2.5 p-2 rounded-[8px] text-left hover:bg-[var(--hover)]">
               <span className="w-8 h-8 rounded-[7px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] inline-flex items-center justify-center shrink-0">{KIND_ICON[a.kind] ?? KIND_ICON.file}</span>

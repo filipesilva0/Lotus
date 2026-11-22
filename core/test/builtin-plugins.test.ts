@@ -84,7 +84,7 @@ describe('built-in plugins are well formed', () => {
     expect(LOTUS_TOOLS.has('files.read')).toBe(true);
     for (const p of BUILTIN_PLUGINS) {
       for (const text of [p.instructions, ...p.skills.map((k) => k.body)]) {
-        for (const m of text.matchAll(/\b(files|web|browser|plan|artifact|agents?|memory|ask|task|todo|routine|image|soul|computer|avatar)\.([a-z]+)\b/g)) {
+        for (const m of text.matchAll(/\b(files|web|browser|plan|artifact|agents?|memory|ask|task|todo|routine|image|soul|computer|avatar|video|voice)\.([a-z]+)\b/g)) {
           if (FILE_EXT.has(m[2])) continue; // "plan.md" is a file name
           expect(LOTUS_TOOLS.has(`${m[1]}.${m[2]}`)).toBe(true);
         }

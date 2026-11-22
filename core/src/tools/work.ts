@@ -21,7 +21,15 @@ const KINDS: Record<string, string> = {
   '.svg': 'image', '.json': 'data',
   '.py': 'code', '.js': 'code', '.ts': 'code', '.tsx': 'code', '.jsx': 'code', '.css': 'code', '.sh': 'code', '.ps1': 'code', '.sql': 'code', '.java': 'code', '.c': 'code', '.cpp': 'code', '.rs': 'code', '.go': 'code', '.rb': 'code', '.php': 'code', '.yaml': 'code', '.yml': 'code', '.toml': 'code',
 };
-export const artifactKind = (file: string) => KINDS[extname(file).toLowerCase()] ?? 'file';
+/** 0.21: what the video tools save. Listed and played in the Artifacts panel, never written by artifact.write. */
+const MEDIA: Record<string, string> = {
+  '.mp4': 'video', '.webm': 'video', '.mov': 'video', '.m4v': 'video', '.mkv': 'video',
+  '.wav': 'audio', '.mp3': 'audio', '.m4a': 'audio', '.ogg': 'audio', '.flac': 'audio',
+  '.png': 'picture', '.jpg': 'picture', '.jpeg': 'picture', '.webp': 'picture', '.srt': 'document',
+};
+export const artifactKind = (file: string) => KINDS[extname(file).toLowerCase()] ?? MEDIA[extname(file).toLowerCase()] ?? 'file';
+/** Files the panel shows as media (not read as text). */
+export const isMediaKind = (kind: string) => kind === 'video' || kind === 'audio' || kind === 'picture';
 
 /** A safe file name inside the work folder: no folders, no tricks, a known extension. */
 export function safeName(raw: string, fallbackTitle = 'artifact'): string | null {
@@ -105,6 +113,8 @@ export const artifactRead: Tool = {
     if (!ctx.workDir) return { ok: false, text: 'Artifacts exist only in Work mode.', summary: 'Not in Work mode' };
     const list = listArtifacts(ctx.workDir);
     if (!a.filename) return { ok: true, text: list.length ? list.map((x) => `- ${x.file} (${x.title}, ${x.kind})`).join('\n') : 'No artifacts yet.', summary: `${list.length} artifacts` };
+    const media = list.find((x) => x.file.toLowerCase() === basename(String(a.filename)).toLowerCase() && isMediaKind(x.kind));
+    if (media) return { ok: false, text: `${media.file} is a ${media.kind}, not text. Use video.inspect to look at it.`, summary: 'Not a text artifact' };
     const file = safeName(String(a.filename));
     const hit = file && list.find((x) => x.file.toLowerCase() === file.toLowerCase());
     if (!hit) return { ok: false, text: `No artifact called ${a.filename}. There are: ${list.map((x) => x.file).join(', ') || 'none'}.`, summary: 'Not found' };

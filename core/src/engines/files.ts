@@ -111,7 +111,8 @@ export async function unzip(archive: string, dest: string): Promise<number> {
 export async function untar(archive: string, dest: string): Promise<void> {
   mkdirSync(dest, { recursive: true });
   const isBz = /\.(tar\.bz2|tbz2?)$/i.test(archive);
-  const flags = isBz ? '-xjf' : '-xzf';
+  const isXz = /\.(tar\.xz|txz)$/i.test(archive);
+  const flags = isBz ? '-xjf' : isXz ? '-xJf' : '-xzf';
   const tar = process.platform === 'win32' ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
   const p = Bun.spawn([tar, flags, archive, '-C', dest], { stdout: 'ignore', stderr: 'pipe', windowsHide: true });
   const err = await new Response(p.stderr).text();
