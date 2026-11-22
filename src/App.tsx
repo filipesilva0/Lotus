@@ -9,7 +9,7 @@ import { ViewMode, LotusSettings, Appearance } from './types/lotus';
 import { LeftRail, VIEW_TITLES } from './components/rail/LeftRail';
 import { TitleBar, MenuDef } from './components/common/TitleBar';
 import { applyWindowGlass, onSystemAppearance, systemPrefersDark } from './lib/glass';
-import { DEFAULT_PANELS, PanelState, PanelsProvider } from './lib/panels';
+import { PanelState, PanelsProvider, defaultPanelsFor } from './lib/panels';
 import { ChatWorkspace, ModelOption } from './components/workspaces/ChatWorkspace';
 import { ImageWorkspace } from './components/workspaces/ImageWorkspace';
 import { VoiceWorkspace } from './components/workspaces/VoiceWorkspace';
@@ -204,12 +204,12 @@ export default function App() {
     return Object.fromEntries(Object.entries(v1).map(([k, v]) => [k, { left: v?.left ?? true, right: false }]));
   });
   useEffect(() => { try { kv.setItem('lotus.panels.v2', JSON.stringify(panelMap)); } catch { /* keep in memory */ } }, [panelMap]);
-  const panels = panelMap[currentView] ?? DEFAULT_PANELS;
+  const panels = panelMap[currentView] ?? defaultPanelsFor(currentView);
   const viewRefForPanels = useRef(currentView);
   viewRefForPanels.current = currentView;
   const setPanel = useCallback((side: keyof PanelState, on: boolean | ((was: boolean) => boolean)) => {
     setPanelMap((m) => {
-      const cur = m[viewRefForPanels.current] ?? DEFAULT_PANELS;
+      const cur = m[viewRefForPanels.current] ?? defaultPanelsFor(viewRefForPanels.current);
       const next = typeof on === 'function' ? on(cur[side]) : on;
       return cur[side] === next ? m : { ...m, [viewRefForPanels.current]: { ...cur, [side]: next } };
     });
@@ -542,7 +542,7 @@ export default function App() {
 
 
         {currentView === 'work' && <WorkWorkspace work={work} settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} models={models} ollamaUp={ollamaUp}
-          onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} />}
+          onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} onOpenLibrary={setLibrary} />}
 
         {currentView === 'tasks' && <TasksWorkspace settings={settings} ollamaUp={ollamaUp} />}
         {currentView === 'video' && <VideoWorkspace work={work} settings={settings} onOpenWork={() => setCurrentView('work')} onOpenModels={() => openEngines('models')} />}

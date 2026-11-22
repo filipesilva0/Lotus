@@ -16,6 +16,8 @@
     "typescript": "5.9.3"
   },
   "dependencies": {
-    "fflate": "0.8.2"
+    "docx": "9.16.0",
+    "fflate": "0.8.2",
+    "pptxgenjs": "4.0.1"
   }
 }

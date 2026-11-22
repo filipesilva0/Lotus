@@ -1,14 +1,14 @@
 // Documents: Lotus's own versions of the Word, Excel, PowerPoint and PDF skills. Written from scratch
-// (the originals are proprietary). Lotus can READ these files (attachments and files.read use fflate
-// and pdf.js) but cannot write binary Office files, so each skill makes the content in a format Lotus
-// can save (.md, .csv, .html) and says how to turn it into the Office or PDF file.
+// (the originals are proprietary). Lotus reads these files (attachments and files.read use fflate and
+// pdf.js) and, since 0.21, writes real .docx, .xlsx and .pptx files: artifact.write builds them from
+// Markdown or CSV (core/src/tools/office.ts). PDFs are still made by printing an .html page.
 
 import type { BuiltinPluginDef } from './types';
 
 export const DOCUMENTS: BuiltinPluginDef = {
   id: 'builtin-documents',
   name: 'Documents',
-  version: '1.0.0',
+  version: '1.1.0',
   description: 'Read, write and fix Word documents, spreadsheets, slide decks and PDFs.',
   author: 'Lotus',
   defaultOn: true,
@@ -26,9 +26,12 @@ export const DOCUMENTS: BuiltinPluginDef = {
 Attached or allowed .docx files are read as text (files.read). Headings, lists and tables come through; images and tracked changes do not. Say so if they matter.
 
 ## Writing
-Lotus cannot save .docx directly. Write the document in Markdown and save it with artifact.write (e.g. report.md):
-- # for the title, ## for sections, real lists and tables.
-- Then tell the user: open the file in Word (or paste it), or use Save As → .docx. For exact styles, paste into their template.
+Save a real Word file with artifact.write, filename ending .docx (e.g. report.docx). The content is Markdown, and Lotus turns it into Word:
+- # Title (once, at the top), ## sections, ### sub-sections.
+- Paragraphs, - bullet lists and 1. numbered lists (indent two spaces for a sub-point), | tables | with a header row, > quotes, **bold**, *italic*, [links](https://…).
+- Write the whole document; never a summary or "…".
+Don't paste the document into your answer: the user opens it from the file card. In the answer, say what is in it in a sentence or two.
+To change it later, artifact.read gives the Markdown back; save it again under the same name.
 
 ## Structure that works
 Title · one-paragraph summary · sections with clear headings · short paragraphs · tables for comparisons · a closing with next steps or contact.
@@ -46,14 +49,15 @@ Quote the passage, then give the replacement text, section by section, so the us
 .xlsx, .ods and .csv files are read as text tables (files.read). Read the header row first; check the units and empty cells before doing maths.
 
 ## Making one
-Save a .csv with artifact.write (e.g. budget.csv):
-- First row: column names. One row per record. No merged cells, no totals mixed into the data.
-- Numbers without currency signs or thousands separators (1234.5), dates as YYYY-MM-DD.
+Save a real Excel file with artifact.write, filename ending .xlsx (e.g. budget.xlsx). The content is CSV:
+- First row: column names (it becomes a bold, frozen header with filter buttons). One row per record.
+- Numbers as 1234.5 (no thousands separators), money as $1200 or 1200€, percentages as 25%, dates as YYYY-MM-DD: Excel gets real numbers and dates.
 - Quote cells that contain commas.
-Tell the user to open it in Excel or Sheets and Save As .xlsx.
+- More than one sheet: put a line "## Sheet name" before each sheet's rows.
+Only make a .csv when the user asks for CSV.
 
 ## Formulas
-Write them for the user to paste, with the cell they go in: "In D2: =B2*C2, then fill down". Prefer simple SUM, AVERAGE, IF, XLOOKUP. Explain each in one line.
+Put them straight in the cells, starting with =: a Total row with =SUM(B2:B9), a column with =B2*C2 on each row. Excel works them out when the file opens. Prefer SUM, AVERAGE, IF, ROUND, XLOOKUP. Mention the key formulas in your answer in one line each.
 
 ## Cleaning data
 List the problems first (duplicates, mixed formats, stray header rows, blanks), then give the cleaned table. Never drop rows silently: say how many and why.
@@ -78,9 +82,11 @@ Double-check every total you state.`,
 At most 3–5 short bullets, about 6 words each. Details go in speaker notes. Suggest one visual per slide (chart, photo, diagram).
 
 ## Making the file
-Lotus cannot save .pptx. Either:
-- write the deck as Markdown (## per slide, bullets, then "Notes:") with artifact.write, for the user to paste into PowerPoint; or
-- make a self-contained .html deck (one section per slide, big text, arrow keys to move) that can be shown full-screen or printed to PDF.`,
+Save a real PowerPoint deck with artifact.write, filename ending .pptx (e.g. pitch.pptx). The content is Markdown:
+- A line with only --- between slides.
+- Each slide starts with # Slide title. The first slide is the title slide: # Title, then one line of subtitle.
+- Bullets with -, a | table | if it helps, then a line "Notes:" followed by the speaker notes.
+Lotus lays the slides out (16:9, title, accent line, bullets that shrink to fit). For a deck to show in the browser instead, make one self-contained .html file (one section per slide, arrow keys to move).`,
     },
     {
       name: 'pdf-files',
@@ -95,7 +101,7 @@ Attached or allowed PDFs are read as text with pdf.js. Scanned PDFs (pictures of
 Give page numbers for every fact you take from it. Tables may come out jumbled: rebuild them and say you did.
 
 ## Making a PDF
-Write a clean, self-contained .html page with artifact.write (print-friendly: white background, no fixed headers), then tell the user to open it and Print → Save as PDF. For a document, Markdown opened in Word → Save as PDF also works.
+Write a clean, self-contained .html page with artifact.write (print-friendly: white background, no fixed headers), then tell the user to open it and Print → Save as PDF. A .docx made with artifact.write can also be saved as PDF from Word (File → Save As → PDF).
 
 ## Merge, split, rotate, fill forms
 Lotus cannot change PDF files. Give the user clear steps for a free tool they already have (the browser or Edge prints selected pages to PDF; Windows "Microsoft Print to PDF"), and for forms, list each field with the text to type in it.`,

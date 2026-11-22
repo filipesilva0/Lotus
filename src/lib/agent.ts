@@ -123,3 +123,7 @@ export const uploadToWork = async (workId: string, file: File): Promise<string> 
 };
 /** Artifacts shown as media rather than read as text. */
 export const isMediaArtifact = (a: Pick<ArtifactInfo, 'kind'>) => a.kind === 'video' || a.kind === 'audio' || a.kind === 'picture';
+/** 0.21: Word, Excel and PowerPoint files the agent built (previewed from the text they were made from). */
+export const isOfficeArtifact = (a: Pick<ArtifactInfo, 'kind'>) => a.kind === 'word' || a.kind === 'spreadsheet' || a.kind === 'slides';
+/** 0.21: opens an artifact in the computer's own app (Word, Excel, PowerPoint, the browser for .html). */
+export const workOpen = (workId: string, file: string) => rpc<boolean>('work_open', { workId, file });

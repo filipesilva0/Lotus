@@ -29,7 +29,7 @@ import { TASK_TOOLS } from '../tools/tasks';
 import { imageGenerate } from '../tools/image';
 import { MEMORY_TOOLS } from '../tools/memory';
 import { WEB_TOOLS } from '../tools/web';
-import { WORK_TOOLS, isMediaKind, listArtifacts } from '../tools/work';
+import { WORK_TOOLS, isMediaKind, isOfficeKind, listArtifacts, moveCodeToFiles, officeSource } from '../tools/work';
 import { COMPUTER_TOOLS } from '../tools/computer';
 import { BROWSER_TOOLS } from '../tools/browser';
 import { avatarCreate } from '../tools/avatar';
@@ -50,12 +50,17 @@ const AVATAR_WORDS = /avatar|blob|face|mascot|character|persona|look like|icon/i
 // 0.21: the video tools need a work folder for what they make, and keep chat's tool list short.
 const WORK_ONLY = new Set(['plan.set', 'plan.check', 'artifact.write', 'artifact.read', 'artifact.png', 'agent.delegate', 'agents.deploy', 'voice.list', 'video.inspect', 'video.voiceover', 'video.generate', 'video.make']);
 
+/** The command that opens a file with its default app. explorer.exe takes the path as one argument, so nothing is parsed by a shell. */
+export function openCommand(path: string, platform: string = process.platform): string[] {
+  return platform === 'win32' ? ['explorer.exe', path] : platform === 'darwin' ? ['open', path] : ['xdg-open', path];
+}
+
 /** A work id from the UI, as a safe folder name. */
 export const workFolderName = (id: string) => String(id ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 
 const WORK_PROMPT = `\n\nYou are working in Lotus's Work mode: the user hands you a job and expects a finished result, not advice.
 - For anything with more than two steps, call plan.set first, then work through the plan and tick each step with plan.check.
-- Deliver the result as artifacts with artifact.write (documents as .md, web pages as one self-contained .html, tables as .csv, code in its own file). Write the whole content.
+- Deliver the result as files with artifact.write, in the format the user asked for: Word (.docx), Excel (.xlsx), PowerPoint (.pptx), a web page or app (one self-contained .html), Markdown (.md), a table (.csv) or code in its own file. When the user doesn't name a format: documents and reports as .docx, budgets and tables of numbers as .xlsx, presentations as .pptx, anything interactive or visual as .html. Write the whole content.\n- Never paste code, a whole document or a whole table into your answer: the files show as cards the user opens. Your answer says what you made and anything they should check.
 - Deploy agents by yourself, without being asked: when a job has two or more parts that don't depend on each other (several topics to research, separate sections or files to write, several things to check), call agents.deploy once with one line per agent ("Name: task") so they work at the same time, then combine what they return. For a single self-contained part use agent.delegate. The user watches each agent's task and progress.
 - If you are blocked or a choice is the user's to make, use ask.user with short options instead of guessing.
 - Finish with a short summary of what you made and where it is.`;
@@ -215,7 +220,17 @@ export class AgentService {
     const hit = d && listArtifacts(d).find((x) => x.file === file);
     if (!d || !hit) throw new Error('That artifact is no longer in the work folder.');
     if (isMediaKind(hit.kind)) throw new Error('That artifact is a video, sound or picture; open it with work_file.');
+    // 0.21: a Word, Excel or PowerPoint file previews from the text it was made from.
+    if (isOfficeKind(hit.kind)) { const src = officeSource(d, hit.file); if (src === null) throw new Error('This file was made outside Lotus, so there is no preview. Open it to see it.'); return src; }
     return readFileSync(join(d, hit.file), 'utf8');
+  }
+
+  /** 0.21: opens an artifact in the computer's own app for it (Word, Excel, PowerPoint, the browser). */
+  artifactOpen(id: string, file: string, spawn: (cmd: string[]) => void = (cmd) => { Bun.spawn(cmd, { stdout: 'ignore', stderr: 'ignore' }); }): boolean {
+    const path = this.artifactPath(id, file);
+    if (!path) throw new Error('That artifact is no longer in the work folder.');
+    spawn(openCommand(path));
+    return true;
   }
 
   /** 0.21: the full path of an artifact (videos and sounds are streamed to the Artifacts panel). */
@@ -325,6 +340,19 @@ export class AgentService {
           },
           approve: (st) => this.waitFor(runId, st, ctrl.signal, !!a.unattended),
         });
+        // 0.21: in Work, long code in the answer is saved as files (cards under the answer), not shown inline.
+        if (workDir && out.content && !ctrl.signal.aborted) {
+          try {
+            const moved = await moveCodeToFiles(out.content, workDir);
+            moved.saved.forEach((f, k) => {
+              const now = Date.now();
+              const st: Step = { id: `${runId}-code${k + 1}`, runId, tool: 'artifact.write', label: 'Saving code as a file', args: { filename: f.file, title: f.title }, status: 'done', detail: `Saved ${f.title} · ${f.file}`, data: { artifact: f, fromAnswer: true }, started: now, finished: now };
+              saveStep(this.o.db, st, 10_000 + k);
+              emit({ kind: 'step', step: st });
+            });
+            out.content = moved.content;
+          } catch (e) { this.o.log?.(`agent ${runId}: couldn't save code from the answer: ${(e as Error).message}`); }
+        }
         // 0.20.0: a run that never answered is not "done" (the 0.19 review saw a green check on one).
         const status = ctrl.signal.aborted ? 'stopped' : out.finished ? 'done' : 'error';
         finishRun(this.o.db, runId, { status, reply: out.content, mode: out.mode, unverified: out.unverified });
