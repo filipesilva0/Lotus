@@ -91,9 +91,12 @@ export async function playThroughLoop(blob: Blob): Promise<void> {
         if (peak(loop!.out, outBuf) > 0.02) arrived++;
         // Sound went in for ~20 frames and nothing came out: the loop is silent here, play directly.
         if (arrived > 3) loopOk = true;
-        else if (sent > 20) {
+        else if (sent > 30) {
           loopOk = false;
           console.warn('[lotus] voice loop is silent, playing directly');
+          // 0.21.1: silence the loop too. On a slow PC its sound was only late, not missing, so the
+          // start of the first answer came out twice, a moment apart.
+          try { loop!.el.muted = true; } catch { /* */ }
           try { meter.disconnect(); meter.connect(c.destination); } catch { /* */ }
         }
       }

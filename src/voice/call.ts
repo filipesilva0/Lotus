@@ -147,8 +147,8 @@ async function run(c: CallLog, a: AbortController) {
     let heard = '';
     try {
       const resume = pendingRec ?? undefined; pendingRec = null;
-      // 0.15.0: a shorter pause ends your turn (was 900 ms); Whisper stays loaded between turns.
-      heard = await listen({ silenceMs: 750, maxSec: 45, waitSec: 30, signal: a.signal, resume, warm: true, onLevel: (l) => { if (Math.abs(l - st.level) > 0.03) set({ level: l }); } });
+      // A short pause ends your turn (900 ms before 0.15.0, 750 before 0.21.1); Whisper stays loaded between turns.
+      heard = await listen({ silenceMs: 700, maxSec: 45, waitSec: 30, signal: a.signal, resume, warm: true, onLevel: (l) => { if (Math.abs(l - st.level) > 0.03) set({ level: l }); } });
     } catch (e) {
       if (a.signal.aborted) break;
       set({ error: (e as Error).message });
@@ -204,8 +204,13 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   let making: Promise<Blob | null> = Promise.resolve(null);
   const stale = (mine: number) => gen !== speakGen || mine !== take || a.signal.aborted;
   let said = 0;
+  // Sentences already heard in full. When the claim check takes the reply back, the model usually writes
+  // much of it again: those sentences aren't said a second time (0.21.1; the call repeated itself).
+  const heard = new Set<string>();
+  const key = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   const say = (sentence: string) => {
     const mine = take;
+    if (mine > 0 && heard.has(key(sentence))) return;
     said++;
     const audio = making = making.then(() => (stale(mine) ? null : synthesize(sentence).catch(() => null)));
     chain = chain.then(async () => {
@@ -213,6 +218,7 @@ async function reply(a: AbortController, recent: CallTurn[]) {
       if (stale(mine)) return;
       set({ phase: 'speaking' });
       if (clip) await playSpeech(clip); else await speak(sentence);
+      if (!stale(mine)) heard.add(key(sentence));
     });
   };
   // Talking over Lotus stops it; your words carry on into the next turn.

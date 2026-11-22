@@ -21,7 +21,7 @@ import { kv } from '../../lib/store';
 import { uid } from '../../lib/persist';
 import { MicRecorder, micErrorMessage } from '../../lib/audio';
 import { Effects, clock, effectsNeutral, withEffects } from '../../voice/studio';
-import { speakWith, useStudio, Clip } from '../../voice/useStudio';
+import { SPEAK_FX_KEY, speakWith, useStudio, Clip } from '../../voice/useStudio';
 import type { LotusSettings } from '../../types/lotus';
 
 /*
@@ -52,7 +52,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   const [q, setQ] = useState('');
   const [text, setText] = useState('');
   const [speed, setSpeed] = useState(1);
-  const [fx, setFx] = useState<Effects>(() => { try { return withEffects(JSON.parse(kv.getItem('lotus.voice.fx.v1') || '{}')); } catch { return withEffects(); } });
+  const [fx, setFx] = useState<Effects>(() => { try { return withEffects(JSON.parse(kv.getItem(SPEAK_FX_KEY) || '{}')); } catch { return withEffects(); } });
   const [busy, setBusy] = useState<string | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -78,7 +78,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
   useEffect(() => () => recRef.current?.cancel(), []);
 
   const go = (m: Mode) => { setMode(m); kv.setItem('lotus.voice.builtin.mode', m); setSelected(null); setError(null); };
-  const setEffects = (f: Effects) => { setFx(f); kv.setItem('lotus.voice.fx.v1', JSON.stringify(f)); };
+  const setEffects = (f: Effects) => { setFx(f); kv.setItem(SPEAK_FX_KEY, JSON.stringify(f)); };
   const { clips: allClips, transcripts: allTranscripts } = studio.history;
   useEffect(() => { if (mode === 'speak') scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }); }, [allClips.length, allTranscripts.length, mode]);
   useEffect(() => { const el = ta.current; if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 200)}px`; } }, [text]);
@@ -367,6 +367,7 @@ export const BuiltinVoice: React.FC<{ settings: LotusSettings; onSettings: (p: P
           <Section title="Effects">
             <EffectsPanel value={fx} onChange={setEffects} sample={lastClip} />
             {!effectsNeutral(voice?.effects) && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">{voice?.name} has its own effects too; these are added on top.</p>}
+            <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Calls use these effects too, without Echo and fades.</p>
           </Section>
           <Section title="Microphone">
             <MicPicker />

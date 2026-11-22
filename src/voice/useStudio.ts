@@ -15,7 +15,7 @@ import { GSV_KEY, gsvModel } from './gptsovits';
 import { applyEffects, clipSeconds, joinClips } from './render';
 import { HISTORY_EVENT } from './stt';
 import { proUnlocked, usePro } from '../lib/pro';
-import { chunkText, effectsNeutral, Segment, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
+import { addEffects, callEffects, chunkText, effectsNeutral, Segment, Effects, MyVoice, pickVoice, Story, VoiceModel, VoiceOption, voiceOptions, withEffects } from './studio';
 
 export const MINE_KEY = 'lotus.voice.mine.v1';
 export const SELECTED_KEY = 'lotus.voice.selected.v1';
@@ -41,11 +41,19 @@ export function currentVoice(): VoiceOption | null {
   return pickVoice(voiceOptions(voiceModels(builtinsNow().models), read<MyVoice[]>(MINE_KEY, []), { proLocked: !proUnlocked() }), kv.getItem(SELECTED_KEY));
 }
 
+/** The effects picked on the Speak page (its Effects button and settings). */
+export const SPEAK_FX_KEY = 'lotus.voice.fx.v1';
+export function speakPageEffects(): Effects {
+  try { return withEffects(JSON.parse(kv.getItem(SPEAK_FX_KEY) || '{}')); } catch { return withEffects(); }
+}
+/** What a call sounds like with this voice: its own effects plus the Speak page's, without Echo and fades (0.21.1). */
+export const callVoiceEffects = (v: VoiceOption): Effects => callEffects(addEffects(v.effects, speakPageEffects()));
+
 /**
  * Speaks `text` with a voice option: long texts in parts (joined), cloning voices with their
  * recording, then the voice's effects and any extra ones. Saves the result in Lotus Studio/Audio.
  */
-export async function speakWith(v: VoiceOption, text: string, o: { speed?: number; effects?: Partial<Effects>; steps?: number } = {}): Promise<{ path: string; seconds: number }> {
+export async function speakWith(v: VoiceOption, text: string, o: { speed?: number; effects?: Partial<Effects>; /** These effects instead of the voice's own (calls). */ only?: Effects; steps?: number } = {}): Promise<{ path: string; seconds: number }> {
   const parts = chunkText(text);
   if (!parts.length) throw new Error('There is nothing to say.');
   const temp: string[] = [];
@@ -56,7 +64,7 @@ export async function speakWith(v: VoiceOption, text: string, o: { speed?: numbe
       temp.push(m.path);
       blobs.push(await loadMedia(m.path));
     }
-    const fx = withEffects({ ...(v.effects ?? {}), ...(o.effects ?? {}) });
+    const fx = o.only ?? addEffects(v.effects, o.effects);
     // One part and no effects: keep the engine's own file.
     if (blobs.length === 1 && effectsNeutral(fx)) { const path = temp.pop()!; return { path, seconds: await clipSeconds(blobs[0]) }; }
     let out = await joinClips(blobs);
