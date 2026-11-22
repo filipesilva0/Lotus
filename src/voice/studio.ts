@@ -136,6 +136,23 @@ export const EFFECT_PRESETS: { id: string; label: string; fx: Partial<Effects> }
 ];
 
 export const withEffects = (fx?: Partial<Effects> | null): Effects => ({ ...NO_EFFECTS, ...(fx ?? {}) });
+/**
+ * Effects picked on the Speak page added to a voice's own effects (0.21.1). The Speak page's effects are
+ * always a full set, so spreading them over the voice's used to put every setting back to "off": a
+ * voice's own effects did nothing there. Now only the settings you changed on the Speak page win.
+ */
+export const addEffects = (base?: Partial<Effects> | null, extra?: Partial<Effects> | null): Effects => {
+  const b = withEffects(base), x = withEffects(extra);
+  const out = { ...b } as Record<keyof Effects, Effects[keyof Effects]>;
+  for (const k of Object.keys(NO_EFFECTS) as (keyof Effects)[]) if (x[k] !== NO_EFFECTS[k]) out[k] = x[k];
+  return out as Effects;
+};
+/**
+ * The effects a voice call uses (0.21.1): the voice's and the Speak page's, without Echo and fades. A call
+ * is spoken a sentence at a time, so an echo repeated each word a moment later and fades dipped every
+ * sentence; Echo also sounded like you talking over Lotus and cut it off.
+ */
+export const callEffects = (fx: Partial<Effects>): Effects => ({ ...withEffects(fx), echo: 0, fadeIn: 0, fadeOut: 0 });
 /** True when rendering would change nothing (skip the extra pass). */
 export const effectsNeutral = (fx?: Partial<Effects> | null): boolean => { const e = withEffects(fx); return (Object.keys(NO_EFFECTS) as (keyof Effects)[]).every((k) => e[k] === NO_EFFECTS[k]); };
 /** Which preset these settings match, if any. */

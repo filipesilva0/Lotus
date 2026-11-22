@@ -20,6 +20,7 @@ import { builtinsNow, refreshBuiltins } from '../lib/builtins';
 import { playThroughLoop, stopPlayback } from './echo';
 import { GSV_ID, gsvSpeech } from './gptsovits';
 import { proUnlocked } from '../lib/pro';
+import { turnStart, turnStep } from './turnRules';
 
 /** Settings → Engines → Voice, and the built-in voice and dictation models picked there. */
 export function builtinVoicePrefs(): { on: boolean; voice: string; speaker: number; dictation: string; language: string } {
@@ -98,7 +99,8 @@ export async function synthesize(text: string): Promise<Blob | null> {
   if (!t) return null;
   const studio = await import('./useStudio');
   const v = studio.currentVoice();
-  const m = v ? await studio.speakWith(v, t) : await builtinSpeech(t);
+  // 0.21.1: the same effects as the Speak page (they did nothing on calls before), minus Echo and fades.
+  const m = v ? await studio.speakWith(v, t, { only: studio.callVoiceEffects(v) }) : await builtinSpeech(t);
   try { return await loadMedia(m.path); }
   finally { void deleteMedia(m.path).catch(() => undefined); }
 }
@@ -206,19 +208,21 @@ export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?:
   if (!useBuiltin && !(await voicebox.health(1000).then(() => true).catch(() => false))) {
     throw new Error(builtin.on ? 'Spoken answers need a dictation model. Get Whisper in Settings → Models, or type your answer.' : 'Spoken answers need Voicebox running (it turns speech into text). Start it in Engines, or type your answer.');
   }
-  let heard = !!o.resume, quietSince = 0;
+  // 0.21.1: the end of your turn is judged against how loud the room is (turnRules.ts), not a fixed level.
+  let turn = turnStart(!!o.resume);
   let resolveStop: () => void = () => undefined;
   const stopNow = new Promise<void>((r) => { resolveStop = r; });
   const onLevel = (level: number, t: number) => {
     o.onLevel?.(level);
-    if (level > 0.09) { heard = true; quietSince = 0; } else if (heard && !quietSince) quietSince = performance.now();
-    if ((heard && quietSince && performance.now() - quietSince > silenceMs) || t > maxSec || (!heard && t > waitSec)) resolveStop();
+    const r = turnStep(turn, level, t, silenceMs);
+    turn = r.s;
+    if (r.done || t > maxSec || (!turn.heard && t > waitSec)) resolveStop();
   };
   let rec: MicRecorder;
   if (o.resume?.active) { rec = o.resume; rec.onLevel = onLevel; }
   else {
     if (o.resume) o.resume.cancel();
-    heard = false;
+    turn = turnStart();
     rec = new MicRecorder(onLevel);
     try { await rec.start(); } catch (e) { throw new Error(micErrorMessage(e)); }
   }
@@ -229,7 +233,7 @@ export async function listen(o: { maxSec?: number; silenceMs?: number; waitSec?:
   await stopNow;
   clearTimeout(guard);
   if (o.signal?.aborted) { rec.cancel(); setState('idle'); return ''; }
-  if (!heard) { rec.cancel(); setState('idle'); return ''; }
+  if (!turn.heard) { rec.cancel(); setState('idle'); return ''; }
   setState('transcribing');
   try {
     const r = await rec.stop();

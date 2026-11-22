@@ -90,6 +90,7 @@ export class MicRecorder {
   private chunks: Blob[] = [];
   private ctx: AudioContext | null = null;
   private raf = 0;
+  private timer: ReturnType<typeof setInterval> | null = null;
   private startedAt = 0;
 
   /** Can be swapped while recording (a call hands a recording that heard you interrupt over to listening). */
@@ -120,6 +121,9 @@ export class MicRecorder {
       this.onLevel?.(Math.min(1, peak * 1.6), (performance.now() - this.startedAt) / 1000);
       this.raf = requestAnimationFrame(tick);
     };
+    // 0.21.1: animation frames stop while the window is hidden or minimised, so a call in the background
+    // never heard you stop talking and waited for the 45-second limit. A timer keeps the readings going.
+    this.timer = setInterval(() => { cancelAnimationFrame(this.raf); tick(); }, 50);
     tick();
   }
 
@@ -146,6 +150,7 @@ export class MicRecorder {
 
   private cleanup() {
     cancelAnimationFrame(this.raf);
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
     this.stream?.getTracks().forEach((t) => t.stop());
     void this.ctx?.close();
     this.stream = null;
