@@ -113,13 +113,15 @@ describe('the catalog itself', () => {
       expect(e.kind).toBe('chat');
       expect(e.tier).toBeUndefined(); // tiers come from the computer's class now
       expect(e.builtin?.gguf?.repo, e.id).toMatch(/^[\w.-]+\/[\w.-]+$/);
-      expect(e.builtin?.gguf?.quant).toBe('Q4_K_M');
+      // 0.21.0: Inkling 2 Mini uses ggml-org's official 4-bit file (IQ4_NL); mainline has no Q4_K_M yet.
+      expect(e.builtin?.gguf?.quant, e.id).toBe(e.id === 'inkling-2-mini' ? 'IQ4_NL' : 'Q4_K_M');
       expect(e.diskGb).toBeGreaterThan(0);
       expect(e.vramGb, e.id).toBeGreaterThanOrEqual(e.diskGb);
       expect(e.vramGb - e.diskGb, e.id).toBeLessThanOrEqual(5);
       expect(!!e.vision, e.id).toBe(!!e.builtin?.gguf?.mmproj); // vision ⇔ a vision file is downloaded
       expect(e.blurb.length).toBeGreaterThan(20);
-      expect(e.ollama, e.id).toMatch(/^[\w.-]+:[\w.-]+$/);
+      // Inkling 2 Mini has no Ollama tag yet (Ollama doesn't run it on Windows).
+      if (e.id !== 'inkling-2-mini') expect(e.ollama, e.id).toMatch(/^[\w.-]+:[\w.-]+$/);
     }
     // Something for every size of computer.
     const sizes = CHAT_MODELS.map((e) => e.vramGb);

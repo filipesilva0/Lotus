@@ -13,7 +13,16 @@ export function llamaOpts<T extends object>(o: T & { think?: Think }): Omit<T, '
   return { ...o, think: o.think === undefined ? false : o.think !== false };
 }
 
+/**
+ * Models whose chat template sets reasoning depth with `reasoning_effort` instead of `enable_thinking`
+ * (0.21.0: Inkling 2 from Thinking Machines; its lowest level, "none", is as close to off as it gets).
+ */
+const EFFORT_MODELS = /inkling/i;
+
 /** The request field that carries the switch (the chat template's `enable_thinking`); nothing when unset. */
-export function thinkingKwargs(think: Think): { chat_template_kwargs?: { enable_thinking: boolean } } {
-  return think === undefined ? {} : { chat_template_kwargs: { enable_thinking: think !== false } };
+export function thinkingKwargs(think: Think, model?: string): { chat_template_kwargs?: { enable_thinking: boolean; reasoning_effort?: string } } {
+  if (think === undefined) return {};
+  const on = think !== false;
+  if (model && EFFORT_MODELS.test(model)) return { chat_template_kwargs: { enable_thinking: on, reasoning_effort: on ? (typeof think === 'string' ? think : 'high') : 'none' } };
+  return { chat_template_kwargs: { enable_thinking: on } };
 }
