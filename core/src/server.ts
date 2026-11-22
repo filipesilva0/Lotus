@@ -10,6 +10,7 @@
 //   GET    /v1/media/<path>              the file (token may be passed as ?t= for <img>/<audio>)
 //   DELETE /v1/media/<path>
 //   GET    /v1/media-list?kind=image
+//   GET    /v1/video-preview?projectId=&file=   the Video editor's preview copy of a file (0.22)
 //   GET    /v1/work-file?workId=&file=   a video, sound or picture from a Work job's folder (0.21)
 //   POST   /v1/work-file?workId=&name=   raw bytes → saved in that folder (videos, pictures, sound only)
 //   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
@@ -36,6 +37,7 @@ import { LocalApi, LOCAL_API_KEY } from './localApi';
 import { mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { AUDIO_EXT, PICTURE_EXT, VIDEO_EXT } from './tools/video';
+import { VideoEditService } from './video/editService';
 
 const MAX_WORK_UPLOAD = 4 * 1024 ** 3;
 /** A safe file name for a video, picture or sound added to a Work folder; null for anything else. */
@@ -136,7 +138,21 @@ function agentRpc(agent: AgentService, o: CoreOptions, method: string, a: Json):
   }
 }
 
-export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService; licence: Licence; mcp: McpHub; localApi: LocalApi };
+/** 0.22: the Video editor (video/editService.ts). */
+async function videoRpc(v: VideoEditService, method: string, a: Json): Promise<{ found: boolean; value?: unknown }> {
+  switch (method) {
+    case 'video_project_get': return { found: true, value: v.projectGet(str(a.projectId)) };
+    case 'video_project_put': return { found: true, value: v.projectPut(str(a.projectId), a.project) };
+    case 'video_media': return { found: true, value: await v.media(str(a.projectId), Array.isArray(a.files) ? a.files.map(String) : undefined) };
+    case 'video_job': return { found: true, value: v.start(str(a.projectId), str(a.op), (a.args && typeof a.args === 'object' ? a.args : {}) as Json) };
+    case 'video_stop': return { found: true, value: v.stop(str(a.jobId)) };
+    case 'video_jobs': return { found: true, value: v.list() };
+    case 'video_copy': return { found: true, value: v.copy(str(a.fromId), str(a.toId), Array.isArray(a.files) ? a.files.map(String) : []) };
+    default: return { found: false };
+  }
+}
+
+export type CoreServer = Server<{ id: number }> & { agent: AgentService; builtins: Builtins; board: BoardService; licence: Licence; mcp: McpHub; localApi: LocalApi; video: VideoEditService };
 
 export function startServer(o: CoreOptions): CoreServer {
   const log = o.log ?? (() => undefined);
@@ -180,6 +196,11 @@ export function startServer(o: CoreOptions): CoreServer {
   try { builtins.ensureFolders(); } catch (e) { log(`could not create the Models folders: ${(e as Error).message}`); }
   // Copied voices in videos follow the Pro switch (0.21); `licence` is made just below and read later.
   const agent = new AgentService({ db: o.db, studio: o.studio, broadcast, fetch: o.fetch, log, builtins, proUnlocked: () => { const s = licence.status(); return !s.locks || s.unlocked; } });
+  // 0.22: the Video editor runs its own jobs (no chat model needed), with the same tool context as Work.
+  const video = new VideoEditService({
+    workDir: (id) => agent.workDir(id), broadcast,
+    toolCtx: (dir, signal, progress) => ({ db: o.db, studio: o.studio, builtins, proUnlocked: () => { const s = licence.status(); return !s.locks || s.unlocked; }, folders: [], kvSet: kvSetCore, kvGet: (k) => kvGet(o.db, k), fetch: o.fetch ?? fetch, memoryOn: false, workDir: dir, signal, progress }),
+  });
   // Phase 2: the task board, routines and their scheduler live here, next to the agent.
   const board = new BoardService({ db: o.db, agent, broadcast, log });
   agent.board = board;
@@ -285,6 +306,12 @@ export function startServer(o: CoreOptions): CoreServer {
           if (!full) return fail(req, 404, 'That artifact is no longer in the work folder.');
           return new Response(Bun.file(full), { headers: { 'content-type': /\.webm$/i.test(full) ? 'video/webm' : mimeFor(full), 'cache-control': 'no-store', ...cors(req) } });
         }
+        // 0.22: what the Video editor previews: a video's 360p copy, or the picture or sound itself.
+        if (url.pathname === '/v1/video-preview' && req.method === 'GET') {
+          const full = video.previewPath(url.searchParams.get('projectId') ?? '', url.searchParams.get('file') ?? '');
+          if (!full) return fail(req, 404, 'That file is no longer in the project.');
+          return new Response(Bun.file(full), { headers: { 'content-type': /\.webm$/i.test(full) ? 'video/webm' : /\.(mp4|mov|m4v|mkv|avi)$/i.test(full) ? 'video/mp4' : mimeFor(full), 'cache-control': 'no-store', ...cors(req) } });
+        }
         if (url.pathname.startsWith('/v1/media/')) {
           const rel = decodeURIComponent(url.pathname.slice('/v1/media/'.length));
           const full = resolveMedia(o.studio, rel);
@@ -314,6 +341,8 @@ export function startServer(o: CoreOptions): CoreServer {
               if (method !== 'pro_status') broadcast({ type: 'pro', status: pr.value });
               return json(req, { result: pr.value ?? null });
             }
+            const vr = await videoRpc(video, method, args);
+            if (vr.found) return json(req, { result: vr.value ?? null });
             const bd = boardRpc(board, method, args);
             if (bd.found) return json(req, { result: bd.value ?? null });
             const r = agentRpc(agent, o, method, args);
@@ -335,5 +364,5 @@ export function startServer(o: CoreOptions): CoreServer {
       message() { /* clients only listen */ },
     },
   });
-  return Object.assign(server, { agent, builtins, board, licence, mcp, localApi });
+  return Object.assign(server, { agent, builtins, board, licence, mcp, localApi, video });
 }
