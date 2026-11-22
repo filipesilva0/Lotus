@@ -5,6 +5,7 @@
 //   voice.list       the voices the user can use: built-in speakers and their own voices
 //   video.inspect    length, size and sound; a sheet of frames to look at; what is said, with times
 //   video.voiceover  a script spoken line by line, laid out in time, saved as WAV + subtitles
+//   video.generate   new AI footage from words (or a picture), on this computer's graphics card
 //   video.make       pictures and clips joined with slow moves and crossfades, plus the voiceover,
 //                    the video's own sound and music; saved as an MP4 in the work folder
 //
@@ -22,6 +23,8 @@ import { entryById } from '../../../src/models/library';
 import { voiceOptions, type MyVoice, type VoiceModel } from '../../../src/voice/studio';
 import { chunkArgs, effectFilters, frameArgs, layoutLines, mixArgs, motionFor, sceneDurations, sheetArgs, sheetTimes, sizeFor, srt, wavSeconds, type Line, type Scene } from '../video/ffmpeg';
 import { probe, render, runProgram, type VideoTools } from '../video/run';
+import { aboutTime, MAX_VIDEO_SECONDS, pickVideoModel, planVideo, VIDEO_FAMILIES, videoFamilyFor, videoFit, videoLadder, videoPrompt, type VideoAttempt } from '../../../src/models/videoModels';
+import { LIBRARY } from '../../../src/models/library';
 
 export const MINE_KEY = 'lotus.voice.mine.v1';
 export const SELECTED_KEY = 'lotus.voice.selected.v1';
@@ -401,4 +404,119 @@ export const videoMake: Tool = {
   },
 };
 
-export const VIDEO_TOOLS: Tool[] = [voiceList, videoInspect, videoVoiceover, videoMake];
+// ── New footage (AI video) ─────────────────────────────────────────────────
+
+/** The fallback the agent takes when this computer can't film: still pictures with slow moves. */
+const FALLBACK = 'Fall back to pictures: make one picture per shot with image.generate and put them together with video.make (slow pans and zooms). Tell the user why in one sentence.';
+
+/** Words for why there is no AI video here, and what to get. */
+export function noVideoModel(installed: { family: keyof typeof VIDEO_FAMILIES; title: string }[], m: Parameters<typeof videoFamilyFor>[0]): string {
+  const best = videoFamilyFor(m);
+  if (!best) return `${(videoFit('wan21-1.3b', m) as { why: string }).why} ${FALLBACK}`;
+  const tooBig = installed.filter((x) => !videoFit(x.family, m).ok);
+  const entry = LIBRARY.find((e) => e.video?.family === best);
+  return `${tooBig.length ? `${tooBig.map((x) => x.title).join(', ')} is too big for this computer. ` : 'No AI video model is downloaded yet. '}The one for this computer is ${entry?.title ?? VIDEO_FAMILIES[best].label} (${entry?.diskGb ?? '?'} GB download) in Settings → Models → Video. ${FALLBACK}`;
+}
+
+const frameNo = (f: string) => Number(/(\d+)\.png$/i.exec(f)?.[1] ?? 0);
+
+export const videoGenerate: Tool = {
+  name: 'video.generate', label: 'Filming with AI', risk: 'write',
+  description: 'Film NEW moving footage with AI on this computer (Wan video models): give what each shot shows, and Lotus makes the clips and joins them into one MP4 in this work (no sound; add a voiceover with video.make, using this file as a scene). Slow: several minutes per 2-second clip on an 8 GB card, so keep shots few and short. On bigger cards it can also bring a picture to life. If it says this computer can\'t, use pictures with video.make instead.',
+  parameters: { type: 'object', properties: {
+    shots: { type: 'array', items: { type: 'string' }, description: 'What each shot shows, in order: subject, action, place, camera, light, e.g. "a physiotherapist guides a patient through a slow shoulder stretch in a bright clinic, camera slowly pushes in". One clip per shot.' },
+    seconds: { type: 'number', description: `Total length to aim for (default: one clip per shot, 2–5 s each depending on the card; at most ${MAX_VIDEO_SECONDS}).` },
+    style: { type: 'string', description: 'Style words added to every shot so they look like one film, e.g. "warm natural light, 35mm film look".' },
+    picture: { type: 'string', description: 'Optional: a picture to bring to life as the first shot (only on cards that can; otherwise it is made from the words).' },
+    aspect: { type: 'string', enum: ['16:9', '9:16', '1:1'], description: 'Shape (default 16:9).' },
+    filename: { type: 'string', description: 'File name, e.g. footage.mp4 (default ai-footage.mp4).' },
+    seed: { type: 'number', description: 'Optional seed, to make the same footage again.' },
+  }, required: ['shots'] },
+  describe: (a) => `Film ${Array.isArray(a.shots) ? a.shots.length : 0} AI shot${Array.isArray(a.shots) && a.shots.length === 1 ? '' : 's'} into ${outName(a.filename, 'ai-footage.mp4', ['.mp4'])}`,
+  async run(a, ctx) {
+    if (!ctx.workDir) return { ok: false, text: 'AI footage is made in Work mode.', summary: 'Not in Work mode' };
+    const b = ctx.builtins;
+    if (!b) return { ok: false, text: `Lotus's own engines aren't available here. ${FALLBACK}`, summary: 'No engines' };
+    const t = videoTools(ctx);
+    if ('error' in t) return { ok: false, text: t.error, summary: 'FFmpeg not installed' };
+    if (!b.engineInfo('sd').installed) return { ok: false, text: `Lotus's image engine (stable-diffusion.cpp) isn't installed, and it makes the video. Tell the user to install it in Settings → Models → Video. ${FALLBACK}`, summary: 'Image engine not installed' };
+    const shots = (Array.isArray(a.shots) ? a.shots : [a.shots]).map((x) => String(x ?? '').replace(/\s+/g, ' ').trim()).filter(Boolean).slice(0, 30);
+    if (!shots.length) return { ok: false, text: 'Say what each shot shows, in shots.', summary: 'No shots' };
+    const m = await b.machine();
+    const installed = b.videoModels();
+    const model = pickVideoModel(installed, m);
+    if (!model) return { ok: false, text: noVideoModel(installed, m), summary: 'No AI video on this computer' };
+    const spec = VIDEO_FAMILIES[model.family];
+    const plan = planVideo(model.family, m, { seconds: Number(a.seconds) || undefined, aspect: typeof a.aspect === 'string' ? a.aspect : undefined });
+    // One clip per shot; a length longer than the shots repeats the last shot with a new take.
+    const count = Math.max(shots.length, Number(a.seconds) > 0 ? plan.clips : shots.length);
+    const prompts = Array.from({ length: Math.min(30, count) }, (_, i) => videoPrompt(shots[Math.min(i, shots.length - 1)], typeof a.style === 'string' ? a.style : undefined));
+    let picture: string | undefined;
+    let pictureNote = '';
+    if (a.picture) {
+      const f = findInput(ctx, a.picture);
+      if (typeof f !== 'string') return { ok: false, text: f.error, summary: 'Picture not found' };
+      if (spec.fromPicture) picture = f;
+      else pictureNote = ` ${model.title} can't start from a picture, so the first shot was made from the words (picture-to-video needs Wan 2.2 5B and a 12 GB card).`;
+    }
+    const seed0 = Number.isFinite(Number(a.seed)) && a.seed !== undefined ? Math.floor(Number(a.seed)) : Math.floor(Math.random() * 2 ** 31);
+    let ladder = videoLadder(model.family, plan);
+    const tmp = tmpDir(ctx);
+    const clips: string[] = [];
+    let shrunk: VideoAttempt | null = null;
+    const started = Date.now();
+    try {
+      ctx.progress(`Filming ${prompts.length} clip${prompts.length === 1 ? '' : 's'} with ${model.title}, ${aboutTime(prompts.length * spec.minutesPerClip)}`);
+      for (let i = 0; i < prompts.length; i++) {
+        const done = Date.now() - started;
+        const left = i ? aboutTime(((done / i) * (prompts.length - i)) / 60_000) + ' left' : aboutTime((prompts.length - i) * spec.minutesPerClip) + ' left (a guess until the first clip is done)';
+        // Picture-capable models carry on from the last frame of the shot before when it's the same shot.
+        let init = i === 0 ? picture : undefined;
+        if (i > 0 && spec.fromPicture && shots[Math.min(i, shots.length - 1)] === shots[Math.min(i - 1, shots.length - 1)]) {
+          const last = join(tmp, `last${i}.png`);
+          try { await runProgram(t.ffmpeg, ['-y', '-nostdin', '-v', 'error', '-sseof', '-0.2', '-i', clips[i - 1], '-frames:v', '1', '-update', '1', last], { signal: ctx.signal }); if (existsSync(last)) init = last; } catch { /* a fresh take instead */ }
+        }
+        const r = await b.generateVideoClip(model, ladder, { prompt: prompts[i], seed: seed0 + i, init, lowVram: plan.lowVram }, {
+          signal: ctx.signal,
+          onProgress: (step, total) => ctx.progress(`Filming clip ${i + 1} of ${prompts.length} · step ${step} of ${total} · ${left}`),
+          onRetry: (why, next) => ctx.progress(`Clip ${i + 1}: the graphics card ${why}; trying again at ${next.width}×${next.height}, ${next.frames} frames`),
+        });
+        // Later clips start where this one succeeded instead of failing the same way first.
+        const idx = ladder.findIndex((x) => x === r.attempt);
+        if (idx > 0) { shrunk = r.attempt; ladder = ladder.slice(idx); }
+        const clip = join(tmp, `clip${String(i).padStart(2, '0')}.avi`);
+        try {
+          if (r.files.length === 1) writeFileSync(clip, readFileSync(r.files[0]));
+          else {
+            // Older sd-cli builds write numbered PNG frames: join them first.
+            const frames = [...r.files].sort((x, y) => frameNo(x) - frameNo(y));
+            const fdir = join(tmp, `frames${i}`); mkdirSync(fdir, { recursive: true });
+            frames.forEach((f, k) => writeFileSync(join(fdir, `f${String(k).padStart(4, '0')}.png`), readFileSync(f)));
+            await runProgram(t.ffmpeg, ['-y', '-nostdin', '-v', 'error', '-framerate', String(spec.fps), '-i', join(fdir, 'f%04d.png'), '-c:v', 'mjpeg', '-q:v', '2', clip], { signal: ctx.signal });
+          }
+        } finally { b.cleanOutputs(r.files); }
+        clips.push(clip);
+      }
+      ctx.progress('Joining the clips');
+      const infos = await Promise.all(clips.map((c) => probe(t, c, ctx.signal)));
+      const scenes: Scene[] = clips.map((file, i) => ({ file, kind: 'video', duration: Math.max(0.3, infos[i].duration || (plan.frames - 1) / spec.fps), from: 0, motion: 'none' }));
+      const name = outName(a.filename, 'ai-footage.mp4', ['.mp4', '.webm']);
+      const res = await render(t, { scenes, width: plan.width, height: plan.height, fps: spec.fps === 24 ? 24 : 16, fade: spec.fromPicture ? 0 : 0.25, out: (c) => join(ctx.workDir!, name.replace(/\.(mp4|webm)$/, `.${c}`)) }, { signal: ctx.signal });
+      const file = basename(res.file);
+      titleOf(ctx.workDir, file, `AI footage · ${file.replace(/\.[^.]+$/, '')}`);
+      const total = scenes.reduce((s, x) => s + x.duration, 0);
+      const minutes = (Date.now() - started) / 60_000;
+      return {
+        ok: true,
+        text: `Saved ${file}: ${total.toFixed(1)} s of new AI footage (${clips.length} clip${clips.length === 1 ? '' : 's'}, ${plan.width}×${plan.height}, no sound) made with ${model.title} in ${aboutTime(minutes).replace('about ', '')}.${shrunk ? ` The graphics card ran short of memory, so clips were made at ${shrunk.width}×${shrunk.height}, ${shrunk.frames} frames.` : ''}${pictureNote} Use it as a scene in video.make to add the voiceover, music and subtitles.`,
+        summary: `${file} · ${total.toFixed(1)} s · ${model.title}`, data: { file, seconds: total, model: model.id, clips: clips.length },
+      };
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
+      const made = clips.length ? ` ${clips.length} of ${prompts.length} clips were done before it stopped.` : '';
+      return { ok: false, text: `${(e as Error).message}${made} ${FALLBACK}`, summary: 'AI footage failed' };
+    } finally { cleanTmp(tmp); }
+  },
+};
+
+export const VIDEO_TOOLS: Tool[] = [voiceList, videoInspect, videoVoiceover, videoGenerate, videoMake];

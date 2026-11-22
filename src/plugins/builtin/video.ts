@@ -12,7 +12,7 @@ import type { BuiltinPluginDef } from './types';
 export const VIDEO: BuiltinPluginDef = {
   id: 'builtin-video',
   name: 'Video',
-  version: '1.0.0',
+  version: '1.1.0',
   description: 'Make narrated videos: watch a video, write the script, pick the best voice, record it and put it all together.',
   author: 'Lotus',
   defaultOn: true,
@@ -20,6 +20,7 @@ export const VIDEO: BuiltinPluginDef = {
   instructions: '',
   commands: [
     { name: 'video', description: 'Make a narrated video', prompt: 'Make a short narrated video. Follow the narrated-video skill: plan, script, pick a voice, record the voiceover, make the pictures or use mine, and put it together with video.make. What it is about:\n\n{{input}}' },
+    { name: 'film', description: 'Film new footage with AI', prompt: 'Film new footage with AI for this. Follow the film-with-ai skill: plan short shots, say how long it will take, then video.generate. What it should show:\n\n{{input}}' },
     { name: 'narrate', description: 'Add a voiceover to one of my videos', prompt: 'Add a voiceover to my video. Follow the narrate-a-video skill: watch it with video.inspect, write a script that fits what happens and when, pick a voice, record it, and make the narrated version with video.make. The video and what I want:\n\n{{input}}' },
   ],
   skills: [
@@ -40,7 +41,24 @@ export const VIDEO: BuiltinPluginDef = {
 ## Rules
 - Never use a voice voice.list marks NOT USABLE, and never copy a real person's voice.
 - Each scene should carry something from the one before (same place, character or colour) so it doesn't feel like slides.
-- Lotus makes moving pictures with pan, zoom and crossfades; it does not film new footage. Say so if asked for real motion.`,
+- Pictures with pan, zoom and crossfades are quick. For real motion use the film-with-ai skill (video.generate), which is slow: say how long before starting.`,
+    },
+    {
+      name: 'film-with-ai',
+      description: 'Film new moving footage with AI (Wan video models) and make it into a narrated video.',
+      whenToUse: 'Real motion, real footage, animate, film, generate video clips, text to video, image to video, bring my picture to life, AI video instead of a slideshow.',
+      body: `# Filming new footage with AI
+
+1. Plan few, short shots: each clip is 2–5 s and takes minutes to make (about 6 minutes per 2 s on an 8 GB card). A 30 s video is about 10–15 shots.
+2. Script and voiceover first (narrated-video steps 2–4), so you know each line's length.
+3. Write each shot as one sentence: subject, action, place, camera move, light ("a runner ties her shoes on a misty bridge at dawn, camera slowly pushes in, soft golden light"). Keep the same style words for every shot. No text or logos: video models can't write.
+4. Tell the user how long it will take, then call video.generate once per line with that shot, seconds about the line's length, the aspect, and filename shot1.mp4, shot2.mp4…
+5. video.make with the shot files as scenes, voiceover "voiceover.wav" and the aspect.
+6. If video.generate says this computer can't film (no graphics card, too little memory, no model), do what it says: pictures with slow moves, and tell the user why in one sentence.
+
+## Rules
+- Never film real, named people or anything the user hasn't the right to show.
+- If a clip fails part way, don't start over: say what was made and offer to continue or use pictures.`,
     },
     {
       name: 'narrate-a-video',

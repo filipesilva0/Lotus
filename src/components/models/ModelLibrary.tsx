@@ -19,12 +19,14 @@ import type { LotusSettings } from '../../types/lotus';
  */
 
 export type KindFilter = 'all' | ModelKind;
-const ENGINE_OF: Record<ModelKind, BuiltinId> = { chat: 'llama', image: 'sd', voice: 'sherpa', dictation: 'sherpa' };
+const ENGINE_OF: Record<ModelKind, BuiltinId> = { chat: 'llama', image: 'sd', voice: 'sherpa', dictation: 'sherpa', video: 'sd' };
 
 /** Which engine a kind of model goes to, from Settings → Engines. */
 export function engineFor(kind: ModelKind, s: Pick<LotusSettings, 'llmBackend' | 'imageEngine' | 'voiceEngine'>): 'builtin' | 'ollama' | 'comfyui' | 'voicebox' {
   if (kind === 'chat') return s.llmBackend === 'ollama' ? 'ollama' : 'builtin';
   if (kind === 'image') return s.imageEngine === 'comfyui' ? 'comfyui' : 'builtin';
+  // 0.21: AI video runs only on Lotus's own image engine (stable-diffusion.cpp).
+  if (kind === 'video') return 'builtin';
   return s.voiceEngine === 'voicebox' ? 'voicebox' : 'builtin';
 }
 
@@ -93,7 +95,7 @@ export const ModelLibrary: React.FC<{
   };
 
   const needle = q.trim().toLowerCase();
-  const KIND_ORDER: ModelKind[] = ['chat', 'image', 'voice', 'dictation'];
+  const KIND_ORDER: ModelKind[] = ['chat', 'image', 'video', 'voice', 'dictation'];
   const FIT_ORDER: Record<Fit, number> = { fits: 0, tight: 1, unknown: 1, 'too-big': 2 };
   const cpuOnly = !!b.machine && machineClass(b.machine) === 'cpu';
   /** Kind first; within chat and images, this computer's picks, then by fit and size. */
@@ -211,6 +213,7 @@ export const EnginesRow: React.FC<{ kind: KindFilter; settings: LotusSettings }>
   const want = new Set<BuiltinId>();
   if ((kind === 'all' || kind === 'chat') && settings.llmBackend !== 'ollama') want.add('llama');
   if ((kind === 'all' || kind === 'image') && settings.imageEngine !== 'comfyui') want.add('sd');
+  if (kind === 'video') { want.add('sd'); want.add('ffmpeg'); }
   if ((kind === 'all' || kind === 'voice' || kind === 'dictation') && settings.voiceEngine !== 'voicebox') want.add('sherpa');
   // 0.21: FFmpeg for videos in Work mode (only on the All tab; it runs no models).
   if (kind === 'all') want.add('ffmpeg');
@@ -262,7 +265,7 @@ const AddByLink: React.FC<{ kind: KindFilter; onError: (m: string | null) => voi
         <span className="relative flex-1 min-w-[260px]"><Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
           <input value={source} onChange={(e) => setSource(e.target.value)} aria-label="Model name or link" placeholder="unsloth/Qwen3-14B-GGUF or https://…/model.safetensors" className={cx(sel, 'w-full pl-8')} /></span>
         <select aria-label="Kind of model" className={sel} value={k} onChange={(e) => setK(e.target.value as ModelKind)}>
-          {(['chat', 'image', 'voice', 'dictation'] as ModelKind[]).map((x) => <option key={x} value={x}>{KIND_LABEL[x]}</option>)}
+          {(['chat', 'image', 'video', 'voice', 'dictation'] as ModelKind[]).map((x) => <option key={x} value={x}>{KIND_LABEL[x]}</option>)}
         </select>
         {k === 'image' && <select aria-label="What the file is" className={sel} value={folder} onChange={(e) => setFolder(e.target.value as ImageFolder)}>
           {(Object.keys(FOLDER_LABEL) as ImageFolder[]).map((f) => <option key={f} value={f}>{FOLDER_LABEL[f]}</option>)}
