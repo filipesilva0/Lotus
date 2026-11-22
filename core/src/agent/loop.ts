@@ -159,14 +159,27 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     const sep = !shown.trim() ? '' : shown.endsWith('\n\n') ? '' : shown.endsWith('\n') ? '\n' : '\n\n';
     let firstToken = true;
     let filter = mode === 'tags' ? new TagFilter() : null;
-    const show = (t: string) => {
-      if (!t) return;
+    // Think mode, before the review: the answer is written into the reasoning drawer, not the chat, so
+    // the review happens inside the reasoning and the chat ends when the answer appears (it used to
+    // stream the answer, then keep "thinking" for a while to check it, and sometimes rewrite it).
+    const hold = !reviewed;
+    let held = '';
+    const emitText = (t: string) => {
       const text = firstToken ? sep + t.replace(/^\s+/, '') : t;
       if (!text) return;
       firstToken = false;
       shown += text;
       d.emit({ kind: 'token', text });
     };
+    const show = (t: string) => {
+      if (!t) return;
+      if (!hold) { emitText(t); return; }
+      if (!held) d.emit({ kind: 'thinking', text: '\n\n### Draft answer\n' });
+      held += t;
+      d.emit({ kind: 'thinking', text: t });
+    };
+    /** Puts the held answer in the chat (all at once: it was already written in the reasoning). */
+    const release = () => { const t = held; held = ''; if (t.trim()) emitText(t); };
 
     let result;
     try {
@@ -174,7 +187,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
         token: (t) => show(filter ? filter.push(t) : t),
         thinking: (t) => d.emit({ kind: 'thinking', text: t }),
         // What was shown this turn was the model's thinking (`</think>` with no opening tag): take it back.
-        retract: () => { d.emit({ kind: 'reset', keep: keep.length }); shown = keep; firstToken = true; if (filter) filter = new TagFilter(); },
+        retract: () => { d.emit({ kind: 'reset', keep: keep.length }); shown = keep; held = ''; firstToken = true; if (filter) filter = new TagFilter(); },
       });
     } catch (e) {
       if (e instanceof ToolsUnsupported && mode === 'native') {
@@ -198,6 +211,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     if (asText) {
       d.emit({ kind: 'reset', keep: keep.length });
       shown = keep;
+      held = '';
       const known = req.tools.some((t) => t.name === fromWire(asText.name));
       if (known) { calls = [asText]; turnText = ''; }
       else if (!fixedText && turn < maxTurns - 1) {
@@ -212,6 +226,7 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
     if (inside) {
       d.emit({ kind: 'reset', keep: keep.length });
       shown = keep;
+      held = '';
       calls = inside.calls.map((c) => ({ name: c.name, args: c.args }));
       turnText = '';
     }
@@ -245,11 +260,13 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
         if (review && !isNoIssues(review)) {
           d.emit({ kind: 'reset', keep: keep.length });
           shown = keep;
+          held = '';
           messages.push({ role: 'assistant', content: result.content });
           messages.push({ role: 'user', content: reviewFix(review) });
           continue;
         }
       }
+      release();
       const content = shown.trim();
       if (!content && steps.length && !d.signal.aborted) {
         const note = unfinishedNote(steps, 'empty');
@@ -259,7 +276,8 @@ export async function runAgent(req: AgentRequest, d: AgentDeps): Promise<AgentOu
       return { content, steps, unverified: [...missing.map(claimText), ...(noSources ? [NO_SOURCES_CLAIM] : [])], mode, finished: true };
     }
 
-    // Tool calls.
+    // Tool calls. Text written before them ("Let me look that up.") goes to the chat as it always did.
+    release();
     if (mode === 'native') messages.push({ role: 'assistant', content: result.content, tool_calls: calls.map((c) => ({ function: { name: c.name, arguments: c.args } })) });
     else messages.push({ role: 'assistant', content: result.content });
 
