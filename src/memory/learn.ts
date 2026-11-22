@@ -13,6 +13,8 @@ import { agentPool } from '../agents/pool';
 import { extractJson, llm } from '../services/llm';
 import { uid } from '../lib/persist';
 import { memoryStore, queryWords, Skill } from './store';
+import { MAX_CHAT, MAX_SHORT, overlap, tierOf } from './layers';
+import type { MemoryTier } from '../types/lotus';
 
 export interface Turn { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -21,16 +23,8 @@ const MAX_TEXT = 220;
 
 // ── pure helpers (tested) ───────────────────────────────────────────────────
 
-const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
-
-/** Word-set overlap (Jaccard) between two short texts. */
-export function similarity(a: string, b: string): number {
-  const A = new Set(norm(a).split(' ').filter(Boolean)), B = new Set(norm(b).split(' ').filter(Boolean));
-  if (!A.size || !B.size) return 0;
-  let inter = 0;
-  A.forEach((w) => { if (B.has(w)) inter++; });
-  return inter / (A.size + B.size - inter);
-}
+/** Word-set overlap (Jaccard) between two short texts (shared with the tidy-up in layers.ts). */
+export const similarity = overlap;
 
 /** Things never to store, whatever the model proposes: secrets and identifiers. */
 export function looksSensitive(text: string): boolean {
@@ -39,10 +33,14 @@ export function looksSensitive(text: string): boolean {
     || /\b(sk|pk|ghp|xox[abp])[-_][A-Za-z0-9]{12,}/.test(text); // key-like strings
 }
 
-export interface MemoryOps { add: { kind: 'memory' | 'instruction'; text: string }[]; update: { id: string; text: string }[]; remove: string[] }
+export interface MemoryOps { add: { kind: 'memory' | 'instruction'; text: string; tier: MemoryTier }[]; update: { id: string; text: string }[]; remove: string[] }
 
-/** Validates the model's proposal against the current list. Only learned ('auto') items can be changed. */
-export function parseMemoryOps(raw: unknown, current: MemoryItem[]): MemoryOps {
+/**
+ * Validates the model's proposal against the current list. Only learned ('auto') items can be changed.
+ * 0.22: each addition names its layer; "chat" needs the chat (`chatId`), else it becomes short-term.
+ * A near-copy of an item in another chat's notes does not count as a duplicate.
+ */
+export function parseMemoryOps(raw: unknown, current: MemoryItem[], chatId?: string): MemoryOps {
   const out: MemoryOps = { add: [], update: [], remove: [] };
   if (!raw || typeof raw !== 'object') return out;
   const r = raw as Record<string, unknown>;
@@ -53,9 +51,13 @@ export function parseMemoryOps(raw: unknown, current: MemoryItem[]): MemoryOps {
     if (out.add.length >= 3) break;
     const text = clean((a as Record<string, unknown>)?.text ?? a);
     const kind = (a as Record<string, unknown>)?.kind === 'instruction' ? 'instruction' : 'memory';
+    const t = String((a as Record<string, unknown>)?.tier ?? (a as Record<string, unknown>)?.layer ?? 'long');
+    // Instructions are standing rules: they always live long-term.
+    const tier: MemoryTier = kind === 'instruction' ? 'long' : t === 'chat' ? (chatId ? 'chat' : 'short') : t === 'short' ? 'short' : 'long';
     if (text.length < 6 || text.length > MAX_TEXT || looksSensitive(text)) continue;
-    if (current.some((m) => similarity(m.text, text) >= 0.7) || out.add.some((x) => similarity(x.text, text) >= 0.7)) continue;
-    out.add.push({ kind, text });
+    const seen = current.filter((m) => tierOf(m) !== 'chat' || m.chatId === chatId);
+    if (seen.some((m) => similarity(m.text, text) >= 0.7) || out.add.some((x) => similarity(x.text, text) >= 0.7)) continue;
+    out.add.push({ kind, text, tier });
   }
   for (const u of Array.isArray(r.update) ? r.update.slice(0, 5) : []) {
     const id = String((u as Record<string, unknown>)?.id ?? ''), text = clean((u as Record<string, unknown>)?.text);
@@ -113,32 +115,54 @@ const transcript = (turns: Turn[], max = 9000) => {
 
 // ── background jobs ─────────────────────────────────────────────────────────
 
-const REFLECT_PROMPT = (mem: MemoryItem[], convo: string) => `You maintain the long-term memory of a personal assistant that runs on the user's own PC.
-Current memory (id: text; "user" items were saved by the user and must not be changed):
-${mem.length ? mem.map((m) => `${m.id} [${m.source === 'auto' ? 'learned' : 'user'}${m.kind === 'instruction' ? ', instruction' : ''}]: ${m.text}`).join('\n') : '(empty)'}
+const TAG: Record<MemoryTier, string> = { long: 'long', short: 'short', chat: 'chat' };
+
+const REFLECT_PROMPT = (mem: MemoryItem[], convo: string) => `You maintain the memory of a personal assistant that runs on the user's own PC. Like a person's, it has three layers:
+- long: lasting facts about the user (who they are, their work, setup, likes) and standing instructions ("always …").
+- short: what is going on now and matters for the next days or weeks (a trip, a deadline, the project they are on). It fades unless it keeps coming up.
+- chat: notes that only matter inside THIS conversation (what it is about, decisions made, names and numbers in it).
+Current memory that may be related (id [who, layer]: text; "user" items were saved by the user and must not be changed):
+${mem.length ? mem.map((m) => `${m.id} [${m.source === 'auto' ? 'learned' : 'user'}, ${TAG[tierOf(m)]}${m.kind === 'instruction' ? ', instruction' : ''}]: ${m.text}`).join('\n') : '(empty)'}
 
 Recent conversation:
 ${convo}
 
-Propose changes so the memory stays accurate, short and useful for FUTURE conversations:
-- add: durable facts the USER stated about themselves, their work, projects, setup or preferences, and standing instructions ("always …"). One fact per item, under 200 characters, written in the third person ("Uses Windows 11 with an RTX 4070").
+Propose changes so the memory stays accurate, short and useful:
+- add: things the USER stated, one per item, under 200 characters, in the third person ("Uses Windows 11 with an RTX 4070"), each with its layer.
 - update: learned items that the conversation corrected or made more precise.
 - remove: learned items the conversation shows are wrong or obsolete.
-Never store: passwords, keys, account or ID numbers, health, religion, politics or other sensitive details, things the assistant said, one-off task details, or guesses.
+Never store: passwords, keys, account or ID numbers, health, religion, politics or other sensitive details, things the assistant said, or guesses.
 If nothing is worth changing, return empty lists.
-Reply with JSON only: {"add":[{"kind":"memory"|"instruction","text":"..."}],"update":[{"id":"...","text":"..."}],"remove":["id"]}`;
+Reply with JSON only: {"add":[{"kind":"memory"|"instruction","layer":"long"|"short"|"chat","text":"..."}],"update":[{"id":"...","text":"..."}],"remove":["id"]}`;
+
+/** What the reflect prompt shows: this chat's notes, short-term items and the long-term items that match, not all of memory. */
+async function relatedMemory(turns: Turn[], chatId?: string): Promise<MemoryItem[]> {
+  const all = memoryStore.get().memories;
+  const text = turns.filter((t) => t.role === 'user').map((t) => t.content).join(' ').slice(-1500);
+  const ids = new Set(text.trim() ? await memoryStore.searchMemories(text, 16, { chatId }) : []);
+  const mine = all.filter((m) => (tierOf(m) === 'chat' && m.chatId === chatId) || tierOf(m) === 'short' || ids.has(m.id));
+  return mine.slice(-40);
+}
 
 /** Background: update learned memories from the recent part of a conversation. */
-export function reflect(turns: Turn[], label = 'Updating memory'): Promise<number> {
+export function reflect(turns: Turn[], label = 'Updating memory', chatId?: string): Promise<number> {
   return agentPool.run(label, 'memory', async ({ model, numCtx, signal }) => {
+    const shown = await relatedMemory(turns.slice(-8), chatId);
+    const r = await llm.chatOnce([{ role: 'user', content: REFLECT_PROMPT(shown, transcript(turns.slice(-8), 6000)) }], { model, numCtx, temperature: 0.1, json: true, signal, numPredict: 600 });
     const current = memoryStore.get().memories;
-    const r = await llm.chatOnce([{ role: 'user', content: REFLECT_PROMPT(current, transcript(turns.slice(-8), 6000)) }], { model, numCtx, temperature: 0.1, json: true, signal, numPredict: 600 });
-    const ops = parseMemoryOps(extractJson(r.content), current);
+    const ops = parseMemoryOps(extractJson(r.content), shown, chatId);
+    // Duplicates are checked against everything, not only what the prompt showed.
+    ops.add = ops.add.filter((a) => !current.some((m) => (tierOf(m) !== 'chat' || m.chatId === chatId) && similarity(m.text, a.text) >= 0.7));
     const now = Date.now();
-    const learned = current.filter((m) => m.source === 'auto').length;
-    const room = Math.max(0, MAX_LEARNED - learned + ops.remove.length);
-    const adds: MemoryItem[] = ops.add.slice(0, room).map((a) => ({ id: uid('mem'), kind: a.kind, text: a.text, source: 'auto', ts: now, updated: now, uses: 0 }));
-    const ups: MemoryItem[] = ops.update.map((u) => ({ ...current.find((m) => m.id === u.id)!, text: u.text, updated: now }));
+    const learned = (t: MemoryTier) => current.filter((m) => m.source === 'auto' && tierOf(m) === t && (t !== 'chat' || m.chatId === chatId)).length;
+    const room: Record<MemoryTier, number> = { long: Math.max(0, MAX_LEARNED - learned('long') + ops.remove.length), short: Math.max(0, MAX_SHORT - learned('short')), chat: Math.max(0, MAX_CHAT - learned('chat')) };
+    const adds: MemoryItem[] = [];
+    for (const a of ops.add) {
+      if (room[a.tier] <= 0) continue;
+      room[a.tier]--;
+      adds.push({ id: uid('mem'), kind: a.kind, text: a.text, source: 'auto', ts: now, updated: now, uses: 0, tier: a.tier, ...(a.tier === 'chat' ? { chatId } : {}) });
+    }
+    const ups: MemoryItem[] = ops.update.map((u) => ({ ...current.find((m) => m.id === u.id)!, text: u.text, updated: now })).filter((m) => m.id);
     for (const id of ops.remove) await memoryStore.deleteMemory(id);
     await memoryStore.putMemories([...adds, ...ups]);
     return adds.length + ups.length + ops.remove.length;

@@ -9,6 +9,8 @@ import { onCoreEvent, rpc } from '../lib/core';
 import { kv, storeMode } from '../lib/store';
 import { MemoryItem } from '../types/lotus';
 import { skillFits } from './skillMatch';
+import { tierOf } from './layers';
+import type { MemoryTier } from '../types/lotus';
 
 export interface Skill {
   id: string;
@@ -70,7 +72,8 @@ interface Backend {
   listMemories(): Promise<MemoryItem[]>;
   putMemories(items: MemoryItem[]): Promise<void>;
   deleteMemory(id: string): Promise<void>;
-  searchMemories(query: string, limit: number): Promise<string[]>;
+  searchMemories(query: string, limit: number, f?: MemoryFilter): Promise<string[]>;
+  touchMemories(ids: string[]): Promise<void>;
   listSkills(): Promise<Skill[]>;
   putSkill(s: Skill): Promise<string | undefined>;
   deleteSkill(id: string): Promise<void>;
@@ -78,7 +81,16 @@ interface Backend {
 }
 
 interface SkillRow { id: string; name: string; description: string; whenToUse: string; body: string; tags: string[]; version: number; uses: number; wins: number; enabled: boolean; origin: string; created: number; updated: number }
-interface MemRow { id: string; kind: string; text: string; source: string; uses: number; ts: number; updated: number }
+interface MemRow { id: string; kind: string; text: string; source: string; uses: number; ts: number; updated: number; tier?: string; chatId?: string | null; lastUsed?: number | null }
+/** Which memories a search may return: some layers only; chat notes only of `chatId`. */
+export interface MemoryFilter { tiers?: MemoryTier[]; chatId?: string }
+
+const fromRow = (r: MemRow): MemoryItem => ({
+  id: r.id, kind: r.kind === 'instruction' ? 'instruction' : 'memory', text: r.text, source: r.source === 'auto' ? 'auto' : 'user', uses: r.uses, ts: r.ts, updated: r.updated,
+  tier: tierOf({ tier: r.tier as MemoryTier }), ...(r.chatId ? { chatId: r.chatId } : {}), ...(r.lastUsed ? { lastUsed: r.lastUsed } : {}),
+});
+const toRow = (m: MemoryItem) => ({ id: m.id, kind: m.kind, text: m.text, source: m.source ?? 'user', uses: m.uses ?? 0, ts: m.ts, updated: m.updated ?? m.ts, tier: tierOf(m), chatId: tierOf(m) === 'chat' ? m.chatId ?? null : null, lastUsed: m.lastUsed ?? null });
+const passes = (m: MemoryItem, f: MemoryFilter = {}) => (!f.tiers?.length || f.tiers.includes(tierOf(m))) && (tierOf(m) !== 'chat' || (!!f.chatId && m.chatId === f.chatId));
 
 const SKILL_META = 'lotus.skills.meta.v1'; // change history is UI-only metadata, kept beside the DB
 
@@ -88,10 +100,11 @@ const coreBackend: Backend = {
   forgetSession: async (sessionId) => { await rpc('mem_forget_session', { sessionId }); },
   wipeHistory: async () => { await rpc('mem_wipe_history'); },
   search: async (query, excludeSession, limit) => (await rpc<SessionHit[]>('mem_search', { query, excludeSession, limit })) ?? [],
-  listMemories: async () => ((await rpc<MemRow[]>('memories_list')) ?? []).map((r) => ({ id: r.id, kind: r.kind === 'instruction' ? 'instruction' : 'memory', text: r.text, source: r.source === 'auto' ? 'auto' : 'user', uses: r.uses, ts: r.ts, updated: r.updated })),
-  putMemories: async (items) => { await rpc('memories_put', { items: items.map((m) => ({ id: m.id, kind: m.kind, text: m.text, source: m.source ?? 'user', uses: m.uses ?? 0, ts: m.ts, updated: m.updated ?? m.ts })) }); },
+  listMemories: async () => ((await rpc<MemRow[]>('memories_list')) ?? []).map(fromRow),
+  putMemories: async (items) => { await rpc('memories_put', { items: items.map(toRow) }); },
   deleteMemory: async (id) => { await rpc('memories_delete', { id }); },
-  searchMemories: async (query, limit) => (await rpc<string[]>('memories_search', { query, limit })) ?? [],
+  searchMemories: async (query, limit, f = {}) => (await rpc<string[]>('memories_search', { query, limit, tiers: f.tiers, chatId: f.chatId })) ?? [],
+  touchMemories: async (ids) => { await rpc('memories_touch', { ids }); },
   listSkills: async () => {
     const meta = readMeta();
     return ((await rpc<SkillRow[]>('skills_list')) ?? []).map((r) => ({ ...r, origin: r.origin === 'user' ? 'user' : 'auto', history: meta[r.id] }));
@@ -121,7 +134,7 @@ function webBackend(): Backend {
   return {
     status: async () => ({ native: false, fts5: false, path: 'browser storage', messages: idx.size, memories: load(MEM).length, skills: load(SK).length }),
     index: async (msgs) => { msgs.forEach((m) => (m.content.trim() ? idx.set(m.id, m) : idx.delete(m.id))); },
-    forgetSession: async (id) => { [...idx.values()].filter((m) => m.sessionId === id).forEach((m) => idx.delete(m.id)); },
+    forgetSession: async (id) => { [...idx.values()].filter((m) => m.sessionId === id).forEach((m) => idx.delete(m.id)); save(MEM, load<MemoryItem>(MEM).filter((m) => !(tierOf(m) === 'chat' && m.chatId === id))); },
     wipeHistory: async () => idx.clear(),
     search: async (query, exclude, limit) => {
       const w = queryWords(query);
@@ -134,7 +147,8 @@ function webBackend(): Backend {
     listMemories: async () => load<MemoryItem>(MEM),
     putMemories: async (items) => { const cur = load<MemoryItem>(MEM); items.forEach((it) => { const i = cur.findIndex((x) => x.id === it.id); if (i >= 0) cur[i] = it; else cur.push(it); }); save(MEM, cur); },
     deleteMemory: async (id) => save(MEM, load<MemoryItem>(MEM).filter((x) => x.id !== id)),
-    searchMemories: async (query, limit) => { const w = queryWords(query); return load<MemoryItem>(MEM).map((m) => ({ id: m.id, s: matchScore(w, m.text) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.id); },
+    searchMemories: async (query, limit, f) => { const w = queryWords(query); return load<MemoryItem>(MEM).filter((m) => passes(m, f)).map((m) => ({ id: m.id, s: matchScore(w, m.text) })).filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.id); },
+    touchMemories: async (ids) => { const now = Date.now(); save(MEM, load<MemoryItem>(MEM).map((m) => (ids.includes(m.id) ? { ...m, uses: (m.uses ?? 0) + 1, lastUsed: now } : m))); },
     listSkills: async () => load<Skill>(SK),
     putSkill: async (s) => { const cur = load<Skill>(SK).filter((x) => x.id !== s.id); save(SK, [s, ...cur]); return undefined; },
     deleteSkill: async (id) => save(SK, load<Skill>(SK).filter((x) => x.id !== id)),
@@ -205,13 +219,26 @@ export const memoryStore = {
   async setMemories(list: MemoryItem[]) {
     const keep = new Set(list.map((m) => m.id));
     const gone = state.memories.filter((m) => !keep.has(m.id));
-    const changed = list.filter((m) => { const o = state.memories.find((x) => x.id === m.id); return !o || o.text !== m.text || o.kind !== m.kind; });
+    const changed = list.filter((m) => { const o = state.memories.find((x) => x.id === m.id); return !o || o.text !== m.text || o.kind !== m.kind || tierOf(o) !== tierOf(m); });
     set({ memories: list });
     await Promise.all(gone.map((m) => be().deleteMemory(m.id).catch(() => undefined)));
     if (changed.length) await be().putMemories(changed).catch(() => undefined);
     refreshStatus();
   },
-  searchMemories: (q: string, limit = 8) => be().searchMemories(q, limit).catch(() => [] as string[]),
+  searchMemories: (q: string, limit = 8, f?: MemoryFilter) => be().searchMemories(q, limit, f).catch(() => [] as string[]),
+  /** A reply recalled these: count the use (short-term items that keep coming up move to long-term). */
+  async touch(ids: string[]) {
+    if (!ids.length) return;
+    const now = Date.now();
+    set({ memories: state.memories.map((m) => (ids.includes(m.id) ? { ...m, uses: (m.uses ?? 0) + 1, lastUsed: now } : m)) });
+    await be().touchMemories(ids).catch(() => undefined);
+  },
+  /** Moves items to another layer (Assistant → Memory). Chat notes need the chat they belong to. */
+  async moveTo(ids: string[], tier: MemoryTier, chatId?: string) {
+    const now = Date.now();
+    const items = state.memories.filter((m) => ids.includes(m.id)).map((m) => ({ ...m, tier, chatId: tier === 'chat' ? chatId ?? m.chatId : undefined, updated: now }));
+    await memoryStore.putMemories(items);
+  },
 
   // chat history index
   index: (msgs: IndexedMsg[]) => be().index(msgs).then(refreshStatus).catch(() => undefined),

@@ -4,6 +4,7 @@ import { Code2, Copy, Download, FileText, Layers, FlaskConical, SlidersHorizonta
 import { DEFAULT_TEMPERATURE, temperatureWarning } from '../../chat/sampling';
 import type { ContextFile } from '../../context/discover';
 import { useMemoryStore } from '../../memory/store';
+import { TIER_LABEL, tierOf } from '../../memory/layers';
 import { useHardware } from '../../hardware/monitor';
 import { ChatMessage, ChatSession, ContextItem, LotusSettings, MemoryItem } from '../../types/lotus';
 import { artifactsFrom, contextTokens } from '../../chat/helpers';
@@ -91,7 +92,9 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
   const { status, error: memError } = useMemoryStore();
   const toks = contextTokens(items);
   const memOn = !session.incognito && !session.memoryOff;
-  const shown = filter ? memory.filter((m) => m.text.toLowerCase().includes(filter.toLowerCase())) : memory;
+  // 0.22: other chats' notes are not this chat's business.
+  const mine = memory.filter((m) => tierOf(m) !== 'chat' || m.chatId === session.id);
+  const shown = filter ? mine.filter((m) => m.text.toLowerCase().includes(filter.toLowerCase())) : mine;
   const pickFolder = async () => {
     const { isTauri } = await import('../../lib/http');
     if (!isTauri) return;
@@ -164,15 +167,15 @@ const ContextTab: React.FC<Pick<Props, 'session' | 'memory' | 'onMemory' | 'onCo
         {items.length > 0 && <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">About {toks.toLocaleString()} tokens of the {settings.contextWindow.toLocaleString()}-token window.</p>}
       </Section>
       <Section title="Memory & instructions" hint={memOn
-        ? 'Lotus saves what you ask it to (“remember …”, “from now on …”) and learns lasting facts and preferences as you talk. Learned items are marked; remove anything that is wrong.'
+        ? 'Lotus saves what you ask it to (“remember …”, “from now on …”) and learns as you talk: lasting facts go to long-term memory, current plans to short-term, and notes about this chat stay with this chat. Only what fits each message is sent. Learned items are marked; remove anything that is wrong.'
         : session.incognito ? 'Incognito: this chat reads no memories and creates none.' : 'Memory is off for this chat (header button): nothing is recalled or learned until you turn it back on.'}>
         {memError && <Banner tone="error">{memError}</Banner>}
-        {memory.length > 6 && <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter memories" aria-label="Filter memories" className="mb-2" />}
-        {!memory.length && <p className="text-[13px] text-[var(--color-text-muted)]">Nothing stored yet.</p>}
+        {mine.length > 6 && <TextInput value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter memories" aria-label="Filter memories" className="mb-2" />}
+        {!mine.length && <p className="text-[13px] text-[var(--color-text-muted)]">Nothing stored yet.</p>}
         <ul className="space-y-1">
           {shown.map((m) => (
             <li key={m.id} className="flex items-start gap-2 text-[13px]">
-              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[12px] font-semibold mt-0.5 shrink-0">{m.kind === 'memory' ? 'Fact' : 'Rule'}</span>
+              <span className="px-1.5 rounded-[4px] bg-[var(--hover)] text-[12px] font-semibold mt-0.5 shrink-0" title={m.kind === 'memory' ? 'Fact' : 'Rule'}>{m.kind === 'instruction' ? 'Rule' : TIER_LABEL[tierOf(m)]}</span>
               <span className="flex-1">{m.text}{m.source === 'auto' && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[12px] text-[var(--color-text-muted)]" title="Learned from a conversation"><Sparkles className="w-3 h-3" />learned</span>}</span>
               <IconBtn label="Forget" className="!w-6 !h-6" onClick={() => { const before = memory; onMemory(memory.filter((x) => x.id !== m.id)); offerUndo('Memory forgotten', () => onMemory(before), () => undefined); }}><Trash2 className="w-3.5 h-3.5" /></IconBtn>
             </li>

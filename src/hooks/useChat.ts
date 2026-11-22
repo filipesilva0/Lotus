@@ -17,6 +17,7 @@ import { effectiveNumCtx, hardware, modelCapabilities } from '../hardware/monito
 import { agentPool } from '../agents/pool';
 import { loadMemory, memoryStore, useMemoryStore } from '../memory/store';
 import { buildRecall } from '../memory/recall';
+import { maybeTidy } from '../memory/tidy';
 import { feedbackEffect, feedbackNote, type Feedback } from '../chat/feedback';
 import { considerSkill, correction, isComplexExchange, positiveFeedback, recordUse, recordWin, reflect, refineSkill, shouldReflect } from '../memory/learn';
 import type { ContextFile } from '../context/discover';
@@ -119,7 +120,9 @@ export function useChat(settings: LotusSettings) {
     const userTurns = turns.filter((t) => t.role === 'user').length;
     const lastUser = s.messages[i - 1]?.content ?? '';
     if (usedSkillIds.length) void recordUse(memoryStore.get().skills.filter((k) => usedSkillIds.includes(k.id)));
-    if (st.autoMemory && shouldReflect(userTurns, lastUser)) void reflect(turns).catch(() => undefined);
+    if (st.autoMemory && shouldReflect(userTurns, lastUser)) void reflect(turns, undefined, sid).catch(() => undefined);
+    // Once a day: merge duplicates, let stale short-term notes fade, move what keeps coming up to long-term.
+    maybeTidy(ref.current.map((x) => x.id));
     if (st.autoSkills && !usedSkillIds.length && isComplexExchange(turns, { thinking: o.thinking })) void considerSkill(turns).catch(() => undefined);
   }, []);
 
@@ -229,7 +232,7 @@ export function useChat(settings: LotusSettings) {
       const proj = projectRef.current.sid === sid ? projectRef.current.files : [];
       const recall = await buildRecall({
         query: o.query ?? '', sessionId: sid, memoryOn: memOn, sessionRecall: s.sessionRecall,
-        projectFiles: proj, projectOff: session0.folderOff, budgetChars: Math.floor(budget * 0.5),
+        projectFiles: proj, projectOff: session0.folderOff, budgetChars: Math.floor(budget * 0.5), canSearch: s.agentTools !== false && agentAvailable(),
       });
       usedSkillIds = recall.usedSkills.map((k) => k.id);
       let system = `${s.systemPrompt}\n\nToday's date is ${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}. Format replies with GitHub Flavored Markdown when it helps (tables, task lists, code blocks).`;
@@ -239,7 +242,7 @@ export function useChat(settings: LotusSettings) {
       const lastReply = [...history].reverse().find((m) => m.role === 'assistant')?.content ?? '';
       if (wantsInstall(o.query ?? '')) system += installInstructions();
       if (wantsImage(o.query ?? '', lastReply)) system += imageInstructions(imageChoices());
-      if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added. Your soul (this system prompt\'s persona) can change too: when the user asks you to be different from now on (name, personality, tone, standing rules), use soul.update; for facts about the user use memory.save.';
+      if (s.agentTools !== false) system += '\n\nYou can organise things for the user with your tools: task.add for a single to-do, todo.create for a to-do list or checklist, and routine.add to schedule something you will do by yourself on a schedule (a cron job: daily summaries, reminders, weekly reviews). Use them when the user asks, then say what you added. Your soul (this system prompt\'s persona) can change too: when the user asks you to be different from now on (name, personality, tone, standing rules), use soul.update; for facts about the user use memory.save (layer "short" for things that matter only for now, "chat" for notes about this conversation).';
       system += pluginSystemBlock(o.query ?? '');
       system += recall.system;
       system += contextPayload(session0.context, o.force, Math.max(2000, budget - system.length - sourceText.length));

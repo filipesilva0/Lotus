@@ -43,6 +43,8 @@ export interface ToolCtx {
   /** Progress for a long step ("Generating · 12 s"). */
   progress: (detail: string) => void;
   memoryOn: boolean;
+  /** 0.22: the chat this run answers (memory.save puts chat notes here; memory.search reads them). */
+  chatId?: string;
   /** Work mode: the folder this piece of work keeps its artifacts in (Lotus Studio/Work/<id>). */
   workDir?: string;
   /** Asks the user a question and waits for the answer (typed, a picked option, or spoken). */
