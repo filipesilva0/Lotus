@@ -83,9 +83,9 @@ const SlideCard: React.FC<{ s: ReturnType<typeof splitSlides>[number]; n: number
             {s.subtitle && <p className="mt-[0.4em] text-[1.3em] text-[#6B7280]">{s.subtitle}</p>}
           </div>
         </>) : (<>
-          <p className="absolute left-[4.5%] right-[4.5%] top-[6%] text-[1.9em] font-bold leading-tight truncate">{s.title}</p>
-          <span className="absolute left-[4.5%] top-[18%] w-[9%] h-[0.8%] bg-[#2563EB]" />
-          <div className="absolute left-[4.5%] right-[4.5%] top-[23%] bottom-[5%] overflow-hidden text-[1.25em] leading-snug"><SlideBlocks blocks={s.blocks} /></div>
+          <p className="absolute left-[4.5%] right-[4.5%] top-[5%] text-[1.7em] font-bold leading-tight truncate">{s.title}</p>
+          <span className="absolute left-[4.5%] top-[19.5%] w-[9%] h-[0.8%] bg-[#2563EB]" />
+          <div className="absolute left-[4.5%] right-[4.5%] top-[25%] bottom-[5%] overflow-hidden text-[1.25em] leading-snug"><SlideBlocks blocks={s.blocks} /></div>
         </>)}
       </div>
       <figcaption className="mt-1 text-[12px] text-[var(--color-text-muted)]">Slide {n}{s.notes ? ` · Notes: ${s.notes.slice(0, 120)}${s.notes.length > 120 ? '…' : ''}` : ''}</figcaption>

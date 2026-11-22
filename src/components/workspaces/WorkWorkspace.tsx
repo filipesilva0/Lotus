@@ -269,7 +269,8 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
   const [copied, flash] = useFlash();
   const agents = m.agents ?? [];
   // Code Lotus moved out of the answer into files (0.21) shows only as file cards.
-  const own = steps.filter((s) => !s.data?.helper && !s.data?.fromAnswer && s.tool !== 'plan.set' && s.tool !== 'plan.check');
+  // Saved files show as cards under the answer, so a finished reply doesn't list them as steps too.
+  const own = steps.filter((s) => !s.data?.helper && !s.data?.fromAnswer && s.tool !== 'plan.set' && s.tool !== 'plan.check' && (live || !(s.tool === 'artifact.write' && s.status === 'done')));
   const { answer, thought } = splitThink(m.content);
   const helpers = helpersOf(steps);
   // One card per file (its latest version), in the order they were first made.
