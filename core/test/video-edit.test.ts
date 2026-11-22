@@ -12,8 +12,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   assStyle, cleanCaption, cuesToSrt, findMoments, fitFilter, fontsConf, joinArgs, loudness, parseSceneTimes, parseSrt, pcmFromWav, phrasePieces,
-  planHighlights, planTighten, savedSeconds, segmentArgs, shotsOf, speechSpans, splitCues, timelineSegments, wavBytes, wrapCaption, type Analysis,
+  planHighlights, planTighten, proxyArgs, savedSeconds, segmentArgs, shotsOf, soundArgs, speechSpans, splitCues, thumbArgs, timelineSegments, wavBytes,
+  wrapCaption, type Analysis,
 } from '../src/video/edit';
+import { ENCODERS, effectFilters, mixArgs, renderArgs } from '../src/video/ffmpeg';
 import { analyse, captionsFor, exportTimeline, freeName, makeProxy, readMedia, safeName, type EditCtx } from '../src/video/editRun';
 import { runOp, VideoEditService } from '../src/video/editService';
 import { probe, runProgram } from '../src/video/run';
@@ -143,7 +145,8 @@ describe('export commands', () => {
     const v = segmentArgs({ file: 'a.mp4', kind: 'video', from: 3, seconds: 2.5, hasAudio: true, width: 720, height: 1280, fps: 30, fit: 'blur', volume: 0.5 });
     const j = v.join(' ');
     expect(j).toContain('-ss 3 -t 2.500 -i a.mp4');
-    expect(j).toContain('boxblur');
+    expect(j).toContain('gblur');
+    expect(j).not.toContain('boxblur');
     expect(j).toContain('[0:a]aresample=48000');
     expect(j).toContain('volume=0.5');
     const p = segmentArgs({ file: 'b.png', kind: 'picture', from: 0, seconds: 3, hasAudio: false, width: 1280, height: 720, fps: 30, fit: 'fill', motion: 'in' }).join(' ');
@@ -168,6 +171,74 @@ describe('export commands', () => {
   test('safe names for what the editor makes', () => {
     expect(safeName('../My Clip?.mp4', 'x')).toBe('My-Clip');
     expect(safeName('', 'export')).toBe('export');
+  });
+});
+
+// ── Only filters the FFmpeg Lotus downloads has ─────────────────────────────
+// Lotus installs BtbN's LGPL build of FFmpeg, which leaves out every GPL-only filter. Test machines
+// often have a GPL ffmpeg, so a real run there can't catch one slipping in (0.22's blurred Shorts
+// background used boxblur and failed on every user's PC). This list is from FFmpeg's configure
+// (`*_filter_deps="gpl"`).
+const GPL_ONLY_FILTERS = new Set([
+  'blackframe', 'boxblur', 'colormatrix', 'cover_rect', 'cropdetect', 'delogo', 'eq', 'find_rect', 'fspp', 'histeq', 'hqdn3d', 'interlace',
+  'kerndeint', 'mcdeint', 'mpdecimate', 'nnedi', 'owdenoise', 'perspective', 'phase', 'pp', 'pp7', 'pullup', 'repeatfields', 'sab', 'signature',
+  'smartblur', 'spp', 'stereo3d', 'tinterlace', 'uspp', 'vaguedenoiser', 'boxblur_opencl', 'frei0r', 'frei0r_src', 'ocv', 'zmq', 'azmq',
+]);
+
+/** The filter names in a filter graph ("[0:v]scale=1:2,setsar=1[v];[v]null" → scale, setsar, null). */
+function filterNames(graph: string): string[] {
+  const names: string[] = [];
+  let depth = 0, quoted = false, start = 0;
+  const take = (end: number) => {
+    const name = graph.slice(start, end).replace(/^(\s*\[[^\]]*\])+/, '').trim().match(/^[A-Za-z0-9_]+/)?.[0];
+    if (name) names.push(name);
+  };
+  for (let i = 0; i < graph.length; i++) {
+    const c = graph[i];
+    if (c === "'") quoted = !quoted;
+    else if (c === '\\') i++;
+    else if (!quoted && c === '[') depth++;
+    else if (!quoted && c === ']') depth--;
+    else if (!quoted && depth === 0 && (c === ',' || c === ';')) { take(i); start = i + 1; }
+  }
+  take(graph.length);
+  return names;
+}
+
+/** Every filter graph in a command (-filter_complex, -vf, -af). */
+const graphsIn = (args: string[]) => args.flatMap((a, i) => (['-filter_complex', '-vf', '-af', '-filter:v', '-filter:a'].includes(args[i - 1]) ? [a] : []));
+
+/** Every ffmpeg command Lotus's video code builds, in every shape it comes in. */
+function everyCommand(): string[][] {
+  const cmds: string[][] = [];
+  for (const fit of ['fit', 'fill', 'blur'] as const) {
+    for (const [width, height] of [[720, 1280], [1280, 720], [1080, 1080]]) {
+      cmds.push(segmentArgs({ file: 'a.mp4', kind: 'video', from: 1, seconds: 45.708, hasAudio: true, width, height, fps: 30, fit, volume: 1 }));
+      cmds.push(segmentArgs({ file: 'a.mp4', kind: 'video', from: 0, seconds: 2, hasAudio: false, width, height, fps: 30, fit }));
+      for (const motion of ['in', 'out', 'left', 'right', 'none'] as const) cmds.push(segmentArgs({ file: 'p.png', kind: 'picture', from: 0, seconds: 3, hasAudio: false, width, height, fps: 30, fit, motion }));
+    }
+  }
+  for (const burn of [true, false]) {
+    cmds.push(joinArgs({ segments: [{ file: 's0.mp4', seconds: 3 }, { file: 's1.mp4', seconds: 2 }], fade: 0.5, voiceover: 'vo.wav', music: 'm.mp3', captions: { file: 'c.srt', burn, style: 'bold', width: 720, height: 1280 }, fps: 30 }).args);
+  }
+  cmds.push(joinArgs({ segments: [{ file: 's0.mp4', seconds: 3 }], fade: 0, fps: 30 }).args);
+  cmds.push(joinArgs({ segments: [{ file: 's0.mp4', seconds: 3 }, { file: 's1.mp4', seconds: 2 }], fade: 0, fps: 30 }).args);
+  cmds.push(proxyArgs('a.mp4'), thumbArgs('a.mp4', 1, 't.jpg'), soundArgs('a.mp4', 's.wav'));
+  const enc = ENCODERS.find((e) => e.name === 'libx264')!;
+  cmds.push(renderArgs({ scenes: [{ file: 'a.png', kind: 'image', duration: 3, motion: 'in' }, { file: 'c.mp4', kind: 'video', duration: 4 }], width: 1280, height: 720, voiceover: 'vo.wav', subtitles: 's.srt', encoder: enc, out: 'v.mp4' }));
+  cmds.push(renderArgs({ scenes: [{ file: 'c.mp4', kind: 'video', duration: 6 }], width: 720, height: 1280, voiceover: 'vo.wav', original: 'lower', encoder: enc, out: 'v.mp4' }));
+  cmds.push(mixArgs([{ file: 'a.wav', start: 0 }, { file: 'b.wav', start: 2 }], 'o.wav', 5, effectFilters({ volume: 1.2, bass: 3, treble: 2, normalize: true })));
+  return cmds;
+}
+
+describe('ffmpeg filters', () => {
+  test('the filter-name reader finds every filter, and skips labels and quoted text', () => {
+    expect(filterNames("[0:v]split=2[a][b];[a]scale=1:2,gblur=sigma=6[c];[b][c]overlay=(W-w)/2:(H-h)/2[v];[v]zoompan=z='1,2':d=1[o]")).toEqual(['split', 'scale', 'gblur', 'overlay', 'zoompan']);
+  });
+  test('no command uses a filter that Lotus\'s (LGPL) FFmpeg leaves out', () => {
+    const used = new Set(everyCommand().flatMap(graphsIn).flatMap(filterNames));
+    expect(used.size).toBeGreaterThan(20);
+    expect([...used].filter((n) => GPL_ONLY_FILTERS.has(n))).toEqual([]);
   });
 });
 
@@ -196,6 +267,30 @@ function ctxIn(dir: string, heard: string[] = []): EditCtx {
 }
 
 describe.skipIf(!FFMPEG)('the editor with a real ffmpeg', () => {
+  test('every clip shape (fit, fill, blur; tall, wide, square) really runs through ffmpeg', async () => {
+    const dir = tmp('shapes');
+    await talkingVideo(join(dir, 'wide.mp4'), 2, '1920x1080');
+    await runProgram(FFMPEG!, ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=teal:s=800x600', '-frames:v', '1', join(dir, 'p.png')]);
+    for (const fit of ['fit', 'fill', 'blur'] as const) {
+      for (const [width, height] of [[720, 1280], [1280, 720], [1080, 1080]]) {
+        for (const kind of ['video', 'picture'] as const) {
+          const file = join(dir, kind === 'video' ? 'wide.mp4' : 'p.png');
+          const args = segmentArgs({ file, kind, from: 0.5, seconds: 1, hasAudio: kind === 'video', width, height, fps: 30, fit, motion: 'in' });
+          const r = await runProgram(FFMPEG!, [...args, '-f', 'null', '-']).then(() => 'ok', (e: Error) => `${fit} ${width}x${height} ${kind}: ${e.message}`);
+          expect(r).toBe('ok');
+        }
+      }
+    }
+  }, 120_000);
+
+  test('this ffmpeg knows every filter the commands use', async () => {
+    const out = Bun.spawnSync([FFMPEG!, '-hide_banner', '-filters']).stdout.toString();
+    const known = new Set(out.split('\n').map((l) => l.trim().split(/\s+/)[1]).filter(Boolean));
+    const used = new Set(everyCommand().flatMap(graphsIn).flatMap(filterNames));
+    // subtitles needs libass; a test machine's ffmpeg may not have it (Lotus's does).
+    expect([...used].filter((n) => !known.has(n) && n !== 'subtitles')).toEqual([]);
+  });
+
   test('footage: length, thumbnail and a light preview copy', async () => {
     const dir = tmp('media');
     await talkingVideo(join(dir, 'talk.mp4'), 4);

@@ -390,12 +390,14 @@ export type Fit = 'fit' | 'fill' | 'blur';
 /**
  * The video filter that makes any footage exactly W×H: 'fit' shows all of it with bars, 'fill' crops
  * to fill the frame, 'blur' fills the bars with a blurred, zoomed copy (the Shorts look).
+ * Only LGPL filters: the FFmpeg Lotus downloads is BtbN's LGPL build, which has no GPL-only filters
+ * such as boxblur (see GPL_ONLY_FILTERS in the tests).
  */
 export function fitFilter(fit: Fit, W: number, H: number, input = '0:v', out = 'v'): string {
   if (fit === 'fill') return `[${input}]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1[${out}]`;
   if (fit === 'blur') {
     const bw = Math.max(2, Math.round(W / 8 / 2) * 2), bh = Math.max(2, Math.round(H / 8 / 2) * 2);
-    return `[${input}]split=2[bg${out}][fg${out}];[bg${out}]scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},boxblur=6:2,scale=${W}:${H},setsar=1[bb${out}];[fg${out}]scale=${W}:${H}:force_original_aspect_ratio=decrease,setsar=1[ff${out}];[bb${out}][ff${out}]overlay=(W-w)/2:(H-h)/2[${out}]`;
+    return `[${input}]split=2[bg${out}][fg${out}];[bg${out}]scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},gblur=sigma=6,scale=${W}:${H},setsar=1[bb${out}];[fg${out}]scale=${W}:${H}:force_original_aspect_ratio=decrease,setsar=1[ff${out}];[bb${out}][ff${out}]overlay=(W-w)/2:(H-h)/2[${out}]`;
   }
   return `[${input}]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1[${out}]`;
 }
