@@ -3,14 +3,14 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Download, ExternalLink, FolderOpen, Mic, Sparkles, Square, Trash2, Upload, Volume2, Wand2 } from 'lucide-react';
-import { Banner, Btn, Empty, Select, TextArea, TextInput, cx } from '../../common/ui';
+import { Banner, Btn, Empty, Progress, Select, TextArea, TextInput, cx } from '../../common/ui';
 import { SliderField } from '../../common/Pane';
 import { SampleHealthPanel } from '../SampleHealth';
 import { ClipAudio, EffectsPanel } from './parts';
 import { confirmAlert } from '../../common/Alerts';
 import { MicRecorder, micErrorMessage, toWav } from '../../../lib/audio';
 import { deleteMedia, saveMedia } from '../../../lib/core';
-import { installModel } from '../../../lib/builtins';
+import { fmtSize, installModel, useBuiltins } from '../../../lib/builtins';
 import { builtinTranscribePath } from '../../../voice/voice';
 import { MyVoice, READING_SCRIPTS, VOICE_CONSENT, VOICE_CONSENT_NOTE, VoiceOption, canCloneVoice, speakerLabel } from '../../../voice/studio';
 import { VoiceConsent } from '../VoiceConsent';
@@ -47,33 +47,52 @@ const TestVoice: React.FC<{ option: VoiceOption | null }> = ({ option }) => {
 const H: React.FC<{ children: React.ReactNode }> = ({ children }) => <h3 className="text-[13px] font-semibold mb-2">{children}</h3>;
 
 /**
- * GPT-SoVITS (0.15.0): a separate, free program for the most natural copied voices. Lotus doesn't
- * download it (several GB with its own Python); you pick its folder and Lotus starts it when needed.
+ * GPT-SoVITS (0.15.0): a separate, free program for the most natural copied voices. Since 0.22 Lotus
+ * installs it with one click on Windows (a download of several GB), and starts it when a voice speaks.
+ * A folder you set up yourself still works ("I already have it").
  */
 const GptSovitsCard: React.FC = () => {
   const g = useGptSovits();
   const s = g.status;
+  const job = g.job;
+  const windows = (useBuiltins().machine?.os ?? 'windows') === 'windows';
+  const failed = job?.state === 'error' && !g.dir ? job.error : null;
+  const size = g.offer?.bytes ? `a ${fmtSize(g.offer.bytes)} download${g.offer.needs ? `, and about ${fmtSize(g.offer.needs)} of free space while it unpacks` : ''}` : 'a download of several GB';
+  const unpacking = !!job && /^Unpacking/.test(job.step);
   return (
     <div className="p-3 rounded-[12px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] space-y-2">
       <div className="flex items-start gap-2">
         <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-[var(--color-accent-fill)]" />
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium">GPT-SoVITS{g.dir ? (s?.running ? ' · running' : ' · starts when a voice speaks') : ''}</p>
+          <p className="text-[13px] font-medium">GPT-SoVITS{g.installing ? ' · installing' : g.dir ? (s?.running ? ' · running' : ' · starts when a voice speaks') : ''}</p>
           <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed">
-            {g.dir
-              ? <>Folder: <span className="break-all">{g.dir}</span>. Pick “GPT-SoVITS” as the cloning model below. {GSV_NOTE}</>
-              : <>For the most natural copied voice, use GPT-SoVITS: free, but a separate download of several GB. Download it, unpack it, then pick its folder here. {GSV_NOTE}</>}
+            {g.installing
+              ? <>Lotus is downloading and setting up GPT-SoVITS. You can keep using Lotus; it carries on in the background, and continues where it stopped if the download is interrupted.</>
+              : g.dir
+                ? <>{g.managed ? <>Installed by Lotus{g.version ? ` (${g.version})` : ''}.</> : <>Folder: <span className="break-all">{g.dir}</span>.</>} Pick “GPT-SoVITS” as the cloning model below. The first time a voice speaks, it takes a minute or two to start. {GSV_NOTE}</>
+                : windows
+                  ? <>For the most natural copied voice, install GPT-SoVITS: free, open source (MIT), and {size}. Lotus downloads it from GPT-SoVITS’s own page and sets it up for you. {GSV_NOTE}</>
+                  : <>{g.offer?.why ?? 'GPT-SoVITS only offers a ready-made package for Windows. On a Mac or Linux, set it up from its GitHub page and pick its folder.'} {GSV_NOTE}</>}
           </p>
         </div>
       </div>
+      {g.installing && job && (
+        <div className="space-y-1">
+          <Progress value={job.total ? job.done / job.total : null} label="Installing GPT-SoVITS" />
+          <p className="text-[12px] text-[var(--color-text-muted)]">{job.step}{!unpacking && job.total > 100 ? ` · ${fmtSize(job.done)} of ${fmtSize(job.total)}` : ''}</p>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
-        {!g.dir && <Btn size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => void openExternal(GSV_DOWNLOAD)}>Download Page</Btn>}
-        <Btn size="sm" icon={<FolderOpen className="w-3 h-3" />} onClick={() => void g.pick()}>{g.dir ? 'Change Folder' : 'Pick Its Folder'}</Btn>
-        {g.dir && !s?.running && <Btn size="sm" loading={g.busy} onClick={() => void g.start()}>Start Now</Btn>}
+        {g.installing && <Btn size="sm" variant="ghost" onClick={g.cancel}>Stop</Btn>}
+        {!g.installing && !g.dir && windows && <Btn size="sm" variant="primary" icon={<Download className="w-3 h-3" />} onClick={() => void g.install()}>{failed ? 'Try Again' : 'Install GPT-SoVITS'}</Btn>}
+        {!g.installing && !g.dir && !windows && <Btn size="sm" icon={<ExternalLink className="w-3 h-3" />} onClick={() => void openExternal(GSV_DOWNLOAD)}>Setup Page</Btn>}
+        {!g.installing && (!g.dir || !g.managed) && <Btn size="sm" variant={g.dir ? 'secondary' : 'ghost'} icon={<FolderOpen className="w-3 h-3" />} onClick={() => void g.pick()}>{g.dir ? 'Change Folder' : 'I Already Have It'}</Btn>}
+        {g.dir && !g.installing && !s?.running && <Btn size="sm" loading={g.busy} onClick={() => void g.start()}>{g.busy ? 'Starting…' : 'Start Now'}</Btn>}
         {g.dir && s?.running && s.startedByLotus && <Btn size="sm" onClick={() => void g.stop()}>Stop</Btn>}
-        {g.dir && <Btn size="sm" variant="ghost" onClick={g.forget}>Don’t Use It</Btn>}
+        {g.dir && !g.installing && <Btn size="sm" variant="ghost" onClick={() => void g.remove()}>{g.managed ? 'Remove' : 'Don’t Use It'}</Btn>}
       </div>
-      {(g.err || s?.error) && <p className="text-[12px] text-[var(--c-red)]">{g.err || s?.error}</p>}
+      {g.busy && <p className="text-[12px] text-[var(--color-text-muted)]">Starting GPT-SoVITS. The first start loads its voice models and can take a minute or two.</p>}
+      {(g.err || failed || s?.error) && <p className="text-[12px] text-[var(--c-red)]">{g.err || failed || s?.error}</p>}
     </div>
   );
 };

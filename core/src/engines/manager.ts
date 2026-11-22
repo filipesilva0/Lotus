@@ -25,6 +25,7 @@ import { fitChatCtx, MB, memoryMb, planMoe, type ChatFit } from './chatFit';
 import { readGgufInfo } from './gguf';
 import { gpuMemory } from '../hardware';
 import { SttServers } from './sttServer';
+import { GSV_KEY, installGsv, type GsvInstallDeps, type GsvSaved } from './gsvInstall';
 import { entryById, parseCustomSource, pickGguf, profileForEntry, quantFolder, type LibEntry, type ModelKind } from '../../../src/models/library';
 import { sdcppHasVideo, sdcppVideoArgs, videoStepTotals, type VideoAttempt, type VideoFamily, type VideoFiles, type VideoRun } from '../../../src/models/videoModels';
 import { freemem } from 'node:os';
@@ -94,6 +95,8 @@ interface Deps {
   systemTool?: (name: 'ffmpeg' | 'ffprobe') => string | null;
   /** Tests: free computer memory in GB. */
   freeRamGb?: () => number;
+  /** Tests: GPT-SoVITS's unpacking and free space. */
+  gsv?: Partial<Pick<GsvInstallDeps, 'unpack7z' | 'free' | 'sevenZr'>>;
 }
 
 const now = () => Date.now();
@@ -369,6 +372,34 @@ export class Builtins {
     if (r) removeTree(join(this.enginesDir, ENGINE_DIR[id]));
     delete state[id];
     writeJson(this.stateFile(), state);
+    this.emit();
+    return true;
+  }
+
+  // ── GPT-SoVITS (0.22: one click, Windows) ─────────────────────────────
+  get gsvDir() { return join(this.enginesDir, 'GPT-SoVITS'); }
+  get fetchFn() { return this.d.fetch; }
+  get hfBase() { return this.d.hfBase; }
+
+  /** Downloads and unpacks GPT-SoVITS's Windows package (gsvInstall.ts) as a job with progress. */
+  installGptSovits(stopServer: () => void): string {
+    return this.startJob('engine', 'gptsovits', 'GPT-SoVITS', async (job, signal) => {
+      const r = await installGsv({
+        root: this.gsvDir, machine: await this.machine(), fetch: this.d.fetch, hfBase: this.d.hfBase, signal,
+        step: (st) => { job.step = st; this.emit(); }, progress: this.progress(job),
+        kvGet: this.d.kvGet, kvSet: this.d.kvSet, stopServer, ...this.d.gsv,
+      });
+      job.step = `GPT-SoVITS ${r.version}`;
+    });
+  }
+
+  /** Removes the GPT-SoVITS Lotus installed (a folder the user picked is only forgotten, never deleted). */
+  removeGptSovits(stopServer: () => void) {
+    let saved: GsvSaved = {};
+    try { saved = JSON.parse(this.d.kvGet(GSV_KEY) || '{}') as GsvSaved; } catch { /* none */ }
+    stopServer();
+    if (saved.managed) removeTree(this.gsvDir);
+    this.d.kvSet(GSV_KEY, '{}');
     this.emit();
     return true;
   }

@@ -131,7 +131,7 @@ describe('GPT-SoVITS', () => {
     wf(join(dir, 'api_v2.py'), ''); wf(join(dir, 'runtime', 'python.exe'), ''); wf(join(dir, 'GPT_SoVITS', 'configs', 'tts_infer.yaml'), '');
     const c = gsvCommand(dir, 9880, 'win32')!;
     expect(c.exe).toBe(join(dir, 'runtime', 'python.exe'));
-    expect(c.args).toEqual(['api_v2.py', '-a', '127.0.0.1', '-p', '9880', '-c', join('GPT_SoVITS', 'configs', 'tts_infer.yaml')]);
+    expect(c.args).toEqual(['-s', '-X', 'utf8', 'api_v2.py', '-a', '127.0.0.1', '-p', '9880', '-c', join('GPT_SoVITS', 'configs', 'tts_infer.yaml')]);
     expect(gsvCommand(root, 9880, 'win32')).toBeNull(); // no api_v2.py
   });
   test('a reference over 10 s is cut at a pause between 6 and 9.5 s', () => {
@@ -160,6 +160,7 @@ describe('GPT-SoVITS', () => {
         if (body.text === 'fail') return new Response(JSON.stringify({ message: 'tts failed', Exception: 'x' }), { status: 400 });
         return new Response(wav([0, 0.1, 0.2], 32000, 1), { status: 200, headers: { 'content-type': 'audio/wav' } });
       }
+      if (String(url).endsWith('/openapi.json')) return new Response('{"paths":{"/tts":{}}}', { status: 200 });
       return new Response('{"detail":"Not Found"}', { status: 404 });
     }) as unknown as typeof fetch;
     const g = new GptSovits({ tempDir: join(root, 'tmp'), fetch: fake });

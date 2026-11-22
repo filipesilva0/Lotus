@@ -20,6 +20,9 @@
 //   stt_warm    { model, language? }             → boolean     (loads Whisper ahead of a call)
 //   gsv_status  { dir }  → { folderOk, running, startedByLotus, error? }   GPT-SoVITS (optional voice engine)
 //   gsv_start   { dir }  / gsv_stop {}
+//   gsv_offer   {}       → { name, bytes, needs, supported, why? }   the package a one-click install would get (0.22)
+//   gsv_install {}       → { jobId }   downloads and unpacks it (Windows); the job's target is 'gptsovits'
+//   gsv_remove  {}       removes the one Lotus installed (a folder you picked is only forgotten)
 //   tts_gptsovits { dir, text, reference, referenceText?, language?, speed? } → MediaRow (audio)
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
@@ -33,6 +36,7 @@ import { FAMILIES, settingsFor, sizeFor } from '../../../src/models/imageProfile
 import type { ModelKind } from '../../../src/models/library';
 import { comfyDesktopConfigDir, linkComfy } from './comfyLink';
 import { GptSovits } from './gptsovits';
+import { gsvOffer } from './gsvInstall';
 import { join } from 'node:path';
 
 type Json = Record<string, unknown>;
@@ -163,6 +167,9 @@ export async function builtinRpc(b: Builtins, db: Db, studio: string, method: st
     case 'gsv_status': return { found: true, value: await gptSovits(studio).status(str(a.dir)) };
     case 'gsv_start': await gptSovits(studio).start(str(a.dir)); return { found: true, value: true };
     case 'gsv_stop': gptSovits(studio).stop(); return { found: true, value: true };
+    case 'gsv_offer': return { found: true, value: await gsvOffer({ fetch: b.fetchFn, hfBase: b.hfBase, machine: await b.machine() }) };
+    case 'gsv_install': return { found: true, value: { jobId: b.installGptSovits(() => gptSovits(studio).stop()) } };
+    case 'gsv_remove': return { found: true, value: b.removeGptSovits(() => gptSovits(studio).stop()) };
     case 'tts_gptsovits': {
       const ref = resolveMedia(studio, str(a.reference));
       if (!ref) throw new Error('This voice has no recording yet. Add one in Voice → Voices.');
