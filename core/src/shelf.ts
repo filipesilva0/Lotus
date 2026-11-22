@@ -74,7 +74,7 @@ export class Shelf {
   async save(body: ReadableStream<Uint8Array> | ArrayBuffer | Blob, raw: string): Promise<ShelfItem> {
     const safe = shelfName(raw) ?? 'file';
     const name = uniqueName(safe, (n) => existsSync(join(this.dir(), n)));
-    await Bun.write(join(this.dir(), name), body instanceof ReadableStream ? new Response(body) : body);
+    await Bun.write(join(this.dir(), name), new Response(body));
     return this.item(name);
   }
 
