@@ -147,7 +147,7 @@ describe('HTTP API', () => {
   const server = startServer({ db, studio, token: TOKEN, origins: ['http://127.0.0.1:8123'] });
   const base = `http://127.0.0.1:${server.port}`;
   const auth = { authorization: `Bearer ${TOKEN}` };
-  afterAll(() => { server.stop(true); db.sql.close(); });
+  afterAll(() => { server.board.stop(); server.stop(true); db.sql.close(); });
 
   test('health is open, everything else needs the token', async () => {
     expect((await fetch(`${base}/health`)).status).toBe(200);

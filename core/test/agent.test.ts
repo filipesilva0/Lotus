@@ -500,7 +500,7 @@ describe('agent over the core API', () => {
     kvApply(db, { set: { 'lotus.engineUrls.v1': JSON.stringify({ ollama: ol.url }), 'lotus.settings.v1': JSON.stringify({ agentApproval: 'risky' }) }, remove: [] });
     const TOKEN = 'y'.repeat(48);
     const server = startServer({ db, studio, token: TOKEN });
-    stops.push(() => server.stop(true));
+    stops.push(() => { server.board.stop(); server.stop(true); });
     const base = `http://127.0.0.1:${server.port}`;
     const rpc = async (m: string, a: unknown) => ((await (await fetch(`${base}/v1/rpc/${m}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify(a) })).json()) as { result: any }).result; // eslint-disable-line @typescript-eslint/no-explicit-any
 
