@@ -12,8 +12,8 @@ import type { BuiltinPluginDef } from './types';
 export const VIDEO: BuiltinPluginDef = {
   id: 'builtin-video',
   name: 'Video',
-  version: '1.1.0',
-  description: 'Make narrated videos: watch a video, write the script, pick the best voice, record it and put it all together.',
+  version: '1.2.0',
+  description: 'Make and edit videos: narrated videos, captions, Shorts from a long video, an automatic first cut, voiceovers with your voices. Its makers are also presets on the Video page.',
   author: 'Lotus',
   defaultOn: true,
   credit: { by: 'Lotus', license: 'Original', note: 'Written for Lotus. Does the kind of job video skills like onetake do, with Lotus’s own voices and FFmpeg; onetake itself is for non-commercial use only, so none of it is copied.' },
@@ -21,6 +21,9 @@ export const VIDEO: BuiltinPluginDef = {
   commands: [
     { name: 'video', description: 'Make a narrated video', prompt: 'Make a short narrated video. Follow the narrated-video skill: plan, script, pick a voice, record the voiceover, make the pictures or use mine, and put it together with video.make. What it is about:\n\n{{input}}' },
     { name: 'film', description: 'Film new footage with AI', prompt: 'Film new footage with AI for this. Follow the film-with-ai skill: plan short shots, say how long it will take, then video.generate. What it should show:\n\n{{input}}' },
+    { name: 'captions', description: 'Add captions to a video', prompt: 'Add captions to my video. Follow the captions-for-a-video skill. The video and the look I want:\n\n{{input}}' },
+    { name: 'shorts', description: 'Cut a long video into Shorts', prompt: 'Cut my long video into Shorts. Follow the shorts-from-a-long-video skill. The video and what I want:\n\n{{input}}' },
+    { name: 'autoedit', description: 'Edit my footage into one video', prompt: 'Edit my footage into one video. Follow the auto-edit-footage skill. The files and what I want:\n\n{{input}}' },
     { name: 'narrate', description: 'Add a voiceover to one of my videos', prompt: 'Add a voiceover to my video. Follow the narrate-a-video skill: watch it with video.inspect, write a script that fits what happens and when, pick a voice, record it, and make the narrated version with video.make. The video and what I want:\n\n{{input}}' },
   ],
   skills: [
@@ -74,6 +77,39 @@ export const VIDEO: BuiltinPluginDef = {
 6. Report the file, its length and anything you had to move or cut.
 
 Translating a video: write the transcript's meaning in the new language as the lines, keep the starts, mute or lower the original.`,
+    },
+    {
+      name: 'captions-for-a-video',
+      description: 'Add captions (subtitles) to a video from what is said in it.',
+      whenToUse: 'Add captions, subtitles, subs, closed captions, burned-in text or a transcript with times to my video, reel or recording.',
+      body: `# Captions for a video
+
+1. video.subtitles with the file. Whisper writes what is said with real times; it saves an .srt and, with burn true (default), a copy with the captions drawn on.
+2. Pick the look from where it will be posted: "bold" for Shorts, Reels and TikTok; "clean" for YouTube and anything wide; "boxed" when the footage is busy; "big" for one punchy word at a time.
+3. Tell the user both file names and the first few lines, and that the Video page's Captions panel lets them fix any word.
+
+If it says no dictation model is downloaded, tell the user to get Whisper in Settings → Models → Dictation.`,
+    },
+    {
+      name: 'shorts-from-a-long-video',
+      description: 'Cut a long video into several tall Shorts with captions.',
+      whenToUse: 'Make Shorts, Reels, TikToks or clips from a long video, podcast, stream, lesson or vlog; find the best moments; split a video into short vertical clips.',
+      body: `# Shorts from a long video
+
+1. video.shorts with the file, how many (count, default 3) and about how long (seconds, default 30). Lotus finds the best moments itself: where people talk, the liveliest sound, where things happen.
+2. If the user named the moments ("the bit about posture at 4:10"), pass them as moments with start and end in seconds instead.
+3. Each Short is 9:16 with a blurred copy behind and bold captions. Report each file, its time in the original and what is said in it.`,
+    },
+    {
+      name: 'auto-edit-footage',
+      description: 'Edit raw footage into one video automatically: a highlight reel, or a talking video with the pauses cut.',
+      whenToUse: 'Edit my footage, clips or recordings into one video; make a highlight reel, montage or recap; cut out the pauses, silences or dead air; tighten a talking-head video.',
+      body: `# Auto-editing footage
+
+1. Pick the mode: "highlights" for a reel of many clips (holiday, event, product shots); "tighten" for one person talking (lesson, vlog, explainer).
+2. video.autoedit with the files in order, the mode, and for highlights about how long (seconds).
+3. Add a voiceover (video.voiceover) or music only if asked, then pass them to video.autoedit.
+4. Tell the user the file, its length and, for tighten, how much was cut. Mention they can fine-tune the cut on the Video page.`,
     },
     {
       name: 'understanding-a-video',

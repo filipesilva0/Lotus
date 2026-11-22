@@ -5,8 +5,8 @@ import { parseProbe, probeArgs, progressSeconds, renderArgs, usableEncoders, typ
 export interface VideoTools { ffmpeg: string; ffprobe: string | null }
 
 /** Runs a program; rejects with the last lines it printed when it fails. */
-export async function runProgram(exe: string, args: string[], o: { signal?: AbortSignal; onLine?: (line: string) => void } = {}): Promise<{ stdout: string; stderr: string }> {
-  const p = Bun.spawn([exe, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', windowsHide: true });
+export async function runProgram(exe: string, args: string[], o: { signal?: AbortSignal; onLine?: (line: string) => void; cwd?: string; env?: Record<string, string> } = {}): Promise<{ stdout: string; stderr: string }> {
+  const p = Bun.spawn([exe, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe', windowsHide: true, ...(o.cwd ? { cwd: o.cwd } : {}), ...(o.env ? { env: { ...process.env, ...o.env } } : {}) });
   const kill = () => { try { p.kill(); } catch { /* gone */ } };
   o.signal?.addEventListener('abort', kill, { once: true });
   let stderr = '';
@@ -78,4 +78,44 @@ export async function render(t: VideoTools, plan: Omit<RenderPlan, 'encoder' | '
     }
   }
   throw new Error(`FFmpeg couldn't make the video. ${errors.join(' · ').slice(0, 600)}`);
+}
+
+/**
+ * Runs an ffmpeg command that ends in an encoded video, with the best encoder that works (0.22, the
+ * Video editor). `args` is everything but the encoder and the output; `out` names the file for a
+ * container. A hardware encoder that fails falls through to the next one.
+ */
+export async function encode(t: VideoTools, args: string[], out: (container: 'mp4' | 'webm') => string, o: { signal?: AbortSignal; onSeconds?: (s: number) => void; cwd?: string; env?: Record<string, string>; quality?: 'final' | 'proxy' | 'segment' } = {}): Promise<{ file: string; encoder: string }> {
+  const list = await encodersOf(t.ffmpeg);
+  if (!list.length) throw new Error('This FFmpeg can\'t make videos (it has no video encoder Lotus knows). Install Lotus\'s FFmpeg in Settings → Models.');
+  const errors: string[] = [];
+  for (const enc of list.slice(0, 4)) {
+    const file = out(enc.container);
+    const vargs = o.quality === 'proxy' ? proxyQuality(enc) : o.quality === 'segment' ? segmentQuality(enc) : enc.args;
+    const aargs = o.quality === 'proxy' ? (enc.container === 'webm' ? ['-c:a', 'libopus', '-b:a', '64k'] : ['-c:a', 'aac', '-b:a', '96k']) : enc.audio;
+    try {
+      await runProgram(t.ffmpeg, [...args, ...vargs, ...aargs, ...(enc.container === 'mp4' ? ['-movflags', '+faststart'] : []), file], { signal: o.signal, cwd: o.cwd, env: o.env, onLine: (l) => { const s = progressSeconds(l); if (s !== null) o.onSeconds?.(s); } });
+      return { file, encoder: enc.name };
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e;
+      errors.push(`${enc.name}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(`FFmpeg couldn't make the video. ${errors.join(' · ').slice(0, 600)}`);
+}
+
+/** Smaller files for previews: the encoder's own settings with a lower quality. */
+function proxyQuality(e: Encoder): string[] {
+  const a = [...e.args];
+  const set = (k: string, v: string) => { const i = a.indexOf(k); if (i >= 0) a[i + 1] = v; };
+  set('-cq', '30'); set('-crf', e.name === 'libvpx-vp9' ? '40' : '28'); set('-b:v', '1M'); set('-global_quality', '30'); set('-q:v', '6'); set('-preset', e.name === 'libx264' ? 'ultrafast' : e.name === 'h264_nvenc' ? 'p2' : a[a.indexOf('-preset') + 1]);
+  return a;
+}
+
+/** The export's in-between clips: a bit better than the final quality, so joining them loses nothing you'd see. */
+function segmentQuality(e: Encoder): string[] {
+  const a = [...e.args];
+  const set = (k: string, v: string) => { const i = a.indexOf(k); if (i >= 0) a[i + 1] = v; };
+  set('-cq', '19'); set('-crf', e.name === 'libvpx-vp9' ? '28' : '17'); set('-b:v', '12M'); set('-global_quality', '19'); set('-q:v', '2'); set('-qp_i', '18'); set('-qp_p', '19');
+  return a;
 }

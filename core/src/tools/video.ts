@@ -23,6 +23,9 @@ import { entryById } from '../../../src/models/library';
 import { voiceOptions, type MyVoice, type VoiceModel } from '../../../src/voice/studio';
 import { chunkArgs, effectFilters, frameArgs, layoutLines, mixArgs, motionFor, sceneDurations, sheetArgs, sheetTimes, sizeFor, srt, wavSeconds, type Line, type Scene } from '../video/ffmpeg';
 import { probe, render, runProgram, type VideoTools } from '../video/run';
+import { captionsFor, exportTimeline, freeName, readMedia, type EditCtx } from '../video/editRun';
+import { CAPTION_STYLES, cuesToSrt, type CaptionStyle } from '../video/edit';
+import { runOp } from '../video/editService';
 import { aboutTime, MAX_VIDEO_SECONDS, pickVideoModel, planVideo, VIDEO_FAMILIES, videoFamilyFor, videoFit, videoLadder, videoPrompt, type VideoAttempt } from '../../../src/models/videoModels';
 import { LIBRARY } from '../../../src/models/library';
 
@@ -519,4 +522,124 @@ export const videoGenerate: Tool = {
   },
 };
 
-export const VIDEO_TOOLS: Tool[] = [voiceList, videoInspect, videoVoiceover, videoGenerate, videoMake];
+// ── Editing (0.22): captions, Shorts and a first cut, shared with the Video editor ─────────────
+
+/** The editor's context for a Work step. */
+function editCtx(ctx: ToolCtx, t: VideoTools): EditCtx {
+  const b = ctx.builtins;
+  const model = dictationModel(ctx);
+  return { t, dir: ctx.workDir!, signal: ctx.signal, progress: (d) => ctx.progress(d), transcribe: model && b ? (wav, o) => b.transcribe(model, wav, { language: o.language, signal: o.signal, warm: true }) : undefined };
+}
+
+/** Brings a file the model named into the work folder's view (the editor works on files in it). */
+function inWork(ctx: ToolCtx, raw: unknown): string | { error: string } {
+  const f = findInput(ctx, raw);
+  if (typeof f !== 'string') return f;
+  if (dirname(f) === ctx.workDir) return basename(f);
+  const name = basename(f);
+  if (!existsSync(join(ctx.workDir!, name))) writeFileSync(join(ctx.workDir!, name), readFileSync(f));
+  return name;
+}
+
+const shapeOf = (w: number, h: number) => (h > w * 1.1 ? '9:16' : w > h * 1.1 ? '16:9' : '1:1');
+
+export const videoSubtitles: Tool = {
+  name: 'video.subtitles', label: 'Writing captions', risk: 'write',
+  description: 'Write captions (subtitles) for a video from what is said in it, with real times (Whisper). Saves an .srt file, and with burn true also a copy of the video with the captions drawn on in a look: clean, bold (Shorts), boxed or big.',
+  parameters: { type: 'object', properties: {
+    file: { type: 'string', description: 'The video.' },
+    burn: { type: 'boolean', description: 'Also make a copy with the captions drawn on (default true).' },
+    style: { type: 'string', enum: ['clean', 'bold', 'boxed', 'big'], description: 'How they look (default clean; bold for Shorts).' },
+    language: { type: 'string', description: 'Language code (en, pt…); leave out to let Whisper tell.' },
+  }, required: ['file'] },
+  describe: (a) => `Write captions for ${basename(String(a.file))}`,
+  async run(a, ctx) {
+    if (!ctx.workDir) return { ok: false, text: 'Captions are made in Work mode.', summary: 'Not in Work mode' };
+    const t = videoTools(ctx);
+    if ('error' in t) return { ok: false, text: t.error, summary: 'FFmpeg not installed' };
+    const c = editCtx(ctx, t);
+    if (!c.transcribe) return { ok: false, text: 'Captions need a dictation model (Whisper). Tell the user to download one in Settings → Models → Dictation.', summary: 'No Whisper' };
+    const file = inWork(ctx, a.file);
+    if (typeof file !== 'string') return { ok: false, text: file.error, summary: 'File not found' };
+    const m = await readMedia(c, file);
+    if (!m.hasAudio) return { ok: false, text: `${file} has no sound, so there is nothing to caption.`, summary: 'No sound' };
+    const cues = await captionsFor(c, file, { language: typeof a.language === 'string' ? a.language : undefined });
+    if (!cues.length) return { ok: false, text: `No speech was heard in ${file}.`, summary: 'No speech' };
+    const st = (typeof a.style === 'string' && a.style in CAPTION_STYLES ? a.style : 'clean') as CaptionStyle;
+    const base = file.replace(/\.[^.]+$/, '');
+    const srtName = `${freeName(ctx.workDir, `${base}-captions`, 'srt')}.srt`;
+    writeFileSync(join(ctx.workDir, srtName), cuesToSrt(cues, 'clean'));
+    titleOf(ctx.workDir, srtName, `Captions · ${file}`);
+    let made = '';
+    if (a.burn !== false && m.kind === 'video') {
+      const r = await exportTimeline(c, { clips: [{ file, from: 0, to: m.duration }], aspect: shapeOf(m.width, m.height), fit: 'fit', fade: 0, captions: cues, captionStyle: st, burn: true, filename: freeName(ctx.workDir, `${base}-captioned`) }, new Map([[file, { kind: m.kind, hasAudio: m.hasAudio }]]));
+      titleOf(ctx.workDir, r.file, `Captioned · ${file}`);
+      made = r.captions === 'burned' ? ` and ${r.file} with them drawn on (${CAPTION_STYLES[st].label})` : ` and ${r.file} (the captions are attached, not drawn on: this FFmpeg can't draw text)`;
+    }
+    return { ok: true, text: `Saved ${srtName} (${cues.length} captions)${made}. First lines: ${cues.slice(0, 3).map((x) => `[${clock(x.start)}] ${x.text}`).join(' ')}`, summary: `${cues.length} captions`, data: { file: srtName, cues: cues.length } };
+  },
+};
+
+export const videoShorts: Tool = {
+  name: 'video.shorts', label: 'Making Shorts', risk: 'write',
+  description: 'Cut a long video into Shorts (9:16 clips for YouTube Shorts, Reels, TikTok): Lotus finds the best moments (where people talk, where things happen), makes each one tall with a blurred background and bold captions. Give starts/ends to choose the moments yourself.',
+  parameters: { type: 'object', properties: {
+    file: { type: 'string', description: 'The long video.' },
+    count: { type: 'integer', description: 'How many Shorts (1–10, default 3).' },
+    seconds: { type: 'number', description: 'About how long each is (default 30).' },
+    moments: { type: 'array', items: { type: 'object' }, description: 'Optional: the moments to use, each { start, end, title } in seconds, instead of letting Lotus find them.' },
+    captions: { type: 'boolean', description: 'Draw captions on (default true, needs Whisper).' },
+    style: { type: 'string', enum: ['clean', 'bold', 'boxed', 'big'], description: 'Caption look (default bold).' },
+  }, required: ['file'] },
+  describe: (a) => `Make Shorts from ${basename(String(a.file))}`,
+  async run(a, ctx) {
+    if (!ctx.workDir) return { ok: false, text: 'Shorts are made in Work mode.', summary: 'Not in Work mode' };
+    const t = videoTools(ctx);
+    if ('error' in t) return { ok: false, text: t.error, summary: 'FFmpeg not installed' };
+    const c = editCtx(ctx, t);
+    const file = inWork(ctx, a.file);
+    if (typeof file !== 'string') return { ok: false, text: file.error, summary: 'File not found' };
+    let moments = (Array.isArray(a.moments) ? a.moments : []) as { start: number; end: number; title?: string }[];
+    moments = moments.map((m) => ({ start: Number(m.start), end: Number(m.end), title: m.title })).filter((m) => Number.isFinite(m.start) && m.end - m.start > 2);
+    if (!moments.length) {
+      const found = await runOp(c, 'shorts.find', { file, count: a.count, seconds: a.seconds }) as { moments: { start: number; end: number; text: string }[] };
+      moments = found.moments;
+    }
+    const r = await runOp(c, 'shorts.make', { file, moments, captions: a.captions, style: a.style ?? 'bold' }) as { files: { file: string; seconds: number; captions: string }[] };
+    for (const f of r.files) titleOf(ctx.workDir, f.file, `Short · ${f.file.replace(/\.[^.]+$/, '')}`);
+    return { ok: true, text: `Made ${r.files.length} Short${r.files.length === 1 ? '' : 's'}: ${r.files.map((f, i) => `${f.file} (${clock(moments[i].start)}–${clock(moments[i].end)}, ${f.seconds.toFixed(0)} s${f.captions === 'burned' ? ', captions' : ''})`).join('; ')}.${c.transcribe ? '' : ' No captions: no dictation model (Whisper) is downloaded.'}`, summary: `${r.files.length} Short${r.files.length === 1 ? '' : 's'}`, data: { files: r.files.map((f) => f.file) } };
+  },
+};
+
+export const videoAutoEdit: Tool = {
+  name: 'video.autoedit', label: 'Editing the footage', risk: 'write',
+  description: 'Edit footage automatically into one video: "highlights" keeps the best few seconds of each shot (a reel of everything), "tighten" keeps a talking video whole but cuts out the pauses. Optional voiceover, music and aspect.',
+  parameters: { type: 'object', properties: {
+    files: { type: 'array', items: { type: 'string' }, description: 'The videos and pictures, in order.' },
+    mode: { type: 'string', enum: ['highlights', 'tighten'], description: 'highlights (default) or tighten.' },
+    seconds: { type: 'number', description: 'Highlights: about how long (default: up to 60 s).' },
+    aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:5'], description: 'Shape (default from the first video).' },
+    voiceover: { type: 'string', description: 'Optional voiceover WAV from video.voiceover.' },
+    music: { type: 'string', description: 'Optional music file.' },
+    filename: { type: 'string', description: 'File name (default edit.mp4).' },
+  }, required: ['files'] },
+  describe: (a) => `Edit ${Array.isArray(a.files) ? a.files.length : 0} file${Array.isArray(a.files) && a.files.length === 1 ? '' : 's'} into one video`,
+  async run(a, ctx) {
+    if (!ctx.workDir) return { ok: false, text: 'Videos are edited in Work mode.', summary: 'Not in Work mode' };
+    const t = videoTools(ctx);
+    if ('error' in t) return { ok: false, text: t.error, summary: 'FFmpeg not installed' };
+    const c = editCtx(ctx, t);
+    const names: string[] = [];
+    for (const f of (Array.isArray(a.files) ? a.files : [a.files]).slice(0, 60)) { const n = inWork(ctx, f); if (typeof n !== 'string') return { ok: false, text: n.error, summary: 'File not found' }; names.push(n); }
+    const plan = await runOp(c, 'autoedit', { files: names, mode: a.mode, seconds: a.seconds }) as { clips: { file: string; from: number; to: number }[]; saved: number };
+    if (!plan.clips.length) return { ok: false, text: 'There was nothing to keep in that footage.', summary: 'Nothing to keep' };
+    const media = await Promise.all([...new Set(plan.clips.map((x) => x.file))].map((f) => readMedia(c, f)));
+    const first = media.find((m) => m.kind === 'video') ?? media[0];
+    const opt = (v: unknown) => { if (!v) return undefined; const n = inWork(ctx, v); if (typeof n !== 'string') throw new Error(n.error); return n; };
+    const r = await exportTimeline(c, { clips: plan.clips, aspect: typeof a.aspect === 'string' ? a.aspect : shapeOf(first.width, first.height), fit: 'fit', fade: a.mode === 'tighten' ? 0 : 0.3, voiceover: opt(a.voiceover), music: opt(a.music), filename: freeName(ctx.workDir, outName(a.filename, 'edit.mp4', ['.mp4']).replace(/\.mp4$/, '')) }, new Map(media.map((m) => [m.file, { kind: m.kind, hasAudio: m.hasAudio }])));
+    titleOf(ctx.workDir, r.file, `Edit · ${r.file.replace(/\.[^.]+$/, '')}`);
+    return { ok: true, text: `Saved ${r.file}: ${clock(r.seconds)} from ${plan.clips.length} piece${plan.clips.length === 1 ? '' : 's'}${a.mode === 'tighten' ? `, ${Math.round(plan.saved)} s of pauses taken out` : ''}.`, summary: `${r.file} · ${clock(r.seconds)}`, data: { file: r.file, seconds: r.seconds } };
+  },
+};
+
+export const VIDEO_TOOLS: Tool[] = [voiceList, videoInspect, videoVoiceover, videoGenerate, videoMake, videoSubtitles, videoShorts, videoAutoEdit];

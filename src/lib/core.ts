@@ -21,7 +21,9 @@ export type CoreEvent =
   /** Lotus Pro status changed (0.18.0: licence key, trial). */
   | { type: 'pro'; status: unknown }
   /** MCP tool servers started, stopped or failed (Settings → Advanced). */
-  | { type: 'mcp' };
+  | { type: 'mcp' }
+  /** 0.22: the Video editor's jobs (core/src/video/editService.ts). */
+  | { type: 'video'; jobId: string; projectId: string; op: string; state: string };
 
 let info: CoreInfo | null = null;
 let lastError: string | null = null;

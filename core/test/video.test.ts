@@ -196,7 +196,7 @@ describe('voices for videos', () => {
   });
 
   test('the video tools are in Work only, with the right risk', () => {
-    expect(VIDEO_TOOLS.map((t) => [t.name, t.risk])).toEqual([['voice.list', 'read'], ['video.inspect', 'read'], ['video.voiceover', 'write'], ['video.generate', 'write'], ['video.make', 'write']]);
+    expect(VIDEO_TOOLS.map((t) => [t.name, t.risk])).toEqual([['voice.list', 'read'], ['video.inspect', 'read'], ['video.voiceover', 'write'], ['video.generate', 'write'], ['video.make', 'write'], ['video.subtitles', 'write'], ['video.shorts', 'write'], ['video.autoedit', 'write']]);
     for (const t of VIDEO_TOOLS) expect(ALL_TOOLS).toContain(t);
   });
 });
