@@ -143,7 +143,7 @@ export const VideoWorkspace: React.FC<{ work: Work; settings: LotusSettings; onO
               </button>
             ))}
           </div>
-          <p className="text-[12px] text-[var(--color-text-muted)] -mt-2">{cur.hint}</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] -mt-2">{footage === 'ai' ? (mode === 'idea' ? 'Lotus writes the script, films a short AI clip for each line, records the voice and puts it together.' : 'Lotus brings each picture to life with AI, records the voiceover and puts it together.') : cur.hint}</p>
 
           {mode !== 'idea' && (
             <div className={cx('rounded-[12px] border border-dashed p-4 text-center', dragging ? 'border-[var(--color-accent-vibrant)] bg-[var(--color-accent-pastel)]' : 'border-[var(--sep)]')}>

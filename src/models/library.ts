@@ -378,7 +378,7 @@ const videoEntry = (e: Omit<LibEntry, 'kind' | 'builtin' | 'video' | 'tags'> & {
 
 export const VIDEO_MODELS: LibEntry[] = [
   videoEntry({ id: 'wan21-t2v-1.3b', title: 'Wan 2.1 1.3B (video)', maker: 'Alibaba Wan', licence: 'Apache-2.0', tags: ['Video', 'Small'], vramGb: 6, diskGb: 7.2,
-    blurb: 'Makes short moving clips from words on 6–11 GB cards (832×480). Slow but steady: several minutes for each 2-second clip on an 8 GB card.',
+    blurb: 'Makes short moving clips from words on 6–11 GB cards (832×464). Slow but steady: several minutes for each 2-second clip on an 8 GB card.',
     family: 'wan21-1.3b', model: { url: HF(WAN21, 'split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors'), path: imgPath('diffusion_models', 'wan2.1_t2v_1.3B_fp16.safetensors'), gb: 2.84 }, vae: WAN21_VAE }),
   videoEntry({ id: 'wan22-ti2v-5b', title: 'Wan 2.2 5B (video)', maker: 'Alibaba Wan', licence: 'Apache-2.0', tags: ['Video', 'From a picture'], vramGb: 12, diskGb: 9.4,
     blurb: 'Sharper clips up to 1280×704 that can also bring one of your pictures to life. For 12–23 GB cards.',

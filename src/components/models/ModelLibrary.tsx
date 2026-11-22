@@ -265,7 +265,7 @@ const AddByLink: React.FC<{ kind: KindFilter; onError: (m: string | null) => voi
         <span className="relative flex-1 min-w-[260px]"><Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
           <input value={source} onChange={(e) => setSource(e.target.value)} aria-label="Model name or link" placeholder="unsloth/Qwen3-14B-GGUF or https://…/model.safetensors" className={cx(sel, 'w-full pl-8')} /></span>
         <select aria-label="Kind of model" className={sel} value={k} onChange={(e) => setK(e.target.value as ModelKind)}>
-          {(['chat', 'image', 'video', 'voice', 'dictation'] as ModelKind[]).map((x) => <option key={x} value={x}>{KIND_LABEL[x]}</option>)}
+          {(['chat', 'image', 'voice', 'dictation'] as ModelKind[]).map((x) => <option key={x} value={x}>{KIND_LABEL[x]}</option>)}
         </select>
         {k === 'image' && <select aria-label="What the file is" className={sel} value={folder} onChange={(e) => setFolder(e.target.value as ImageFolder)}>
           {(Object.keys(FOLDER_LABEL) as ImageFolder[]).map((f) => <option key={f} value={f}>{FOLDER_LABEL[f]}</option>)}
