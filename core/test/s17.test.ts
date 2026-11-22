@@ -282,7 +282,7 @@ describe.skipIf(process.platform === 'win32')('built-in engines end to end', () 
     const db = openDb(tmp('data'));
     kvApply(db, { set: { 'lotus.settings.v1': JSON.stringify({ llmBackend: 'builtin', imageEngine: 'builtin', agentApproval: 'never' }) }, remove: [] });
     const srv = startServer({ db, studio, token: 'x'.repeat(40), fetch: fakeFetch, builtins: { machine: async () => ({ os: 'linux', arch: 'x64', gpu: 'none', gpuName: '', vramGb: 0, unified: false, ramGb: 16 }) } });
-    stops.push(() => { srv.builtins.shutdown(); srv.stop(true); });
+    stops.push(() => { srv.board.stop(); srv.builtins.shutdown(); srv.stop(true); });
     const rpc = async (m: string, a: Record<string, unknown> = {}) => {
       const r = await fetch(`http://127.0.0.1:${srv.port}/v1/rpc/${m}`, { method: 'POST', headers: { authorization: `Bearer ${'x'.repeat(40)}`, 'content-type': 'application/json' }, body: JSON.stringify(a) });
       const j = await r.json() as { result?: unknown; error?: string };
