@@ -8,7 +8,8 @@ import React, { createContext, useContext } from 'react';
  * - right = the page's inspector
  * SidebarPane / InspectorPane read it, so any page built from them follows automatically.
  */
-export interface PanelState { left: boolean; right: boolean }
+import type { PanelState } from './panelDefaults';
+export type { PanelState } from './panelDefaults';
 export interface PanelsApi extends PanelState {
   setLeft: (on: boolean) => void;
   setRight: (on: boolean) => void;
@@ -23,6 +24,5 @@ export const PanelsProvider: React.FC<{ value: PanelsApi; children: React.ReactN
   <PanelsContext.Provider value={value}>{children}</PanelsContext.Provider>
 );
 
-/** Default visibility for a page that has never been toggled. The inspector starts closed (session 16):
- *  it holds settings you reach for now and then, not something to look at all the time. */
-export const DEFAULT_PANELS: PanelState = { left: true, right: false };
+export { DEFAULT_PANELS, defaultPanelsFor } from './panelDefaults';
+

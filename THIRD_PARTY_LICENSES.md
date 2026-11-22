@@ -64,6 +64,17 @@ scripts, templates or move library are in Lotus.
 ## fflate (bundled inside lotusd, session 17; in the app since 0.11.0)
 - **What:** zip unpacking for the built-in engines' downloads, and (0.11.0) reading Word, Excel, PowerPoint, OpenDocument and EPUB attachments. **Licence:** MIT. https://github.com/101arrowz/fflate
 
+## Word and PowerPoint writers (bundled inside lotusd, 0.21)
+Work mode saves real .docx and .pptx files with these libraries. All are permissive licences that allow
+selling Lotus under the FSL; each needs only its copyright notice kept (the MIT text is below).
+- **docx** 9.16.0, Copyright Dolan Miu. **Licence:** MIT. https://github.com/dolanmiu/docx. Uses **nanoid** (MIT, Andrey Sitnik).
+- **PptxGenJS** 4.0.1, Copyright Brent Ely. **Licence:** MIT. https://github.com/gitbrent/PptxGenJS. Uses:
+  - **JSZip** 3.10.2, dual-licensed MIT or GPL-3.0; Lotus uses it under **MIT** (Stuart Knightley and contributors).
+  - **pako** 1.0.11, MIT and Zlib (Andrei Tuputcyn, Vitaly Puzrin; zlib by Jean-loup Gailly and Mark Adler).
+  - **image-size** (MIT), **https** (ISC), **lie**, **immediate**, **setimmediate**, **queue**, **readable-stream**, **string_decoder**, **safe-buffer**, **core-util-is**, **isarray**, **process-nextick-args**, **util-deprecate** (all MIT) and **inherits** (ISC).
+- Excel (.xlsx) files are written by Lotus's own code (core/src/tools/office.ts) on fflate, with no other library.
+⚠️ Not reviewed by a lawyer; check before selling Lotus.
+
 ## pdf.js (pdfjs-dist, bundled in the app since 0.11.0)
 - **What:** reads the text of attached PDFs on this computer; loaded only when a PDF is attached. **Licence:** Apache-2.0, Copyright Mozilla Foundation. https://github.com/mozilla/pdf.js
 

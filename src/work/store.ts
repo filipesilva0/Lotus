@@ -206,7 +206,11 @@ export function useWork(settings: LotusSettings) {
       setRunning((r) => ({ ...r, [workId]: { runId: '', ctrl } }));
       const done = await runAgent({
         model: s.selectedModel, prompt: t, workId, memoryOn: s.autoMemory !== false, web: true, folders: [...(item.folder ? [item.folder] : []), ...(s.agentFolders ?? [])],
-        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow, ...(item.think ? { think: true } : {}) },
+        options: { temperature: s.temperature, topP: s.topP, topK: s.topK, numCtx: s.contextWindow },
+        // 0.21: Think works as in Chat: the model reasons in its own turns (shown in the Thinking pill), and
+        // the tool turns stay plain. Before, `options.think` made every turn reason, and on engines that
+        // don't send reasoning apart that reasoning came out as the answer's text.
+        think: !!item.think,
         messages: [{ role: 'system', content: (s.systemPrompt ?? '') + pluginSystemBlock(t) }, ...history],
       }, (e) => {
         const rid = (e as unknown as { runId?: string }).runId;

@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Mic, MicOff, Plus, Square, X, FileText, Navigation, AtSign, Brain, Globe, FolderOpen, ChevronDown, Check, Boxes, Puzzle, BookOpen, BrainCircuit, EyeOff, FlaskConical } from 'lucide-react';
+import { Plus, X, FileText, Navigation, AtSign, Brain, Globe, FolderOpen, Puzzle, BookOpen, BrainCircuit, EyeOff, FlaskConical } from 'lucide-react';
 import { IconBtn, cx } from '../common/ui';
-import { EdgeMeter, ModeButton, PickerButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayRow, TrayToggle } from '../common/PromptBox';
-import { prettyModelName } from '../../models/names';
+import { EdgeMeter, ModeButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayRow, TrayToggle } from '../common/PromptBox';
+import { AttachmentChips, DictateButton, ModelMenu, useAttachments, useAutoGrow } from '../common/PromptParts';
 import { useAssistantName } from '../../lib/identity';
-import { MicRecorder, micErrorMessage } from '../../lib/audio';
-import { transcribe } from '../../voice/voice';
 import { isTauri } from '../../lib/http';
 import { folderName } from '../../chat/folder';
 import { useFileIntake } from '../../lib/fileDrop';
@@ -62,30 +60,17 @@ interface Props {
 export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEnter, models, onModel, onOpenModels, onAttachFolder, folder, onClearFolder, extraCommands = [], thinkingOn, onToggleThinking, webOn, onToggleWeb, memoryOn, incognito, onToggleMemory, onToggleIncognito, contextUsed, contextTitle, onOpenLibrary, onResearch, mentions, prefill, onSend, onCommand, onStop }) => {
   const [text, setText] = useState('');
   const name = useAssistantName();
-  const [modelOpen, setModelOpen] = useState(false);
   const [researchMode, setResearchMode] = useState(false);
   const [folderBusy, setFolderBusy] = useState(false);
   const dirInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
-  const bar = useRef<HTMLDivElement>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const att = useAttachments();
+  const files = att.files;
   const [notice, setNotice] = useState<string | null>(null);
   const [sel, setSel] = useState(0);
-  const [rec, setRec] = useState(false);
-  const [busyMic, setBusyMic] = useState(false);
-  const recorder = useRef<MicRecorder | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { if (prefill?.text) setText((p) => (p ? `${p} ${prefill.text}` : prefill.text)); }, [prefill?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => recorder.current?.cancel(), []);
-  useEffect(() => {
-    if (!modelOpen) return;
-    const away = (e: MouseEvent) => { if (!bar.current?.contains(e.target as Node)) setModelOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setModelOpen(false); };
-    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-  }, [modelOpen]);
 
   const attachFolder = async (list?: FileList) => {
     setNotice(null); setFolderBusy(true);
@@ -93,7 +78,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     catch (e) { setNotice(`Couldn't read that folder. ${(e as Error).message ?? e}`); }
     finally { setFolderBusy(false); }
   };
-  useEffect(() => { const el = ta.current; if (el) { el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 200)}px`; } }, [text]);
+  useAutoGrow(ta, text);
 
   // Slash menu: shown while the text is "/word" with no space yet. @ menu: shown for a trailing "@word".
   const slashQ = /^\/(\w*)$/.exec(text)?.[1];
@@ -104,11 +89,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
   const menu = slashItems.length ? 'slash' : atItems.length ? 'at' : null;
   useEffect(() => setSel(0), [menu, slashQ, atQ]);
 
-  const addFiles = (list: FileList | File[]) => {
-    const arr = Array.from(list);
-    setFiles((f) => [...f, ...arr]);
-    arr.filter((f) => f.type.startsWith('image/')).forEach((f) => setPreviews((p) => ({ ...p, [f.name + f.size]: URL.createObjectURL(f) })));
-  };
+  const addFiles = att.add;
   // Drop files anywhere on the Chat page, or paste them (Ctrl/Cmd+V): all of them are attached.
   const drag = useFileIntake(addFiles, { enabled: !disabled });
 
@@ -134,7 +115,7 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     }
     const errs = await onSend(t, files);
     if (errs.length) setNotice(errs.join(' '));
-    setText(''); setFiles([]); setPreviews({});
+    setText(''); att.clear();
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -152,20 +133,6 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
     }
   };
 
-  const toggleMic = async () => {
-    setNotice(null);
-    if (busyMic) return;
-    if (!rec) {
-      try { recorder.current = new MicRecorder(); await recorder.current.start(); setRec(true); } catch (e) { setNotice(micErrorMessage(e)); }
-      return;
-    }
-    setRec(false); setBusyMic(true);
-    try {
-      const r = await recorder.current!.stop();
-      const said = await transcribe(r.wav);
-      if (said) setText((p) => (p ? `${p} ${said}` : said)); else setNotice('Heard nothing. Try again a little closer to the mic.');
-    } catch (e) { setNotice((e as Error).message); } finally { setBusyMic(false); }
-  };
 
   const hasText = text.trim().length > 0 || files.length > 0;
   const steer = streaming && hasText && !researchMode;
@@ -217,24 +184,9 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
             {/* Context used, as a thin bar along the top edge (no text; the numbers are in the tip). */}
             <EdgeMeter value={contextUsed} label="Context used" title={contextTitle} />
 
-            {(files.length > 0 || drag) && (
-              <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, PDFs, Office documents, text or code files to attach them. You can also paste them.</p>}
-                {files.map((f, i) => {
-                  const url = previews[f.name + f.size];
-                  return (
-                    <span key={f.name + i} className="inline-flex items-center gap-1.5 h-8 pl-1.5 pr-1 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">
-                      {url ? <img src={url} alt="" className="w-6 h-6 rounded-[4px] object-cover" /> : <FileText className="w-3.5 h-3.5 ml-1" />}
-                      <span className="truncate">{f.name}</span>
-                      <IconBtn label={`Remove ${f.name}`} className="!w-5 !h-5" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))}><X className="w-3 h-3" /></IconBtn>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
+            <AttachmentChips files={files} previews={att.previews} drag={drag} onRemove={att.remove} />
             <PromptText ref={ta} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} rows={1} disabled={disabled}
               aria-label="Message" placeholder={researchMode ? 'What do you want to research? Describe the question in your own words' : streaming ? 'Type to steer the reply…' : `Message ${name}`} />
-            <div ref={bar}>
             <PromptRow
               attach={<>
               <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
@@ -253,41 +205,13 @@ export const Composer: React.FC<Props> = ({ model, streaming, disabled, sendOnEn
                 researchMode ? 'Research on: sending starts a deep research task. Lotus asks a few questions, drafts a plan for you to approve, then searches scholarly sources and writes a cited report.' : 'Deep research: plan, search scholarly sources with parallel agents, and write a cited report')}
               {folderBusy && <span className="ml-1 text-[12px] text-[var(--color-text-muted)] animate-pulse" role="status">Reading folder…</span>}
               </>}
-              picker={<>
-              {/* Model for this chat, right where you type. Its name is the friendly one; the ID is in the tip. */}
-              <PickerButton open={modelOpen} onClick={() => setModelOpen((o) => !o)} title={model ? `Model for this chat (${model})` : 'Model for this chat'}
-                text={model ? prettyModelName(model) : 'Choose a model'}
-                chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70 transition-transform', modelOpen && 'rotate-180')} />} />
-              {modelOpen && (
-                <div role="listbox" aria-label="Models" className="material-frosted absolute bottom-full right-2 mb-2 w-[300px] max-h-[320px] overflow-y-auto p-1 rounded-[10px] z-30">
-                  <p className="px-2.5 pt-1.5 pb-1 text-[12px] font-semibold text-[var(--color-text-muted)]">Chat model</p>
-                  {!models.length && <p className="px-2.5 py-2 text-[12px] text-[var(--color-text-muted)]">No models listed. Start Ollama, or download a model.</p>}
-                  {models.map((m) => (
-                    <button key={m.id} type="button" role="option" aria-selected={m.id === model} onClick={() => { onModel(m.id); setModelOpen(false); ta.current?.focus(); }}
-                      className={cx('w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px] focus:outline-none focus-visible:bg-[var(--hover)]', m.id === model ? 'bg-[var(--color-accent-pastel)]' : 'hover:bg-[var(--hover)]')}>
-                      <span className="w-4 shrink-0">{m.id === model && <Check className="w-3.5 h-3.5 text-[var(--color-accent-vibrant)]" />}</span>
-                      <span className="flex-1 min-w-0 truncate">{m.name}</span>
-                      <span className="text-[12px] text-[var(--color-text-muted)] shrink-0">{m.tag}</span>
-                    </button>
-                  ))}
-                  <div role="separator" className="my-1 mx-2 h-px bg-[var(--sep)]" />
-                  <button type="button" onClick={() => { setModelOpen(false); onOpenModels(); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[6px] text-left text-[13px] hover:bg-[var(--hover)] focus:outline-none focus-visible:bg-[var(--hover)]">
-                    <Boxes className="w-3.5 h-3.5 ml-0.5 mr-0.5 text-[var(--color-text-muted)]" />Get more models…
-                  </button>
-                </div>
-              )}
-              </>}
-              mic={<button type="button" onClick={toggleMic} aria-pressed={rec} aria-label={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate'} data-tip={rec ? 'Stop dictation' : busyMic ? 'Transcribing…' : 'Dictate (local Whisper)'}
-                className={cx('tip w-8 h-8 inline-flex items-center justify-center rounded-full hover:bg-[var(--hover)] focus:outline-none focus-visible:outline-[3px] focus-visible:outline-[var(--ring)]', rec ? 'text-[var(--c-red)] animate-pulse' : 'text-[var(--color-text-main)]')}>
-                {rec ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
-              </button>}
+              picker={<ModelMenu model={model} models={models} onModel={onModel} onOpenModels={onOpenModels} title={model ? `Model for this chat (${model})` : 'Model for this chat'} onPicked={() => ta.current?.focus()} />}
+              mic={<DictateButton onText={(said) => setText((p) => (p ? `${p} ${said}` : said))} onNotice={setNotice} />}
               send={streaming && !steer
                 ? <SendButton stop onClick={onStop} label="Stop the reply" />
                 : <SendButton disabled={!hasText || disabled} onClick={() => void submit()} label={steer ? 'Steer the reply' : 'Send'}
                     tip={steer ? 'Steer: stop the reply here and continue from your message' : sendOnEnter ? 'Send (Enter)' : 'Send (Ctrl+Enter)'}
                     icon={steer ? <Navigation className="w-4 h-4" /> : undefined} />} />
-            </div>
         </PromptShell>
       </div>
     </div>

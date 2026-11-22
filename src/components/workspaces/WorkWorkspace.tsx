@@ -7,9 +7,10 @@ import { Starters } from '../common/Starters';
 import { documentText, READABLE } from '../../lib/docText';
 import { WORK_STARTERS } from '../../data/starters';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, AudioLines, Brain, Clapperboard, Check, ChevronDown, ChevronRight, Code2, Copy, Download, FileText, FolderOpen, Globe, Image as ImageIcon, Mic, MonitorSmartphone, Pencil, Pin, PinOff, Plus, RefreshCw, Search, Table2, Trash2, X } from 'lucide-react';
+import { AlertCircle, AudioLines, Brain, Check, ChevronRight, Copy, Download, ExternalLink, FileText, FolderOpen, Image as ImageIcon, Mic, MonitorSmartphone, BookOpen, Puzzle, Pencil, Pin, PinOff, Plus, PanelRightClose, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { Work, WorkAttachment, WorkItem, WorkMsg, agentProgress, helpersOf, planOf } from '../../work/store';
 import { interruptedNote, stoppedNote } from '../../work/interrupted';
+import { splitThink } from '../../work/think';
 import { ThinkingDrawer } from '../chat/ChatStream';
 import type { ChatMessage } from '../../types/lotus';
 import { useFileIntake } from '../../lib/fileDrop';
@@ -17,15 +18,14 @@ import { fileToBase64 } from '../../services/ollamaService';
 import { folderName, pickFolderPath } from '../../chat/folder';
 import { isTauri } from '../../lib/http';
 import type { ArtifactInfo, AgentStep, HelperInfo } from '../../lib/agent';
-import { agentAvailable, isMediaArtifact, workArtifact, workDir, workFile } from '../../lib/agent';
+import { agentAvailable, isMediaArtifact, isOfficeArtifact, workArtifact, workDir, workFile, workOpen } from '../../lib/agent';
 import { AgentSteps, UnverifiedNote } from '../chat/AgentSteps';
 import { ReplyHeader } from '../common/ReplyHeader';
 import { AgentFace } from '../common/AgentFace';
 import { MarkdownLite } from '../../lib/markdownLite';
-import { InspectorPane, MenuItem, Popover, SidebarPane, groupByDate } from '../common/Pane';
+import { InspectorPane, SidebarPane, groupByDate } from '../common/Pane';
 import { Btn, IconBtn, Segmented, TextArea, cx, useFlash } from '../common/ui';
-import { ModeButton, PickerButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayNote, TrayRow, VramMeter } from '../common/PromptBox';
-import { prettyModelName } from '../../models/names';
+import { ModeButton, PromptRow, PromptShell, PromptText, RoundIcon, SendButton, TrayButton, TrayRow, VramMeter } from '../common/PromptBox';
 import { useAssistantName } from '../../lib/identity';
 import { BuiltinNotice, EngineNotice } from '../common/EngineNotice';
 import { Tip } from '../common/Tip';
@@ -36,12 +36,13 @@ import { revealPath } from '../../lib/open';
 import type { ModelOption } from './ChatWorkspace';
 import type { LotusSettings } from '../../types/lotus';
 import { attachWithDialog } from '../../lib/pickFiles';
+import { FileCard, KindTile, OfficePreview, kindLabel, openLabel, opensOutside } from './workFiles';
+import { usePanels } from '../../lib/panels';
+import { AttachmentChips, DictateButton, ModelMenu, useAttachments, useAutoGrow } from '../common/PromptParts';
+import type { LibraryTab } from '../library/LibraryPane';
 
 
-const KIND_ICON: Record<string, React.ReactNode> = {
-  document: <FileText className="w-4 h-4" />, page: <Globe className="w-4 h-4" />, table: <Table2 className="w-4 h-4" />,
-  image: <ImageIcon className="w-4 h-4" />, picture: <ImageIcon className="w-4 h-4" />, video: <Clapperboard className="w-4 h-4" />, audio: <AudioLines className="w-4 h-4" />, code: <Code2 className="w-4 h-4" />, data: <Code2 className="w-4 h-4" />, file: <FileText className="w-4 h-4" />,
-};
+// KIND_ICON, the file cards and the Office previews live in workFiles.tsx (0.21).
 
 /** CSV → rows (quotes and commas inside quotes handled). */
 export function parseCsv(text: string, sep = text.split('\n')[0].includes('\t') ? '\t' : ','): string[][] {
@@ -90,6 +91,22 @@ export const MediaArtifact: React.FC<{ workId: string; a: ArtifactInfo; nonce: n
   );
 };
 
+/** The bar over a Word, Excel or PowerPoint preview: open it in its app, show it in the folder, download it. */
+const OpenBar: React.FC<{ workId: string; a: ArtifactInfo; onDownload: () => void }> = ({ workId, a, onDownload }) => {
+  const [err, setErr] = useState<string | null>(null);
+  const reveal = async () => { const d = await workDir(workId).catch(() => null); if (d) void revealPath(`${d}/${a.file}`).catch((e) => setErr((e as Error).message)); };
+  return (
+    <div className="px-3 py-2 flex items-center gap-2 border-b border-[var(--sep)]">
+      <KindTile kind={a.kind} size={24} />
+      <span className="text-[12px] text-[var(--color-text-muted)] truncate flex-1">{kindLabel(a.kind)} · {Math.max(1, Math.round(a.bytes / 1024))} KB</span>
+      {isTauri && <Btn size="sm" variant="primary" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => void workOpen(workId, a.file).catch((e) => setErr((e as Error).message))}>{openLabel(a.kind)}</Btn>}
+      {isTauri && <IconBtn label="Show in folder" onClick={() => void reveal()}><FolderOpen className="w-3.5 h-3.5" /></IconBtn>}
+      <IconBtn label="Download" onClick={onDownload}><Download className="w-3.5 h-3.5" /></IconBtn>
+      {err && <p role="alert" className="sr-only">{err}</p>}
+    </div>
+  );
+};
+
 const ArtifactView: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = (props) => (isMediaArtifact(props.a) ? <MediaArtifact {...props} /> : <TextArtifact {...props} />);
 
 const TextArtifact: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }> = ({ workId, a, nonce }) => {
@@ -100,14 +117,23 @@ const TextArtifact: React.FC<{ workId: string; a: ArtifactInfo; nonce: number }>
   if (err) return <p className="p-4 text-[13px] text-[var(--c-red)]">{err}</p>;
   if (text === null) return <p className="p-4 text-[13px] text-[var(--color-text-muted)]">Opening…</p>;
   const previewable = a.kind === 'document' || a.kind === 'page' || a.kind === 'table' || a.kind === 'image';
-  const download = () => { const el = document.createElement('a'); el.href = URL.createObjectURL(new Blob([text])); el.download = a.file; el.click(); };
+  const office = isOfficeArtifact(a);
+  // Office files are binary: download the real file, not the text it was made from.
+  const download = async () => { const blob = office ? await workFile(workId, a.file).catch(() => null) : new Blob([text]); if (!blob) return; const el = document.createElement('a'); el.href = URL.createObjectURL(blob); el.download = a.file; el.click(); };
+  if (office) return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <OpenBar workId={workId} a={a} onDownload={() => void download()} />
+      <OfficePreview kind={a.kind} text={text} />
+    </div>
+  );
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="px-3 py-2 flex items-center gap-2 border-b border-[var(--sep)]">
         {previewable && <Segmented label="View" value={mode} onChange={setMode} options={[{ id: 'preview', label: 'Preview' }, { id: 'source', label: 'Source' }]} />}
         <span className="flex-1" />
+        {opensOutside(a.kind) && isTauri && <Btn size="sm" variant="secondary" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => void workOpen(workId, a.file)}>{openLabel(a.kind)}</Btn>}
         <IconBtn label="Copy" onClick={() => void navigator.clipboard.writeText(text)}><Copy className="w-3.5 h-3.5" /></IconBtn>
-        <IconBtn label="Download" onClick={download}><Download className="w-3.5 h-3.5" /></IconBtn>
+        <IconBtn label="Download" onClick={() => void download()}><Download className="w-3.5 h-3.5" /></IconBtn>
       </div>
       <div className="flex-1 min-h-0 overflow-auto">
         {mode === 'source' || !previewable ? <pre className="p-3 text-[12px] font-mono leading-relaxed whitespace-pre-wrap break-words">{text}</pre>
@@ -129,19 +155,22 @@ const ArtifactsPanel: React.FC<{ work: Work; open: string | null; onOpen: (f: st
   const cur = list.find((a) => a.file === open) ?? null;
   const [nonce, setNonce] = useState(0);
   const reveal = async () => { const d = await workDir(work.activeId).catch(() => null); if (d) void revealPath(d); };
+  // 0.21: the panel follows the title bar's inspector button (and this close button), remembered per page.
+  const { setRight } = usePanels();
+  const hide = <IconBtn label="Hide artifacts" onClick={() => setRight(false)}><PanelRightClose className="w-3.5 h-3.5" /></IconBtn>;
   return (
-    <InspectorPane label="Artifacts" pinned className="w-[380px]">
+    <InspectorPane label="Artifacts" className="w-[380px]">
       <div className="h-11 shrink-0 flex items-center gap-1.5 px-3 border-b border-[var(--sep)]">
-        {cur ? <><IconBtn label="All artifacts" onClick={() => onOpen(null)}><X className="w-3.5 h-3.5" /></IconBtn><span className="text-[13px] font-semibold truncate flex-1">{cur.title}</span><IconBtn label="Reload" onClick={() => setNonce((n) => n + 1)}><AudioLines className="w-3.5 h-3.5 rotate-90" /></IconBtn></>
-          : <><span className="text-[13px] font-semibold flex-1 inline-flex items-center gap-1">Artifacts<Tip label="Artifacts" /></span><IconBtn label="Show in folder" onClick={() => void reveal()}><FolderOpen className="w-3.5 h-3.5" /></IconBtn></>}
+        {cur ? <><IconBtn label="All artifacts" onClick={() => onOpen(null)}><X className="w-3.5 h-3.5" /></IconBtn><span className="text-[13px] font-semibold truncate flex-1">{cur.title}</span><IconBtn label="Reload" onClick={() => setNonce((n) => n + 1)}><RefreshCw className="w-3.5 h-3.5" /></IconBtn>{hide}</>
+          : <><span className="text-[13px] font-semibold flex-1 inline-flex items-center gap-1">Artifacts<Tip label="Artifacts" /></span><IconBtn label="Show in folder" onClick={() => void reveal()}><FolderOpen className="w-3.5 h-3.5" /></IconBtn>{hide}</>}
       </div>
       {cur ? <ArtifactView workId={work.activeId} a={cur} nonce={nonce} /> : (
         <div className="flex-1 min-h-0 overflow-y-auto p-2">
-          {!list.length && <p className="p-3 text-[13px] text-[var(--color-text-muted)] leading-snug">What Lotus makes for this work shows up here: documents, web pages, tables, images, videos and code, saved in your Lotus Studio folder.</p>}
+          {!list.length && <p className="p-3 text-[13px] text-[var(--color-text-muted)] leading-snug">What Lotus makes for this work shows up here: Word documents, Excel sheets, PowerPoint decks, web pages, images, videos and code, saved in your Lotus Studio folder.</p>}
           {list.map((a) => (
             <button key={a.file} type="button" onClick={() => onOpen(a.file)} className="w-full flex items-center gap-2.5 p-2 rounded-[8px] text-left hover:bg-[var(--hover)]">
-              <span className="w-8 h-8 rounded-[7px] bg-[var(--color-accent-pastel)] text-[var(--color-accent-vibrant)] inline-flex items-center justify-center shrink-0">{KIND_ICON[a.kind] ?? KIND_ICON.file}</span>
-              <span className="min-w-0"><span className="block text-[13px] font-medium truncate">{a.title}</span><span className="block text-[12px] text-[var(--color-text-muted)] truncate">{a.file} · {new Date(a.updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span>
+              <KindTile kind={a.kind} />
+              <span className="min-w-0"><span className="block text-[13px] font-medium truncate">{a.title}</span><span className="block text-[12px] text-[var(--color-text-muted)] truncate">{kindLabel(a.kind)} · {a.file} · {new Date(a.updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></span>
             </button>
           ))}
         </div>
@@ -235,18 +264,21 @@ const AgentsPanel: React.FC<{ agents: HelperInfo[]; steps: AgentStep[]; live: bo
   );
 };
 
-const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void; onArtifact: (f: string) => void; onRetry: () => void; savedFiles: number }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onRetry, savedFiles }) => {
+const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'collapsed' | 'expanded' | 'hidden'; onDecide: (s: AgentStep, allow: boolean, always?: boolean) => void; onArtifact: (f: string) => void; onOpenFile?: (f: string) => void; onRetry: () => void; savedFiles: number }> = ({ m, live, busy, reasoning, onDecide, onArtifact, onOpenFile, onRetry, savedFiles }) => {
   const steps = m.steps ?? [];
   const [copied, flash] = useFlash();
   const agents = m.agents ?? [];
-  const own = steps.filter((s) => !s.data?.helper && s.tool !== 'plan.set' && s.tool !== 'plan.check');
+  // Code Lotus moved out of the answer into files (0.21) shows only as file cards.
+  const own = steps.filter((s) => !s.data?.helper && !s.data?.fromAnswer && s.tool !== 'plan.set' && s.tool !== 'plan.check');
+  const { answer, thought } = splitThink(m.content);
   const helpers = helpersOf(steps);
-  const made = steps.filter((s) => s.tool === 'artifact.write' && s.status === 'done').map((s) => s.data?.artifact as { file: string; title: string; kind: string }).filter(Boolean);
+  // One card per file (its latest version), in the order they were first made.
+  const made = [...new Map(steps.filter((s) => s.tool === 'artifact.write' && s.status === 'done').map((s) => s.data?.artifact as { file: string; title: string; kind: string }).filter(Boolean).map((a) => [a.file, a] as const)).values()];
   return (
     <div className="min-w-0">
       <ReplyHeader live={live} mood={live ? 'thinking' : m.error ? 'sad' : undefined} />
       <div className="min-w-0">
-        <ThinkingDrawer m={{ id: m.id, role: 'assistant', content: m.content, timestamp: '', thinking: m.thinking, thinkingMs: m.thinkingMs, isStreaming: live && m.thinkingMs === undefined } as ChatMessage} mode={reasoning} />
+        <ThinkingDrawer m={{ id: m.id, role: 'assistant', content: m.content, timestamp: '', thinking: [m.thinking, thought].filter(Boolean).join('\n\n') || undefined, thinkingMs: m.thinkingMs, isStreaming: live && m.thinkingMs === undefined } as ChatMessage} mode={reasoning} />
         {agents.length > 0 && <AgentsPanel agents={agents} steps={steps} live={live} interrupted={m.interrupted} onDecide={onDecide} />}
         {(() => {
           // Each helper's steps sit right under the step that started it, with the helper's own face.
@@ -272,16 +304,12 @@ const Reply: React.FC<{ m: WorkMsg; live: boolean; busy: boolean; reasoning: 'co
           flush();
           return out;
         })()}
+        {answer && <div className="text-[14px] leading-relaxed"><MarkdownLite text={answer} onDark={false} /></div>}
         {made.length > 0 && (
-          <div className="flex flex-wrap gap-2 my-2">
-            {made.map((a) => (
-              <button key={a.file} type="button" onClick={() => onArtifact(a.file)} className="h-9 pl-2 pr-3 inline-flex items-center gap-2 rounded-[9px] bg-[var(--color-bg-card)] shadow-[0_0_0_0.5px_var(--sep)] hover:shadow-[0_0_0_1px_var(--color-accent-fill)] text-[13px]">
-                <span className="text-[var(--color-accent-vibrant)]">{KIND_ICON[a.kind] ?? KIND_ICON.file}</span>{a.title}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2 mt-3 mb-1" aria-label="Files made">
+            {made.map((a) => <FileCard key={a.file} file={a.file} title={a.title} kind={a.kind} onPreview={() => onArtifact(a.file)} onOpen={isTauri && onOpenFile ? () => onOpenFile(a.file) : undefined} />)}
           </div>
         )}
-        {m.content && <div className="text-[14px] leading-relaxed"><MarkdownLite text={m.content} onDark={false} /></div>}
         {live && !m.content && !steps.length && <p className="text-[13px] text-[var(--color-text-muted)]">Thinking about how to do this…</p>}
         {m.error && <p className="mt-1 text-[13px] text-[var(--c-red)]">{m.error}</p>}
         {m.interrupted && !live && (
@@ -366,9 +394,9 @@ const AskCard: React.FC<{ work: Work }> = ({ work }) => {
 };
 
 // ── Page ────────────────────────────────────────────────────────────────────
-interface Props { work: Work; settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; models: ModelOption[]; ollamaUp: boolean | null; onOpenModels: () => void; onOpenSettings: () => void }
+interface Props { work: Work; settings: LotusSettings; onSettings: (p: Partial<LotusSettings>) => void; models: ModelOption[]; ollamaUp: boolean | null; onOpenModels: () => void; onOpenSettings: () => void; /** Skills and Plugins in the tray, as in Chat (0.21). */ onOpenLibrary?: (tab: LibraryTab) => void }
 
-export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, models, ollamaUp, onOpenModels, onOpenSettings }) => {
+export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, models, ollamaUp, onOpenModels, onOpenSettings, onOpenLibrary }) => {
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const [openArtifact, setOpenArtifact] = useState<string | null>(null);
@@ -376,21 +404,23 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
   const name = useAssistantName();
   const [vs, setVs] = useState<VoiceState>(voiceState.get());
   const [notice, setNotice] = useState<string | null>(null);
-  const [files, setFiles] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  // 0.21: the same attachment chips, dictation, model menu and growing text field as Chat (PromptParts).
+  const att = useAttachments();
+  const files = att.files;
+  const ta = useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(ta, text);
   const fileInput = useRef<HTMLInputElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => voiceState.on(setVs), []);
   const item = work.active;
   useEffect(() => { setOpenArtifact(null); }, [work.activeId]);
+  // A file card opens the Artifacts panel on that file (the panel may have been hidden).
+  const { setRight } = usePanels();
+  const showArtifact = (f: string) => { setOpenArtifact(f); setRight(true); };
   useEffect(() => { scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' }); }, [item.messages, work.asks.length]);
-  useCommand('new-work', () => { work.newWork(); setText(''); setFiles([]); });
+  useCommand('new-work', () => { work.newWork(); setText(''); att.clear(); });
 
-  const addFiles = (list: FileList | File[]) => {
-    const arr = Array.from(list);
-    setFiles((f) => [...f, ...arr]);
-    arr.filter((f) => f.type.startsWith('image/')).forEach((f) => setPreviews((p) => ({ ...p, [f.name + f.size]: URL.createObjectURL(f) })));
-  };
+  const addFiles = att.add;
   // Drop files anywhere on the Work page, or paste them: all of them are attached.
   const drag = useFileIntake(addFiles);
   // Images go to the model as pictures; text and code files are read and sent with the request.
@@ -416,7 +446,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
     let attach: WorkAttachment[] = [];
     if (list.length) {
       const r = await readFiles(list);
-      attach = r.out; setFiles([]); setPreviews({});
+      attach = r.out; att.clear();
       if (r.errors.length) setNotice(r.errors.join(' '));
       if (!t.trim() && !attach.length) return '';
     }
@@ -481,7 +511,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
     <div className="flex-1 min-h-0 flex bg-[var(--color-bg-panel)] overflow-hidden">
       <SidebarPane label="Work">
         <div className="p-3 space-y-2">
-          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => { work.newWork(); setText(''); setFiles([]); }}>New Work</Btn>
+          <Btn variant="primary" className="w-full" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => { work.newWork(); setText(''); att.clear(); }}>New Work</Btn>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" aria-hidden="true" />
             <input type="search" data-page-search value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" aria-label="Search work"
@@ -512,7 +542,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                   {item.messages.map((m, i) => m.role === 'user'
                     ? <Request key={m.id} m={m} busy={work.busy} onEdit={(t) => void work.edit(m.id, t).catch((e) => setNotice((e as Error).message))} />
                     : <Reply key={m.id} m={m} live={work.busy && i === item.messages.length - 1} busy={work.busy} reasoning={settings.reasoningBlockMode ?? 'collapsed'}
-                        onDecide={(s, allow, always) => void work.decide(s, allow, always)} onArtifact={setOpenArtifact} savedFiles={work.artifacts.length} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
+                        onDecide={(s, allow, always) => void work.decide(s, allow, always)} onArtifact={showArtifact} onOpenFile={(f) => void workOpen(work.activeId, f).catch((e) => setNotice((e as Error).message))} savedFiles={work.artifacts.length} onRetry={() => void work.retry(m.id).catch((e) => setNotice((e as Error).message))} />)}
                 </div>
               </>
             )}
@@ -525,7 +555,7 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
             {ollamaUp === false && settings.llmBackend === 'ollama' && <EngineNotice id="ollama" purpose="to work" className="mb-2" />}
             {ollamaUp === false && settings.llmBackend === 'builtin' && <BuiltinNotice kind="chat" purpose="to work" className="mb-2" />}
             {!agentAvailable() && <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">Work mode runs in the desktop app (it needs the Lotus core).</p>}
-            {notice && <p role="status" className="mb-2 text-[12px] text-[var(--c-orange)]">{notice}</p>}
+            {notice && <p role="status" className="mb-2 px-1 text-[12px] text-[var(--c-orange)]">{notice}</p>}
             <PromptShell drag={drag}
               tray={<TrayRow
               actions={<>
@@ -539,46 +569,27 @@ export const WorkWorkspace: React.FC<Props> = ({ work, settings, onSettings, mod
                   onClick={async () => { const p = await pickFolderPath(`Give ${name} a folder for this work`); if (p) work.patch(item.id, (x) => ({ ...x, folder: p })); }}
                   icon={<FolderOpen className="w-4 h-4" />} label="Choose Folder" />
               )}
-              <TrayButton onClick={onOpenSettings} icon={<MonitorSmartphone className="w-4 h-4" />} label="Tools" title="Choose what the agent may do: browser and computer control, and which steps ask first" />
-              </>}
-              status={<TrayNote><span className="inline-flex items-center gap-1">Can use: files, web, tasks, images{tools.length ? `, ${tools.join(', ')}` : ''}<Tip text="What the agent can do in Work. Turn on browser and computer control in Settings → Tools. Steps that change your files or control your computer ask first unless you changed that there." /></span></TrayNote>} />}>
+              {onOpenLibrary && <TrayButton onClick={() => onOpenLibrary('skills')} icon={<BookOpen className="w-4 h-4" />} label="Skills" title={`The skills, memory and soul ${name} uses (Assistant page)`} />}
+              {onOpenLibrary && <TrayButton onClick={() => onOpenLibrary('plugins')} icon={<Puzzle className="w-4 h-4" />} label="Plugins" title="Your plugins and their / commands" />}
+              <TrayButton onClick={onOpenSettings} icon={<MonitorSmartphone className="w-4 h-4" />} label="Tools" title={`What the agent can use: files, web, tasks, images${tools.length ? `, ${tools.join(', ')}` : ''}. Turn on browser and computer control, and choose which steps ask first, in Settings → Tools.`} />
+              </>} />}>
               {/* Video memory in use, as a thin bar along the top edge (numbers in the tip). */}
               <VramMeter />
-              {(files.length > 0 || drag) && (
-                <div className="flex flex-wrap gap-2 px-3.5 pt-3" aria-label="Attachments">
-                  {drag && !files.length && <p className="text-[12px] text-[var(--color-text-muted)] px-1 py-2">Drop images, PDFs, Office documents, text or code files to attach them. You can also paste them.</p>}
-                  {files.map((f, i) => {
-                    const url = previews[f.name + f.size];
-                    return (
-                      <span key={f.name + i} className="inline-flex items-center gap-1.5 h-8 pl-1.5 pr-1 rounded-[8px] bg-[var(--hover)] text-[12px] max-w-[220px]">
-                        {url ? <img src={url} alt="" className="w-6 h-6 rounded-[4px] object-cover" /> : <FileText className="w-3.5 h-3.5 ml-1" />}
-                        <span className="truncate">{f.name}</span>
-                        <IconBtn label={`Remove ${f.name}`} className="!w-5 !h-5" onClick={() => setFiles((l) => l.filter((_, j) => j !== i))}><X className="w-3 h-3" /></IconBtn>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
-              <PromptText value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder={talk ? (vs === 'listening' ? 'Listening… just talk' : vs === 'speaking' ? `${name} is speaking…` : 'Talk mode is on') : 'Describe the job, e.g. “Make a study plan for my exams as a document”'}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void go(); } }} aria-label="Describe the work" />
+              <AttachmentChips files={files} previews={att.previews} drag={drag} onRemove={att.remove} />
+              <PromptText ref={ta} value={text} onChange={(e) => setText(e.target.value)} rows={1} placeholder={talk ? (vs === 'listening' ? 'Listening… just talk' : vs === 'speaking' ? `${name} is speaking…` : 'Talk mode is on') : `Describe the job for ${name}`}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && (settings.sendOnEnter !== false || e.ctrlKey || e.metaKey)) { e.preventDefault(); void go(); } }} aria-label="Describe the work" />
               <PromptRow
                 attach={<>
                 <input ref={fileInput} type="file" multiple className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} />
-                <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
+                <RoundIcon label="Attach files" tip="Attach images, PDFs, documents, spreadsheets, text or code (or paste or drop them)" onClick={() => void attachWithDialog(addFiles, () => fileInput.current?.click(), setNotice)}><Plus className="w-[18px] h-[18px]" /></RoundIcon>
                 </>}
                 chips={<>
                 <ModeButton on={!!item.think} onClick={() => work.patch(item.id, (x) => ({ ...x, think: !x.think }))} icon={<Brain className="w-4 h-4" />} label="Think" title="Let the model think before it acts; its reasoning shows above the reply (slower, often better plans)" />
                 <ModeButton on={talk} onClick={() => setTalk((t) => !t)} icon={<AudioLines className="w-4 h-4" />} label={talk ? (vs === 'listening' ? 'Listening' : vs === 'speaking' ? 'Speaking' : 'Talk') : 'Talk'} title={`Talk with ${name} hands-free: it listens, works, answers aloud and listens again`} />
                 </>}
-                picker={<Popover up align="right" className="w-[280px]" trigger={(o, t) => <PickerButton open={o} onClick={t} title={model ? `Model (${model})` : 'Model'} text={model ? prettyModelName(model) : 'No model'} chevron={<ChevronDown className={cx('w-3.5 h-3.5 shrink-0 opacity-70', o && 'rotate-180')} />} />}>
-                  {(close) => (<>
-                    {models.map((m) => <MenuItem key={m.id} active={m.id === model} onClick={() => { onSettings({ selectedModel: m.id }); close(); }}><span className="truncate flex-1">{m.name}</span><span className="text-[12px] opacity-70">{m.tag}</span></MenuItem>)}
-                    {!models.length && <p className="p-2.5 text-[12px] text-[var(--color-text-muted)]">No chat models yet.</p>}
-                    <div className="my-1 border-t border-[var(--sep)]" />
-                    <MenuItem onClick={() => { close(); onOpenModels(); }}>Get more models…</MenuItem>
-                  </>)}
-                </Popover>}
-                send={work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={(!text.trim() && !files.length) || !model} onClick={() => void go()} label="Start" tip="Start (Enter)" />} />
+                picker={<ModelMenu model={model} models={models} onModel={(id) => onSettings({ selectedModel: id })} onOpenModels={onOpenModels} title={model ? `Model for this work (${model})` : 'Model for this work'} onPicked={() => ta.current?.focus()} />}
+                mic={<DictateButton disabled={talk} onText={(said) => setText((p) => (p ? `${p} ${said}` : said))} onNotice={setNotice} />}
+                send={work.busy ? <SendButton stop onClick={() => work.stop()} label="Stop working" /> : <SendButton disabled={(!text.trim() && !files.length) || !model} onClick={() => void go()} label="Start" tip={settings.sendOnEnter !== false ? 'Start (Enter)' : 'Start (Ctrl+Enter)'} />} />
             </PromptShell>
           </div>
         </div>
