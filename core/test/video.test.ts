@@ -346,3 +346,55 @@ describe('video frames reach the model only when it can see', () => {
     expect(ms2.some((m) => 'images' in m && m.images?.length)).toBe(false);
   });
 });
+
+// ── 6. The Video page and the Video plugin ─────────────────────────────────
+
+import { videoRequest } from '../../src/work/videoBrief';
+import { mediaUploadName } from '../src/server';
+import { builtinPlugins } from '../../src/plugins/builtin';
+import { matchPluginSkills } from '../../src/plugins/block';
+
+describe('Video page', () => {
+  test('narrating: watch, script to the moments, the chosen voice, the video\'s own sound', () => {
+    const t = videoRequest({ mode: 'narrate', files: ['walk.mp4'], brief: 'Explain the exercise', voice: { id: 'preset:kokoro:3', name: 'Heart' }, shape: '16:9', original: 'mute' });
+    expect(t).toContain('"walk.mp4"');
+    expect(t).toContain('video.inspect');
+    expect(t).toContain('Use the voice preset:kokoro:3 (Heart)');
+    expect(t).toContain('original_sound "mute"');
+    expect(t).toContain('Explain the exercise');
+  });
+  test('from an idea: Lotus picks the voice and makes the pictures; from pictures: uses them in order', () => {
+    const idea = videoRequest({ mode: 'idea', files: [], brief: 'Back stretches', shape: '9:16', seconds: 45 });
+    expect(idea).toContain('45-second');
+    expect(idea).toContain('voice.list');
+    expect(idea).toContain('image.generate, aspect 9:16');
+    expect(idea).toContain('aspect "9:16"');
+    const pics = videoRequest({ mode: 'pictures', files: ['a.png', 'b.jpg'], brief: '', shape: '1:1' });
+    expect(pics).toContain('"a.png", "b.jpg"');
+    expect(pics).not.toContain('image.generate');
+  });
+  test('only videos, pictures and sound can be added to a job\'s folder', () => {
+    expect(mediaUploadName('My Walk.MP4')).toBe('My Walk.MP4');
+    expect(mediaUploadName('../../evil.mp4')).toBe('evil.mp4');
+    expect(mediaUploadName('.hidden.png')).toBe('hidden.png');
+    expect(mediaUploadName('notes.exe')).toBeNull();
+    expect(mediaUploadName('')).toBeNull();
+  });
+});
+
+describe('Video plugin', () => {
+  const all = builtinPlugins();
+  const top = (q: string) => matchPluginSkills(q, all, 2)[0]?.skill.name ?? null;
+  test('is built in, on, original, and says why onetake was not copied', () => {
+    const v = all.find((p) => p.id === 'builtin-video')!;
+    expect(v.enabled).toBe(true);
+    expect(v.credit?.license).toBe('Original');
+    expect(v.credit?.note).toContain('onetake');
+  });
+  test('the right skill for each kind of request', () => {
+    expect(top('make a 30 second promo video with voiceover for my physio clinic')).toBe('narrated-video');
+    expect(top('add a voiceover narration to my existing video of the exercises')).toBe('narrate-a-video');
+    expect(top('summarise what happens in this video recording')).toBe('understanding-a-video');
+    expect(top('hello how are you')).toBeNull();
+  });
+});

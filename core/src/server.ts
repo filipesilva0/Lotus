@@ -11,6 +11,7 @@
 //   DELETE /v1/media/<path>
 //   GET    /v1/media-list?kind=image
 //   GET    /v1/work-file?workId=&file=   a video, sound or picture from a Work job's folder (0.21)
+//   POST   /v1/work-file?workId=&name=   raw bytes → saved in that folder (videos, pictures, sound only)
 //   POST   /v1/rpc/<method>              JSON args → JSON result (memory, agent_*: see agent/service.ts)
 //   GET    /v1/events?t=                 WebSocket: { type: 'kv', set, remove, origin } · { type: 'agent', runId, kind, … } · { type: 'memory' }
 //   GET    /v1/stream                    the same events as one JSON object per line (a streamed HTTP response).
@@ -32,6 +33,17 @@ import { webSearchRpc } from './tools/web';
 import { Licence, type LicenceOptions } from './licence';
 import { McpHub, MCP_KEY } from './mcp';
 import { LocalApi, LOCAL_API_KEY } from './localApi';
+import { mkdirSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { AUDIO_EXT, PICTURE_EXT, VIDEO_EXT } from './tools/video';
+
+const MAX_WORK_UPLOAD = 4 * 1024 ** 3;
+/** A safe file name for a video, picture or sound added to a Work folder; null for anything else. */
+export function mediaUploadName(raw: string): string | null {
+  const n = basename(String(raw).replace(/\\/g, '/')).replace(/[\u0000-\u001f<>:"|?*]/g, '').trim().replace(/^\.+/, '').slice(0, 120);
+  const ext = (/\.[a-z0-9]{1,5}$/i.exec(n)?.[0] ?? '').toLowerCase();
+  return n && (VIDEO_EXT.has(ext) || PICTURE_EXT.has(ext) || AUDIO_EXT.has(ext)) ? n : null;
+}
 
 export const VERSION = '0.3.1';
 
@@ -193,7 +205,7 @@ export function startServer(o: CoreOptions): CoreServer {
     // Bun closes a connection after 10 s without traffic; /v1/stream pings every 5 s, so 30 s is plenty.
     idleTimeout: 30,
     port: o.port ?? 0,
-    maxRequestBodySize: MAX_MEDIA + 1024 * 1024,
+    maxRequestBodySize: MAX_WORK_UPLOAD + 1024 * 1024,
     async fetch(req, srv) {
       const url = new URL(req.url);
       // Only this machine's loopback names: a web page that rebinds its own domain to 127.0.0.1
@@ -245,6 +257,8 @@ export function startServer(o: CoreOptions): CoreServer {
         if (url.pathname === '/v1/media' && req.method === 'POST') {
           const type = req.headers.get('content-type') ?? url.searchParams.get('type') ?? '';
           const dir = url.searchParams.get('dir');
+          // The server takes Work uploads up to 4 GB (0.21); pictures and recordings stay at 200 MB.
+          if (Number(req.headers.get('content-length') ?? 0) > MAX_MEDIA) return fail(req, 413, 'That file is over 200 MB.');
           const row = await saveMedia(o.db, o.studio, await req.arrayBuffer(), type, url.searchParams.get('name') ?? 'file', new Date(),
             { dir: dir ?? undefined, numbered: url.searchParams.get('numbered') === '1', reuse: url.searchParams.get('reuse') === '1' });
           return json(req, row);
@@ -254,6 +268,17 @@ export function startServer(o: CoreOptions): CoreServer {
           return json(req, { items: listMedia(o.db, kind === 'image' || kind === 'audio' ? (kind as MediaKind) : undefined) });
         }
         // 0.21: a video, sound or picture a Work job made, for the Artifacts panel's player.
+        // 0.21: the Video page puts the user's video or pictures in a Work job's folder for the video tools.
+        if (url.pathname === '/v1/work-file' && req.method === 'POST') {
+          const dir = agent.workDir(url.searchParams.get('workId') ?? '');
+          const name = mediaUploadName(url.searchParams.get('name') ?? '');
+          if (!dir || !name) return fail(req, 400, 'Only videos, pictures and sound files can be added here.');
+          const size = Number(req.headers.get('content-length') ?? 0);
+          if (size > MAX_WORK_UPLOAD) return fail(req, 413, 'That file is over 4 GB.');
+          mkdirSync(dir, { recursive: true });
+          await Bun.write(join(dir, name), new Response(req.body));
+          return json(req, { file: name });
+        }
         if (url.pathname === '/v1/work-file' && req.method === 'GET') {
           const full = agent.artifactPath(url.searchParams.get('workId') ?? '', url.searchParams.get('file') ?? '');
           if (!full) return fail(req, 404, 'That artifact is no longer in the work folder.');

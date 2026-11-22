@@ -17,7 +17,7 @@ const allSource = walk(SRC).map((p) => ({ p, s: readFileSync(p, 'utf8') }));
 
 describe('rail pages', () => {
   test('Tasks and Assistant are two pages, in rail order, with Engines & Models last', () => {
-    expect(PAGES.map((p) => p.id)).toEqual(['chat', 'work', 'images', 'voice', 'tasks', 'assistant', 'engines']);
+    expect(PAGES.map((p) => p.id)).toEqual(['chat', 'work', 'images', 'voice', 'video', 'tasks', 'assistant', 'engines']);
     expect(WORKSPACES.map((p) => p.id)).not.toContain('engines');
     expect(VIEW_TITLES.assistant).toBe('Assistant');
     expect(VIEW_TITLES.tasks).toBe('Tasks');
@@ -25,8 +25,10 @@ describe('rail pages', () => {
   test('Ctrl+number follows the rail order and is unique', () => {
     const keys = PAGES.map((p) => pageShortcut(p.id));
     expect(keys).toEqual(PAGES.map((_, i) => `Ctrl+${i + 1}`));
-    expect(pageShortcut('tasks')).toBe('Ctrl+5');
-    expect(pageShortcut('assistant')).toBe('Ctrl+6');
+    expect(pageShortcut('video')).toBe('Ctrl+5');
+    expect(pageShortcut('tasks')).toBe('Ctrl+6');
+    expect(pageShortcut('assistant')).toBe('Ctrl+7');
+    expect(pageShortcut('engines')).toBe('Ctrl+8');
     expect(new Set(keys).size).toBe(keys.length);
   });
   test('the Go menu is built from the page list, not a hand-written copy', () => {

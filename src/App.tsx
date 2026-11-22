@@ -20,6 +20,7 @@ import { startVoiceController } from './voice/controller';
 import { useResearch } from './research/store';
 import { TasksWorkspace } from './components/workspaces/TasksWorkspace';
 import { AssistantWorkspace } from './components/workspaces/AssistantWorkspace';
+import { VideoWorkspace } from './components/workspaces/VideoWorkspace';
 import { PAGES, pageFromName, pageShortcut } from './components/rail/pages';
 import { setLiveSettings } from './lib/liveSettings';
 import { hardware, startHardwareMonitor } from './hardware/monitor';
@@ -544,6 +545,7 @@ export default function App() {
           onOpenModels={() => openEngines('models')} onOpenSettings={() => openSettings('tools' as SettingsTab)} />}
 
         {currentView === 'tasks' && <TasksWorkspace settings={settings} ollamaUp={ollamaUp} />}
+        {currentView === 'video' && <VideoWorkspace work={work} settings={settings} onOpenWork={() => setCurrentView('work')} onOpenModels={() => openEngines('models')} />}
         {currentView === 'assistant' && <AssistantWorkspace settings={settings} onSettings={(p) => setSettings((s) => ({ ...s, ...p }))} request={assistantRequest} folder={chat.active?.folder} />}
 
         {currentView === 'engines' && <EnginesWorkspace eng={eng} initialTab={enginesTab} />}

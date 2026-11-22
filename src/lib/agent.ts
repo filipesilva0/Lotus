@@ -114,5 +114,12 @@ export const workFile = async (workId: string, file: string): Promise<Blob> => {
   if (!r.ok) throw new Error('That artifact is no longer in the work folder.');
   return r.blob();
 };
+/** 0.21: puts a video, picture or sound into a job's folder (the Video page); returns its file name there. */
+export const uploadToWork = async (workId: string, file: File): Promise<string> => {
+  const r = await coreFetch(`/v1/work-file?${new URLSearchParams({ workId, name: file.name })}`, { method: 'POST', headers: { 'content-type': file.type || 'application/octet-stream' }, body: file });
+  const j = (await r.json().catch(() => ({}))) as { file?: string; error?: string };
+  if (!r.ok || !j.file) throw new Error(j.error || `Couldn't add ${file.name}.`);
+  return j.file;
+};
 /** Artifacts shown as media rather than read as text. */
 export const isMediaArtifact = (a: Pick<ArtifactInfo, 'kind'>) => a.kind === 'video' || a.kind === 'audio' || a.kind === 'picture';
