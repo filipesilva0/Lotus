@@ -322,7 +322,7 @@ export class AgentService {
         }, {
           llm,
           registry: this.registry,
-          ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, proUnlocked: this.o.proUnlocked, board: this.board, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, workDir, ask,
+          ctx: { db: this.o.db, studio: this.o.studio, builtins: this.o.builtins, proUnlocked: this.o.proUnlocked, board: this.board, folders, kvSet: this.kvSet, kvGet: (k) => kvGet(this.o.db, k), fetch: fetchFn, memoryOn: !!a.memoryOn, chatId: a.chatId && a.chatId !== 'island' ? a.chatId : undefined, workDir, ask,
             delegate: workDir ? (goal, context, name) => this.helper(runId, ++helperSeq, { ...helperBase, goal, context, name }) : undefined,
             deploy: workDir ? (jobs, context) => {
               // Several helpers at once. Lotus's own engine serves one request at a time (and may reload the

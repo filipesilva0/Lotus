@@ -10,7 +10,7 @@ import { skillFits } from '../../src/memory/skillMatch';
 
 export interface IndexedMsg { id: string; sessionId: string; title: string; role: string; content: string; ts: number }
 export interface Hit { id: string; sessionId: string; title: string; role: string; snippet: string; ts: number; score: number }
-export interface MemoryRow { id: string; kind: string; text: string; source: string; uses: number; ts: number; updated: number }
+export interface MemoryRow { id: string; kind: string; text: string; source: string; uses: number; ts: number; updated: number; tier?: string; chatId?: string | null; lastUsed?: number | null }
 export interface SkillRow {
   id: string; name: string; description: string; whenToUse: string; body: string; tags: string[];
   version: number; uses: number; wins: number; enabled: boolean; origin: string; created: number; updated: number;
@@ -95,6 +95,7 @@ export function indexMessages(db: Db, msgs: IndexedMsg[]): number {
 
 export function forgetSession(db: Db, sessionId: string): void {
   db.sql.query('DELETE FROM messages_fts WHERE session_id = ?').run(sessionId);
+  forgetChatMemories(db, sessionId);
 }
 
 export function wipeHistory(db: Db): void {
@@ -125,20 +126,26 @@ export function searchMessages(db: Db, query: string, exclude = '', limit = 6): 
 
 // ── memory items ────────────────────────────────────────────────────────────
 
+const tierOf = (t: unknown) => (t === 'short' || t === 'chat' ? t : 'long');
+
 export function listMemories(db: Db): MemoryRow[] {
-  return db.sql.query<MemoryRow, []>('SELECT id, kind, text, source, uses, ts, updated FROM memories ORDER BY ts').all()
-    .map((m) => ({ ...m, uses: Number(m.uses) || 0, ts: Number(m.ts) || 0, updated: Number(m.updated) || 0 }));
+  type R = { id: string; kind: string; text: string; source: string; uses: number; ts: number; updated: number; tier: string; chat_id: string | null; last_used: number | null };
+  return db.sql.query<R, []>('SELECT id, kind, text, source, uses, ts, updated, tier, chat_id, last_used FROM memories ORDER BY ts').all()
+    .map((m) => ({ id: m.id, kind: m.kind, text: m.text, source: m.source, uses: Number(m.uses) || 0, ts: Number(m.ts) || 0, updated: Number(m.updated) || 0, tier: tierOf(m.tier), chatId: m.chat_id ?? null, lastUsed: m.last_used == null ? null : Number(m.last_used) }));
 }
 
 export function putMemories(db: Db, items: MemoryRow[]): void {
-  const up = db.sql.query(`INSERT INTO memories(id, kind, text, source, uses, ts, updated) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, text = excluded.text, source = excluded.source, uses = excluded.uses, updated = excluded.updated`);
+  const up = db.sql.query(`INSERT INTO memories(id, kind, text, source, uses, ts, updated, tier, chat_id, last_used) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, text = excluded.text, source = excluded.source, uses = excluded.uses, updated = excluded.updated,
+      tier = excluded.tier, chat_id = excluded.chat_id, last_used = excluded.last_used`);
   const del = db.sql.query('DELETE FROM memories_fts WHERE id = ?');
   const ins = db.sql.query('INSERT INTO memories_fts(id, text) VALUES (?, ?)');
   db.sql.transaction(() => {
     for (const m of items) {
       const id = String(m.id);
-      up.run(id, String(m.kind ?? 'memory'), String(m.text ?? ''), String(m.source ?? 'user'), Number(m.uses) || 0, Number(m.ts) || 0, Number(m.updated ?? m.ts) || 0);
+      const tier = tierOf(m.tier);
+      up.run(id, String(m.kind ?? 'memory'), String(m.text ?? ''), String(m.source ?? 'user'), Number(m.uses) || 0, Number(m.ts) || 0, Number(m.updated ?? m.ts) || 0,
+        tier, tier === 'chat' && m.chatId ? String(m.chatId) : null, m.lastUsed == null ? null : Number(m.lastUsed) || null);
       del.run(id);
       ins.run(id, String(m.text ?? ''));
     }
@@ -152,14 +159,40 @@ export function deleteMemory(db: Db, id: string): void {
   })();
 }
 
-export function searchMemories(db: Db, query: string, limit = 8): string[] {
+/** Recall counted: one more use and "last used now" for each id (short-term items that keep coming up move to long-term). */
+export function touchMemories(db: Db, ids: string[], now = Date.now()): void {
+  const q = db.sql.query('UPDATE memories SET uses = coalesce(uses, 0) + 1, last_used = ? WHERE id = ?');
+  db.sql.transaction(() => { for (const id of ids) q.run(now, String(id)); })();
+}
+
+/** A chat was deleted or cleared: its own notes go with it. */
+export function forgetChatMemories(db: Db, chatId: string): void {
+  const ids = db.sql.query<{ id: string }, [string]>("SELECT id FROM memories WHERE tier = 'chat' AND chat_id = ?").all(chatId).map((r) => r.id);
+  for (const id of ids) deleteMemory(db, id);
+}
+
+export interface MemoryFilter {
+  /** Only these layers (default: all). */
+  tiers?: string[];
+  /** Chat notes are searched only for this chat; without it, none are. */
+  chatId?: string;
+}
+
+const allowed = (m: { tier: string; chat_id: string | null }, f: MemoryFilter) =>
+  (!f.tiers?.length || f.tiers.includes(tierOf(m.tier))) && (tierOf(m.tier) !== 'chat' || (!!f.chatId && m.chat_id === f.chatId));
+
+export function searchMemories(db: Db, query: string, limit = 8, f: MemoryFilter = {}): string[] {
+  type R = { id: string; tier: string; chat_id: string | null };
+  const meta = new Map(db.sql.query<R, []>('SELECT id, tier, chat_id FROM memories').all().map((r) => [r.id, r]));
+  const ok = (id: string) => { const m = meta.get(id); return !!m && allowed(m, f); };
   if (db.fts) {
     const q = ftsQuery(query);
     if (!q) return [];
-    return db.sql.query<{ id: string }, [string, number]>('SELECT id FROM memories_fts WHERE memories_fts MATCH ? ORDER BY bm25(memories_fts) LIMIT ?').all(q, limit).map((r) => r.id);
+    return db.sql.query<{ id: string }, [string, number]>('SELECT id FROM memories_fts WHERE memories_fts MATCH ? ORDER BY bm25(memories_fts) LIMIT ?').all(q, Math.max(limit * 4, 24))
+      .map((r) => r.id).filter(ok).slice(0, limit);
   }
   const ws = words(query);
-  return listMemories(db)
+  return listMemories(db).filter((m) => ok(m.id))
     .map((m) => [ws.filter((w) => m.text.toLowerCase().includes(w)).length, m.id] as const)
     .filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]).slice(0, limit).map(([, id]) => id);
 }

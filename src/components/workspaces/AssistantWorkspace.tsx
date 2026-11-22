@@ -6,6 +6,7 @@ import { useAssistantName } from '../../lib/identity';
 import { SidebarPane } from '../common/Pane';
 import { Segmented, cx } from '../common/ui';
 import { LibraryPane, type LibraryTab } from '../library/LibraryPane';
+import { MemoryPane } from '../library/MemoryPane';
 import { SkillsView } from '../tasks/SkillsView';
 
 export type AssistantTab = LibraryTab;
@@ -13,7 +14,7 @@ const TABS: AssistantTab[] = ['memory', 'soul', 'skills', 'plugins'];
 
 /** The sections of the Assistant page, in sidebar order. Exported for tests and screenshots. */
 export const ASSISTANT_SECTIONS: { id: AssistantTab; label: string; hint: string }[] = [
-  { id: 'memory', label: 'Memory', hint: 'What it remembers about you' },
+  { id: 'memory', label: 'Memory', hint: 'Long-term, short-term and chat notes' },
   { id: 'soul', label: 'Soul', hint: 'Its name and personality' },
   { id: 'skills', label: 'Skills', hint: 'Procedures it has learned' },
   { id: 'plugins', label: 'Plugins', hint: 'Extra abilities you add' },
@@ -60,7 +61,8 @@ export const AssistantWorkspace: React.FC<{ settings: LotusSettings; onSettings:
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {tab === 'skills' && skillView === 'yours' && <SkillsView settings={settings} onSettings={onSettings} />}
         {tab === 'skills' && skillView === 'all' && <LibraryPane tab="skills" settings={settings} onSettings={onSettings} folder={folder} />}
-        {(tab === 'memory' || tab === 'soul' || tab === 'plugins') && <LibraryPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}
+        {tab === 'memory' && <MemoryPane folder={folder} />}
+        {(tab === 'soul' || tab === 'plugins') && <LibraryPane tab={tab} settings={settings} onSettings={onSettings} folder={folder} />}
       </div>
     </div>
   );

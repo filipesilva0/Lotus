@@ -104,7 +104,14 @@ export interface MemoryItem {
   source?: 'user' | 'auto';
   /** How many replies used it (recall), and when it last changed. */
   uses?: number; updated?: number;
+  /** 0.22: which layer it lives in (absent = long-term, as everything saved before 0.22). See memory/layers.ts. */
+  tier?: MemoryTier;
+  /** Chat notes ('chat' tier): the chat they belong to. */
+  chatId?: string;
+  /** When a reply last recalled it. */
+  lastUsed?: number;
 }
+export type MemoryTier = 'long' | 'short' | 'chat';
 
 /** Accent palettes. Since session 8 each page has its own (one petal of the logo per page); there is no user choice. */
 export type ColorPalette = 'blue' | 'amber' | 'purple' | 'green' | 'pink' | 'red' | 'yellow' | 'graphite';

@@ -7,6 +7,8 @@
 //   2  adds agent_runs and agent_steps (session 15: every tool call the agent makes, with its result)
 //   3  agent_runs.source/ref (run history, phase 2); tasks, routines and routine_runs tables (they were
 //      JSON in kv: `lotus.tasks.v1`, `lotus.routines.v1`; imported once, the kv keys are left as they were)
+//   4  memories.tier/chat_id/last_used (0.22: long-term, short-term and per-chat memory; existing rows are
+//      long-term)
 // New versions append a step to MIGRATIONS; never edit a step that has shipped.
 
 import { Database } from 'bun:sqlite';
@@ -94,6 +96,13 @@ const MIGRATIONS: ((sql: Database) => void)[] = [
     sql.run('ALTER TABLE agent_runs ADD COLUMN ref TEXT');    // the task or routine id, the Work id
     sql.run('CREATE INDEX IF NOT EXISTS agent_runs_source ON agent_runs(source, created)');
     createBoardTables(sql);
+  },
+  // 3 → 4
+  (sql) => {
+    sql.run("ALTER TABLE memories ADD COLUMN tier TEXT NOT NULL DEFAULT 'long'"); // 'long' | 'short' | 'chat'
+    sql.run('ALTER TABLE memories ADD COLUMN chat_id TEXT');                        // 'chat' tier: whose notes
+    sql.run('ALTER TABLE memories ADD COLUMN last_used INTEGER');                   // last recalled
+    sql.run('CREATE INDEX IF NOT EXISTS memories_chat ON memories(chat_id)');
   },
 ];
 
