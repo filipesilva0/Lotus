@@ -69,6 +69,7 @@ describe('reading the experts from a GGUF file', () => {
     expect(info.expertBytes!.length).toBe(LAYERS);
     // Sizes come from the gaps between tensors, so each layer is exactly its three expert tensors.
     for (const b of info.expertBytes!) expect(b).toBe(3 * EXPERT_MB * MB);
+    rmSync(p, { force: true }); // Windows has no sparse files: the 18 GB is really taken, so free it now
   });
 
   test('an ordinary model has no experts, and names like ffn_up_shexp (shared expert) are not experts', () => {
@@ -78,7 +79,12 @@ describe('reading the experts from a GGUF file', () => {
 });
 
 describe('splitting a mixture-of-experts model between the card and system memory', () => {
-  const info = () => { const p = join(tmp('plan'), 'inkling.gguf'); writeGguf(p, inklingKv, inklingTensors()); return readGgufInfo(p)!; };
+  // Written and read once, then deleted: on Windows the file is not sparse, so each copy really takes 18 GB.
+  let cached: ReturnType<typeof readGgufInfo> | undefined;
+  const info = () => {
+    if (!cached) { const p = join(tmp('plan'), 'inkling.gguf'); writeGguf(p, inklingKv, inklingTensors()); cached = readGgufInfo(p)!; rmSync(p, { force: true }); }
+    return { ...cached! };
+  };
   const weightsMb = (LAYERS * (3 * EXPERT_MB + 30 + 7) + 1800) + 346; // model + vision file
 
   test('8 GB card: 32K context on the card, and only as many layers\' experts in system memory as needed', () => {
