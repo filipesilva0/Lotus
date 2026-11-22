@@ -26,7 +26,7 @@ import { reflect, shouldReflect } from '../memory/learn';
 import { hush, listen, playSpeech, speak, synthesize, warmVoice } from './voice';
 import { watchForBargeIn } from './bargeIn';
 import type { MicRecorder } from '../lib/audio';
-import { CallLog, CallTurn, callSystemPrompt, callTitle, cleanModelText, firstClause, takeSentences } from './studio';
+import { CallLog, CallTurn, callSystemPrompt, callTitle, cleanModelText, firstClause, spokenPart, takeSentences } from './studio';
 
 export const CALLS_KEY = 'lotus.voice.calls.v1';
 /** Interrupt by voice on or off (Call page; on unless turned off). */
@@ -224,18 +224,25 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   // Talking over Lotus stops it; your words carry on into the next turn.
   const watch = st.bargeIn && !st.muted ? watchForBargeIn((rec) => { pendingRec = rec; interrupt(); }) : null;
   let raw = '', spoken = 0, pending = '';
+  /** The visible reply as far as it was taken for speaking. */
+  let said0 = '';
   try {
     for await (const tok of replyStream(turns, { model, temperature: s?.temperature ?? 0.7, numCtx: effectiveNumCtx(), signal: rc.signal, memoryOn: call.memory, prompt: last.text })) {
       if (typeof tok !== 'string') {
         // The agent's claim check asked for the reply again: stop saying the old one.
         take++; hush();
-        raw = raw.slice(0, tok.keep); spoken = Math.min(spoken, visibleText(raw).length); pending = '';
+        raw = raw.slice(0, tok.keep); spoken = Math.min(spoken, visibleText(raw).length); pending = ''; said0 = visibleText(raw).slice(0, spoken);
         set({ partial: visibleText(raw) });
         continue;
       }
       raw += tok;
       const visible = visibleText(raw);
-      if (visible.length > spoken) { pending += visible.slice(spoken); spoken = visible.length; }
+      if (!visible.startsWith(said0)) {
+        // A closing thinking marker turned up: what was taken for the answer was thinking. Stop saying it.
+        take++; hush();
+        spoken = 0; pending = ''; said0 = '';
+      }
+      if (visible.length > spoken) { pending += visible.slice(spoken); spoken = visible.length; said0 = visible; }
       const { sentences, rest } = takeSentences(pending);
       pending = rest;
       sentences.forEach(say);
@@ -246,6 +253,7 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   } catch (e) {
     if (!rc.signal.aborted) { watch?.stop(); throw e; }
   } finally { a.signal.removeEventListener('abort', stopReply); }
+  { const all = spokenPart(raw, true); if (all.startsWith(said0) && all.length > spoken) pending += all.slice(spoken); }
   const { sentences } = takeSentences(pending, true);
   if (!rc.signal.aborted) sentences.forEach(say);
   const text = cleanModelText(raw);
@@ -258,12 +266,8 @@ async function reply(a: AbortController, recent: CallTurn[]) {
   try { await chain; } finally { watch?.stop(); }
 }
 
-/** The reply without thinking: complete <think> blocks removed, an unfinished one held back. */
-function visibleText(raw: string): string {
-  const t = raw.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  const open = t.search(/<think>/i);
-  return open >= 0 ? t.slice(0, open) : t;
-}
+/** The reply without thinking, in any model's markers (studio.ts spokenPart; only <think> before 0.21.5). */
+const visibleText = (raw: string) => spokenPart(raw);
 
 /** Index the exchange for recall and learn from it now and then (memory on only). */
 function afterTurn(user: CallTurn, ai: CallTurn) {
