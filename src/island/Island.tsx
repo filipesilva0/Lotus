@@ -102,6 +102,8 @@ export const Island: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [skills, setSkills] = useState<{ id: string; name: string }[]>([]);
   const [now, setNow] = useState(Date.now());
+  /** 0.23.1: the open/close animation (see below). */
+  const [phase, setPhase] = useState<'closed' | 'opening' | 'open' | 'closing'>('closed');
   const activity = useActivity();
   const agents = useAgents(settings.agents);
   const chat = useRef<IslandChatHandle>(null);
@@ -376,7 +378,8 @@ export const Island: React.FC = () => {
     ro.observe(el);
     setMeasured(Math.ceil(el.scrollHeight));
     return () => ro.disconnect();
-  }, [measuredMode, mode, view, workView]);
+    // The content exists only once the window is open, so measure again then (0.23.1).
+  }, [measuredMode, mode, view, workView, phase === 'closed']);
 
   const top = MAC ? NOTCH_H : 0;
   const dims = useMemo(() => {
@@ -396,7 +399,6 @@ export const Island: React.FC = () => {
   // 0.23.1: opening and closing are animated. Opening: the window shows, the island starts as a small
   // pill, faded, and springs to its size. Closing: the content fades, the island folds back into the
   // top edge, then the window hides.
-  const [phase, setPhase] = useState<'closed' | 'opening' | 'open' | 'closing'>('closed');
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   useEffect(() => {
@@ -446,7 +448,7 @@ export const Island: React.FC = () => {
   const trailing = voice === 'speaking' ? 'Speaking' : voice === 'transcribing' ? '…' : head ? (head.done ? 'Done' : head.progress != null ? `${Math.round(head.progress * 100)}%` : running.length > 1 ? `${running.length}` : '')
     : focus ? focusLabel(left) : '';
   const kicker = voice !== 'idle' ? 'Voice' : head ? wordOf(head) : new Date(now).toLocaleString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' });
-  const title = line || (focus && mode === 'pill' ? `Focus · ${focusLabel(left)} left` : 'Nothing running right now');
+  const title = line || (focus ? `Focus · ${focusLabel(left)} left` : 'Nothing running right now');
   const announce = mode === 'clip' ? 'You copied some text. Lotus can explain, summarise, translate, fix or read it.'
     : mode === 'drop' ? 'Drop the file on Keep for later, Ask Lotus, Turn into, or Use in.'
       : mode === 'focus-done' ? 'Focus time is up.'
