@@ -75,10 +75,11 @@ export const IslandSettingsPanel: React.FC<{ models: { id: string; name: string 
         <Row title="Open with the mouse" hint="Push the mouse against the top centre of any screen and the island opens there, with your quick buttons, a note box and what's next.">
           <Toggle checked={s.wake} onChange={(v) => set({ wake: v })} ariaLabel="Open with the mouse" />
         </Row>
-        <Row title="Colour" hint="Match Lotus: white in light mode, black in dark mode. On a Mac it is always black, to blend with the notch.">
+        <Row title="Colour" hint="Match Lotus: white in light mode, black in dark mode. Frosted glass: see-through, light or dark with Lotus. On a Mac it is always black, to blend with the notch.">
           <Select value={s.surface} onChange={(e) => set({ surface: e.target.value as IslandSettings['surface'] })} className="!w-52" aria-label="Island colour">
             <option value="auto">Match Lotus</option>
             <option value="black">Always black</option>
+            <option value="glass">Frosted glass</option>
           </Select>
         </Row>
       </Group>

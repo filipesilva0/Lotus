@@ -280,7 +280,7 @@ export const IslandChat = forwardRef<IslandChatHandle, {
             <Mic className="w-4 h-4" />
           </button>
           {busy ? (
-            <button onClick={() => abort.current?.abort()} aria-label="Stop generating" className="w-8 h-8 shrink-0 rounded-full bg-[var(--is-text)] text-[var(--is-bg)] flex items-center justify-center"><Square className="w-3 h-3" fill="currentColor" /></button>
+            <button onClick={() => abort.current?.abort()} aria-label="Stop generating" className="w-8 h-8 shrink-0 rounded-full bg-[var(--is-text)] text-[var(--is-ink)] flex items-center justify-center"><Square className="w-3 h-3" fill="currentColor" /></button>
           ) : (
             <button onClick={() => send()} disabled={!input.trim() && !attach.length} aria-label="Send"
               className="w-8 h-8 shrink-0 rounded-full bg-[var(--color-accent-fill)] text-white flex items-center justify-center disabled:opacity-30 transition-opacity"><ArrowUp className="w-4 h-4" /></button>

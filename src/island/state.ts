@@ -32,7 +32,8 @@ export interface IslandSettings {
   calendarUrl: string;
   /** 0.23: minutes for a focus timer. */
   focusMinutes: number;
-  /** 0.23: 'auto' = white island in light mode, black in dark mode; 'black' = always black. */
+  /** 0.23: 'auto' = white island in light mode, black in dark mode; 'black' = always black.
+   *  0.23.1: 'glass' = frosted glass, see-through, light or dark with Lotus. */
   surface: IslandSurface;
   /** Settings format. 2 (session 11) = the one-time "start switched off" reset has been applied. */
   schema?: number;
@@ -93,6 +94,8 @@ export interface Activity {
   done?: boolean;
   /** 0.11.0: a Work helper agent's name; shown with its face. */
   agent?: string;
+  /** 0.23.1: the small word above the line ("Task", "Routine"); else the kind's word. */
+  kicker?: string;
 }
 
 export interface AgentSession {

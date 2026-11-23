@@ -5,7 +5,9 @@ import { applyThemeToDocument } from '../styles/theme';
 import { Mascot } from './Mascot';
 import { IslandChat, IslandChatHandle } from './IslandChat';
 import { ApprovalCard } from './ApprovalCard';
-import { useActivity, useAgents } from './hooks';
+import { useActivity, useAgents, useCoreRuns } from './hooks';
+import { runActivities } from './runs';
+import { WorkView, wordOf } from './WorkView';
 import { Activity, Mood, loadIsland, mainSettings, saveIsland } from './state';
 import { onCoreEvent, rpc } from '../lib/core';
 import { answerAsk, decideStep } from '../lib/agent';
@@ -46,11 +48,15 @@ import { shelf, useAutoPause, useBoard, useCalendar, useNowPlaying, type ShelfIt
 type Ask = { runId: string; askId: string; question: string; options: string[] };
 type Perm = { runId: string; stepId: string; text: string; always?: string };
 type VoiceState = 'idle' | 'speaking' | 'listening' | 'transcribing';
-const KIND_WORD: Record<Activity['kind'], string> = { image: 'Images', voice: 'Voice', chat: 'Chat', download: 'Download', research: 'Research', build: 'Work' };
 
 /** A spring with a little overshoot, like the Dynamic Island. */
 const ease = 'cubic-bezier(.34,1.36,.64,1)';
 const DONE_MS = 4000;
+/** 0.23.1: how long closing takes (the island folds back into the top edge, then the window hides). */
+const CLOSE_MS = 260;
+/** 0.23.1: a woken island folds away this fast after the mouse leaves it (or never reaches it). */
+const FOLD_AFTER_LEAVE = 260, FOLD_UNTOUCHED = 1100;
+const reduceMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CLIP_MS = 8000;
 /**
  * macOS: the island sits over the notch. Its compact form keeps Petal and the status on either side
@@ -83,7 +89,8 @@ export const Island: React.FC = () => {
   const [typed, setTyped] = useState('');
   const [hue, setHue] = useState(() => Number(kv.getItem('lotus.petal.hue')) || 330);
   const [dark, setDark] = useState(appDark);
-  const [view, setView] = useState<'home' | 'shelf'>('home');
+  // 'auto': what Lotus is doing when it is busy, else the menu. 'menu': the menu (home). 'shelf'.
+  const [view, setView] = useState<'auto' | 'menu' | 'shelf'>('auto');
   const [dragging, setDragging] = useState(false);
   const [shelfItems, setShelfItems] = useState<ShelfItem[]>([]);
   const [shelfSel, setShelfSel] = useState<string | null>(null);
@@ -99,6 +106,8 @@ export const Island: React.FC = () => {
   const agents = useAgents(settings.agents);
   const chat = useRef<IslandChatHandle>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const entered = useRef(false);
+  const coreRuns = useCoreRuns();
 
   const look = islandLook(dark, settings.surface, MAC);
   const setFocus = useCallback((f: Focus | null) => { setFocusState(f); saveFocus(f); }, []);
@@ -142,11 +151,11 @@ export const Island: React.FC = () => {
     void onEvent<VoiceState>('voice:state', (s) => setVoice(s)).then((u) => offs.push(u));
     void onEvent<number>('petal:hue', (h) => setHue(h)).then((u) => offs.push(u));
     // 0.23: the mouse touched the top centre of the screen (src-tauri/src/island.rs).
-    void onEvent('island:wake', () => { setWoken((was) => { if (!was) setView('home'); return true; }); setDismissed(''); }).then((u) => offs.push(u));
+    void onEvent('island:wake', () => { setWoken((was) => { if (!was) { setView('auto'); entered.current = false; } return true; }); setDismissed(''); }).then((u) => offs.push(u));
     // 0.23: you copied text (only sent while "Offer actions for copied text" is on; never from password managers).
     void onEvent<{ text: string }>('island:clip', (c) => { if (c?.text && clipWorthShowing(c.text)) { setClip(c.text); setDismissed(''); } }).then((u) => offs.push(u));
     // 0.23: "Focus" on a task card in the main window.
-    void onEvent<{ id: string; title: string }>('island:focus', (t) => { setFocus(focusStart(loadIsland().focusMinutes, Date.now(), t)); setFocusDone(false); setView('home'); setWoken(true); }).then((u) => offs.push(u));
+    void onEvent<{ id: string; title: string }>('island:focus', (t) => { setFocus(focusStart(loadIsland().focusMinutes, Date.now(), t)); setFocusDone(false); setView('auto'); setWoken(true); }).then((u) => offs.push(u));
     return () => offs.forEach((o) => o());
   }, [openChat, withChat, setFocus]);
 
@@ -159,10 +168,19 @@ export const Island: React.FC = () => {
   const claude = agents.queue[0];
   const ask = asks[0];
   const perm = perms[0];
-  const running = activity.items.filter((a) => !a.done);
-  const finished = activity.items.filter((a) => a.done);
+  // Windows' own lines, then Lotus's agent runs they don't already show, then Claude Code sessions at work.
+  const items = useMemo<Activity[]>(() => [
+    ...activity.items,
+    ...runActivities(coreRuns, activity.items, Date.now()),
+    ...(settings.agents ? agents.sessions.filter((x) => x.state === 'working').map((x) => ({ id: `cc-${x.id}`, kind: 'build' as const, label: x.project ? `Working in ${x.project}` : 'Working', kicker: 'Claude Code' })) : []),
+  ], [activity.items, coreRuns, agents.sessions, settings.agents]);
+  const running = items.filter((a) => !a.done);
+  const finished = items.filter((a) => a.done);
   const head: Activity | undefined = running[0] ?? finished[finished.length - 1];
   const agentRows = running.slice(1).filter((a) => a.agent);
+  // When each line was first seen, for "3 min" on the work view.
+  const firstSeen = useRef(new Map<string, number>());
+  for (const a of items) if (!firstSeen.current.has(a.id)) firstSeen.current.set(a.id, Date.now());
   const left = focus ? focusLeft(focus, now) : 0;
   type Mode = 'hidden' | 'pill' | 'home' | 'ask' | 'perm' | 'claude' | 'chat' | 'clip' | 'drop' | 'focus-done';
   // A key for "the thing on screen", so × hides only that and the next new thing shows again.
@@ -196,17 +214,20 @@ export const Island: React.FC = () => {
   }, [head?.id, head?.done, running.length]);
 
   // The clock ticks while a focus timer runs (and for "in 18 min" on the home).
+  // 0.23.1: every second too while the work view shows how long something has taken.
+  const workTick = mode === 'home' && !!head && !head.done && view === 'auto';
   useEffect(() => {
     if (!focus || focus.since === null) { if (mode !== 'home') return; }
-    const t = setInterval(() => setNow(Date.now()), focus && focus.since !== null ? 1000 : 30_000);
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), (focus && focus.since !== null) || workTick ? 1000 : 30_000);
     return () => clearInterval(t);
-  }, [focus, mode]);
+  }, [focus, mode, workTick]);
   useEffect(() => { if (focus && focus.since !== null && left <= 0) { setFocusDone(true); setDismissed(''); } }, [focus, left]);
 
   // A woken island that the mouse never enters, or leaves, folds away (not while you type).
   useEffect(() => {
     if (!woken || hovered) return;
-    const t = setTimeout(() => { if (!typing) { setWoken(false); setView('home'); } }, 1600);
+    const t = setTimeout(() => { if (!typing) { setWoken(false); setView('auto'); } }, entered.current ? FOLD_AFTER_LEAVE : FOLD_UNTOUCHED);
     return () => clearTimeout(t);
   }, [woken, hovered, typing]);
   // The copied-text peek leaves on its own unless you hover it.
@@ -340,6 +361,10 @@ export const Island: React.FC = () => {
     setFocus(null);
   };
 
+  // 0.23.1: while Lotus is doing something, opening the island shows only that (Menu goes to the home).
+  const busy = !!head;
+  const workView = busy && view === 'auto';
+
   // ── Window size and visibility ───────────────────────────────────────────
   const content = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState(0);
@@ -351,7 +376,7 @@ export const Island: React.FC = () => {
     ro.observe(el);
     setMeasured(Math.ceil(el.scrollHeight));
     return () => ro.disconnect();
-  }, [measuredMode, mode, view]);
+  }, [measuredMode, mode, view, workView]);
 
   const top = MAC ? NOTCH_H : 0;
   const dims = useMemo(() => {
@@ -368,11 +393,34 @@ export const Island: React.FC = () => {
 
   const shown = mode !== 'hidden';
   const compact = mode === 'pill' && !peek;
+  // 0.23.1: opening and closing are animated. Opening: the window shows, the island starts as a small
+  // pill, faded, and springs to its size. Closing: the content fades, the island folds back into the
+  // top edge, then the window hides.
+  const [phase, setPhase] = useState<'closed' | 'opening' | 'open' | 'closing'>('closed');
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  useEffect(() => {
+    const ph = phaseRef.current;
+    if (shown) {
+      if (ph === 'open' || ph === 'opening') return;
+      void invokeNative('island_show');
+      setPhase('opening');
+      let r2 = 0;
+      const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setPhase('open')); });
+      return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+    }
+    if (ph === 'closed') return;
+    setPhase('closing');
+    const t = setTimeout(() => { setPhase('closed'); void invokeNative('island_hide'); }, reduceMotion() ? 60 : CLOSE_MS);
+    return () => clearTimeout(t);
+  }, [shown]);
+  // Drawn smaller while opening and closing; the window keeps the full size meanwhile.
+  const small = phase !== 'open';
+  const drawn = small ? { w: MAC ? NOTCH_W + 92 : 200, h: MAC ? NOTCH_H : 34 } : dims;
   const padX = look.floating ? FLOAT_GAP.side : EAR;
   const padTop = look.floating ? FLOAT_GAP.top : 0;
   const padBottom = look.floating ? FLOAT_GAP.bottom : 0;
   const winW = dims.w + 2 * padX, winH = dims.h + padTop + padBottom;
-  useEffect(() => { void invokeNative(shown ? 'island_show' : 'island_hide'); }, [shown]);
   const prev = useRef({ w: 0, h: 0 });
   useEffect(() => {
     if (!shown) return;
@@ -383,49 +431,60 @@ export const Island: React.FC = () => {
     return () => clearTimeout(t);
   }, [winW, winH, shown]);
 
-  const close = useCallback(() => { setChatOpen(false); setWoken(false); setView('home'); setClip(null); setDismissed(key); }, [key]);
+  const close = useCallback(() => { setChatOpen(false); setWoken(false); setView('auto'); setClip(null); setDismissed(key); }, [key]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && (mode === 'chat' || mode === 'pill' || mode === 'home' || mode === 'clip')) close(); };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
   }, [mode, close]);
 
-  const enter = () => { clearTimeout(leaveTimer.current); setHovered(true); };
-  const leave = () => { clearTimeout(leaveTimer.current); leaveTimer.current = setTimeout(() => { setHovered(false); if (!woken) setView('home'); }, 250); };
+  const enter = () => { clearTimeout(leaveTimer.current); entered.current = true; setHovered(true); };
+  const leave = () => { clearTimeout(leaveTimer.current); leaveTimer.current = setTimeout(() => { setHovered(false); if (!woken) setView('auto'); }, 120); };
 
   const line = voice === 'listening' ? 'Listening…' : voice === 'transcribing' ? 'Got it, writing it down…' : voice === 'speaking' ? 'Speaking…' : head ? head.label : '';
   // Compact trailing value: a number when there is one, else a word (Dynamic Island keeps it to one value).
   const trailing = voice === 'speaking' ? 'Speaking' : voice === 'transcribing' ? '…' : head ? (head.done ? 'Done' : head.progress != null ? `${Math.round(head.progress * 100)}%` : running.length > 1 ? `${running.length}` : '')
     : focus ? focusLabel(left) : '';
-  const kicker = voice !== 'idle' ? 'Voice' : head ? KIND_WORD[head.kind] : new Date(now).toLocaleString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' });
+  const kicker = voice !== 'idle' ? 'Voice' : head ? wordOf(head) : new Date(now).toLocaleString([], { weekday: 'long', hour: '2-digit', minute: '2-digit' });
   const title = line || (focus && mode === 'pill' ? `Focus · ${focusLabel(left)} left` : 'Nothing running right now');
   const announce = mode === 'clip' ? 'You copied some text. Lotus can explain, summarise, translate, fix or read it.'
     : mode === 'drop' ? 'Drop the file on Keep for later, Ask Lotus, Turn into, or Use in.'
       : mode === 'focus-done' ? 'Focus time is up.'
-        : head ? `${KIND_WORD[head.kind]}: ${head.label}${head.done ? ', done' : ''}` : voice !== 'idle' ? line : '';
-  const radius = compact ? 17 : 26;
+        : head ? `${wordOf(head)}: ${head.label}${head.done ? ', done' : ''}` : voice !== 'idle' ? line : '';
+  const radius = compact || small ? 17 : 26;
+  const motion = reduceMotion();
+  const closing = phase === 'closing';
+  const spring = closing ? 'cubic-bezier(.4,0,.9,.4)' : ease;
+  const dur = motion ? '.01s' : closing ? `${CLOSE_MS / 1000}s` : '.42s';
   const surfaceStyle: React.CSSProperties = {
     ...(look.vars as React.CSSProperties),
-    left: padX, top: padTop, width: dims.w, height: dims.h,
+    left: padX + (dims.w - drawn.w) / 2, top: padTop, width: drawn.w, height: drawn.h,
     background: 'var(--is-bg)', color: 'var(--is-text)', boxShadow: 'var(--is-shadow)',
     borderRadius: look.floating ? radius : `0 0 ${radius}px ${radius}px`,
-    transition: `width .42s ${ease}, height .42s ${ease}, border-radius .42s ${ease}`,
+    opacity: small ? 0 : 1,
+    transform: small && !motion ? (look.floating ? 'translateY(-6px) scale(.96)' : 'scaleY(.9)') : 'none',
+    transformOrigin: 'top center',
+    transition: ['width', 'height', 'border-radius', 'left', 'transform'].map((k) => `${k} ${dur} ${spring}`).concat(`opacity ${motion ? '.12s' : closing ? '.2s' : '.18s'} ease`).join(', '),
   };
+  // The content shows once the island has room for it, and goes first when it closes.
+  const contentStyle: React.CSSProperties = { opacity: small ? 0 : 1, transition: small ? 'opacity .1s ease' : `opacity .2s ease ${motion ? 0 : 0.08}s` };
 
   return (
     <div className="w-screen h-screen flex justify-center items-start select-none overflow-hidden" style={look.vars as React.CSSProperties}>
-      {shown && (
-        <div className="relative" style={{ width: winW, height: winH, transition: `width .42s ${ease}, height .42s ${ease}` }}>
+      {phase !== 'closed' && (
+        <div className="relative" style={{ width: winW, height: winH }}>
           {/* The flared top corners notch apps use: the black curves outwards into the screen's top edge. */}
+          {/* 0.23.1: a 1 px soft edge (0.23.0 had a hard half-pixel one that looked jagged), tucked 2 px under */}
+          {/* the island so no hairline gap shows at 125 % or 150 % screen scaling; they move with the island. */}
           {!look.floating && <>
-            <span aria-hidden className="absolute top-0 left-0" style={{ width: EAR, height: EAR, background: `radial-gradient(circle at 0 100%, transparent ${EAR - 0.5}px, var(--is-bg) ${EAR}px)` }} />
-            <span aria-hidden className="absolute top-0 right-0" style={{ width: EAR, height: EAR, background: `radial-gradient(circle at 100% 100%, transparent ${EAR - 0.5}px, var(--is-bg) ${EAR}px)` }} />
+            <span aria-hidden className="absolute top-0" style={{ left: padX + (dims.w - drawn.w) / 2 - EAR, width: EAR + 2, height: EAR, opacity: small ? 0 : 1, background: `radial-gradient(circle at 0 100%, transparent ${EAR - 1}px, var(--is-bg) ${EAR}px)`, transition: surfaceStyle.transition }} />
+            <span aria-hidden className="absolute top-0" style={{ left: padX + (dims.w + drawn.w) / 2 - 2, width: EAR + 2, height: EAR, opacity: small ? 0 : 1, background: `radial-gradient(circle at ${EAR + 2}px 100%, transparent ${EAR - 1}px, var(--is-bg) ${EAR}px)`, transition: surfaceStyle.transition }} />
           </>}
           <div role="region" aria-label="Lotus island" onPointerEnter={enter} onPointerLeave={leave}
             className="absolute overflow-hidden" style={surfaceStyle}>
             {/* What a screen reader hears: changes of state only, never the ticking timer. */}
             <p className="sr-only" aria-live="polite">{announce}</p>
-            <div className="absolute inset-x-0 bottom-0" style={{ top: MAC && !compact ? NOTCH_H : 0 }}>
+            <div className="absolute inset-x-0 bottom-0" style={{ top: MAC && !compact ? NOTCH_H : 0, ...contentStyle }}>
               <div ref={content}>
                 {mode === 'pill' && (compact ? (
                   <div className="h-[34px] flex items-center justify-between pl-2 pr-2.5" title={line}>
@@ -451,8 +510,14 @@ export const Island: React.FC = () => {
                   </div>
                 ))}
 
-                {mode === 'home' && view === 'home' && (
-                  <Home mood={mood} hue={hue} kicker={kicker} title={title} head={head} running={running}
+                {mode === 'home' && workView && head && (
+                  <WorkView head={head} others={items.filter((a) => a.id !== head.id && !a.done)} mood={mood} hue={hue}
+                    since={firstSeen.current.get(head.id) ?? now} now={now} voice={voice} voiceLine={line}
+                    onMenu={() => setView('menu')} onOpen={(page) => void invokeNative('open_main', { view: page })} onHide={close}
+                    onStop={head.id.startsWith('run-') ? () => void rpc('agent_stop', { runId: head.id.slice(4) }).catch(() => undefined) : undefined} />
+                )}
+                {mode === 'home' && !workView && view !== 'shelf' && (
+                  <Home onShowWork={busy ? () => setView('auto') : undefined} mood={mood} hue={hue} kicker={kicker} title={title} head={head} running={running}
                     media={settings.media ? media : null} onMedia={mediaControl}
                     focus={focus} now={now} onFocus={focusAct}
                     next={next} onJoin={(u) => void openExternal(u)} onFocusTask={(id, t) => setFocus(focusStart(settings.focusMinutes, Date.now(), { id, title: t }))}
@@ -463,7 +528,7 @@ export const Island: React.FC = () => {
                     onTyping={(b) => { setTyping(b); if (b) void invokeNative('island_focus'); }} notice={notice} />
                 )}
                 {mode === 'home' && view === 'shelf' && (
-                  <ShelfView items={shelfItems} selected={shelfSel} onSelect={setShelfSel} onBack={() => { setView('home'); setShelfSel(null); }} act={shelfActs} status={shelfStatus} busy={shelfBusy} />
+                  <ShelfView items={shelfItems} selected={shelfSel} onSelect={setShelfSel} onBack={() => { setView('auto'); setShelfSel(null); }} act={shelfActs} status={shelfStatus} busy={shelfBusy} />
                 )}
                 {mode === 'drop' && <DropZones onDropZone={dropOnZone} />}
                 {mode === 'clip' && clip && <ClipPeek text={clip} onAction={clipAction} onClose={() => setClip(null)} />}
