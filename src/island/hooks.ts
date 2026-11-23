@@ -4,6 +4,8 @@ import { ollamaClient } from '../services/ollamaService';
 import { voicebox } from '../services/voicebox';
 import { comfy } from '../services/comfyService';
 import { Activity, AgentSession, PermissionRequest, baseName } from './state';
+import { onCoreEvent, rpc } from '../lib/core';
+import { applyRunEvent, reconcileRuns, type CoreRun, type RunSource } from './runs';
 
 export interface EngineUp { ollama: boolean | null; voicebox: boolean | null; comfyui: boolean | null }
 
@@ -35,8 +37,9 @@ export function useActivity() {
     if (a.done) {
       timers.current.set(a.id, window.setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== a.id)), 2500));
     } else {
-      // A task that stops reporting (window crashed) must not stick forever.
-      timers.current.set(a.id, window.setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== a.id)), 90_000));
+      // A task that stops reporting (window crashed) must not stick forever. 0.23.1: 10 minutes, not 90 s:
+      // tasks, routines and calls report once when they start, and dropped off while still going.
+      timers.current.set(a.id, window.setTimeout(() => setItems((cur) => cur.filter((x) => x.id !== a.id)), 10 * 60_000));
     }
   }, []);
 
@@ -114,4 +117,34 @@ export function useAgents(enabled: boolean) {
   }, []);
 
   return { sessions, queue, answer };
+}
+
+/**
+ * 0.23.1: what Lotus's own agent is running (chat, Work, tasks, routines), from the core's event stream,
+ * checked against the core's list of runs when the island starts and every half minute while one runs.
+ */
+export function useCoreRuns(): Map<string, CoreRun> {
+  const [runs, setRuns] = useState<Map<string, CoreRun>>(() => new Map());
+  const ref = useRef(runs);
+  ref.current = runs;
+  useEffect(() => {
+    let alive = true;
+    const sync = () => void rpc<{ id: string; status: string; source: RunSource | null; prompt: string; created: number }[]>('agent_runs', { limit: 12 })
+      .then((rows) => { if (alive && Array.isArray(rows)) setRuns((m) => reconcileRuns(m, rows, Date.now())); }).catch(() => undefined);
+    sync();
+    const off = onCoreEvent((e) => {
+      const before = ref.current;
+      const next = applyRunEvent(before, e, Date.now());
+      if (next === before) return;
+      setRuns(next);
+      // A run we haven't seen: ask the core where it came from (chat, task, routine…).
+      const id = (e as { runId?: string }).runId;
+      if (id && !before.has(id)) sync();
+    });
+    const t = setInterval(() => { if ([...ref.current.values()].some((r) => !r.done)) sync(); }, 30_000);
+    // Finished runs fade from the list after a moment.
+    const sweep = setInterval(() => setRuns((m) => { const now = Date.now(); let ch = false; const n = new Map(m); for (const [k, r] of n) if (r.done && now - r.at > 5000) { n.delete(k); ch = true; } return ch ? n : m; }), 2500);
+    return () => { alive = false; off(); clearInterval(t); clearInterval(sweep); };
+  }, []);
+  return runs;
 }

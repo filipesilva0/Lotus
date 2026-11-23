@@ -7,10 +7,11 @@
 //   note box    ask Lotus, or keep a note in memory or on the task board
 import React, { useState } from 'react';
 import {
-  AppWindow, ArrowUp, Brain, CalendarClock, CircleCheck, Clapperboard, Image as ImageIcon, ListPlus, MessageSquare, Mic, Music2,
+  ArrowUp, Brain, CalendarClock, CircleCheck, Clapperboard, Image as ImageIcon, ListPlus, MessageSquare, Mic, Music2,
   Pause, Phone, Play, Repeat, ScrollText, SkipBack, SkipForward, Sparkles, SquareKanban, Timer, Briefcase, Volume2, X, Inbox,
 } from 'lucide-react';
 import { Mascot } from './Mascot';
+import { LotusMark } from '../components/common/LotusMark';
 import { AgentFace } from '../components/common/AgentFace';
 import { Card, IconBtn, Label, Link, Pill, Ring, Tile, focusRing } from './parts';
 import { ACTIONS, MAX_PINS, actionById } from './actions';
@@ -54,6 +55,8 @@ export interface HomeProps {
   onOpen: () => void;
   onHide: () => void;
   onTyping: (busy: boolean) => void;
+  /** 0.23.1: while Lotus works, the header goes back to the "what Lotus is doing" view. */
+  onShowWork?: () => void;
   /** A short note from the island (a routine started, nothing copied). */
   notice?: string | null;
 }
@@ -75,13 +78,20 @@ export const Home: React.FC<HomeProps> = (p) => {
       {/* Header */}
       <div className="flex items-center gap-2.5 pl-1">
         {p.head?.agent ? <AgentFace name={p.head.agent} size={32} animate={!p.head.done} mood={p.head.done ? undefined : 'thinking'} /> : <Mascot hue={p.hue} mood={p.mood} size={32} />}
-        <div className="flex-1 min-w-0">
-          <p className="text-[11px] leading-tight text-[var(--is-muted)]">{p.kicker}</p>
-          <p className="truncate text-[14px] font-semibold leading-snug text-[var(--is-text)]">{p.title}</p>
-        </div>
+        {p.onShowWork ? (
+          <button type="button" onClick={p.onShowWork} title="Back to what Lotus is doing" className={`flex-1 min-w-0 text-left rounded-[10px] -my-1 py-1 px-1 -mx-1 hover:bg-[var(--is-raised)] ${focusRing}`}>
+            <p className="text-[11px] leading-tight text-[var(--is-muted)]">{p.kicker} ›</p>
+            <p className="truncate text-[14px] font-semibold leading-snug text-[var(--is-text)]">{p.title}</p>
+          </button>
+        ) : (
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] leading-tight text-[var(--is-muted)]">{p.kicker}</p>
+            <p className="truncate text-[14px] font-semibold leading-snug text-[var(--is-text)]">{p.title}</p>
+          </div>
+        )}
         {p.head && <span className="flex items-center gap-1.5 text-[12px] font-semibold tabular-nums text-[var(--color-accent-vibrant)]">
           {p.head.progress != null && !p.head.done && `${Math.round(p.head.progress * 100)}%`}<Ring progress={p.head.progress ?? null} done={p.head.done} size={20} /></span>}
-        <IconBtn label="Open Lotus" onClick={p.onOpen}><AppWindow className="w-4 h-4" /></IconBtn>
+        <IconBtn label="Open Lotus" onClick={p.onOpen}><LotusMark size={18} /></IconBtn>
         <IconBtn label="Hide until something new happens" onClick={p.onHide}><X className="w-4 h-4" /></IconBtn>
       </div>
 
